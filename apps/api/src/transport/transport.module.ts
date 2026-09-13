@@ -29,6 +29,7 @@ import { PrismaCounterpartySiteRepository } from './counterparty/prisma-counterp
 import { MovementRepository, InMemoryMovementRepository } from './movement/movement.repository.js';
 import { MovementService } from './movement/movement.service.js';
 import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
+import { MovementRunWriteGuard, RunWriteGuard } from './movement/run-write-guard.port.js';
 import {
   TRANSPORT_PLANNING_POLICY,
   tenantTransportPlanningPolicy,
@@ -125,14 +126,28 @@ import { TripService } from './trips/trip.service.js';
         new FleetCounterpartySubjectAdapter(fleet),
       inject: [FleetRepository],
     },
+    /*
+     * Ban TRONG BO NHO nhan kho dau vet vi `closeRunAsSystemSerialized()` phai dat dau vet o CUNG
+     * mot luot voi buoc chuyen trang thai (`#293` R2). Ban Prisma khong can: no ghi thang tren
+     * giao dich cua chinh no. Bo doi so nay se lam duong `PERSISTENCE=memory` dong vong chay ma
+     * khong de lai dong bang chung nao — dung khoang trong dang duoc dong.
+     */
     {
       provide: MovementRepository,
-      useFactory: (prisma: PrismaService): MovementRepository =>
+      useFactory: (prisma: PrismaService, trace: AuditLogRepository): MovementRepository =>
         loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaMovementRepository(prisma)
-          : new InMemoryMovementRepository(),
-      inject: [PrismaService],
+          : new InMemoryMovementRepository(trace),
+      inject: [PrismaService, AuditLogRepository],
     },
+    /**
+     * RANH GIOI SERIALIZE cua vong chay (`#293` R2) — mot cong HEP tren kho da so huu khoa.
+     *
+     * Song o `transport-core` vi khoa la khoa cua hang `TransportVehicleRun`, va vi ca hai duong
+     * ghi kia (`closeRunAsSystemSerialized`, `createLeg`) deu o day. Capability nhan CONG nay chu
+     * khong nhan `MovementRepository`: xem `run-write-guard.port.ts`.
+     */
+    { provide: RunWriteGuard, useClass: MovementRunWriteGuard },
     {
       provide: AssetOwnershipRepository,
       useFactory: (prisma: PrismaService): AssetOwnershipRepository =>
@@ -215,6 +230,14 @@ import { TripService } from './trips/trip.service.js';
     CounterpartySiteRepository,
     TripRepository,
     MovementRepository,
+    /**
+     * XUAT CONG, khong xuat kho — `#293` R2.
+     *
+     * `transport-checkpoint` can ghi duoi khoa cua vong chay; no KHONG duoc quyen tao chang hay doi
+     * trang thai vong chay. `MovementRepository` o tren duoc xuat cho cac cong DOC da co tu truoc;
+     * dong nay la duong GHI duy nhat di ra ngoai, va no hep bang dung mot phuong thuc.
+     */
+    RunWriteGuard,
     RunPlanRepository,
     AuditLogService,
     TRANSPORT_CORE_POLICY,

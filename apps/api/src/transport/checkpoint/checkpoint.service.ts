@@ -1,6 +1,8 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { toBusinessDate } from '../business-date.js';
+import { isTerminalRunStatus } from '../movement/movement-lifecycle.js';
+import { RunWriteGuard } from '../movement/run-write-guard.port.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
   TRANSPORT_CLOCK,
@@ -60,6 +62,11 @@ export class CheckpointService {
     private readonly checkpoints: CheckpointRepository,
     private readonly core: TransportCheckpointCoreFacts,
     private readonly location: TransportCheckpointLocationFacts,
+    /**
+     * RANH GIOI SERIALIZE cua vong chay — `#293` R2. BAT BUOC, cung ly le voi
+     * `WaitingSessionService`: vang mat no thi cua so mo lai mot cach im lang.
+     */
+    private readonly runs: RunWriteGuard,
     @Inject(TRANSPORT_CORE_POLICY) private readonly corePolicy: TransportCorePolicy,
     @Optional()
     @Inject(TRANSPORT_CHECKPOINT_POLICY)
@@ -227,18 +234,46 @@ export class CheckpointService {
 
     const receivedAt = this.now();
     try {
-      const checkpoint = await this.checkpoints.create({
-        type: command.type,
-        runId: command.runId,
-        legId,
-        recordedBy: command.authUserId,
-        driverId,
-        observationId,
-        clientEventId: command.clientEventId,
-        capturedAt,
-        receivedAt,
-        businessDate: toBusinessDate(receivedAt, this.corePolicy.timeZone),
-        note: command.note ?? null,
+      /*
+       * GHI MOC TREN DUONG DA KHOA — `#293` R2/R4.
+       *
+       * `runStatus` o tren la mot ban doc CU: no den tu `requireRun()` truoc moi phep kiem khac.
+       * Giua no va lan ghi nay, mot luot quet co the da khoa vong chay, hoi lai (`CARGO_STILL_
+       * CARRIED` chua co vi moc chua ton tai), va ghi `COMPLETED`. Mot moc `LOADING` ghi ngay sau
+       * do se de lai dung trang thai ma `#293` R4 cam: vong chay o diem cuoi, con so ghi hien
+       * truong noi hang van tren thung.
+       *
+       * Duoi khoa thi chi con hai thu tu, va ca hai deu dung. Xem chu thich dai o
+       * `WaitingSessionService.append()`.
+       */
+      const checkpoint = await this.runs.underRunLock(command.runId, async (scope) => {
+        if (isTerminalRunStatus(scope.run.status)) {
+          this.deny('CHECKPOINT_RUN_TERMINAL', {
+            runId: command.runId,
+            legId,
+            type: command.type,
+            status: scope.run.status,
+            revalidated: true,
+          });
+          throw this.errorFor('CHECKPOINT_RUN_TERMINAL');
+        }
+
+        return this.checkpoints.create(
+          {
+            type: command.type,
+            runId: command.runId,
+            legId,
+            recordedBy: command.authUserId,
+            driverId,
+            observationId,
+            clientEventId: command.clientEventId,
+            capturedAt,
+            receivedAt,
+            businessDate: toBusinessDate(receivedAt, this.corePolicy.timeZone),
+            note: command.note ?? null,
+          },
+          scope.tx,
+        );
       });
       this.allow('CHECKPOINT_RECORDED', {
         checkpointId: checkpoint.id,

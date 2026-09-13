@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { RunWriteTransaction } from '../movement/movement.repository.js';
 import type { UniqueIndexRef } from '../storage-conflict.js';
 import type { DeliveryWaitingSession, WaitingCloseReason, WaitingReason } from './waiting.types.js';
 
@@ -86,7 +87,21 @@ export interface CloseWaitingSessionInput {
  * ay. Tang luu tru cuong che mot lan nua bang trigger `transport_waiting_session_immutable`.
  */
 export abstract class WaitingSessionRepository {
-  abstract create(input: CreateWaitingSessionInput): Promise<DeliveryWaitingSession>;
+  /**
+   * MO mot phien — tuy chon GHI TREN GIAO DICH dang giu khoa vong chay (`#293` R2).
+   *
+   * `tx` vang mat la duong cu: ghi thang, khong ai xep hang. Duong do van dung cho moi lan ghi
+   * KHONG dua vao trang thai vong chay.
+   *
+   * `tx` co mat nghia la nguoi goi dang dung trong `RunWriteGuard.underRunLock()`: hang vong chay
+   * da bi khoa, trang thai da duoc doc lai, va lan ghi nay phai nam trong CHINH giao dich do. Ghi
+   * ra ngoai no thi khoa khong con che duoc gi — mot lan dong dang cho commit se khong thay phien
+   * nay, va ket qua la mot vong chay o diem cuoi nam canh mot phien DANG MO.
+   */
+  abstract create(
+    input: CreateWaitingSessionInput,
+    tx?: RunWriteTransaction,
+  ): Promise<DeliveryWaitingSession>;
   abstract close(input: CloseWaitingSessionInput): Promise<DeliveryWaitingSession>;
   abstract find(sessionId: string): Promise<DeliveryWaitingSession | null>;
   abstract findByEvent(

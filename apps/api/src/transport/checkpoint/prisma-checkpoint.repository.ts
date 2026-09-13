@@ -1,8 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import type { TransportRunCheckpoint as PrismaCheckpoint } from '@prisma/client';
 import type { PrismaService } from '../../config/prisma.service.js';
+import type { RunWriteTransaction } from '../movement/movement.repository.js';
 import { CheckpointRepository, type CreateCheckpointInput } from './checkpoint.repository.js';
 import type { RunCheckpoint, RunCheckpointType } from './checkpoint.types.js';
+
+/**
+ * Delegate cua bang moc, doc duoc tu CA client goc LAN mot loi ra giao dich.
+ *
+ * Cung ly le voi `model()` trong `prisma-movement.repository.ts`. Ranh gioi kieu THAT van la
+ * `toDomain()` ben duoi.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+const checkpoints = (client: unknown): any =>
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  (client as Record<string, any>).transportRunCheckpoint;
 
 /**
  * Hien thuc Postgres cua kho moc.
@@ -21,8 +33,8 @@ export class PrismaCheckpointRepository extends CheckpointRepository {
     super();
   }
 
-  async create(input: CreateCheckpointInput): Promise<RunCheckpoint> {
-    const row = await this.prisma.transportRunCheckpoint.create({
+  async create(input: CreateCheckpointInput, tx?: RunWriteTransaction): Promise<RunCheckpoint> {
+    const row = await checkpoints(tx ?? this.prisma).create({
       data: {
         type: input.type,
         runId: input.runId,

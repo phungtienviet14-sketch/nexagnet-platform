@@ -42,6 +42,11 @@ const ORDER_EDGES: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   CANCELLED: [],
 };
 
+/**
+ * Hai canh `CANCELLED` va `COMPLETED` deu CO trong bang nay — chung la nhung buoc chuyen THAT — va
+ * ca hai deu bi cong chung tu choi (`..._REQUIRES_..._PATH`) vi chung doi mot ly do. Bang nay noi
+ * *may trang thai cho phep gi*, khong noi *ai duoc phep di*.
+ */
 const RUN_EDGES: Readonly<Record<VehicleRunStatus, readonly VehicleRunStatus[]>> = {
   PLANNED: ['ACTIVE', 'CANCELLED'],
   ACTIVE: ['COMPLETED', 'CANCELLED'],
@@ -93,8 +98,40 @@ export function evaluateRunTransition(
   if (isTerminalRunStatus(from)) return deny('RUN_ALREADY_TERMINAL');
   if (from === to) return deny('RUN_ALREADY_IN_STATE');
   if (to === 'CANCELLED') return deny('RUN_CANCEL_REQUIRES_DEDICATED_PATH');
+  if (to === 'COMPLETED') return deny('RUN_COMPLETE_REQUIRES_SYSTEM_PATH');
   if (!RUN_EDGES[from].includes(to)) return deny('RUN_TRANSITION_NOT_PERMITTED');
   if (to === 'ACTIVE' && context.legCount === 0) return deny('RUN_HAS_NO_LEG');
+  return allow('RUN_TRANSITION_APPLIED');
+}
+
+/**
+ * DONG VONG CHAY — duong CUA HE THONG, va la duong DUY NHAT dan toi `COMPLETED`.
+ *
+ * ============================================================================================
+ * VI SAO TACH KHOI `evaluateRunTransition()`
+ * ============================================================================================
+ *
+ * `#293` R1: *"the normal state transition to completed Run must be system authority only"*. Mot
+ * cong gop hai duong vao mot ham — nhu ban truoc day, khi `evaluateRunTransition(from,'COMPLETED')`
+ * van xanh — nghia la BAT KY ai goi duoc duong doi trang thai vong chay cung dong duoc vong chay.
+ * Hom nay `POST /transport/runs/:id/transition` chi con `ACTIVE`, va loi tu choi nam ngay trong
+ * may trang thai chu khong nam o tang HTTP — mot tang HTTP khong chung minh duoc rang khong con
+ * duong nao khac.
+ *
+ * Cung khuon voi cap `evaluateRunTransition` / `evaluateRunCancel`: huy va dong deu la quyet dinh
+ * doi mot ly do, nen chung khong di qua cong chung.
+ *
+ * ============================================================================================
+ * HAM NAY KHONG TU QUYET DINH
+ * ============================================================================================
+ *
+ * No tra loi mot cau hep: *"trang thai nay co duoc phep sang `COMPLETED` khong"*. Cau hoi rong hon
+ * — *"da du dieu kien dong chua"* — thuoc `evaluateRunClosure()`, va do la thu phai tra loi TRUOC.
+ * `MovementService.closeRunAsSystem()` vi vay la mot phep THI HANH, khong phai mot phep PHAN XU.
+ */
+export function evaluateSystemRunClose(from: VehicleRunStatus): TransitionDecision<RunTransitionReason> {
+  if (isTerminalRunStatus(from)) return deny('RUN_ALREADY_TERMINAL');
+  if (!RUN_EDGES[from].includes('COMPLETED')) return deny('RUN_TRANSITION_NOT_PERMITTED');
   return allow('RUN_TRANSITION_APPLIED');
 }
 

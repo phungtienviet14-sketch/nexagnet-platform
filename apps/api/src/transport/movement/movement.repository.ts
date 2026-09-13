@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { AuditLogRepository, type AppendAuditLogInput } from '../../audit/audit-log.repository.js';
 import { storageUniqueViolation } from '../proof/proof-storage-conflict.js';
 import type { UniqueIndexRef } from '../storage-conflict.js';
+import { TransportDomainError } from '../transport.errors.js';
 import type {
   Order,
   OrderStatus,
@@ -25,6 +27,126 @@ import type {
  * `#267` H3 dua bat bien chong lap cua no LEN chinh unique nay: ma vong chay cua mot lan nhan viec
  * tai dia diem A la mot bam tat dinh tu `(driverId, clientEventId)`.
  */
+/**
+ * KET QUA cua mot lan dong vong chay CO DIEU KIEN (`completeRunIfActive`).
+ *
+ * Hai truong, va ca hai deu can: `run` la su that SAU lan goi (de nguoi goi tra ve duoc ket qua
+ * dung, du no thang hay thua), `transitioned` noi ai la nguoi da lam buoc chuyen.
+ */
+export interface RunCloseAttempt {
+  readonly run: VehicleRun;
+  /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
+  readonly transitioned: boolean;
+}
+
+/**
+ * SU THAT DOC LAI TREN DUONG DA KHOA — `#293` R2.
+ *
+ * Hai truong nay la phan ma `transport-core` LA NGUON. Chung duoc doc SAU khi hang vong chay bi
+ * khoa, nen giua luc doc va luc ghi khong mot nguoi lap ke hoach nao chen duoc mot chang moi vao.
+ */
+export interface SerializedRunSnapshot {
+  readonly run: VehicleRun;
+  readonly legs: readonly RunLeg[];
+}
+
+/**
+ * LOI RA GIAO DICH dang giu khoa hang vong chay — khong kieu.
+ *
+ * Kieu that cua loi ra giao dich Prisma chua ton tai truoc khi `prisma generate` chay; cung ly le
+ * voi `model()` trong `prisma-movement.repository.ts`. Ranh gioi kieu THAT van la cac ham `to*()`
+ * cua tung kho. Ban trong bo nho dat `null` vao day — no khong co giao dich nao de dua ra.
+ */
+export type RunWriteTransaction = unknown;
+
+/**
+ * MOT LAN GHI DUOI KHOA CUA VONG CHAY — `#293` R2, cho nguoi ghi o NGOAI `transport-core`.
+ *
+ * Xem `run-write-guard.port.ts` de biet cua so nao dang duoc dong lai. O day chi ghi hai truong.
+ */
+export interface RunWriteScope {
+  /**
+   * Vong chay DOC LAI duoi khoa — khong phai ban nguoi goi da doc truoc do.
+   *
+   * Day la ca ly do ranh gioi nay ton tai. Nguoi ghi van doc trang thai vong chay mot lan tu som
+   * (de tu choi som cho re), nhung ban doc do co the da cu truoc khi cau lenh ke tiep chay. Ban
+   * NAY thi khong cu duoc: khong ai sua duoc hang do chung nao khoa con trong tay.
+   */
+  readonly run: VehicleRun;
+  /**
+   * GIAO DICH dang giu khoa. Kho cua capability phai ghi qua CHINH no.
+   *
+   * Ghi qua mot duong khac (client goc) thi lan ghi do muon mot ket noi THU HAI trong khi ket noi
+   * thu nhat van dang giu khoa. Duoi tai that, n lan ghi dong thoi giu n ket noi va cung cho n ket
+   * noi nua — be ket noi can, va khong cai nao nha ra duoc. Do la mot deadlock khong hien ra o bat
+   * ky bai kiem tuan tu nao.
+   */
+  readonly tx: RunWriteTransaction;
+}
+
+/** Cau tra loi cua nguoi phan xu, dua ra TU BEN TRONG duong da khoa. */
+export type SerializedRunCloseVerdict =
+  { readonly close: true; readonly trigger: string } | { readonly close: false };
+
+export interface SerializedRunCloseInput {
+  readonly runId: string;
+  readonly at: Date;
+  /**
+   * PHAN XU, chay khi hang vong chay DA bi khoa.
+   *
+   * Nhan su that loi cua `transport-core`; nguoi phan xu tu hoi them nhung nguon ngoai ma no can.
+   * Phai la mot lan doc + tinh NGAN: no dang giu mot khoa hang tren mot giao dich dang mo.
+   */
+  readonly decide: (snapshot: SerializedRunSnapshot) => Promise<SerializedRunCloseVerdict>;
+  /**
+   * DAU VET BEN VUNG cua lan dong, dat o CUNG mot don vi cong viec voi buoc chuyen trang thai.
+   *
+   * Khong phai mot lan goi kho RIENG: mot vong chay `COMPLETED` ma khong co dong dau vet nao la
+   * mot su that da doi khong ai giai thich duoc — va do la khoang trong `#293` doi phai dong.
+   */
+  readonly trace: (before: VehicleRun, after: VehicleRun, trigger: string) => AppendAuditLogInput;
+}
+
+export interface SerializedRunCloseResult {
+  readonly run: VehicleRun;
+  /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
+  readonly transitioned: boolean;
+  readonly verdict: SerializedRunCloseVerdict;
+}
+
+/**
+ * VONG CHAY DA O DIEM CUOI khi mot lenh THEM VIEC MOI cham toi hang da khoa.
+ *
+ * Mot lop loi RIENG chu khong mot `Error` chung: `MovementService` phai dich no thanh
+ * `LEG_RUN_TERMINAL` — mot ma nguoi dung doc duoc — thay vi 500. Phep kiem o tang dich vu van con,
+ * nhung no doc TRUOC khi khoa nen no khong thay ban dong dang chay; cai nay thi thay.
+ */
+export class RunClosedForNewWorkError extends Error {
+  constructor(
+    readonly runId: string,
+    readonly status: VehicleRunStatus,
+  ) {
+    super(`Vong chay ${runId} da o trang thai ${status} — khong nhan them viec moi`);
+    this.name = 'RunClosedForNewWorkError';
+  }
+}
+
+export interface RunClosureCandidateQuery {
+  /** Lan hoan thanh muon nhat phai da cu hon moc nay. */
+  readonly completedBefore: Date;
+  /**
+   * Nguong nghi khach da khai, hoac `null`.
+   *
+   * `null` KHONG phai "khong loc gi": no nghia la khong con duong dong nao dua tren THOI GIAN, nen
+   * ung vien phai la "co the dong duoc" chu khong chi "da xong viec" — xem chu thich cua
+   * `listRunClosureCandidates`.
+   */
+  readonly idleHours: number | null;
+  /** Nhan bai dang hoat dong, hoac `null` khi khach chua khai bai nao. */
+  readonly depotLabel: string | null;
+  readonly limit: number;
+}
+
 export const RUN_CODE: UniqueIndexRef = {
   indexName: 'TransportVehicleRun_code_key',
   model: 'TransportVehicleRun',
@@ -167,7 +289,108 @@ export abstract class MovementRepository {
    */
   abstract findLatestRunForVehicle(vehicleId: string): Promise<VehicleRun | null>;
   abstract setRunStatus(id: string, status: VehicleRunStatus, at: Date): Promise<VehicleRun | null>;
+  /**
+   * DONG vong chay — buoc chuyen CO DIEU KIEN, va la lop chan CUOI cung chong dong hai lan.
+   *
+   * `setRunStatus()` ghi theo KHOA CHINH: hai nguoi ghi song song deu thay `status = 'ACTIVE'`,
+   * deu quyet dinh duoc phep dong, va ca hai deu ghi — ban sau ghi de `completedAt` cua ban truoc,
+   * va so dau vet co hai dong `transport.run.close.system` cho mot lan dong. Do la mot cuoc dua
+   * doc-roi-ghi, khong phai mot rang buoc.
+   *
+   * Ham nay chuyen phep kiem xuong chinh cau `UPDATE` (`WHERE status = 'ACTIVE'`), nen chi mot
+   * nguoi ghi doi duoc trang thai. Nguoi thua nhan `transitioned: false` kem trang thai HIEN TAI —
+   * mot ket qua binh thuong de hai worker cung chay mot luot quet khong sinh hai lan dong.
+   *
+   * `null` = khong tim thay vong chay. Phan biet duoc voi `transitioned: false` la ca diem.
+   */
+  abstract completeRunIfActive(id: string, at: Date): Promise<RunCloseAttempt | null>;
+
+  /**
+   * DONG DO HE THONG, TREN MOT DUONG DA SERIALIZE — `#293` R2.
+   *
+   * ==========================================================================================
+   * VI SAO `completeRunIfActive` MOT MINH KHONG DU
+   * ==========================================================================================
+   *
+   * `UPDATE ... WHERE status = 'ACTIVE'` chan duoc HAI LAN DONG. No khong chan duoc mot thu khac:
+   * mot nguoi lap ke hoach them mot chang moi vao vong chay GIUA luc phan xu doc su that va luc
+   * buoc chuyen duoc ghi. Ket qua la mot vong chay `COMPLETED` mang mot chang `PLANNED` — dung
+   * cai ma `#293` R3 goi la khong duoc phep ton tai.
+   *
+   * Nen o day khoa hang vong chay TRUOC, doc lai su that TREN duong da khoa, phan xu, roi moi
+   * chuyen trang thai. Moi duong ghi co the them viec moi cho vong chay (`createLeg`) deu phai
+   * gianh CUNG mot khoa — neu khong thi khoa nay chi lam cham chinh no.
+   *
+   * Tra ve `null` khi khong co vong chay nao mang dinh danh do.
+   */
+  abstract closeRunAsSystemSerialized(
+    input: SerializedRunCloseInput,
+  ): Promise<SerializedRunCloseResult | null>;
+
+  /**
+   * GIANH CHINH KHOA DO, cho mot nguoi ghi o NGOAI `transport-core` — `#293` R2.
+   *
+   * ==========================================================================================
+   * VI SAO KHOA PHAI O DAY, KHONG O CAPABILITY
+   * ==========================================================================================
+   *
+   * `closeRunAsSystemSerialized()` va `createLeg()` deu gianh khoa hang `TransportVehicleRun`. Mot
+   * capability tu viet lay cau `SELECT ... FOR UPDATE` cua rieng no se la cau lenh khoa THU BA cho
+   * cung mot hang — va thu tu khoa la mot tinh chat toan cuc, khong phai mot chi tiet cuc bo. Ba
+   * cho tu chon thu tu khoa la ba co hoi deadlock, va chung chi lo ra duoi tai that.
+   *
+   * Nen o day chi co MOT cau lenh khoa, va no dung chung cho ca ba duong ghi.
+   *
+   * ==========================================================================================
+   * `write` PHAI GHI QUA `scope.tx`
+   * ==========================================================================================
+   *
+   * Ghi qua client goc thi lan ghi do muon mot ket noi THU HAI trong khi ket noi thu nhat van dang
+   * giu khoa — xem `RunWriteScope.tx`. Ngoai ra no con pha vo tinh nguyen tu: mot loi sau do se
+   * cuon lai giao dich ma KHONG cuon lai lan ghi kia.
+   *
+   * Nem tu trong `write` thi giao dich cuon lai va loi di thang ra ngoai.
+   */
+  abstract underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T>;
   abstract cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null>;
+
+  /**
+   * UNG VIEN cho luot quet — `#293` R3.
+   *
+   * Tra ve mot TRANG GIOI HAN (`limit`) cac vong chay dang `ACTIVE` ma MOI chang deu da o trang
+   * thai cuoi va lan hoan thanh MUON NHAT da cu hon `completedBefore`. Dieu kien nam trong cau truy
+   * van chu khong nam trong bo nho: mot luot quet khoi phuc sau khi tien trinh chet phai tim lai
+   * duoc dung tap do tu su that nguon, khong tu mot con tro song.
+   *
+   * Day la tap UNG VIEN, khong phai tap KET LUAN. Con ke hoach mo, con hang tren thung, con phien
+   * cho — ba thu do khong nam trong hai bang nay, va `evaluateRunClosure()` moi la noi phan xu.
+   *
+   * Thu tu SAP XEP la tat dinh (`updatedAt`, roi `id`) de hai worker cung mot luot quet nhin thay
+   * cung mot trang theo cung mot thu tu.
+   *
+   * ============================================================================================
+   * VI SAO UNG VIEN PHAI LA "CO THE DONG DUOC", KHONG CHI "DA XONG VIEC"
+   * ============================================================================================
+   *
+   * `take` chi lay MOT trang. Mot ung vien quet ma khong dong duoc se quay lai o luot sau voi
+   * nguyen `updatedAt` cu, tuc no nam mai o dau trang va nhung vong chay phia sau khong bao gio
+   * duoc nhin toi. Do la mot cach hong IM LANG, va no da duoc do bang mot bai kiem truoc khi sua.
+   *
+   * Truong hop nguy hiem nhat la nhung vong chay KHONG BAO GIO dong duoc bang thoi gian: khach
+   * khong khai `closure.idleHours` thi mot chiec xe ket thuc viec o XA BAI se nam nguyen o trang
+   * thai `holding` mai mai (`RunClosureFacts` co y lam dieu do — khong doan mot nguong khach chua
+   * noi). Chung se chiem cho trong trang vinh vien.
+   *
+   * Nen khi khach CHUA khai nguong nghi, ung vien bi thu hep ve nhung vong chay CO THE dong duoc:
+   * mot chang da hoan thanh ket thuc tai BAI XE dang hoat dong. Do la mot phep LOC THO (so sanh
+   * chuoi, khong phai `sameSite()`), va no duoc phep sai theo huong BO SOT: mot vong chay ve bai
+   * voi nhan bai lech khoang trang van duoc duong SU KIEN dong ngay; luot quet chi la luoi an toan
+   * cho su kien da that lac, va no khong bao gio duoc phep dong bua mot vong chay chi vi doan sai.
+   *
+   * Khi khach CO khai nguong nghi thi moi vong chay het viec deu la ung vien that: chu so 0 o
+   * `updatedAt` la moc thoi gian, va "cu hon nguong" la mot su that se den.
+   */
+  abstract listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]>;
 
   abstract createLeg(input: CreateLegInput): Promise<RunLeg>;
   abstract findLeg(id: string): Promise<RunLeg | null>;
@@ -240,6 +463,47 @@ export class InMemoryMovementRepository extends MovementRepository {
   private readonly assignments = new Map<string, RunAssignment>();
   private readonly links = new Map<string, TripRunLegLink>();
   private readonly orderLinks = new Map<string, TripOrderLink>();
+  /** Hang doi mot-luot-mot theo vong chay — ban trong bo nho cua `SELECT ... FOR UPDATE`. */
+  private readonly runLocks = new Map<string, Promise<unknown>>();
+
+  /**
+   * Kho dau vet, de ban nay ghi dau vet dong vong chay o CUNG mot luot voi buoc chuyen trang thai.
+   *
+   * Tuy chon vi phan lon bo test cua cac mien khac dung kho nay ma khong quan tam den dau vet. Khi
+   * VANG mat, `closeRunAsSystemSerialized()` van dong dung nhu the — no chi khong co cho de dat
+   * hang dau vet, va bai `run-closure` nao doi bang chung do phai tiem kho vao.
+   */
+  constructor(private readonly traceStore?: AuditLogRepository) {
+    super();
+  }
+
+  /**
+   * MOT VONG CHAY, MOT LUOT — ban trong bo nho cua khoa hang.
+   *
+   * JavaScript don luong khong co nghia la khong co dua: moi `await` la mot cho nhuong luot, va
+   * hai lan goi dong xen ke nhau tai dung nhung diem do se cung doc thay `ACTIVE`. Ban Postgres
+   * xep hang bang `FOR UPDATE`; neu ban nay khong xep hang thi hai ban hien thuc cua CUNG mot kho
+   * chay theo hai luat khac nhau, va bai kiem xanh o day se khong noi gi ve duong that.
+   */
+  private async withRunLock<T>(runId: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.runLocks.get(runId) ?? Promise.resolve();
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Nguoi den sau xep hang SAU cai cong nay, khong sau ket qua cua `work()`: mot luot that bai
+    // van phai nha khoa, va no nha o `finally` ben duoi.
+    this.runLocks.set(
+      runId,
+      previous.then(() => held),
+    );
+    await previous;
+    try {
+      return await work();
+    } finally {
+      release();
+    }
+  }
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
     const now = iso(new Date());
@@ -386,6 +650,120 @@ export class InMemoryMovementRepository extends MovementRepository {
     return next;
   }
 
+  /**
+   * Ban trong bo nho cua phep dong CO DIEU KIEN.
+   *
+   * `Map` cua Node la don luong, nen phep `get` roi `set` o day KHONG co khe ho giua hai buoc —
+   * nhung no van phai kiem `status === 'ACTIVE'` y nhu ban Prisma. Ly do khong phai de chong dua
+   * (khong co dua), ma de hai ban chay CUNG MOT LUAT: `PERSISTENCE=memory` la mot duong chay that,
+   * va mot ban de lot mot lan dong thu hai se lam bai kiem dong thoi XANH o mot che do va DO o che
+   * do kia.
+   */
+  async completeRunIfActive(id: string, at: Date): Promise<RunCloseAttempt | null> {
+    const current = this.runs.get(id);
+    if (!current) return null;
+    if (current.status !== 'ACTIVE') return { run: current, transitioned: false };
+
+    const next: VehicleRun = {
+      ...current,
+      status: 'COMPLETED',
+      completedAt: iso(at),
+      updatedAt: iso(at),
+    };
+    this.runs.set(id, next);
+    return { run: next, transitioned: true };
+  }
+
+  /**
+   * CUNG mot hang doi voi `closeRunAsSystemSerialized()` va `createLeg()` — do la ca y nghia.
+   *
+   * `tx` la `null`: khong co giao dich nao o duong nay. Kho trong bo nho ghi thang vao `Map`, va
+   * mot loi nem ra giua chung KHONG cuon lai duoc — do la mot khac biet THAT so voi Postgres, va no
+   * duoc noi ra o day thay vi bi giau di. Cai duong nay VAN cuong che duoc la thu tu: hai nguoi ghi
+   * khong bao gio nhin thay cung mot anh chup.
+   */
+  async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
+    return this.withRunLock(runId, async () => {
+      const run = this.runs.get(runId);
+      if (!run) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+      return write({ run, tx: null });
+    });
+  }
+
+  async closeRunAsSystemSerialized(
+    input: SerializedRunCloseInput,
+  ): Promise<SerializedRunCloseResult | null> {
+    return this.withRunLock(input.runId, async () => {
+      const before = this.runs.get(input.runId);
+      if (!before) return null;
+
+      const verdict = await input.decide({ run: before, legs: this.legsOf(input.runId) });
+      if (!verdict.close) return { run: before, transitioned: false, verdict };
+
+      // Doc LAI sau khi nguoi phan xu tra loi: `decide()` co `await` ben trong no, nhung khoa hang
+      // van dang duoc giu nen khong ai doi duoc trang thai o giua. Doc lai la de phong dung mot
+      // truong hop: chinh nguoi phan xu do di ghi len vong chay nay.
+      const current = this.runs.get(input.runId);
+      if (!current) return null;
+      if (current.status !== 'ACTIVE') return { run: current, transitioned: false, verdict };
+
+      const after: VehicleRun = {
+        ...current,
+        status: 'COMPLETED',
+        completedAt: iso(input.at),
+        updatedAt: iso(input.at),
+      };
+      this.runs.set(input.runId, after);
+      await this.traceStore?.append(input.trace(current, after, verdict.trigger));
+      return { run: after, transitioned: true, verdict };
+    });
+  }
+
+  async listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]> {
+    const threshold = iso(query.completedBefore);
+    const candidates = [...this.runs.values()].filter((run) => {
+      if (run.status !== 'ACTIVE') return false;
+      const legs = this.legsOf(run.id);
+      if (legs.length === 0) return false;
+
+      let lastCompletedAt: string | null = null;
+      for (const leg of legs) {
+        if (leg.status === 'CANCELLED') continue;
+        if (leg.status !== 'COMPLETED' || leg.completedAt === null) return false;
+        if (lastCompletedAt === null || leg.completedAt > lastCompletedAt) {
+          lastCompletedAt = leg.completedAt;
+        }
+      }
+      if (lastCompletedAt === null || lastCompletedAt > threshold) return false;
+
+      /*
+       * PHEP LOC "CO THE DONG DUOC" — cung menh de voi ban Prisma, va cung ly do.
+       *
+       * Khach khong khai nguong nghi thi mot chiec xe xong viec o xa bai nam nguyen `holding` mai
+       * mai. No khong duoc chiem mot cho trong trang: do la cach mot luot quet co tran bien thanh
+       * mot luot quet BO SOT nhung vong chay phia sau, va bo sot do im lang.
+       */
+      if (query.idleHours === null) {
+        if (query.depotLabel === null) return false;
+        return legs.some(
+          (leg) => leg.status === 'COMPLETED' && leg.destinationLabel === query.depotLabel,
+        );
+      }
+      return true;
+    });
+
+    return candidates
+      .sort(
+        (left, right) =>
+          left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
+      )
+      .slice(0, query.limit);
+  }
+
+  private legsOf(runId: string): RunLeg[] {
+    return [...this.legs.values()].filter((leg) => leg.runId === runId);
+  }
+
   async cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null> {
     const current = this.runs.get(id);
     if (!current) return null;
@@ -400,7 +778,23 @@ export class InMemoryMovementRepository extends MovementRepository {
     return next;
   }
 
+  /**
+   * THEM MOT CHANG — gianh CUNG khoa vong chay voi duong dong.
+   *
+   * Phep kiem "vong chay con mo khong" o tang dich vu doc TRUOC khi khoa, nen no khong thay duoc
+   * mot lan dong dang chay. Phep kiem o day thi thay: hoac no chay TRUOC lan dong (va lan dong se
+   * doc lai thay mot chang moi con mo), hoac no chay SAU (va no thay `COMPLETED` roi tu choi). Cua
+   * so o giua bien mat vi ca hai deu di qua mot khoa.
+   */
   async createLeg(input: CreateLegInput): Promise<RunLeg> {
+    return this.withRunLock(input.runId, async () => this.insertLeg(input));
+  }
+
+  private insertLeg(input: CreateLegInput): RunLeg {
+    const run = this.runs.get(input.runId);
+    if (run && (run.status === 'COMPLETED' || run.status === 'CANCELLED')) {
+      throw new RunClosedForNewWorkError(input.runId, run.status);
+    }
     const now = iso(new Date());
     const leg: RunLeg = {
       id: randomUUID(),
