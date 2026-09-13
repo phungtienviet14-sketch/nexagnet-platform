@@ -203,6 +203,7 @@ const policyWith = (depots: TransportPlanningPolicy['depots']): TransportPlannin
   grouping: 'ONE_ORDER_PER_RUN',
   depots,
   closure: { idleHours: null },
+  sweep: { intervalSeconds: 60, batchSize: 50 },
 });
 
 describe('bai xe: mot bai hom nay, nhieu bai khong bi dong cua (#276 L5)', () => {

@@ -4,6 +4,8 @@ import { toBusinessDate } from '../business-date.js';
 import { CheckpointRepository } from '../checkpoint/checkpoint.repository.js';
 import { TransportCheckpointCoreFacts } from '../checkpoint/checkpoint-facts.port.js';
 import type { RunCheckpoint } from '../checkpoint/checkpoint.types.js';
+import { isTerminalRunStatus } from '../movement/movement-lifecycle.js';
+import { RunWriteGuard } from '../movement/run-write-guard.port.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
   TRANSPORT_CLOCK,
@@ -70,6 +72,16 @@ export class WaitingSessionService {
     private readonly sessions: WaitingSessionRepository,
     private readonly checkpoints: CheckpointRepository,
     private readonly core: TransportCheckpointCoreFacts,
+    /**
+     * RANH GIOI SERIALIZE cua vong chay — `#293` R2. BAT BUOC, khong `@Optional()`.
+     *
+     * Vang mat cong nay thi `start()` quay ve dung cua so ma lane nay dong lai, va no quay ve mot
+     * cach IM LANG: khong mot ma loi nao, khong mot dong log nao, chi mot phien cho thinh thoang
+     * nam canh mot vong chay da dong. `transport-checkpoint` luon di kem `transport-core` nen
+     * khong co cau hinh hop le nao thieu no — mot lan thieu la mot loi boot, va do dung la cho no
+     * phai keu.
+     */
+    private readonly runs: RunWriteGuard,
     @Inject(TRANSPORT_CORE_POLICY) private readonly corePolicy: TransportCorePolicy,
     @Optional() private readonly telemetry?: TelemetryService,
     @Optional() @Inject(TRANSPORT_CLOCK) private readonly clock?: () => Date,
@@ -190,17 +202,55 @@ export class WaitingSessionService {
   ): Promise<DeliveryWaitingSession> {
     const startedAt = this.now();
     try {
-      const session = await this.sessions.create({
-        runId,
-        legId: command.legId,
-        driverId,
-        arrivalCheckpointId: anchor.id,
-        reason: command.reason,
-        startedAt,
-        startedBy: command.authUserId,
-        startClientEventId: command.clientEventId,
-        note: command.note ?? null,
-        businessDate: toBusinessDate(startedAt, this.corePolicy.timeZone),
+      /*
+       * MO PHIEN TREN DUONG DA KHOA — `#293` R2, doan con lai sau `#290`.
+       *
+       * `evaluateWaitingStart()` o tren da doc trang thai vong chay mot lan roi. Ban doc do khong
+       * du: giua no va lan ghi nay, mot luot quet co the da khoa vong chay, hoi lai (chua thay
+       * phien nao), va ghi `COMPLETED`. Ket qua la mot vong chay o diem cuoi mang mot phien cho
+       * DANG MO — khong ma chan nao sai, khong phep kiem nao that bai, chi la hai nguoi ghi khong
+       * gap nhau.
+       *
+       * Duoi khoa thi cua so do bien thanh mot thu tu, va chi con hai truong hop:
+       *
+       *   · phien ghi TRUOC  -> lan dong doc lai (duoi cung khoa) thay `OPEN_WAITING_SESSION`, va
+       *                         no giu lai;
+       *   · lan dong ghi TRUOC -> phep kiem ngay duoi day doc thay trang thai cuoi va tu choi.
+       *
+       * Lan ghi PHAI di qua `scope.tx`: ghi ra ngoai giao dich dang giu khoa thi khoa khong che
+       * duoc gi — xem `RunWriteScope.tx`.
+       */
+      const session = await this.runs.underRunLock(runId, async (scope) => {
+        if (isTerminalRunStatus(scope.run.status)) {
+          /*
+           * `revalidated` phan biet mot lan tu choi o cong THU HAI voi mot lan tu choi o cong thu
+           * nhat. Hai cai giong het nhau khi doc ket qua, va khac han nhau khi doc nguyen nhan: cai
+           * nay nghia la vong chay vua dong TRONG LUC lai xe dang bam.
+           */
+          this.deny('waiting.start', 'WAITING_RUN_TERMINAL', {
+            runId,
+            legId: command.legId,
+            status: scope.run.status,
+            revalidated: true,
+          });
+          throw this.startErrorFor('WAITING_RUN_TERMINAL');
+        }
+
+        return this.sessions.create(
+          {
+            runId,
+            legId: command.legId,
+            driverId,
+            arrivalCheckpointId: anchor.id,
+            reason: command.reason,
+            startedAt,
+            startedBy: command.authUserId,
+            startClientEventId: command.clientEventId,
+            note: command.note ?? null,
+            businessDate: toBusinessDate(startedAt, this.corePolicy.timeZone),
+          },
+          scope.tx,
+        );
       });
       this.allow('waiting.start', 'WAITING_STARTED', {
         sessionId: session.id,

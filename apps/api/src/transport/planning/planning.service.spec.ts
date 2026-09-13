@@ -55,6 +55,7 @@ const planningPolicy = (
   grouping,
   depots: [{ code: 'DEPOT-HN', label: DEPOT_LABEL }],
   closure: { idleHours: null },
+  sweep: { intervalSeconds: 60, batchSize: 50 },
   ...over,
 });
 

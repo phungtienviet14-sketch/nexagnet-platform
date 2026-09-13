@@ -18,17 +18,35 @@ import {
   evaluateOrderTransition,
   evaluateRunCancel,
   evaluateRunTransition,
+  evaluateSystemRunClose,
+  isTerminalRunStatus,
 } from './movement-lifecycle.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
   MovementRepository,
   RUN_CODE,
+  RunClosedForNewWorkError,
   type CreateOrderInput,
   type CreateRunInput,
+  type RunCloseAttempt,
+  type RunClosureCandidateQuery,
+  type SerializedRunCloseVerdict,
+  type SerializedRunSnapshot,
   type TripOrderProjection,
   type TripProjection,
   type UpdateOrderInput,
 } from './movement.repository.js';
+
+/**
+ * PHAN XU LAI, chay tren su that doc DUOI KHOA hang vong chay.
+ *
+ * `MovementService` khong biet gi ve chinh sach dong: no chi bao dam rang cau tra loi cuoi cung
+ * duoc lay tren mot su that khong ai doi duoc nua. Chu the biet chinh sach la `PlanningService`, va
+ * no truyen phep phan xu cua no vao day.
+ */
+export type SystemRunCloseRevalidation = (
+  snapshot: SerializedRunSnapshot,
+) => Promise<SerializedRunCloseVerdict>;
 import type {
   Order,
   OrderStatus,
@@ -273,6 +291,18 @@ export class MovementService {
     return this.repository.listRuns();
   }
 
+  /**
+   * UNG VIEN cho luot quet dong vong chay — `#293` R3. Xem `MovementRepository` de biet vi sao tap
+   * nay la ung vien chu khong phai ket luan.
+   *
+   * Di qua dich vu chu khong qua kho: `PlanningService` va `RunClosureService` chi duoc nhin thay
+   * `MovementService`, va mot phuong thuc doc o day giu dung chieu phu thuoc do. Quy uoc cua lane
+   * L la *ghi* phai di qua dich vu; o day cung vay — lop tren khong cam vao kho.
+   */
+  listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]> {
+    return this.repository.listRunClosureCandidates(query);
+  }
+
   async getRun(id: string): Promise<VehicleRunDetail> {
     const run = await this.requireRun(id);
     return {
@@ -354,6 +384,19 @@ export class MovementService {
         note: command.note ?? null,
       })
       .catch((error: unknown) => {
+        /*
+         * VONG CHAY DA DONG GIUA HAI BUOC. Phep kiem o dau ham doc truoc khi co khoa nao, nen no
+         * khong nhin thay mot lan dong dang chay; kho — noi gianh cung khoa hang voi duong dong —
+         * thi nhin thay. Dich ve DUNG ma ma phep kiem kia se tra: nguoi dung khong duoc nhan hai
+         * cau tra loi khac nhau cho cung mot su that chi vi ho cham hon mot phan nghin giay.
+         */
+        if (error instanceof RunClosedForNewWorkError) {
+          throw this.deny('run.leg_change', 'LEG_RUN_TERMINAL', {
+            runId,
+            status: error.status,
+            by: 'ANOTHER_WRITER',
+          });
+        }
         throw this.legSequenceConflict(error, runId, command.sequence);
       });
 
@@ -508,16 +551,90 @@ export class MovementService {
    * Do la ly do no khong nam trong `transitionRun()` — duong kia la duong THU CONG, con duong nay
    * la duong TU DONG, va tron hai lai se lam mot lan bam tay trong y het mot lan he thong quyet.
    */
-  async closeRunAsSystem(runId: string, trigger: string): Promise<VehicleRun> {
+  async closeRunAsSystem(
+    runId: string,
+    trigger: string,
+    revalidate: SystemRunCloseRevalidation = async () => ({ close: true, trigger }),
+  ): Promise<RunCloseAttempt> {
     const before = await this.requireRun(runId);
-    const legs = await this.repository.listLegs(runId);
-    const decision = evaluateRunTransition(before.status, 'COMPLETED', { legCount: legs.length });
+
+    /*
+     * DA O DIEM CUOI — mot ket qua BINH THUONG, khong phai mot loi.
+     *
+     * Hai worker cung mot luot quet deu doc thay `ACTIVE` va deu quyet dinh duoc dong; den khi
+     * vao toi day thi mot ban da thang. Neu cho nay NEM, ke thua cuoc se bien mot lan dong da
+     * thanh cong thanh mot loi o tang tren — va `RunClosureService` se tra ve mot ngoai le cho
+     * mot trang thai hoan toan dung. Do la ly do `RunCloseAttempt.transitioned` ton tai.
+     *
+     * Phan biet voi vong chay CHUA CHAY: mot vong chay `PLANNED` khong duoc phep dong, va do la
+     * mot lan tu choi that — xem nhanh duoi.
+     *
+     * Phep kiem nay doc TRUOC khi co khoa nao, nen no la mot loi tat cho truong hop ro rang, khong
+     * phai lop bao ve. Lop bao ve nam duoi, tren duong da khoa.
+     */
+    if (isTerminalRunStatus(before.status)) {
+      this.allow('run.lifecycle_transition', 'RUN_ALREADY_TERMINAL', {
+        runId,
+        status: before.status,
+        because: trigger,
+        by: 'ANOTHER_WRITER',
+      });
+      return { run: before, transitioned: false };
+    }
+
+    const decision = evaluateSystemRunClose(before.status);
     if (!decision.allowed) {
       throw this.deny('run.lifecycle_transition', decision.reason, { runId, to: 'COMPLETED' });
     }
 
-    const after = await this.repository.setRunStatus(runId, 'COMPLETED', new Date());
-    if (!after) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+    /*
+     * MOT DON VI CONG VIEC: khoa hang -> doc lai -> phan xu lai -> chuyen trang thai -> dat dau vet.
+     *
+     * Truoc `#293` R2 o day co hai khoang trong. Thu nhat: phan xu doc su that TRUOC khi khoa, nen
+     * mot nguoi lap ke hoach chen duoc mot chang moi vao giua — va vong chay dong lai voi mot viec
+     * chua lam. Thu hai: dau vet duoc ghi bang mot lan goi kho RIENG sau khi buoc chuyen da commit,
+     * nen mot cu chet o giua de lai mot vong chay `COMPLETED` khong ai giai thich duoc.
+     *
+     * `revalidate` la cho nguoi goi phan xu LAI tren su that vua doc duoi khoa. Mac dinh la "dong
+     * di" — giu nguyen hop dong cu cho nhung duong goi khong mang mot phan xu nao.
+     */
+    const settled = await this.repository.closeRunAsSystemSerialized({
+      runId,
+      at: new Date(),
+      decide: (snapshot) => revalidate(snapshot),
+      trace: (from, to) =>
+        this.audit.entryFor({
+          actor: SYSTEM_ACTOR,
+          action: 'transport.run.close.system',
+          entityType: 'TransportVehicleRun',
+          entityId: runId,
+          before: from,
+          after: to,
+        }),
+    });
+    if (!settled) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+
+    if (!settled.verdict.close) {
+      /*
+       * PHAN XU LAI DA DOI Y. Su that doc duoi khoa khac su that doc truoc do — dung cai cua so ma
+       * lane nay dong lai. Khong phai mot loi: nguoi goi da co ly do co ma cua rieng no, va no se
+       * ghi ly do do vao so quyet dinh cua chinh no.
+       */
+      this.allow('run.lifecycle_transition', 'RUN_CLOSE_REVALIDATION_HELD', {
+        runId,
+        because: trigger,
+      });
+      return { run: settled.run, transitioned: false };
+    }
+
+    if (!settled.transitioned) {
+      this.allow('run.lifecycle_transition', 'RUN_ALREADY_TERMINAL', {
+        runId,
+        because: trigger,
+        by: 'ANOTHER_WRITER',
+      });
+      return { run: settled.run, transitioned: false };
+    }
 
     this.allow('run.lifecycle_transition', decision.reason, {
       runId,
@@ -525,17 +642,8 @@ export class MovementService {
       to: 'COMPLETED',
       because: trigger,
     });
-    await this.audit.append({
-      actor: SYSTEM_ACTOR,
-      action: 'transport.run.close.system',
-      entityType: 'TransportVehicleRun',
-      entityId: runId,
-      before,
-      after,
-    });
-    return after;
+    return { run: settled.run, transitioned: true };
   }
-
   /* ------------------------------------------------------------------ *
    * PHAN CONG LAI XE -- LICH SU
    * ------------------------------------------------------------------ */

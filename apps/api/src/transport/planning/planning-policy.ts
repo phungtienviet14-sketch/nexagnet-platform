@@ -30,12 +30,42 @@ export const DEFAULT_RUN_GROUPING: RunGrouping = 'ONE_ORDER_PER_RUN';
  */
 export const DEFAULT_RUN_CLOSURE_IDLE_HOURS: number | null = null;
 
+/**
+ * NHIP CUA LUOT QUET — hai so VAN HANH, khong phai hai nguong nghiep vu.
+ *
+ * Khac han `idleHours`: khong co con so nao o day quyet dinh mot vong chay CO duoc dong hay khong.
+ * Chung chi quyet dinh *bao lau hoi lai mot lan* va *moi lan hoi bao nhieu*. Mot khach khong khai
+ * gi van duoc mot luot quet chay dung — va do la khac biet giua "khong co cau hinh" va "khong co
+ * co che".
+ */
+export const DEFAULT_RUN_CLOSURE_SWEEP_INTERVAL_SECONDS = 60;
+export const DEFAULT_RUN_CLOSURE_SWEEP_BATCH_SIZE = 50;
+
+/**
+ * KHOANG DEM CHO NHANH "VE BAI" — duong bao hiem khi su kien bi mat.
+ *
+ * Binh thuong mot chang ve bai duoc phan xu ngay trong cung request ghi chang (`runs.controller`).
+ * Nhung neu tien trinh chet ngay sau khi ghi chang va truoc khi phan xu, vong chay do nam lai o
+ * `ACTIVE` ma khong con su kien nao danh thuc no. Luot quet vi vay phai nhin lai CA nhung vong chay
+ * vua moi het viec, khong chi nhung vong chay da qua nguong nghi.
+ *
+ * Hai phut la mot con so VAN HANH (nho hon mot nhip quet thong thuong la du) chu khong phai mot
+ * nguong nghiep vu: no khong lam vong chay nao dong SOM hon so voi duong su kien, chi lam no duoc
+ * phan xu lai khi duong su kien da that lac.
+ */
+export const RUN_CLOSURE_EVENT_BACKSTOP_MS = 120_000;
+
 export function tenantTransportPlanningPolicy(): TransportPlanningPolicy {
   const configured = loadTenantConfig().policies.transportPlanning;
   return {
     grouping: configured?.runGrouping ?? DEFAULT_RUN_GROUPING,
     depots: configured?.depots ?? [],
     closure: { idleHours: configured?.closure?.idleHours ?? DEFAULT_RUN_CLOSURE_IDLE_HOURS },
+    sweep: {
+      intervalSeconds:
+        configured?.sweep?.intervalSeconds ?? DEFAULT_RUN_CLOSURE_SWEEP_INTERVAL_SECONDS,
+      batchSize: configured?.sweep?.batchSize ?? DEFAULT_RUN_CLOSURE_SWEEP_BATCH_SIZE,
+    },
   };
 }
 

@@ -63,7 +63,18 @@ export const createRunSchema = z
   })
   .strict();
 
-export const runTransitionSchema = z.object({ to: z.enum(['ACTIVE', 'COMPLETED']) }).strict();
+/*
+ * `COMPLETED` KHONG con o day — `#293` R1.
+ *
+ * Dong mot vong chay la quyet dinh cua HE THONG, va no di duong rieng (`closeRunAsSystem`), cung
+ * khuon voi `CANCELLED`. Mot be mat HTTP van rao `COMPLETED` la mot loi moi: nguoi tich hop doc
+ * schema se tin rang ho gui duoc gia tri do, roi nhan mot loi tu choi o tang mien ma le ra ho
+ * khong bao gio phai cham toi.
+ *
+ * Tang mien VAN tu choi (`RUN_COMPLETE_REQUIRES_SYSTEM_PATH`) — hai lop, va lop thu hai moi la
+ * lop chan that: mot schema khong chung minh duoc rang khong con duong nao khac.
+ */
+export const runTransitionSchema = z.object({ to: z.enum(['ACTIVE']) }).strict();
 
 /**
  * `orderId` duoc phep gui kem mot chang `EMPTY` o tang schema, va bi tu choi o tang MIEN voi ma

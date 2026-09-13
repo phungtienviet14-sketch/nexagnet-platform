@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service.js';
 import { fromStoredAmount, toStoredAmount } from '../money.js';
 import { isUniqueViolationOn, type UniqueIndexRef } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   MovementRepository,
+  RunClosedForNewWorkError,
   type AssignRunInput,
   type CancelOrderInput,
   type CancelRunInput,
@@ -14,6 +16,11 @@ import {
   type ProjectTripInput,
   type ProjectTripOrderInput,
   type RunAssignmentChange,
+  type RunCloseAttempt,
+  type RunClosureCandidateQuery,
+  type RunWriteScope,
+  type SerializedRunCloseInput,
+  type SerializedRunCloseResult,
   type TripOrderProjection,
   type TripProjection,
   type UpdateOrderInput,
@@ -46,9 +53,16 @@ export const ACTIVE_RUN_ASSIGNMENT: UniqueIndexRef = {
  * ham `to*()` ben duoi.
  */
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-const model = (prisma: PrismaService, name: string): any =>
+const model = (prisma: PrismaService | TxClient, name: string): any =>
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   (prisma as unknown as Record<string, any>)[name];
+
+/**
+ * Loi ra cua mot GIAO DICH Prisma. Cung ly le voi `model()`: kieu that cua no khong ton tai truoc
+ * khi `prisma generate` chay, va ranh gioi kieu THAT van la cac ham `to*()` ben duoi.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+type TxClient = any;
 
 interface OrderRow {
   id: string;
@@ -347,6 +361,218 @@ export class PrismaMovementRepository extends MovementRepository {
     return row ? toRun(row) : null;
   }
 
+  /**
+   * DONG vong chay — `updateMany` CO DIEU KIEN, khong phai `update` theo khoa chinh.
+   *
+   * `updateMany` tra ve SO HANG da doi. Dieu kien `status: 'ACTIVE'` di xuong tan cau `UPDATE`,
+   * nen Postgres chu khong phai tang ung dung quyet dinh ai thang: hai giao dich song song thi
+   * hang bi khoa, mot ban doi duoc trang thai va ban kia thay `count = 0`.
+   *
+   * Khi `count = 0` thi van phai DOC LAI hang de tra ve su that hien tai — nguoi thua cuoc can
+   * biet vong chay dang o dau, va "da dong boi nguoi khac" khac han "khong tim thay".
+   */
+  async completeRunIfActive(id: string, at: Date): Promise<RunCloseAttempt | null> {
+    const updated = await model(this.prisma, 'transportVehicleRun').updateMany({
+      where: { id, status: 'ACTIVE' },
+      data: { status: 'COMPLETED', completedAt: at, updatedAt: at },
+    });
+    if (updated.count === 1) {
+      const row: RunRow | null = await model(this.prisma, 'transportVehicleRun').findUnique({
+        where: { id },
+      });
+      return row ? { run: toRun(row), transitioned: true } : null;
+    }
+
+    const current: RunRow | null = await model(this.prisma, 'transportVehicleRun').findUnique({
+      where: { id },
+    });
+    return current ? { run: toRun(current), transitioned: false } : null;
+  }
+
+  /**
+   * DONG DO HE THONG TREN MOT DUONG DA SERIALIZE — `#293` R2.
+   *
+   * ==========================================================================================
+   * THU TU BON BUOC, VA CA BON NAM TRONG MOT GIAO DICH
+   * ==========================================================================================
+   *
+   *   1. `SELECT ... FOR UPDATE` tren DUNG hang vong chay — moi duong ghi khac cham vao vong chay
+   *      nay (`createLeg`) deu gianh cung khoa do, nen tu day den `COMMIT` khong ai them viec moi;
+   *   2. doc lai vong chay + chang TREN giao dich nay;
+   *   3. hoi nguoi phan xu (`decide`) — no tu hoi them nhung nguon ngoai ma no can;
+   *   4. chuyen trang thai VA dat dau vet, cung mot `COMMIT`.
+   *
+   * Buoc 4 la cho khoang trong thu hai duoc dong. Truoc day dau vet di qua mot lan goi kho rieng
+   * SAU khi buoc chuyen da commit; mot cu chet o giua de lai mot vong chay `COMPLETED` khong co
+   * dong bang chung nao. Bay gio hai thu do song hoac chet cung nhau.
+   *
+   * ==========================================================================================
+   * `decide()` CHAY TRONG KHI KHOA DANG DUOC GIU
+   * ==========================================================================================
+   *
+   * Do la co y — `#293` doi phan xu doc su that TREN duong da khoa, khong truoc no. Cai gia la mot
+   * khoa hang bi giu qua mot vai lan doc; nen `decide()` phai NGAN va CHI DOC. `timeout` duoc noi
+   * ro thay vi de mac dinh 5s cua Prisma, de mot nguon ngoai cham lam luot quet bo qua vong chay
+   * do (rerun o luot sau) chu khong lam hong ca giao dich giua chung.
+   *
+   * Ke hoach (`OrderRunPlan`) KHONG duoc doc o day va do khong phai mot bo sot: mot ke hoach moi
+   * bao gio cung sinh chang truoc, va `createLeg` da gianh chinh khoa nay. Nen mot ke hoach moi
+   * khong the xuat hien ma khong keo theo mot chang moi ma buoc 2 se nhin thay.
+   */
+  async closeRunAsSystemSerialized(
+    input: SerializedRunCloseInput,
+  ): Promise<SerializedRunCloseResult | null> {
+    return this.prisma.$transaction(
+      async (tx: unknown) => {
+        const locked: unknown = await (tx as TxClient).$queryRaw`
+          SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${input.runId} FOR UPDATE`;
+        if (!Array.isArray(locked) || locked.length === 0) return null;
+
+        const row: RunRow | null = await model(tx as TxClient, 'transportVehicleRun').findUnique({
+          where: { id: input.runId },
+        });
+        if (!row) return null;
+        const before = toRun(row);
+        const legRows: LegRow[] = await model(tx as TxClient, 'transportRunLeg').findMany({
+          where: { runId: input.runId },
+          orderBy: [{ sequence: 'asc' }],
+        });
+
+        const verdict = await input.decide({ run: before, legs: legRows.map(toLeg) });
+        if (!verdict.close) return { run: before, transitioned: false, verdict };
+        if (before.status !== 'ACTIVE') return { run: before, transitioned: false, verdict };
+
+        const updated = await model(tx as TxClient, 'transportVehicleRun').updateMany({
+          where: { id: input.runId, status: 'ACTIVE' },
+          data: { status: 'COMPLETED', completedAt: input.at, updatedAt: input.at },
+        });
+        if (updated.count !== 1) {
+          // Khong the xay ra khi khoa dang duoc giu — giu lai nhanh nay lam luoi cuoi, va no tra ve
+          // dung hinh dang ma nguoi goi da biet xu ly (`transitioned: false`).
+          const current: RunRow | null = await model(
+            tx as PrismaService,
+            'transportVehicleRun',
+          ).findUnique({ where: { id: input.runId } });
+          return current ? { run: toRun(current), transitioned: false, verdict } : null;
+        }
+
+        const afterRow: RunRow | null = await model(
+          tx as PrismaService,
+          'transportVehicleRun',
+        ).findUnique({ where: { id: input.runId } });
+        if (!afterRow) return null;
+        const after = toRun(afterRow);
+
+        const entry = input.trace(before, after, verdict.trigger);
+        await model(tx as TxClient, 'auditLog').create({
+          data: {
+            actor: entry.actor,
+            action: entry.action,
+            entityType: entry.entityType,
+            entityId: entry.entityId,
+            before: entry.before === null ? Prisma.DbNull : entry.before,
+            after: entry.after === null ? Prisma.DbNull : entry.after,
+            requestId: entry.requestId,
+            createdAt: new Date(entry.createdAt),
+          },
+        });
+
+        return { run: after, transitioned: true, verdict };
+      },
+      { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
+    );
+  }
+
+  /**
+   * CUNG mot cau khoa voi `closeRunAsSystemSerialized()` va `createLeg()` — `#293` R2.
+   *
+   * Ba duong ghi, mot cau `SELECT ... FOR UPDATE` tren CUNG mot hang `TransportVehicleRun`. Do la
+   * ca diem cua ranh gioi nay: nguoi ghi o ngoai `transport-core` xep hang sau dung cai cong ma lan
+   * dong phai di qua.
+   *
+   * `ReadCommitted` la du, va no la MUC DUNG chu khong phai mot nhuong bo:
+   *
+   *   · lan doc lai hang vong chay xay ra SAU khi khoa da trong tay, nen no thay ban commit moi
+   *     nhat — khong phai anh chup luc mo giao dich;
+   *   · cai duoc bao ve la mot HANG cu the, va `FOR UPDATE` bao ve hang do o moi muc co lap;
+   *   · `Serializable` o day chi doi them chi phi va them loi `40001` phai thu lai, cho mot bat
+   *     bien ma khoa hang da du suc giu.
+   *
+   * Nem tu trong `write` thi Prisma cuon lai giao dich va nem tiep ra ngoai — nguoi goi giu nguyen
+   * cach bat loi cua minh, va lan ghi khong de lai gi.
+   */
+  async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx: unknown) => {
+        const locked: unknown = await (tx as TxClient).$queryRaw`
+          SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${runId} FOR UPDATE`;
+        if (!Array.isArray(locked) || locked.length === 0) {
+          throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+        }
+
+        const row: RunRow | null = await model(tx as TxClient, 'transportVehicleRun').findUnique({
+          where: { id: runId },
+        });
+        if (!row) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+
+        return write({ run: toRun(row), tx });
+      },
+      { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
+    );
+  }
+
+  async listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]> {
+    /*
+     * PHEP LOC "CO THE DONG DUOC" — xem chu thich dai o ban trong bo nho (`movement.repository.ts`).
+     *
+     * Khach khong khai nguong nghi: mot chiec xe xong viec o xa bai nam nguyen `holding` mai mai,
+     * nen no khong duoc chiem mot cho trong trang. Cai con lai co the dong duoc la vong chay VE
+     * BAI, va dieu kien do la mot chang da hoan thanh ket thuc tai bai dang hoat dong.
+     *
+     * So sanh chuoi THANG, khong `sameSite()`: mot phep chuan hoa hoa/thuong/khoang trang khong
+     * dien dat duoc trong SQL, va mot ban Prisma "gan dung" con te hon mot ban dung it hon — hai
+     * ban hien thuc cua cung mot kho phai cung MOT luat. Lech nhan chi lam BO SOT mot ung vien
+     * (duong su kien van dong no ngay), khong bao gio lam dong bua mot vong chay.
+     */
+    const possibleOnly = query.idleHours === null;
+    if (possibleOnly && query.depotLabel === null) return [];
+
+    const rows: RunRow[] = await model(this.prisma, 'transportVehicleRun').findMany({
+      where: {
+        status: 'ACTIVE',
+        // KHONG dung `some` + `none` roi tu tinh `completedAt` trong bo nho: dieu kien "lan hoan
+        // thanh muon nhat da cu hon nguong" phai nam trong cau truy van, neu khong moi luot quet
+        // keo ve toan bo vong chay dang chay cua doi xe.
+        legs: {
+          some: { status: 'COMPLETED', completedAt: { not: null, lte: query.completedBefore } },
+          every: {
+            OR: [
+              { status: 'COMPLETED', completedAt: { not: null, lte: query.completedBefore } },
+              { status: 'CANCELLED' },
+            ],
+          },
+        },
+        ...(possibleOnly
+          ? {
+              AND: [
+                {
+                  legs: {
+                    some: {
+                      status: 'COMPLETED',
+                      destinationLabel: { equals: query.depotLabel as string },
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: query.limit,
+    });
+    return rows.map(toRun);
+  }
+
   async cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null> {
     const row = await model(this.prisma, 'transportVehicleRun').update({
       where: { id },
@@ -360,24 +586,55 @@ export class PrismaMovementRepository extends MovementRepository {
     return row ? toRun(row) : null;
   }
 
+  /**
+   * THEM MOT CHANG — gianh CUNG khoa hang voi `closeRunAsSystemSerialized()`.
+   *
+   * Phep kiem "vong chay con mo khong" o `MovementService.addLeg` doc TRUOC khi co khoa nao, nen no
+   * khong nhin thay mot lan dong dang chay. Khoa o day thi nhin thay, va no bien mot cua so thanh
+   * mot thu tu:
+   *
+   *   · chang duoc ghi TRUOC   -> lan dong doc lai (duoi cung khoa) thay mot chang con mo, va no
+   *                               tu choi dong;
+   *   · lan dong ghi TRUOC     -> lenh nay doc thay `COMPLETED` va nem `RunClosedForNewWorkError`.
+   *
+   * Khong con truong hop thu ba. Do la ca dieu `#293` R2 doi: *"a concurrent planner must not be
+   * able to create/activate future work after the decision snapshot but before terminalization."*
+   */
   async createLeg(input: CreateLegInput): Promise<RunLeg> {
-    return toLeg(
-      await model(this.prisma, 'transportRunLeg').create({
-        data: {
-          runId: input.runId,
-          sequence: input.sequence,
-          kind: input.kind,
-          // Bat bien lap lai o day KHONG phai vi thua: `CHECK` cua DB la luoi cuoi cung, con dong
-          // nay la thu giu cho thong bao loi noi ve NGHIEP VU thay vi ve rang buoc SQL.
-          orderId: input.kind === 'EMPTY' ? null : input.orderId,
-          originLabel: input.originLabel,
-          destinationLabel: input.destinationLabel,
-          businessDate: input.businessDate,
-          distanceKm: input.distanceKm ?? null,
-          plannedDistanceKm: input.plannedDistanceKm ?? null,
-          note: input.note ?? null,
-        },
-      }),
+    return this.prisma.$transaction(
+      async (tx: unknown) => {
+        await (tx as TxClient).$queryRaw`
+          SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${input.runId} FOR UPDATE`;
+        const run: { status: VehicleRunStatus } | null = await model(
+          tx as TxClient,
+          'transportVehicleRun',
+        ).findUnique({ where: { id: input.runId }, select: { status: true } });
+        // Vong chay khong ton tai: de nguyen cho khoa ngoai cua DB tu choi — mot ma `RUN_NOT_FOUND`
+        // bia ra o day se de mot duong khac (`legSequenceConflict`) mat kha nang dich loi cua no.
+        if (run && (run.status === 'COMPLETED' || run.status === 'CANCELLED')) {
+          throw new RunClosedForNewWorkError(input.runId, run.status);
+        }
+
+        return toLeg(
+          await model(tx as TxClient, 'transportRunLeg').create({
+            data: {
+              runId: input.runId,
+              sequence: input.sequence,
+              kind: input.kind,
+              // Bat bien lap lai o day KHONG phai vi thua: `CHECK` cua DB la luoi cuoi cung, con
+              // dong nay la thu giu cho thong bao loi noi ve NGHIEP VU thay vi ve rang buoc SQL.
+              orderId: input.kind === 'EMPTY' ? null : input.orderId,
+              originLabel: input.originLabel,
+              destinationLabel: input.destinationLabel,
+              businessDate: input.businessDate,
+              distanceKm: input.distanceKm ?? null,
+              plannedDistanceKm: input.plannedDistanceKm ?? null,
+              note: input.note ?? null,
+            },
+          }),
+        );
+      },
+      { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
     );
   }
 
@@ -423,7 +680,7 @@ export class PrismaMovementRepository extends MovementRepository {
   async assignRun(runId: string, input: AssignRunInput): Promise<RunAssignmentChange> {
     try {
       return await this.prisma.$transaction(async (tx: unknown) => {
-        const delegate = model(tx as PrismaService, 'transportRunAssignment');
+        const delegate = model(tx as TxClient, 'transportRunAssignment');
         const active: AssignmentRow | null = await delegate.findFirst({
           where: { runId, effectiveTo: null },
         });

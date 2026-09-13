@@ -7,6 +7,7 @@ import { PrismaCheckpointRepository } from '../checkpoint/prisma-checkpoint.repo
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { MovementService } from '../movement/movement.service.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
+import { MovementRunWriteGuard } from '../movement/run-write-guard.port.js';
 import { describeStorageError, isUniqueViolationOn } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { PrismaWaitingSessionRepository } from './prisma-waiting.repository.js';
@@ -69,6 +70,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('phien cho tren Postgres that'
     sessions,
     checkpoints,
     new TransportCheckpointCoreFactsAdapter(movementRepo, fleet),
+    new MovementRunWriteGuard(movementRepo),
     POLICY,
     undefined,
     () => now,
@@ -216,6 +218,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('phien cho tren Postgres that'
       new PrismaWaitingSessionRepository(prisma),
       checkpoints,
       new TransportCheckpointCoreFactsAdapter(movementRepo, fleet),
+      new MovementRunWriteGuard(movementRepo),
       POLICY,
       undefined,
       () => now,

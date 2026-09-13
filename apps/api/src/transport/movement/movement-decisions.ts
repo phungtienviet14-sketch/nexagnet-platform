@@ -32,9 +32,23 @@ export type OrderCancelReason = (typeof ORDER_CANCEL_REASONS)[number];
 export const RUN_TRANSITION_REASONS = [
   'RUN_TRANSITION_APPLIED',
   'RUN_ALREADY_TERMINAL',
+  /**
+   * Phan xu lai TREN DUONG DA KHOA da doi y — `#293` R2.
+   *
+   * Su that doc truoc khi khoa noi "dong duoc"; su that doc SAU khi khoa noi khong. Giua hai luc do
+   * mot nguoi lap ke hoach da them viec moi. Day la lop bao ve lam viec dung nhu thiet ke, khong
+   * phai mot loi: ly do nghiep vu that nam trong so quyet dinh cua `planning.run_closure`.
+   */
+  'RUN_CLOSE_REVALIDATION_HELD',
   'RUN_ALREADY_IN_STATE',
   'RUN_TRANSITION_NOT_PERMITTED',
   'RUN_CANCEL_REQUIRES_DEDICATED_PATH',
+  /**
+   * DONG vong chay cung phai di duong rieng — va duong do la duong CUA HE THONG, khong phai mot
+   * tham so cua nguoi goi. `#293` R1: sep/ke toan lam viec theo DON, va mot vong chay chi duoc
+   * dong khi `evaluateRunClosure()` da cho phep. Xem `evaluateSystemRunClose()`.
+   */
+  'RUN_COMPLETE_REQUIRES_SYSTEM_PATH',
   /** Mot vong chay khong co chang nao thi khong co gi de chay. */
   'RUN_HAS_NO_LEG',
 ] as const;
@@ -184,9 +198,12 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
       'Nghia vu da hoan thanh: dieu chinh bang chung tu cong no, khong huy nguoc',
     RUN_TRANSITION_APPLIED: 'Da doi trang thai vong chay',
     RUN_ALREADY_TERMINAL: 'Vong chay da o trang thai cuoi',
+    RUN_CLOSE_REVALIDATION_HELD: 'Phan xu lai duoi khoa da giu vong chay lai',
     RUN_ALREADY_IN_STATE: 'Vong chay da o dung trang thai nay',
     RUN_TRANSITION_NOT_PERMITTED: 'May trang thai khong cho phep buoc chuyen nay',
     RUN_CANCEL_REQUIRES_DEDICATED_PATH: 'Huy vong chay phai di duong huy rieng',
+    RUN_COMPLETE_REQUIRES_SYSTEM_PATH:
+      'Dong vong chay la quyet dinh cua he thong: khong co duong nao de nguoi dung tu dong no',
     RUN_HAS_NO_LEG: 'Vong chay chua co chang nao de chay',
     RUN_CANCEL_RECORDED: 'Da huy vong chay',
     RUN_CANCEL_ALREADY_CANCELLED: 'Vong chay da huy tu truoc',

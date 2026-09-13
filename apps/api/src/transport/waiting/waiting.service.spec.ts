@@ -10,6 +10,7 @@ import {
 } from '../checkpoint/checkpoint-facts.port.js';
 import { DEFAULT_CHECKPOINT_POLICY } from '../checkpoint/checkpoint-lifecycle.js';
 import { InMemoryCheckpointRepository } from '../checkpoint/checkpoint.repository.js';
+import { RunWriteGuard, type RunWriteScope } from '../movement/run-write-guard.port.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { InMemoryWaitingSessionRepository } from './waiting.repository.js';
 import { WaitingSessionService } from './waiting.service.js';
@@ -41,6 +42,44 @@ class FakeCoreFacts extends TransportCheckpointCoreFacts {
   }
   async wasDriverEverAssignedToRun(runId: string, driverId: string): Promise<boolean> {
     return (this.assignments.get(runId) ?? []).includes(driverId);
+  }
+}
+
+/**
+ * RANH GIOI SERIALIZE gia lap — doc trang thai vong chay TU CHINH `FakeCoreFacts`.
+ *
+ * Khong khoa gi: mot bai kiem don luong khong co ai de xep hang, va `#293` R2 dat bang chung ve
+ * khoa o `run-closure-concurrency.int.spec.ts` tren Postgres that.
+ *
+ * Nhung no DOC LAI that, va do moi la phan co nghia o day: mot bai doi `runs.set(...)` sang
+ * `COMPLETED` giua chung se thay dung cai ma duong that thay. Mot double tra ve san mot vong chay
+ * `ACTIVE` co dinh se lam moi bai xanh o dung cho dang duoc dong lai.
+ */
+class FakeRunWriteGuard extends RunWriteGuard {
+  constructor(private readonly core: FakeCoreFacts) {
+    super();
+  }
+
+  async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
+    const facts = await this.core.findRun(runId);
+    if (!facts) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+    return write({
+      run: {
+        id: facts.id,
+        code: facts.code,
+        status: facts.status,
+        vehicleId: 'v.1',
+        businessDate: '2026-09-09',
+        startedAt: null,
+        completedAt: null,
+        note: null,
+        createdAt: '2026-09-09T00:00:00.000Z',
+        updatedAt: '2026-09-09T00:00:00.000Z',
+        cancelledAt: null,
+        cancellationReason: null,
+      },
+      tx: null,
+    });
   }
 }
 
@@ -128,6 +167,7 @@ describe('WaitingSessionService — WT-020', () => {
       sessions,
       checkpoints,
       core,
+      new FakeRunWriteGuard(core),
       { timeZone: TZ },
       undefined,
       () => now,
@@ -136,6 +176,7 @@ describe('WaitingSessionService — WT-020', () => {
       checkpoints,
       core,
       location,
+      new FakeRunWriteGuard(core),
       { timeZone: TZ },
       DEFAULT_CHECKPOINT_POLICY,
       undefined,
@@ -285,6 +326,7 @@ describe('WaitingSessionService — WT-020', () => {
       checkpoints,
       core,
       location,
+      new FakeRunWriteGuard(core),
       { timeZone: TZ },
       DEFAULT_CHECKPOINT_POLICY,
       undefined,
@@ -386,6 +428,7 @@ describe('WaitingSessionService — WT-020', () => {
       sessions,
       checkpoints,
       core,
+      new FakeRunWriteGuard(core),
       { timeZone: TZ },
       undefined,
       () => new Date('2026-09-09T06:00:00.000Z'),
