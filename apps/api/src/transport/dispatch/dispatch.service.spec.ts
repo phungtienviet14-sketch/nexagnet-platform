@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DispatchReadiness } from '../asset-compliance/vehicle-availability.js';
 import type { Order, RunLeg, VehicleRun } from '../movement/movement.types.js';
-import { DEFAULT_RUN_GROUPING } from '../planning/planning-policy.js';
+import {
+  DEFAULT_RUN_CLOSURE_SWEEP_BATCH_SIZE,
+  DEFAULT_RUN_CLOSURE_SWEEP_INTERVAL_SECONDS,
+  DEFAULT_RUN_GROUPING,
+} from '../planning/planning-policy.js';
 import type { RunGrouping, TransportPlanningPolicy } from '../planning/planning.types.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type { Vehicle } from '../transport.types.js';
@@ -47,10 +51,22 @@ import type { ObservationSample } from './vehicle-state-projection.js';
  * Che do `ONE_ORDER_PER_RUN` co bo bai RIENG ("cong che do gom nhom" o cuoi tep), va bo do moi la
  * cho kiem mac dinh that.
  */
+/*
+ * `sweep` di kem tu `#293` Lane R — luot quet dong vong chay dinh ky.
+ *
+ * Bo bai nay khong dung toi no (khong mot bai nao goi `sweep()`), nhung `TransportPlanningPolicy`
+ * la MOT doi tuong chinh sach cho ca mien lap ke hoach, va mot doi tuong thieu truong se de nguoi
+ * doc tuong che do quet la tuy chon. Lay thang hai mac dinh cua san pham thay vi go hai con so:
+ * neu mac dinh doi, bo bai nay doi theo ma khong ai phai nho.
+ */
 const planningPolicy = (grouping: RunGrouping): TransportPlanningPolicy => ({
   grouping,
   depots: [],
   closure: { idleHours: null },
+  sweep: {
+    intervalSeconds: DEFAULT_RUN_CLOSURE_SWEEP_INTERVAL_SECONDS,
+    batchSize: DEFAULT_RUN_CLOSURE_SWEEP_BATCH_SIZE,
+  },
 });
 const multiOrderPlanningPolicy = (): TransportPlanningPolicy => planningPolicy('MULTI_ORDER_RUN');
 
@@ -876,6 +892,10 @@ describe('cong che do gom nhom', () => {
       grouping: 'MULTI_ORDER_RUN',
       depots: [],
       closure: { idleHours: null },
+      sweep: {
+        intervalSeconds: DEFAULT_RUN_CLOSURE_SWEEP_INTERVAL_SECONDS,
+        batchSize: DEFAULT_RUN_CLOSURE_SWEEP_BATCH_SIZE,
+      },
     };
     const service = new DispatchService(
       core,
