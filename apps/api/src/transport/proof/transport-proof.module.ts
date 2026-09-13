@@ -10,6 +10,7 @@ import {
   PrismaGeofenceRepository,
 } from './geofence.repository.js';
 import { GeofenceService } from './geofence.service.js';
+import { LocationHealthService } from './location-health.service.js';
 import {
   InMemoryOperationalProofRepository,
   InMemoryProofChallengeRepository,
@@ -106,6 +107,7 @@ import {
     TrackingService,
     OperationalProofService,
     GeofenceService,
+    LocationHealthService,
   ],
   exports: [
     TrackingService,
@@ -117,6 +119,7 @@ import {
     // `ProofReviewController` dang ky o GOC, nen no CHI thay danh sach nay. Mot provider noi bo
     // (vd `TRANSPORT_PROOF_POLICY`) tiem vao controller do se chet luc khoi dong — da xay ra that.
     GeofenceService,
+    LocationHealthService,
   ],
 })
 export class TransportProofModule {}

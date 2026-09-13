@@ -1,4 +1,5 @@
 import { defineDecisionVocabulary } from '../../observability/decision-vocabulary.js';
+import type { LocationHealthReason } from './location-health.js';
 
 /**
  * TU VUNG QUYET DINH cua `transport-proof` — bam vi tri va chung cu van hanh.
@@ -155,6 +156,18 @@ export const TRACKING_HISTORY_READ_REASONS = [
 export type TrackingHistoryReadReason = (typeof TRACKING_HISTORY_READ_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
+ * tracking.location_health — LocationHealthService.forVehicle()
+ * ------------------------------------------------------------------ */
+/**
+ * DUNG LAI `LocationHealthReason` cua tang mien thay vi go lai mot mang thu hai.
+ *
+ * Hai danh sach song song la cach chac chan nhat de mot ma moi duoc phat ra ma khong co nhan —
+ * va `satisfies Record<...>` ben duoi se im lang vi no chi kiem danh sach NAY. Suy tu union goc
+ * thi them mot ma o `location-health.ts` ma quen nhan o day la mot loi BIEN DICH.
+ */
+export type LocationHealthDecisionReason = LocationHealthReason;
+
+/* ------------------------------------------------------------------ *
  * proof.record — OperationalProofService.record()
  * ------------------------------------------------------------------ */
 export const PROOF_RECORD_REASONS = [
@@ -232,6 +245,7 @@ export const PROOF_CHALLENGE_REASONS = [
 export type ProofChallengeReason = (typeof PROOF_CHALLENGE_REASONS)[number];
 
 export type TransportProofDecisionReason =
+  | LocationHealthDecisionReason
   | ProofRecordReason
   | ProofWithdrawReason
   | ProofChallengeReason
@@ -251,6 +265,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     'tracking.observation_ingest',
     'tracking.risk_assessed',
     'tracking.history_read',
+    'tracking.location_health',
     'geofence.register',
     'geofence.evaluate',
     'proof.record',
@@ -325,6 +340,15 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     CHALLENGE_EXPIRED: 'Lời thách thức đã quá hạn',
     CHALLENGE_ALREADY_USED: 'Lời thách thức đã được tiêu cho một chứng cứ khác',
     CHALLENGE_NOT_OWNED: 'Lời thách thức đó phát cho lái xe hoặc phiên khác',
+
+    TRACKING_NOT_EXPECTED: `Không ai yêu cầu bám vị trí xe này — không phải mất tín hiệu`,
+    RECENT_OBSERVATION: `Đang nhận vị trí trong cửa sổ lành mạnh`,
+    AWAITING_FIRST_OBSERVATION: `Đang chờ bản định vị đầu tiên, và cuộc chờ chưa quá hạn`,
+    OBSERVATION_AGEING: `Còn dữ liệu nhưng đã cũ hơn cửa sổ lành mạnh`,
+    NO_RECENT_OBSERVATION: `Đã từng nhận rồi ngưng — không có bản nào trong cửa sổ mất`,
+    NO_OBSERVATION_RECEIVED: `Kỳ vọng mở đã lâu mà chưa hề nhận được bản nào`,
+    PHONE_SILENT_TELEMATICS_RECENT: `Điện thoại im, phần cứng trên xe vẫn đang báo`,
+    NO_RECENT_OBSERVATION_ANY_SOURCE: `Không nguồn nào còn bản trong cửa sổ mất`,
 
     HISTORY_READ_GRANTED: 'Được đọc lịch sử toạ độ thô',
     HISTORY_READ_DENIED_NEED_TO_KNOW: 'Vai này chỉ được xem tóm tắt, không xem đường đi chi tiết',
