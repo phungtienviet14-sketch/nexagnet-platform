@@ -828,12 +828,7 @@ export type TollProvider = (typeof TOLL_PROVIDERS)[number];
 export const TOLL_SOURCE_KINDS = ['API', 'STATEMENT_FILE', 'INVOICE_PDF', 'MANUAL'] as const;
 export type TollSourceKind = (typeof TOLL_SOURCE_KINDS)[number];
 
-export const TOLL_TRANSACTION_KINDS = [
-  'TOLL_PASS',
-  'TOP_UP',
-  'ACCOUNT_FEE',
-  'ADJUSTMENT',
-] as const;
+export const TOLL_TRANSACTION_KINDS = ['TOLL_PASS', 'TOP_UP', 'ACCOUNT_FEE', 'ADJUSTMENT'] as const;
 export type TollTransactionKind = (typeof TOLL_TRANSACTION_KINDS)[number];
 
 export const TOLL_FILE_FORMATS = ['CSV', 'XLSX'] as const;
@@ -912,6 +907,22 @@ export interface TollAccountVehicleLink {
   readonly provenance: TollLinkProvenance;
   readonly createdAt: string;
   readonly createdBy: string;
+}
+
+/**
+ * SO XE DANG NHAN CHI TRA cua MOT tai khoan, DO MAY CHU DEM.
+ *
+ * Man hinh KHONG duoc tu dem con so nay tu mot danh sach doan noi ma no dang co: no chi tai doan
+ * noi cua tai khoan dang chon, nen moi tai khoan con lai se hien `0` — mot con so doc ra nhu mot
+ * su that van hanh chu khong nhu mot o chua tai xong.
+ *
+ * `onDate` la ngay nghiep vu cua may chu. Man hinh duoc phep noi ra moc nay, va KHONG duoc thay no
+ * bang dong ho cua trinh duyet.
+ */
+export interface TollAccountLinkCount {
+  readonly accountId: string;
+  readonly effectiveLinkCount: number;
+  readonly onDate: BusinessDate;
 }
 
 export interface TollProviderReadiness {

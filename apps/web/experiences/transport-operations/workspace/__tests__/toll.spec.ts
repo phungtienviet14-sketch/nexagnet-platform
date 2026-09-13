@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { TOLL_REVIEW_STATE_LABEL } from '../../customer-view';
+import { TOLL_REVIEW_STATES } from '../../transport-types';
 import type {
   BusinessDate,
   TollAccount,
+  TollAccountLinkCount,
   TollAccountVehicleLink,
   TollCandidate,
   TollCandidatePage,
@@ -52,6 +54,13 @@ const link = (overrides: Partial<TollAccountVehicleLink> = {}): TollAccountVehic
   provenance: 'MANUAL',
   createdAt: '2026-09-01T02:00:00Z',
   createdBy: 'operator',
+  ...overrides,
+});
+
+const count = (overrides: Partial<TollAccountLinkCount> = {}): TollAccountLinkCount => ({
+  accountId: 'acc-1',
+  effectiveLinkCount: 1,
+  onDate: DATE,
   ...overrides,
 });
 
@@ -127,6 +136,27 @@ describe('doi soat KHAC da thanh toan', () => {
 
   it('`MATCHED` noi ve XE, khong noi ve tien', () => {
     expect(toTollCandidateRow(candidate()).matchStateLabel).toBe('Đã khớp xe');
+  });
+
+  /**
+   * HOI QUY — soat doc lap 13/09/2026, finding 3.
+   *
+   * Hang cho chon giua nut "Mo lai" va "Xac nhan" bang `reviewStateLabel === 'Đã có người xác
+   * nhận'`. Sua mot chu trong bang nhan — hoac them mot ban dich — doi hanh vi cua nut ma khong
+   * lam do mot bai kiem nao.
+   */
+  it('hang mang trang thai THO de hanh vi khong phu thuoc chu hien thi', () => {
+    for (const state of TOLL_REVIEW_STATES) {
+      expect(toTollCandidateRow(candidate({ reviewState: state })).reviewState).toBe(state);
+    }
+  });
+
+  it('doi nhan hien thi KHONG doi duoc trang thai tho', () => {
+    const row = toTollCandidateRow(candidate({ reviewState: 'CONFIRMED' }));
+
+    // Hai truong tra loi hai cau hoi khac nhau, va chi mot trong hai duoc phep dieu khien mot nut.
+    expect(row.reviewState).toBe('CONFIRMED');
+    expect(row.reviewStateLabel).not.toBe(row.reviewState);
   });
 });
 
@@ -309,18 +339,53 @@ describe('ban doc thu cua mot lan nap tep', () => {
  * ================================================================== */
 
 describe('tai khoan va so dang ky xe nhan chi tra', () => {
-  it('dem doan DANG hieu luc theo truong `effectiveTo`, khong so voi dong ho may', () => {
+  /**
+   * HOI QUY — soat doc lap 13/09/2026, finding 1.
+   *
+   * Ban truoc nhan mot mang doan noi roi tu dem. Man hinh chi tai doan noi cua tai khoan DANG
+   * CHON, nen tai khoan khac deu hien `0` — mot con so doc ra nhu su that van hanh. Nay con so do
+   * do MAY CHU dem cho ca bang.
+   */
+  it('HAI tai khoan cung co xe -> moi tai khoan hien so cua rieng no', () => {
     const rows = toTollAccountRows(
-      [account()],
+      [account({ id: 'acc-1' }), account({ id: 'acc-2', accountNo: '9704xxxx5678' })],
       [
-        link({ id: 'l1', effectiveTo: null }),
-        link({ id: 'l2', effectiveTo: '2026-08-31' as BusinessDate }),
-        link({ id: 'l3', accountId: 'acc-khac', effectiveTo: null }),
+        count({ accountId: 'acc-1', effectiveLinkCount: 1 }),
+        count({ accountId: 'acc-2', effectiveLinkCount: 3 }),
       ],
     );
 
-    // Chi l1: l2 da het hieu luc, l3 thuoc tai khoan khac.
+    // Day la ca hong cu the: truoc khi sua, mot trong hai dong nay luon la '0'.
     expect(rows[0]?.effectiveLinkCountLabel).toBe('1');
+    expect(rows[1]?.effectiveLinkCountLabel).toBe('3');
+  });
+
+  it('tai khoan CO trong bang dem voi gia tri 0 -> hien "0"', () => {
+    const rows = toTollAccountRows(
+      [account({ id: 'acc-1' })],
+      [count({ accountId: 'acc-1', effectiveLinkCount: 0 })],
+    );
+
+    expect(rows[0]?.effectiveLinkCountLabel).toBe('0');
+  });
+
+  it('tai khoan KHONG co trong bang dem -> `null`, KHONG phai "0"', () => {
+    const rows = toTollAccountRows([account({ id: 'acc-1' })], []);
+
+    // "Chua doc duoc con so" khac han "khong co xe nao". Thay mot cai bang cai kia chinh la loi ma
+    // ban soat da bat.
+    expect(rows[0]?.effectiveLinkCountLabel).toBeNull();
+  });
+
+  it('phep dem KHONG con doc `effectiveTo` cua doan noi o phia man hinh', () => {
+    const rows = toTollAccountRows(
+      [account({ id: 'acc-1' })],
+      [count({ accountId: 'acc-1', effectiveLinkCount: 2 })],
+    );
+
+    // May chu da tinh "dang hieu luc" theo ngay nghiep vu cua no. Neu man hinh dem lai mot lan nua
+    // theo `effectiveTo === null`, hai con so se lech nhau o dung nhung doan co ngay ket thuc.
+    expect(rows[0]?.effectiveLinkCountLabel).toBe('2');
   });
 
   it('doan dang hieu luc va doan da dong duoc phan biet bang sac thai', () => {

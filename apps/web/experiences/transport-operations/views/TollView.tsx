@@ -8,6 +8,7 @@ import {
   useNavigationInput,
   useTollAccountLinks,
   useTollAccounts,
+  useTollLinkCounts,
   useTollProviders,
 } from '../hooks/useTransportWorkspace';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
@@ -21,6 +22,7 @@ import {
   type TollProviderRow,
 } from '../workspace/toll';
 import { TollCandidateQueue } from './TollCandidateQueue';
+import { TollImport } from './TollImport';
 
 /**
  * Man PHI DUONG BO (ETC).
@@ -51,6 +53,16 @@ export function TollView() {
   const providers = toSectionQuery(useTollProviders(navigation));
   const accounts = toSectionQuery(useTollAccounts(navigation));
   const links = toSectionQuery(useTollAccountLinks(navigation, selectedAccountId));
+  /*
+   * HAI nguon KHAC NHAU cho hai cau hoi khac nhau, va gop chung lai la loi da duoc soat doc lap
+   * chi ra:
+   *
+   *   · `links` tra loi *"tai khoan DANG CHON noi voi nhung xe nao"* — no la du lieu cua bang duoi;
+   *   · `linkCounts` tra loi *"moi tai khoan dang co bao nhieu xe"* — no la mot cot cua bang tren.
+   *
+   * Dung `links` cho ca hai thi moi tai khoan chua duoc chon se hien `0`.
+   */
+  const linkCounts = toSectionQuery(useTollLinkCounts(navigation));
 
   if (!hasOperationsScope(navigation.role)) {
     return (
@@ -63,7 +75,9 @@ export function TollView() {
 
   const capabilities = tollCapabilities(navigation.role);
   const providerRows = providers.data ? toTollProviderRows(providers.data) : [];
-  const accountRows = toTollAccountRows(accounts.data ?? [], links.data ?? []);
+  // `linkCounts.data ?? []` chu khong `?? links.data`: chua doc duoc so dem thi cot do hien mot
+  // dau gach, khong hien `0`.
+  const accountRows = toTollAccountRows(accounts.data ?? [], linkCounts.data ?? []);
   const selectedAccount = (accounts.data ?? []).find((account) => account.id === selectedAccountId);
   const linkRows = toTollLinkRows(
     links.data ?? [],
@@ -120,6 +134,17 @@ export function TollView() {
           onRetry={links.refetch}
         />
       )}
+
+      {/*
+       * NAP dat TRUOC hang cho, va do la thu tu cua chinh cong viec: hang cho rong cho den khi co
+       * mot lan nap. Dat hang cho len tren thi man hinh mo ra bang mot o trong ma khong noi duoc
+       * lam sao de lap day no.
+       */}
+      <TollImport
+        navigation={navigation}
+        readiness={providers.data?.readiness ?? []}
+        canImport={capabilities.canImport}
+      />
 
       {capabilities.canReadReview ? <TollCandidateQueue navigation={navigation} /> : null}
     </>
@@ -275,7 +300,7 @@ function AccountsPanel({
               key: 'links',
               header: 'Xe đang nhận chi trả',
               isNumeric: true,
-              render: (row: TollAccountRow) => row.effectiveLinkCountLabel,
+              render: (row: TollAccountRow) => row.effectiveLinkCountLabel ?? '—',
             },
           ]}
           rows={rows}

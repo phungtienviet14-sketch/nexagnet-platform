@@ -21,11 +21,13 @@ import {
 import { canPerform } from '../transport-actions';
 import type {
   TollAccount,
+  TollAccountLinkCount,
   TollAccountVehicleLink,
   TollCandidate,
   TollCandidatePage,
   TollImportPreview,
   TollProviderSurface,
+  TollReviewState,
 } from '../transport-types';
 
 /**
@@ -66,31 +68,69 @@ export interface TollAccountRow {
   readonly holderLabel: string;
   readonly activeLabel: string;
   readonly activeTone: StatusTone;
-  /** So doan DANG hieu luc — tuc `effectiveTo === null`, doc tu truong, khong so voi dong ho may. */
-  readonly effectiveLinkCountLabel: string;
+  /**
+   * So xe DANG nhan chi tra, DO MAY CHU DEM.
+   *
+   * `null` = chua doc duoc con so nay. KHONG duoc thay bang `0`: hai dieu do khac han nhau, va
+   * `0` la cai sai da xay ra that — xem khoi chu thich cua `toTollAccountRows`.
+   */
+  readonly effectiveLinkCountLabel: string | null;
 }
 
-const isEffectiveNow = (link: TollAccountVehicleLink): boolean => link.effectiveTo === null;
-
+/**
+ * DEM DO MAY CHU LAM, va man hinh chi hien lai.
+ *
+ * ============================================================================================
+ * VI SAO KHONG DEM O DAY NUA — MOT LOI THAT, KHONG PHAI MOT SO THICH KIEN TRUC
+ * ============================================================================================
+ *
+ * Ban truoc nhan mot mang `links` roi dem `link.accountId === account.id`. Van de khong nam o phep
+ * dem ma nam o CAI MANG: man hinh chi tai doan noi cua tai khoan DANG CHON. Nen khi chua chon gi,
+ * moi tai khoan hien `0`; chon A thi A dung con B, C van `0` du chung co xe.
+ *
+ * Va khong ai doc `0` do nhu "chua tai du lieu". Nguoi ta doc no la *"tai khoan nay chua noi xe
+ * nao"* roi di mo mot doan noi da ton tai — tuc man hinh gay ra mot thao tac sai, khong chi hien
+ * sai.
+ *
+ * Nen `counts` den tu `GET /transport/toll/accounts/link-counts`: mot cau tra loi ve CA BANG, va
+ * "dang hieu luc" duoc tinh theo NGAY NGHIEP VU cua may chu chu khong theo `effectiveTo === null`
+ * (mot doan mo tu thang sau cung co `effectiveTo` rong).
+ *
+ * Tai khoan KHONG co trong `counts` cho ra `null` chu khong `0` — chua doc duoc mot con so thi
+ * man hinh phai noi rang no chua doc duoc.
+ */
 export const toTollAccountRow = (
   account: TollAccount,
-  links: readonly TollAccountVehicleLink[],
-): TollAccountRow => ({
-  id: account.id,
-  providerLabel: TOLL_PROVIDER_LABEL[account.provider],
-  accountNo: account.accountNo,
-  holderLabel: account.holderName ?? '—',
-  activeLabel: account.active ? 'Đang dùng' : 'Đã ngừng',
-  activeTone: account.active ? 'go' : 'flat',
-  effectiveLinkCountLabel: formatCount(
-    links.filter((link) => link.accountId === account.id && isEffectiveNow(link)).length,
-  ),
-});
+  counts: ReadonlyMap<string, number>,
+): TollAccountRow => {
+  const count = counts.get(account.id);
+  return {
+    id: account.id,
+    providerLabel: TOLL_PROVIDER_LABEL[account.provider],
+    accountNo: account.accountNo,
+    holderLabel: account.holderName ?? '—',
+    activeLabel: account.active ? 'Đang dùng' : 'Đã ngừng',
+    activeTone: account.active ? 'go' : 'flat',
+    effectiveLinkCountLabel: count === undefined ? null : formatCount(count),
+  };
+};
 
 export const toTollAccountRows = (
   accounts: readonly TollAccount[],
-  links: readonly TollAccountVehicleLink[],
-): readonly TollAccountRow[] => accounts.map((account) => toTollAccountRow(account, links));
+  counts: readonly TollAccountLinkCount[],
+): readonly TollAccountRow[] => {
+  const byAccount = new Map(counts.map((row) => [row.accountId, row.effectiveLinkCount]));
+  return accounts.map((account) => toTollAccountRow(account, byAccount));
+};
+
+/**
+ * Doan noi nay con DE NGO khong — dung cho HUY HIEU cua tung dong trong bang doan noi.
+ *
+ * KHAC voi phep dem o tren, va su khac nhau la co y: o day ky han day du (`periodLabel`) nam ngay
+ * canh huy hieu, nen nguoi doc thay duoc ca hai. Phep dem thi khong co cho de bay ky han, nen no
+ * phai do may chu tinh theo ngay nghiep vu.
+ */
+const isEffectiveNow = (link: TollAccountVehicleLink): boolean => link.effectiveTo === null;
 
 export interface TollLinkRow {
   readonly id: string;
@@ -285,6 +325,16 @@ export interface TollCandidateRow {
   readonly stationLabel: string;
   readonly matchStateLabel: string;
   readonly matchStateTone: StatusTone;
+  /**
+   * TRANG THAI THO, giu nguyen kieu — va no o day de HANH VI khong doc chu hien thi.
+   *
+   * Ban truoc, nut "Mo lai / Xac nhan" chon nhanh bang `reviewStateLabel === 'Đã có người xác
+   * nhận'`. Mot lan sua chu trong `TOLL_REVIEW_STATE_LABEL` — hay mot ban dich — se lang le doi
+   * hanh vi cua nut: khong mot bai kiem kieu nao do duoc, va man hinh van bien dich.
+   *
+   * Nhan la de NGUOI doc; quyet dinh phai doc mot gia tri co kieu.
+   */
+  readonly reviewState: TollReviewState;
   readonly reviewStateLabel: string;
   readonly reviewStateTone: StatusTone;
   readonly duplicateOfCandidateId: string | null;
@@ -307,6 +357,7 @@ export const toTollCandidateRow = (candidate: TollCandidate): TollCandidateRow =
   stationLabel: candidate.stationLabel ?? '—',
   matchStateLabel: candidate.matchState ? TOLL_MATCH_STATE_LABEL[candidate.matchState] : '—',
   matchStateTone: candidate.matchState ? tollMatchStateTone(candidate.matchState) : 'flat',
+  reviewState: candidate.reviewState,
   reviewStateLabel: TOLL_REVIEW_STATE_LABEL[candidate.reviewState],
   reviewStateTone: tollReviewStateTone(candidate.reviewState),
   duplicateOfCandidateId: candidate.duplicateOfCandidateId,

@@ -600,6 +600,37 @@ export function useTollAccountLinks(input: NavigationInput, accountId: string | 
 }
 
 /**
+ * LICH SU CAC LAN NAP bang ke ETC.
+ *
+ * Gac bang `transport.toll.review.read` chu khong `transport.toll.import`: doc lai xem ai da nap
+ * gi la viec cua NGUOI DOI SOAT, con `import` la quyen GHI. Mot vai chi doi soat van phai thay
+ * duoc nguon cua nhung dong minh dang xu ly — neu khong, mot dong sai khong truy nguoc duoc ve tep
+ * da sinh ra no.
+ */
+export function useTollImports(input: NavigationInput, provider?: TollProvider | null) {
+  return useQuery({
+    queryKey: ['transport', 'toll', 'imports', provider ?? null],
+    queryFn: () => transportApi.toll.imports(provider ?? undefined),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.review.read'),
+  });
+}
+
+/**
+ * SO XE DANG NHAN CHI TRA cua TUNG tai khoan.
+ *
+ * KHONG phu thuoc tai khoan dang chon, va do la ca ly do no ton tai: con so nay xuat hien o MOI
+ * dong cua bang tai khoan, nen no khong duoc lay tu `useTollAccountLinks` — cai do chi tra loi ve
+ * mot tai khoan.
+ */
+export function useTollLinkCounts(input: NavigationInput) {
+  return useQuery({
+    queryKey: [...TRANSPORT_QUERY_KEYS.tollAccounts, 'link-counts'],
+    queryFn: () => transportApi.toll.linkCounts(),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.account.read'),
+  });
+}
+
+/**
  * HANG CHO DOI SOAT. `queryKey` mang CA BO LOC — cung ly le voi hop thu nhien lieu: hai bo loc la
  * hai cau hoi khac nhau, va dung chung mot o nho se hien ket qua cua lan hoi truoc.
  */

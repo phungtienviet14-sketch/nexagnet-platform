@@ -74,7 +74,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Nap du lieu ETC tren Postgres
     audit,
     policy,
   );
-  const accounts = new TollAccountService(repository, core, audit);
+  const accounts = new TollAccountService(repository, core, audit, policy);
 
   async function cleanup(): Promise<void> {
     const imports = await prisma.transportTollImport.findMany({
@@ -532,5 +532,47 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Nap du lieu ETC tren Postgres
         },
       }),
     ).rejects.toThrow();
+  });
+
+  /**
+   * DEM XE DANG NHAN CHI TRA — tren Postgres THAT.
+   *
+   * Hoi quy cho finding 1 cua soat doc lap 13/09/2026. Bo bai trong bo nho da khoa nghia; hang nay
+   * khoa duong DI QUA KHO: `listAllLinks()` phai that su tra ve doan noi cua CA HAI tai khoan, va
+   * phep dem phai gan dung con so vao dung tai khoan.
+   *
+   * Khang dinh theo TUNG tai khoan chu khong theo do dai mang: cac bai khac trong tep nay cung tao
+   * tai khoan, va mot phep dem tren `length` se do vi mot ly do khong lien quan gi den dieu dang
+   * duoc chung minh.
+   */
+  it('HAI tai khoan cung co xe -> moi tai khoan dem duoc so cua rieng no', async () => {
+    const first = await newAccount('COUNT-1');
+    const second = await newAccount('COUNT-2');
+    const vehicleA = await newVehicle('101.11');
+    const vehicleB = await newVehicle('102.22');
+    const vehicleC = await newVehicle('103.33');
+
+    const open = (accountId: string, vehicleId: string, effectiveTo: string | null) =>
+      accounts.openLink(
+        {
+          accountId,
+          vehicleId,
+          providerVehicleRef: null,
+          effectiveFrom: '2020-01-01',
+          effectiveTo,
+        },
+        'ke-toan',
+      );
+
+    await open(first.id, vehicleA, null);
+    await open(second.id, vehicleB, null);
+    // Doan DA DONG: khong duoc dem, va no o day de phep dem phai that su loc chu khong chi cong.
+    await open(second.id, vehicleC, '2020-06-30');
+
+    const counts = await accounts.countEffectiveLinksByAccount();
+    const byAccount = new Map(counts.map((row) => [row.accountId, row.effectiveLinkCount]));
+
+    expect(byAccount.get(first.id)).toBe(1);
+    expect(byAccount.get(second.id)).toBe(1);
   });
 });

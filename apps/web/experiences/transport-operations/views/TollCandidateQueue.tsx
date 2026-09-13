@@ -123,7 +123,15 @@ export function TollCandidateQueue({ navigation }: { readonly navigation: Naviga
           </>
         ) : null}
 
-        {row.reviewStateLabel === 'Đã có người xác nhận' ? (
+        {/*
+         * So bang TRANG THAI CO KIEU, khong bang chu hien thi.
+         *
+         * Ban truoc so `row.reviewStateLabel === 'Đã có người xác nhận'`. Doi mot chu trong
+         * `TOLL_REVIEW_STATE_LABEL` — sua chinh ta, hay them mot ban dich — se lang le doi hanh vi
+         * cua nut nay tu "Mo lai" thanh "Xac nhan". `tsc` khong bat duoc, va khong mot bai kiem
+         * nao doc ra rang van de nam o mot chuoi.
+         */}
+        {row.reviewState === 'CONFIRMED' ? (
           <button
             type="button"
             className="tx-button tx-button--quiet"

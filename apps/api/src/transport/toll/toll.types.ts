@@ -73,6 +73,29 @@ export interface TollAccountVehicleLink {
   readonly createdBy: string;
 }
 
+/**
+ * SO XE DANG NHAN CHI TRA cua MOT tai khoan, tinh vao mot ngay nghiep vu.
+ *
+ * ========================================================================
+ * VI SAO CON SO NAY PHAI DO MAY CHU TINH
+ * ========================================================================
+ *
+ * Mot man hinh muon hien con so nay cho CA BANG tai khoan chi co hai duong: hoi tung tai khoan mot
+ * (mot bang muoi dong se ban muoi yeu cau), hoac tu dem tren danh sach doan noi ma no dang co.
+ * Duong thu hai la cho mot loi that da xay ra: man hinh chi tai doan noi cua tai khoan DANG CHON
+ * roi dem cho MOI dong, nen tai khoan chua chon deu hien `0`. Mot so `0` sai khong doc ra nhu mot
+ * loi — no doc ra nhu mot su that van hanh (*"tai khoan nay chua noi xe nao"*).
+ *
+ * Va "hom nay" phai la ngay cua MAY CHU: mot trinh duyet dat lech mui gio se doi nghia cua chu
+ * "dang".
+ */
+export interface TollAccountLinkCount {
+  readonly accountId: string;
+  readonly effectiveLinkCount: number;
+  /** Ngay nghiep vu ma con so tren duoc tinh. Man hinh duoc phep noi ra moc nay. */
+  readonly onDate: BusinessDate;
+}
+
 /* ====================================================================== *
  * NGUON NAP va DONG UNG VIEN
  * ====================================================================== */

@@ -88,6 +88,7 @@ import type {
   // `TX-08` phi duong bo / ETC (Issue #295).
   ManualTollRowInput,
   TollAccount,
+  TollAccountLinkCount,
   TollAccountVehicleLink,
   TollCandidate,
   TollCandidateDetail,
@@ -900,6 +901,15 @@ export const transportApi = {
 
     links: (accountId: string): Promise<readonly TollAccountVehicleLink[]> =>
       get(`/transport/toll/accounts/${encodeURIComponent(accountId)}/links`),
+    /**
+     * So xe dang nhan chi tra cua TUNG tai khoan — MOT lan hoi cho ca bang.
+     *
+     * Ton tai vi `links(accountId)` chi tra loi ve MOT tai khoan: dem tren ket qua cua no roi hien
+     * cho moi dong se cho `0` o moi tai khoan chua duoc chon. Va mot vong lap goi `links()` cho
+     * tung dong la N yeu cau cho mot con so.
+     */
+    linkCounts: (): Promise<readonly TollAccountLinkCount[]> =>
+      get('/transport/toll/accounts/link-counts'),
     openLink: (accountId: string, input: OpenTollLinkInput): Promise<TollAccountVehicleLink> =>
       send('POST', `/transport/toll/accounts/${encodeURIComponent(accountId)}/links`, input),
     /**
