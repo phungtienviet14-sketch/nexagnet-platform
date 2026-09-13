@@ -11,17 +11,27 @@ import type { GeoPoint } from '../geo/geo-point.js';
 
 export type TrackingSessionStatus = 'ACTIVE' | 'CLOSED' | 'EXPIRED';
 
-export type LocationSource =
+/**
+ * Nguon THO cua mot ban dinh vi — mot MANG, va kieu duoc suy ra TU no.
+ *
+ * Mang chu khong union viet tay: mot so cho can di qua tung nguon luc CHAY (vd tim ban moi nhat
+ * cua tung nguon o `TrackingRepository`), va neu danh sach chay duoc go tay canh mot union thi
+ * them mot nguon moi se lam hai ban lech nhau ma khong mot cong nao keu. Suy kieu tu mang thi
+ * chi co MOT cho de sua.
+ */
+export const LOCATION_SOURCE_VALUES = [
   /** May thu GNSS cua thiet bi. */
-  | 'DEVICE_GNSS'
+  'DEVICE_GNSS',
   /** Fused Location cua Android — tron GNSS, wifi, tram phat song. */
-  | 'DEVICE_FUSED'
+  'DEVICE_FUSED',
   /** Chi tu tram phat song / wifi — sai so hang tram met tro len. */
-  | 'DEVICE_NETWORK'
+  'DEVICE_NETWORK',
   /** Tu hop GSHT tren xe, qua `VehicleTelematicsPort`. Nguon DOC LAP voi dien thoai. */
-  | 'TELEMATICS'
+  'TELEMATICS',
   /** Nguoi nhap tay. Luon la nguon yeu nhat, va phai nhin ra duoc nhu vay. */
-  | 'MANUAL';
+  'MANUAL',
+] as const;
+export type LocationSource = (typeof LOCATION_SOURCE_VALUES)[number];
 
 export type DevicePlatform = 'ANDROID' | 'IOS' | 'WEB';
 

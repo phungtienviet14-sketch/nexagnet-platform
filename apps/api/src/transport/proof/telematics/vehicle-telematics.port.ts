@@ -79,7 +79,37 @@ export type TelematicsAvailability =
  * `NO_SECOND_SOURCE` chu khong tra ve `AGREE`.
  */
 export abstract class VehicleTelematicsPort {
+  /**
+   * Muc KHACH/NHA CUNG CAP: *"khach nay co dau mot nguon thu hai khong"*.
+   *
+   * CHU Y PHAM VI. Cau tra loi o day KHONG noi gi ve MOT CHIEC XE cu the — chinh bang
+   * `TelematicsUnavailableReason` da noi ra dieu do: `VEHICLE_NOT_ENROLLED` chi co nghia khi dang
+   * xet mot `vehicleId`. Dung ham nay de tra loi mot cau hoi ve mot chiec xe la mot loi pham vi,
+   * va no im lang cho den ngay co mot nha cung cap that (xem `describeVehicle`).
+   */
   abstract describe(): TelematicsAvailability;
+  /**
+   * Muc CHIEC XE: *"chiec xe nay co gan/dang ky thiet bi voi nha cung cap do khong"*.
+   *
+   * ============================================================================================
+   * VI SAO DAY PHAI LA MOT HAM RIENG, VA PHAI LA `abstract`
+   * ============================================================================================
+   *
+   * Mot doi xe khong bao gio duoc gan thiet bi DONG LOAT. Xe dau keo lap hop GSHT hop quy, xe tai
+   * nho thi khong; mot chiec vua ban di thi thiet bi da thao ra. Nen `describe().available === true`
+   * chi noi *"khach da ky voi mot nha cung cap"* — no KHONG cho phep ket luan mot chiec xe bat ky
+   * dang duoc phan cung theo doi.
+   *
+   * Tron hai muc lai thi dung ngay ngay mot nha cung cap that duoc cam vao, MOI chiec xe dang co
+   * phien deu bi coi la co telematics — ke ca xe khong gan thiet bi. Sau cua so mat, phep cham suc
+   * khoe ket luan `ALL_SOURCES_LOST` cho mot nguon CHUA BAO GIO TON TAI tren chiec xe do. Do la
+   * mot bao dong SAI, va la loai te nhat: no chi xuat hien dung luc he thong bat dau chay that.
+   *
+   * `abstract` chu khong phai mot hien thuc mac dinh goi `describe()`: mot mac dinh nhu vay tai
+   * lap dung cai loi vua ta, va nguoi viet adapter tiep theo khong co cach nao biet minh vua bo qua
+   * mot cau hoi. Bat buoc tra loi thi khong ai quen duoc.
+   */
+  abstract describeVehicle(vehicleId: string): TelematicsAvailability;
   /** NEM khi `describe()` bao khong san sang. KHONG tra mang rong: xem khoi chu thich tren. */
   abstract fetch(query: TelematicsQuery): Promise<readonly TelematicsFix[]>;
 }
@@ -99,6 +129,12 @@ export class TelematicsUnavailableError extends Error {
  */
 export class UnconfiguredVehicleTelematicsAdapter extends VehicleTelematicsPort {
   describe(): TelematicsAvailability {
+    return { available: false, reason: 'NO_PROVIDER_CONFIGURED' };
+  }
+
+  // Chua co nha cung cap thi khong chiec xe nao dang ky duoc — va ly do dung van la
+  // `NO_PROVIDER_CONFIGURED`: `VEHICLE_NOT_ENROLLED` se ngu y rang co mot tai khoan de dang ky vao.
+  describeVehicle(_vehicleId: string): TelematicsAvailability {
     return { available: false, reason: 'NO_PROVIDER_CONFIGURED' };
   }
 
