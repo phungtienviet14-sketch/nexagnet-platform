@@ -392,7 +392,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.location_health": {
       "functionName": "LocationHealthService.forVehicle",
       "filePath": "apps/api/src/transport/proof/location-health.service.ts",
-      "line": 84
+      "line": 97
     },
     "tracking.observation_ingest": {
       "filePath": "apps/api/src/transport/proof/tracking.service.ts"
@@ -1657,7 +1657,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.location_health|*": {
       "functionName": "LocationHealthService.compute",
       "filePath": "apps/api/src/transport/proof/location-health.service.ts",
-      "line": 124
+      "line": 147
     },
     "tracking.risk_assessed|*": {
       "functionName": "TrackingService.recordRisk",

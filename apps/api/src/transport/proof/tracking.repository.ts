@@ -124,18 +124,37 @@ export abstract class TrackingRepository {
    */
   abstract latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null>;
   /**
-   * Ban moi nhat cua TUNG NGUON tho cua mot chiec xe — nhieu nhat mot ban moi nguon.
+   * Ban moi nhat cua TUNG NGUON tho cua mot chiec xe, TRONG MOT CUA SO THOI GIAN — nhieu nhat mot
+   * ban moi nguon.
    *
    * KHAC `latestObservationForVehicle` o dung mot diem, va diem do la ca ly do ton tai: ham kia
    * tra ve ban moi nhat KHONG KE nguon, nen mot dien thoai dang bam moi 30 giay se che khuat hoan
    * toan mot hop GSHT da im ca ngay. Phep cham suc khoe can biet trang thai cua TUNG duong truyen
    * doc lap, nen no can ban moi nhat cua tung nguon.
    *
-   * Tang nay KHONG biet gi ve "ho nguon" — viec gop `DEVICE_*` thanh mot ho la nghia NGHIEP VU,
-   * va no nam o `location-health.ts`. O day chi co nguon tho.
+   * ============================================================================================
+   * `receivedAtOrAfter` KHONG PHAI MOT BO LOC CHO TIEN — NO LA MOT RANG BUOC DUNG SAI
+   * ============================================================================================
+   *
+   * Mot chiec xe song qua NHIEU phien: moi ca lai mot phien, va lich su ban dinh vi cua no keo dai
+   * nhieu thang. Cau hoi cua phep cham suc khoe thi khong keo dai nhu the — no luon duoc hoi TRONG
+   * mot ky vong dang mo (*"tu luc phien nay bat dau, he thong co con nghe thay chiec xe khong"*).
+   *
+   * Khong chan cua so, mot ban dinh vi cua PHIEN CU tro thanh cau tra loi cho PHIEN MOI. Hau qua
+   * cu the: phien truoc co mot ban PHONE luc 01:00; phien moi mo luc 03:00 va chua kip co ban dau
+   * tien. Dung ra phai la `AWAITING_FIRST` (may thu GNSS khoi dong nguoi mat hang chuc giay);
+   * khong chan thi ban cua 01:00 duoc nhat len, cham thanh `LOST`, va he bao mat GPS ngay giay
+   * thu nhat cua mot phien vua mo.
+   *
+   * Moc la `receivedAt` — dong ho MAY CHU — dung cung mot ly do ma ca tep nay dung no: cau dang
+   * hoi la *"he thong nghe thay chiec xe nay lan cuoi luc nao"*, khong phai *"may khach noi no ghi
+   * luc nao"*. Chon moc thoi gian thay vi `sessionId` cung la co y: mot ban telematics den tu hop
+   * GSHT tren xe khong thuoc ve phien cua mot lai xe nao ca, va loc theo `sessionId` se vut no di
+   * dung luc no huu ich nhat.
    */
   abstract latestObservationPerSourceForVehicle(
     vehicleId: string,
+    receivedAtOrAfter: Date,
   ): Promise<readonly LocationObservation[]>;
   /** Doc mot ban dinh vi theo id — chung cu van hanh TRO toi mot ban da ghi, khong tu ghi. */
   abstract findObservationById(observationId: string): Promise<LocationObservation | null>;
@@ -259,6 +278,7 @@ export class InMemoryTrackingRepository extends TrackingRepository {
 
   async latestObservationPerSourceForVehicle(
     vehicleId: string,
+    receivedAtOrAfter: Date,
   ): Promise<readonly LocationObservation[]> {
     const sessionIds = new Set(
       [...this.sessions.values()]
@@ -267,9 +287,13 @@ export class InMemoryTrackingRepository extends TrackingRepository {
     );
     if (sessionIds.size === 0) return [];
 
+    const floor = receivedAtOrAfter.getTime();
     const newest = new Map<LocationSource, LocationObservation>();
     for (const observation of this.observations.values()) {
       if (!sessionIds.has(observation.sessionId)) continue;
+      // Cung mot bien `>=` ma Postgres dung (`gte`). Lech mot dau bang o day la mot bai kiem xanh
+      // o che do nay va do o che do kia — dung thu khong ai lan ra duoc.
+      if (observation.receivedAt.getTime() < floor) continue;
       const held = newest.get(observation.source);
       if (held === undefined || observation.receivedAt.getTime() > held.receivedAt.getTime()) {
         newest.set(observation.source, observation);

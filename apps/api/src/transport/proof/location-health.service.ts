@@ -27,8 +27,10 @@ import { TrackingRepository } from './tracking.repository.js';
  * Viec cua tep nay dung ba dieu, va khong dieu nao la mot quyet dinh nghiep vu:
  *
  *   1. ky vong bam vi tri den tu PHIEN DANG MO cua chiec xe, khong tu than yeu cau;
- *   2. ban dinh vi den tu ban moi nhat cua TUNG NGUON, khong phai ban moi nhat noi chung;
- *   3. "khach da khai telematics chua" den tu `describe()` cua cong, khong tu mot co cau hinh.
+ *   2. ban dinh vi den tu ban moi nhat cua TUNG NGUON TRONG CUA SO CUA KY VONG DO, khong phai ban
+ *      moi nhat trong ca lich su chiec xe;
+ *   3. "CHIEC XE NAY co telematics chua" den tu `describeVehicle()` cua cong, khong tu mot co cau
+ *      hinh va cung khong tu `describe()` muc khach.
  *
  * ============================================================================================
  * VI SAO KHONG PHAI MOT WORKFLOW, VA KHONG PHAI MOT BO NHO DEM
@@ -46,12 +48,18 @@ export class LocationHealthService {
   constructor(
     private readonly repository: TrackingRepository,
     /**
-     * Cong telematics — dung o day CHI de hoi `describe()`, khong de `fetch()`.
+     * Cong telematics — dung o day CHI de hoi `describeVehicle()`, khong de `fetch()`.
      *
-     * Su khac nhau quan trong: `describe()` tra loi *"khach nay co nguon thu hai khong"*, va do la
-     * dieu duy nhat phep cham can biet de KHONG bao mot khach chua mua hop GSHT nao la "mat ca hai
-     * nguon". Ban dinh vi telematics that thi di vao he qua duong ghi binh thuong
-     * (`LocationObservation` voi `source: 'TELEMATICS'`), nen tep nay khong goi ra ngoai mang.
+     * `describeVehicle(vehicleId)` chu KHONG `describe()`, va su khac nhau la mot loi that da duoc
+     * soat doc lap chi ra: `describe()` tra loi o muc KHACH (*"co ky voi nha cung cap nao khong"*),
+     * con phep cham suc khoe hoi o muc CHIEC XE (*"chiec nay co gan thiet bi khong"*). Hai cau do
+     * bang nhau dung mot truong hop — khi chua co nha cung cap nao — tuc dung hom nay, va lech nhau
+     * dung luc mot nha cung cap that duoc cam vao: luc do MOI chiec xe dang co phien se bi coi la
+     * co telematics, ke ca xe khong gan thiet bi, va sau cua so mat chung se bi ket luan
+     * `ALL_SOURCES_LOST` cho mot nguon chua bao gio ton tai.
+     *
+     * Ban dinh vi telematics that thi di vao he qua duong ghi binh thuong (`LocationObservation`
+     * voi `source: 'TELEMATICS'`), nen tep nay khong goi ra ngoai mang.
      */
     private readonly telematics: VehicleTelematicsPort,
     @Inject(TRANSPORT_PROOF_POLICY) private readonly policy: TransportProofPolicy,
@@ -64,15 +72,20 @@ export class LocationHealthService {
   }
 
   /**
-   * KHACH DA KHAI MOT NGUON THU HAI CHUA.
+   * CHIEC XE NAY DA CO MOT NGUON THU HAI CHUA — truc XE, khong phai truc khach.
    *
-   * `describe()` co the nem — mot adapter that goi ra mang de tra loi cau nay. Mot lan nem KHONG
-   * duoc lam ca phep cham chet: cau tra loi an toan la "coi nhu chua khai", vi no dan toi `LOST`
-   * (mot canh bao) chu khong dan toi `ALL_SOURCES_LOST` hay mot trang thai binh thuong gia.
+   * `describeVehicle()` co the nem — mot adapter that goi ra mang de tra loi cau nay. Mot lan nem
+   * KHONG duoc lam ca phep cham chet: cau tra loi an toan la "coi nhu chua khai", vi no dan toi
+   * `LOST` (mot canh bao ve dien thoai) chu khong dan toi `ALL_SOURCES_LOST` hay mot trang thai
+   * binh thuong gia.
+   *
+   * Huong fail-safe o day la mot chieu: nham thanh "chua khai" chi lam MAT mot canh bao ve phan
+   * cung ma ta khong xac minh duoc; nham thanh "da khai" thi DUNG ra mot canh bao ve mot thiet bi
+   * co the khong ton tai. Giua hai cai sai, im lang ve dieu chua biet la cai it hai hon.
    */
-  private telematicsConfigured(): boolean {
+  private telematicsConfiguredFor(vehicleId: string): boolean {
     try {
-      return this.telematics.describe().available;
+      return this.telematics.describeVehicle(vehicleId).available;
     } catch {
       return false;
     }
@@ -100,23 +113,33 @@ export class LocationHealthService {
       ? { tripId: session.tripId, sessionId: session.id, since: session.startedAt }
       : null;
 
+    /*
+     * CUA SO = KY VONG. Ban dinh vi nhan TRUOC khi phien nay mo thuoc ve mot ky vong DA DONG, va no
+     * khong duoc tra loi thay cho ky vong dang mo — neu khong, mot phien vua mo ba muoi giay truoc
+     * se thua huong `LOST` cua ca lai truoc do.
+     */
     const samples: readonly LocationHealthSample[] = expectation
-      ? (await this.repository.latestObservationPerSourceForVehicle(vehicleId)).map(
-          (observation) => ({
-            source: observation.source,
-            point: observation.point,
-            accuracyMetres: observation.accuracyMetres,
-            // `receivedAt`, KHONG `capturedAt`. Cau dang hoi la "he thong nghe thay chiec xe nay
-            // lan cuoi luc nao", nen dong ho MAY CHU moi la su that; `capturedAt` la dong ho may
-            // khach va mot may bi chinh gio se tu bao minh con song.
-            receivedAt: observation.receivedAt,
-            sessionId: observation.sessionId,
-          }),
-        )
+      ? (
+          await this.repository.latestObservationPerSourceForVehicle(vehicleId, expectation.since)
+        ).map((observation) => ({
+          source: observation.source,
+          point: observation.point,
+          accuracyMetres: observation.accuracyMetres,
+          // `receivedAt`, KHONG `capturedAt`. Cau dang hoi la "he thong nghe thay chiec xe nay
+          // lan cuoi luc nao", nen dong ho MAY CHU moi la su that; `capturedAt` la dong ho may
+          // khach va mot may bi chinh gio se tu bao minh con song.
+          receivedAt: observation.receivedAt,
+          sessionId: observation.sessionId,
+        }))
       : [];
 
     const health = classifyLocationHealth(
-      { vehicleId, expectation, samples, telematicsConfigured: this.telematicsConfigured() },
+      {
+        vehicleId,
+        expectation,
+        samples,
+        telematicsConfigured: this.telematicsConfiguredFor(vehicleId),
+      },
       now,
       this.policy.health,
     );

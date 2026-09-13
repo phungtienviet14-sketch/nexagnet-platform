@@ -148,11 +148,14 @@ export class PrismaTrackingRepository extends TrackingRepository {
    */
   async latestObservationPerSourceForVehicle(
     vehicleId: string,
+    receivedAtOrAfter: Date,
   ): Promise<readonly LocationObservation[]> {
     const rows = await Promise.all(
       LOCATION_SOURCE_VALUES.map((source) =>
         this.prisma.transportLocationObservation.findFirst({
-          where: { source, session: { vehicleId } },
+          // `gte` chu khong `gt`: ban dinh vi den DUNG giay phien mo la ban dau tien cua chinh
+          // phien do, khong phai tan du cua phien truoc. Ban trong bo nho cuong che cung mot bien.
+          where: { source, session: { vehicleId }, receivedAt: { gte: receivedAtOrAfter } },
           orderBy: { receivedAt: 'desc' },
         }),
       ),
