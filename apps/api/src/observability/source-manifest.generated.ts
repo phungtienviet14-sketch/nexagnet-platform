@@ -389,6 +389,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
       "line": 290
     },
+    "tracking.location_health": {
+      "functionName": "LocationHealthService.forVehicle",
+      "filePath": "apps/api/src/transport/proof/location-health.service.ts",
+      "line": 97
+    },
     "tracking.observation_ingest": {
       "filePath": "apps/api/src/transport/proof/tracking.service.ts"
     },
@@ -743,9 +748,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 208
     },
     "transport.tracking.read": {
-      "functionName": "TrackingController.summaries",
-      "filePath": "apps/api/src/transport/proof/tracking.controller.ts",
-      "line": 36
+      "filePath": "apps/api/src/transport/proof/tracking.controller.ts"
     },
     "transport.trip.assign": {
       "functionName": "TripsController.assign",
@@ -1660,6 +1663,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "TollAccountService.decide",
       "filePath": "apps/api/src/transport/toll/toll-account.service.ts",
       "line": 287
+    },
+    "tracking.location_health|*": {
+      "functionName": "LocationHealthService.compute",
+      "filePath": "apps/api/src/transport/proof/location-health.service.ts",
+      "line": 147
     },
     "tracking.risk_assessed|*": {
       "functionName": "TrackingService.recordRisk",
