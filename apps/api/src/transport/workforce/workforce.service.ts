@@ -16,6 +16,7 @@ import {
   WorkforceCoreFacts,
   WorkforceCostingFacts,
   WorkforceFuelFacts,
+  WorkforceWaitingAllowanceFacts,
 } from './workforce.ports.js';
 import { WorkforceRepository, type PayslipWriteInput } from './workforce.repository.js';
 import type {
@@ -54,6 +55,14 @@ export class WorkforceService {
     @Optional() private readonly costing?: WorkforceCostingFacts,
     @Optional() private readonly fuel?: WorkforceFuelFacts,
     @Optional() private readonly telemetry?: TelemetryService,
+    /**
+     * PHU CAP CHO DA DUYET (`#279` O6) — vang mat o khach khong bat `transport-checkpoint`.
+     *
+     * Cung khuon `fuel` ngay tren, va vi dung mot ly do: mot khach chi tra luong co ban khong phai
+     * bat ca quy trinh cong/can/phieu giao. Vang mat cong ⇒ lan chay ghi
+     * `WAITING_ALLOWANCE_UNAVAILABLE` vao `missingInputs` thay vi lang le cong ra so khong.
+     */
+    @Optional() private readonly waitingAllowance?: WorkforceWaitingAllowanceFacts,
   ) {}
 
   async openPeriod(input: {
@@ -151,6 +160,22 @@ export class WorkforceService {
     } else {
       missingInputs.push('FUEL_SAVING_UNAVAILABLE');
     }
+
+    /*
+     * PHU CAP CHO DA DUYET (`#279` O6) — doc MOT LAN cho ca lan chay, giong `litersSaved`.
+     *
+     * Doc lai cho tung lai xe se lam mot lan chay N truy van, va nang hon: hai lai xe trong CUNG
+     * mot bang luong co the doc hai anh chup khac nhau neu ai do bam `Duyet` giua chung.
+     */
+    let approvedAllowances: ReadonlyMap<string, { totalAmount: number; count: number }> = new Map();
+    if (this.waitingAllowance) {
+      approvedAllowances = await this.waitingAllowance.approvedAllowanceByDriver(
+        period.startDate,
+        period.endDate,
+      );
+    } else {
+      missingInputs.push('WAITING_ALLOWANCE_UNAVAILABLE');
+    }
     if (!this.costing) missingInputs.push('DRIVER_FUND_UNAVAILABLE');
 
     const payslips: PayslipWriteInput[] = [];
@@ -168,6 +193,9 @@ export class WorkforceService {
         distanceKm: row?.distanceKm ?? 0,
         fuelLitersSaved: this.fuel ? (litersSaved.get(driverId) ?? 0) : null,
         driverFundBalance: fundBalance,
+        waitingAllowance: this.waitingAllowance
+          ? (approvedAllowances.get(driverId) ?? { totalAmount: 0, count: 0 })
+          : null,
         manualComponents: manual,
       });
       payslips.push(toWriteInput(draft, 'ORIGINAL', null, null));
@@ -388,6 +416,10 @@ export class WorkforceService {
           distanceKm: 0,
           fuelLitersSaved: null,
           driverFundBalance: detail.payslip.driverFundBalanceSnapshot,
+          // `null`, KHONG phai mot lan doc lai. Mot phieu bo sung/dao chi mang nhung dong NGUOI
+          // KY viet ra; keo lai khoan phu cap cho cua ky goc se cong no lan thu hai vao thu nhap
+          // cua lai xe — dung dieu ma `#279` O6 (*"exactly once"*) cam.
+          waitingAllowance: null,
           manualComponents: manual,
         },
       );

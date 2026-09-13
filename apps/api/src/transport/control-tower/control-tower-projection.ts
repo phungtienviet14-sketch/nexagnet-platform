@@ -52,6 +52,15 @@ export interface ControlTowerCoreInput {
    * that, rong); `null` nghia la khong co nguon, va bang phai cong bo `AWAITING_CHECKPOINT_SOURCE`.
    */
   readonly legPhasesByRun: ReadonlyMap<string, Readonly<Record<string, RunLegPhase>>> | null;
+  /**
+   * CHANG DANG CO MOT PHIEN CHO MO — `#279` O5.
+   *
+   * `null` — chu KHONG mot `Set` rong — khi capability `transport-checkpoint` dang tat. Hai thu do
+   * khac han nhau, cung khuon `legPhasesByRun`: mot `Set` rong nghia la CO nguon va hom nay khong
+   * xe nao dang cho (cot `WAITING` la mot cot that, rong); `null` nghia la khong co nguon, va bang
+   * phai cong bo `AWAITING_WAITING_SESSION_SOURCE`.
+   */
+  readonly waitingLegIds: ReadonlySet<string> | null;
 }
 
 /**
@@ -102,10 +111,21 @@ const pickCurrentLeg = (
 const columnForRun = (
   run: VehicleRun,
   currentLeg: BoardCurrentLeg | null,
+  waitingLegIds: ReadonlySet<string> | null,
 ): OperationsBoardColumn | null => {
   if (run.status === 'PLANNED') return 'PLANNED';
   if (run.status === 'COMPLETED') return 'DELIVERED';
   if (run.status !== 'ACTIVE') return null;
+
+  /*
+   * `WAITING` DUNG TRUOC `ARRIVED`, va do la ca ly do cot nay ton tai.
+   *
+   * Hai chang cung dung o `DELIVERY_ARRIVAL` thi mot chang co the dang cho nguoi nhan con chang kia
+   * thi khong. Chi mot PHIEN CHO co gio mo phan biet duoc hai truong hop do — xem khoi chu thich
+   * cua `WAITING_COLUMN`. Doc no truoc `phase` nghia la mot xe dang cho khong con lan trong cot
+   * `ARRIVED` cung nhung xe vua den va dang do hang.
+   */
+  if (currentLeg !== null && waitingLegIds?.has(currentLeg.legId) === true) return WAITING_COLUMN;
 
   switch (currentLeg?.phase) {
     case 'AT_PICKUP':
@@ -157,7 +177,7 @@ export function buildOperationsBoard(
 
   for (const run of input.runs) {
     const card = toCard(run, input);
-    const column = columnForRun(run, card.currentLeg);
+    const column = columnForRun(run, card.currentLeg, input.waitingLegIds);
     if (column === null) continue;
     const bucket = cardsByColumn.get(column) ?? [];
     bucket.push(card);
@@ -168,11 +188,14 @@ export function buildOperationsBoard(
 
   return OPERATIONS_BOARD_COLUMNS.map((column) => {
     /*
-     * `WAITING` giu nguyen cho tren bang va RONG, o MOI cau hinh. Xem `WAITING_COLUMN`: khoang cho
-     * nguoi nhan can mot PHIEN CHO co gio mo/gio dong, va suy no tu `DELIVERY_ARRIVAL` se bien hai
-     * chang khac han nhau thanh mot con so.
+     * `WAITING` chi RONG kem ma ly do khi KHONG CO nguon phien cho — tuc khach dang tat
+     * `transport-checkpoint`. Khi co nguon, no la mot cot that: rong o day nghia la hom nay khong
+     * xe nao dang cho nguoi nhan, mot su that chu khong mot cho trong.
+     *
+     * `#279` O5 da lam ra nguon do. Truoc no, suy cot nay tu `DELIVERY_ARRIVAL` se bien hai chang
+     * khac han nhau thanh mot con so — xem khoi chu thich cua `WAITING_COLUMN`.
      */
-    if (column === WAITING_COLUMN) {
+    if (column === WAITING_COLUMN && input.waitingLegIds === null) {
       return {
         column,
         cards: [],

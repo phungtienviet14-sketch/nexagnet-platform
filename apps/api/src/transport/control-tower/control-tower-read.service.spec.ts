@@ -7,6 +7,7 @@ import type { TransportCorePolicy } from '../transport-policy.js';
 import {
   ControlTowerAlertFacts,
   ControlTowerCheckpointFacts,
+  ControlTowerFieldFacts,
   ControlTowerClaimFacts,
   ControlTowerCoreFacts,
   ControlTowerFuelFacts,
@@ -169,6 +170,31 @@ class AlertStub extends ControlTowerAlertFacts {
   }
 }
 
+/**
+ * CONG HIEN TRUONG (`#279` Lane O) — ba cau tra loi, khong mot hang du lieu nao.
+ *
+ * Mac dinh la RONG chu khong `null`: mot khach BAT `transport-checkpoint` ma hom nay khong xe nao
+ * dang cho van la mot cau tra loi hop le, va no phai khac han voi mot khach TAT capability do.
+ */
+class FieldStub extends ControlTowerFieldFacts {
+  constructor(
+    private readonly waiting: ReadonlySet<string> = new Set(),
+    private readonly pending = 0,
+    private readonly missing: ReadonlySet<string> = new Set(),
+  ) {
+    super();
+  }
+  listOpenWaitingLegIds() {
+    return Promise.resolve(this.waiting);
+  }
+  countPendingAllowances() {
+    return Promise.resolve(this.pending);
+  }
+  listLegsMissingRequiredDocuments() {
+    return Promise.resolve(this.missing);
+  }
+}
+
 describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
   it('khach chi bat `transport-core` — bon nguon deu duoc cong bo la thieu', async () => {
     const service = new ControlTowerReadService(new CoreStub(), policy);
@@ -178,13 +204,16 @@ describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
     expect([...view.unavailableSources].sort()).toEqual([
       'CHECKPOINT',
       'EXPENSE_CLAIMS',
+      // `#279` Lane O — phien cho / phu cap / chung tu. TACH khoi `CHECKPOINT`: vang mat `CHECKPOINT`
+      // thi ba cot giai doan trong, vang mat cai nay thi cot `WAITING` trong. Hai thu khac nhau.
+      'FIELD_OPERATIONS',
       'FUEL',
       'OPERATIONAL_ALERTS',
     ]);
     expect(view.queue).toHaveLength(0);
   });
 
-  it('khach bat du bon nguon — khong con nguon nao duoc bao la thieu', async () => {
+  it('khach bat du NAM nguon — khong con nguon nao duoc bao la thieu', async () => {
     const service = new ControlTowerReadService(
       new CoreStub(),
       policy,
@@ -192,6 +221,8 @@ describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
       new FuelStub(),
       new AlertStub({ generatedFor: TODAY, alerts: [], unavailableSources: [] }),
       new CheckpointStub(),
+      undefined,
+      new FieldStub(),
     );
 
     const view = await service.view(NOW);
@@ -305,18 +336,20 @@ describe('hang viec doc duoc tu chinh `transport-core`', () => {
 });
 
 describe('viec CHUA THEO DOI DUOC phai duoc cong bo kem ly do', () => {
-  it('nam muc, moi muc mot ma ly do doc duoc', async () => {
+  /**
+   * BA MUC, khong con nam — `#279` Lane O da lam ra nguon cho HAI muc kia.
+   *
+   * `RECEIVER_WAITING_ABOVE_THRESHOLD` o lai, nhung voi mot ma ly do KHAC, va khac biet do la ca
+   * diem: NGUON da co (mot phien cho co gio mo, dem duoc), cai thieu la mot CHINH SACH — *"cho bao
+   * lau thi dang bao dong"*. `#279` O6 cam bia con so do ra.
+   */
+  it('ba muc, moi muc mot ma ly do doc duoc', async () => {
     const service = new ControlTowerReadService(new CoreStub(), policy);
 
     const view = await service.view(NOW);
 
     expect(view.pendingWork).toEqual([
-      { kind: 'RECEIVER_WAITING_ABOVE_THRESHOLD', reason: 'AWAITING_WAITING_SESSION_SOURCE' },
-      { kind: 'DELIVERY_PROOF_DOCUMENT_MISSING', reason: 'AWAITING_OPERATIONAL_DOCUMENT_SOURCE' },
-      {
-        kind: 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL',
-        reason: 'AWAITING_WAITING_SESSION_SOURCE',
-      },
+      { kind: 'RECEIVER_WAITING_ABOVE_THRESHOLD', reason: 'AWAITING_WAITING_THRESHOLD_POLICY' },
       { kind: 'CUSTOMER_AR_OVERDUE', reason: 'AWAITING_RECEIVABLE_DUE_DATE_SOURCE' },
       { kind: 'LOCATION_PROOF_REVIEW', reason: 'AWAITING_FLEET_WIDE_PROOF_QUERY' },
     ]);
