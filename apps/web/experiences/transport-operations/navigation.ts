@@ -37,6 +37,7 @@ export type TransportSectionId =
   | 'expense-claims'
   | 'order-completion'
   | 'fuel'
+  | 'toll'
   | 'settlement'
   | 'maintenance'
   | 'payroll'
@@ -180,6 +181,15 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Phiếu đổ dầu, xác thực phiếu, nhập bảng kê cây xăng và đối soát.',
     requiredCapabilities: ['transport-fuel'],
     requiredAction: 'transport.fuel.entry.read',
+  },
+  {
+    id: 'toll',
+    label: 'Phí đường bộ (ETC)',
+    group: 'cost',
+    summary:
+      'Tài khoản VETC/ePass, sổ xe nhận chi trả, nạp bảng kê và hàng chờ đối soát từng dòng.',
+    requiredCapabilities: ['transport-toll'],
+    requiredAction: 'transport.toll.account.read',
   },
   {
     id: 'settlement',

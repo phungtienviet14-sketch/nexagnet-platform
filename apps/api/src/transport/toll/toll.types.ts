@@ -73,6 +73,55 @@ export interface TollAccountVehicleLink {
   readonly createdBy: string;
 }
 
+/**
+ * SO XE DANG NHAN CHI TRA cua MOT tai khoan, tinh vao mot ngay nghiep vu.
+ *
+ * ========================================================================
+ * VI SAO CON SO NAY PHAI DO MAY CHU TINH
+ * ========================================================================
+ *
+ * Mot man hinh muon hien con so nay cho CA BANG tai khoan chi co hai duong: hoi tung tai khoan mot
+ * (mot bang muoi dong se ban muoi yeu cau), hoac tu dem tren danh sach doan noi ma no dang co.
+ * Duong thu hai la cho mot loi that da xay ra: man hinh chi tai doan noi cua tai khoan DANG CHON
+ * roi dem cho MOI dong, nen tai khoan chua chon deu hien `0`. Mot so `0` sai khong doc ra nhu mot
+ * loi — no doc ra nhu mot su that van hanh (*"tai khoan nay chua noi xe nao"*).
+ *
+ * Va "hom nay" phai la ngay cua MAY CHU: mot trinh duyet dat lech mui gio se doi nghia cua chu
+ * "dang".
+ */
+export interface TollAccountLinkCount {
+  readonly accountId: string;
+  readonly effectiveLinkCount: number;
+  /** Ngay nghiep vu ma con so tren duoc tinh. Man hinh duoc phep noi ra moc nay. */
+  readonly onDate: BusinessDate;
+}
+
+/**
+ * MOT DOAN NOI kem CAU TRA LOI "doan nay co dang hieu luc khong" — do MAY CHU cham.
+ *
+ * ========================================================================
+ * VI SAO CO `effective` O DAY, KHI BAN GHI DA CO DU HAI NGAY
+ * ========================================================================
+ *
+ * `effectiveFrom`/`effectiveTo` la DU LIEU; *"dang hieu luc"* la mot KET LUAN rut ra tu du lieu do
+ * cong voi mot ngay nghiep vu. Chi phat ra du lieu thi moi nguoi doc phai tu rut ket luan — va lan
+ * nao cung co mot nguoi rut gon thanh `effectiveTo === null`. Do la mot phep sai that: mot doan
+ * MO TU THANG SAU cung co `effectiveTo` rong, va no chua nhan chi tra ngay nao ca.
+ *
+ * Chuyen ket luan ve may chu con dong mot khe thu hai: trinh duyet khong co ngay nghiep vu cua
+ * khach. No chi co dong ho may nguoi dung, va hai nguoi o hai mui gio se thay hai su that.
+ *
+ * `onDate` di kem de man hinh NOI RA duoc moc da dung, thay vi bat nguoi doc tin.
+ */
+export interface TollAccountLinkView extends TollAccountVehicleLink {
+  readonly effective: boolean;
+}
+
+export interface TollAccountLinkListing {
+  readonly onDate: BusinessDate;
+  readonly links: readonly TollAccountLinkView[];
+}
+
 /* ====================================================================== *
  * NGUON NAP va DONG UNG VIEN
  * ====================================================================== */

@@ -7,7 +7,12 @@ import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import type { NavigationInput } from '../navigation';
 import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
-import type { FuelEntryInboxQuery, SettlementFlow } from '../transport-types';
+import type {
+  FuelEntryInboxQuery,
+  SettlementFlow,
+  TollCandidateQuery,
+  TollProvider,
+} from '../transport-types';
 
 /**
  * Duong DUY NHAT de mot khung nhin lay du lieu.
@@ -40,6 +45,8 @@ export const TRANSPORT_QUERY_KEYS = {
   partners: ['transport', 'partners'],
   fuelSuppliers: ['transport', 'fuel', 'suppliers'],
   reconciliations: ['transport', 'fuel', 'reconciliations'],
+  tollProviders: ['transport', 'toll', 'providers'],
+  tollAccounts: ['transport', 'toll', 'accounts'],
   driverTrips: ['transport', 'me', 'trips'],
   driverFund: ['transport', 'me', 'fund'],
   driverFuel: ['transport', 'me', 'fuel'],
@@ -548,6 +555,90 @@ export function useDriverFuelSlips(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.driverFuel,
     queryFn: () => transportApi.me.fuelSlips(),
     enabled: allowed(input, 'transport-fuel', 'transport.driver.self.fuel.read'),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Phi duong bo (ETC) — `#295` phan C
+ * ------------------------------------------------------------------ */
+
+/**
+ * DO SAN SANG cua tung nha cung cap.
+ *
+ * Gac bang `transport.toll.account.read` chu khong bang mot ma rieng cho "do san sang": day la
+ * mot phep DOC cau hinh tai khoan, va tach ra mot ma thu sau se buoc sua
+ * `transport-actions.ts` — mang dang bi mot lane khac sua VA bi khoa theo thu tu boi hai spec.
+ */
+export function useTollProviders(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.tollProviders,
+    queryFn: () => transportApi.toll.providers(),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.account.read'),
+  });
+}
+
+export function useTollAccounts(input: NavigationInput, provider?: TollProvider | null) {
+  return useQuery({
+    queryKey: [...TRANSPORT_QUERY_KEYS.tollAccounts, provider ?? null],
+    queryFn: () => transportApi.toll.accounts(provider ?? undefined),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.account.read'),
+  });
+}
+
+/**
+ * So xe nhan chi tra cua MOT tai khoan.
+ *
+ * `accountId === null` thi khong hoi — mot man hinh chua chon tai khoan nao khong co cau hoi de
+ * hoi, va goi voi mot chuoi rong se tra ve loi cua may chu chu khong tra ve mot danh sach rong.
+ */
+export function useTollAccountLinks(input: NavigationInput, accountId: string | null) {
+  return useQuery({
+    queryKey: [...TRANSPORT_QUERY_KEYS.tollAccounts, accountId, 'links'],
+    queryFn: () => transportApi.toll.links(accountId ?? ''),
+    enabled: accountId !== null && allowed(input, 'transport-toll', 'transport.toll.account.read'),
+  });
+}
+
+/**
+ * LICH SU CAC LAN NAP bang ke ETC.
+ *
+ * Gac bang `transport.toll.review.read` chu khong `transport.toll.import`: doc lai xem ai da nap
+ * gi la viec cua NGUOI DOI SOAT, con `import` la quyen GHI. Mot vai chi doi soat van phai thay
+ * duoc nguon cua nhung dong minh dang xu ly — neu khong, mot dong sai khong truy nguoc duoc ve tep
+ * da sinh ra no.
+ */
+export function useTollImports(input: NavigationInput, provider?: TollProvider | null) {
+  return useQuery({
+    queryKey: ['transport', 'toll', 'imports', provider ?? null],
+    queryFn: () => transportApi.toll.imports(provider ?? undefined),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.review.read'),
+  });
+}
+
+/**
+ * SO XE DANG NHAN CHI TRA cua TUNG tai khoan.
+ *
+ * KHONG phu thuoc tai khoan dang chon, va do la ca ly do no ton tai: con so nay xuat hien o MOI
+ * dong cua bang tai khoan, nen no khong duoc lay tu `useTollAccountLinks` — cai do chi tra loi ve
+ * mot tai khoan.
+ */
+export function useTollLinkCounts(input: NavigationInput) {
+  return useQuery({
+    queryKey: [...TRANSPORT_QUERY_KEYS.tollAccounts, 'link-counts'],
+    queryFn: () => transportApi.toll.linkCounts(),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.account.read'),
+  });
+}
+
+/**
+ * HANG CHO DOI SOAT. `queryKey` mang CA BO LOC — cung ly le voi hop thu nhien lieu: hai bo loc la
+ * hai cau hoi khac nhau, va dung chung mot o nho se hien ket qua cua lan hoi truoc.
+ */
+export function useTollCandidates(input: NavigationInput, query: TollCandidateQuery) {
+  return useQuery({
+    queryKey: ['transport', 'toll', 'candidates', query],
+    queryFn: () => transportApi.toll.candidates(query),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.review.read'),
   });
 }
 

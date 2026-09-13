@@ -36,6 +36,14 @@ import type {
   FundPeriodStatus,
   PartnerRoleKind,
   PartyStatus,
+  TollApiStatus,
+  TollLinkProvenance,
+  TollMatchState,
+  TollProvider,
+  TollReviewAction,
+  TollReviewState,
+  TollSourceKind,
+  TollTransactionKind,
   TripKind,
   TripStatus,
   VehicleStatus,
@@ -278,6 +286,90 @@ export const rejectReasonLabel = (reason: string | null): string => {
   return labels[reason] ?? reason;
 };
 
+/* --- `TX-08` phi duong bo / ETC (#295) --- */
+
+export const TOLL_PROVIDER_LABEL = {
+  VETC: 'VETC',
+  EPASS: 'ePass',
+  OTHER: 'Nhà cung cấp khác',
+} as const satisfies Record<TollProvider, string>;
+
+export const TOLL_SOURCE_KIND_LABEL = {
+  API: 'Đường API nhà cung cấp',
+  STATEMENT_FILE: 'Tệp sao kê',
+  INVOICE_PDF: 'Hoá đơn PDF',
+  MANUAL: 'Nhập tay',
+} as const satisfies Record<TollSourceKind, string>;
+
+export const TOLL_TRANSACTION_KIND_LABEL = {
+  TOLL_PASS: 'Lượt qua trạm',
+  TOP_UP: 'Nạp tiền tài khoản',
+  ACCOUNT_FEE: 'Phí tài khoản',
+  ADJUSTMENT: 'Điều chỉnh',
+} as const satisfies Record<TollTransactionKind, string>;
+
+/**
+ * NAM TRANG THAI SO KHOP, va khong cai nao duoc doc thanh "da tra tien".
+ *
+ * `MATCHED` co nghia la *dong nay noi ve chiec xe nao thi da ro*, khong phai *khoan nay da duoc
+ * thanh toan*. Cau chu phai giu dung khoang cach do — #295 cam mot dong doc ra nghe nhu mot nghia
+ * vu da duoc ghi nhan.
+ */
+export const TOLL_MATCH_STATE_LABEL = {
+  MATCHED: 'Đã khớp xe',
+  ACCOUNT_UNRESOLVED: 'Chưa nhận ra tài khoản',
+  VEHICLE_UNRESOLVED: 'Chưa nhận ra xe',
+  AMBIGUOUS: 'Nhiều xe cùng khớp',
+  DUPLICATE_CANDIDATE: 'Nghi trùng dòng',
+} as const satisfies Record<TollMatchState, string>;
+
+export const TOLL_REVIEW_STATE_LABEL = {
+  PENDING: 'Chờ người đối soát',
+  CONFIRMED: 'Đã có người xác nhận',
+  REOPENED: 'Đã mở lại',
+} as const satisfies Record<TollReviewState, string>;
+
+export const TOLL_REVIEW_ACTION_LABEL = {
+  RESOLVE_VEHICLE: 'Chỉ định xe cho dòng này',
+  CONFIRM: 'Xác nhận dòng này đã đúng',
+  FLAG_DUPLICATE: 'Đánh dấu trùng với một dòng khác',
+  CLEAR_DUPLICATE: 'Bỏ nghi trùng — đây là hai sự kiện thật',
+  REOPEN: 'Mở lại để xem xét tiếp',
+} as const satisfies Record<TollReviewAction, string>;
+
+export const TOLL_LINK_PROVENANCE_LABEL = {
+  MANUAL: 'Người khai',
+  STATEMENT_DECLARED: 'Đọc từ tệp sao kê',
+} as const satisfies Record<TollLinkProvenance, string>;
+
+/**
+ * TRANG THAI DUONG API — cau chu o day la mot LOI HUA KHONG DUOC PHEP SAI.
+ *
+ * `NOT_PUBLICLY_PROVEN` khong duoc viet thanh "đang kết nối" hay "sắp có": tinh den 08/09/2026 khong
+ * nha cung cap nao cong bo tai lieu API, va mot cau chu mo ho o day se lam nguoi van hanh ngoi cho
+ * mot duong khong ton tai thay vi di nap tep.
+ */
+export const TOLL_API_STATUS_LABEL = {
+  NOT_PUBLICLY_PROVEN: 'Chưa có tài liệu API công khai',
+  REGISTERED: 'Đã đăng ký đường API',
+} as const satisfies Record<TollApiStatus, string>;
+
+export const TOLL_ROW_REJECT_REASON_LABEL = {
+  TOLL_ROW_UNPARSEABLE: 'Dòng không đọc được',
+  TOLL_ROW_MISSING_AMOUNT: 'Thiếu số tiền',
+  TOLL_ROW_MISSING_DATE: 'Thiếu ngày',
+  TOLL_ROW_DATE_INVALID: 'Ngày sai định dạng',
+  TOLL_ROW_PLATE_MISSING: 'Thiếu biển số',
+  TOLL_ROW_KIND_UNKNOWN: 'Loại giao dịch chưa khai',
+} as const;
+
+/** Cung khuon `rejectReasonLabel`: ma la chuoi mo phia API, nen tra lai chinh ma khi chua co nhan. */
+export const tollRejectReasonLabel = (reason: string | null): string => {
+  if (reason === null) return EMPTY_VALUE;
+  const labels: Readonly<Record<string, string>> = TOLL_ROW_REJECT_REASON_LABEL;
+  return labels[reason] ?? reason;
+};
+
 /* ------------------------------------------------------------------ *
  * Sac thai phu hieu
  * ------------------------------------------------------------------ */
@@ -354,6 +446,44 @@ export const fuelReconciliationStateTone = (state: FuelReconciliationState): Sta
       return 'stop';
   }
 };
+
+/**
+ * SAC THAI cua mot dong ETC — ba trang thai "chua ro" deu la `wait`, khong phai `stop`.
+ *
+ * `stop` danh cho thu DA SAI. Mot dong chua nhan ra xe thi khong sai: no dang cho mot con nguoi noi
+ * ra chiec xe do la chiec nao. Chi `AMBIGUOUS` duoc bay `stop`, vi do la cho may chu TU CHOI chon —
+ * va dung cho do la cho de nhat cho mot man hinh lo dang "chon giup" (#295).
+ */
+export const tollMatchStateTone = (state: TollMatchState): StatusTone => {
+  switch (state) {
+    case 'MATCHED':
+      return 'go';
+    case 'ACCOUNT_UNRESOLVED':
+      return 'wait';
+    case 'VEHICLE_UNRESOLVED':
+      return 'wait';
+    case 'AMBIGUOUS':
+      return 'stop';
+    case 'DUPLICATE_CANDIDATE':
+      return 'stop';
+  }
+};
+
+/** `done` o day nghia la DA CO NGUOI NHIN, khong phai da thanh toan — xem `TOLL_REVIEW_STATE_LABEL`. */
+export const tollReviewStateTone = (state: TollReviewState): StatusTone => {
+  switch (state) {
+    case 'PENDING':
+      return 'wait';
+    case 'CONFIRMED':
+      return 'done';
+    case 'REOPENED':
+      return 'stop';
+  }
+};
+
+/** `flat` chu khong `stop`: khong co API la mot su that da do, khong phai mot su co dang xay ra. */
+export const tollApiStatusTone = (status: TollApiStatus): StatusTone =>
+  status === 'REGISTERED' ? 'go' : 'flat';
 
 export const fundPeriodStatusTone = (status: FundPeriodStatus): StatusTone => {
   switch (status) {

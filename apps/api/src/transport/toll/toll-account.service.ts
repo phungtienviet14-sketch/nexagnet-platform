@@ -1,15 +1,26 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
-import { BusinessDateError, assertBusinessDate, type BusinessDate } from '../business-date.js';
+import {
+  BusinessDateError,
+  assertBusinessDate,
+  toBusinessDate,
+  type BusinessDate,
+} from '../business-date.js';
 import { TRANSPORT_CLOCK } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
-import { tollLinkPeriodInvalid } from './toll-account-link.js';
+import { tollLinkEffectiveOn, tollLinkPeriodInvalid } from './toll-account-link.js';
 import { TRANSPORT_TOLL_DECISIONS } from './toll-decisions.js';
+import { TRANSPORT_TOLL_POLICY, type TransportTollPolicy } from './toll-policy.js';
 import type { TollProvider } from './toll-provider.port.js';
 import { TransportTollCoreFacts } from './toll.ports.js';
 import { TollRepository } from './toll.repository.js';
-import type { TollAccount, TollAccountVehicleLink } from './toll.types.js';
+import type {
+  TollAccount,
+  TollAccountLinkCount,
+  TollAccountLinkListing,
+  TollAccountVehicleLink,
+} from './toll.types.js';
 
 /**
  * TAI KHOAN GIAO THONG va ANH XA XE — tach khoi `toll.service.ts` vi hai ly do.
@@ -24,6 +35,7 @@ export class TollAccountService {
     private readonly repository: TollRepository,
     private readonly core: TransportTollCoreFacts,
     private readonly audit: AuditLogService,
+    @Inject(TRANSPORT_TOLL_POLICY) private readonly policy: TransportTollPolicy,
     @Optional() private readonly telemetry?: TelemetryService,
     @Optional() @Inject(TRANSPORT_CLOCK) private readonly clock?: () => Date,
   ) {}
@@ -59,12 +71,85 @@ export class TollAccountService {
     return account;
   }
 
-  listLinksForAccount(accountId: string): Promise<readonly TollAccountVehicleLink[]> {
-    return this.repository.listLinksForAccount(accountId);
+  /**
+   * SO DOAN NOI cua mot tai khoan — kem ket luan "dang hieu luc" cho TUNG doan.
+   *
+   * ======================================================================================
+   * VI SAO KHONG TRA VE MANG TRAN NHU TRUOC
+   * ======================================================================================
+   *
+   * Ban truoc tra ve mang ban ghi tho, va man hinh tu cham bang `effectiveTo === null`. Phep rut
+   * gon do bien mot doan MO TU THANG SAU thanh mot huy hieu xanh *"Dang hieu luc"* — trong khi
+   * chinh may chu, o phep dem ngay ben canh, loai no ra. Hai con so canh nhau noi hai dieu khac
+   * nhau ve cung mot doan noi, va nguoi doc khong co cach nao biet ben nao dung.
+   *
+   * Nen ket luan duoc cham o DAY, bang DUNG mot ham ma phep dem va phep doc mot dong ve chiec xe
+   * dang dung (`tollLinkEffectiveOn`). Ba be mat, mot dinh nghia.
+   *
+   * `onDate` di ra ngoai cung ly do o `countEffectiveLinksByAccount`: man hinh phai noi duoc moc
+   * da dung, va no khong duoc tu lay ngay tu dong ho trinh duyet.
+   */
+  async listLinksForAccount(accountId: string): Promise<TollAccountLinkListing> {
+    const onDate = toBusinessDate(this.now(), this.policy.timeZone);
+    const links = await this.repository.listLinksForAccount(accountId);
+    return {
+      onDate,
+      links: links.map((link) => ({ ...link, effective: tollLinkEffectiveOn(link, onDate) })),
+    };
   }
 
   listLinksForVehicle(vehicleId: string): Promise<readonly TollAccountVehicleLink[]> {
     return this.repository.listLinksForVehicle(vehicleId);
+  }
+
+  /**
+   * DEM so xe DANG nhan chi tra, cho TUNG tai khoan, trong MOT lan hoi.
+   *
+   * ======================================================================================
+   * TON TAI VI MOT CON SO SAI DOC RA NHU MOT SU THAT VAN HANH
+   * ======================================================================================
+   *
+   * Bang tai khoan tren man hinh muon hien con so nay o MOI dong. Neu man hinh tu dem, no chi co
+   * trong tay doan noi cua tai khoan DANG CHON — va moi tai khoan con lai se hien `0`. Khong ai
+   * doc `0` do nhu "chua tai du lieu"; nguoi ta doc no la "tai khoan nay chua noi xe nao", roi di
+   * mo mot doan noi da ton tai.
+   *
+   * ======================================================================================
+   * MOI TAI KHOAN DEU CO MOT HANG, KE CA TAI KHOAN KHONG CO DOAN NOI NAO
+   * ======================================================================================
+   *
+   * Bang dem duoc gieo tu DANH SACH TAI KHOAN chu khong tu danh sach doan noi. Chi gieo tu doan
+   * noi thi mot tai khoan chua noi xe nao se KHONG co hang — va nguoi goi lai phai tu quyet dinh
+   * "khong co hang" nghia la `0` hay la "chua biet". Hai nghia do khac nhau, nen tang nay tra loi
+   * dut khoat: `0` la mot cau tra loi, khong phai mot khoang trong.
+   *
+   * `onDate` do MAY CHU tinh theo mui gio nghiep vu cua khach. Mot trinh duyet dat lech mui gio
+   * khong duoc phep doi nghia cua chu "dang".
+   */
+  async countEffectiveLinksByAccount(): Promise<readonly TollAccountLinkCount[]> {
+    const onDate = toBusinessDate(this.now(), this.policy.timeZone);
+    const [accounts, links] = await Promise.all([
+      this.repository.listAccounts(null),
+      this.repository.listAllLinks(),
+    ]);
+
+    const counts = new Map<string, number>(accounts.map((account) => [account.id, 0]));
+    for (const link of links) {
+      // `tollLinkEffectiveOn` chu khong `effectiveTo === null`: mot doan mo tu thang sau cung co
+      // `effectiveTo` rong, va no CHUA nhan chi tra hom nay.
+      if (!tollLinkEffectiveOn(link, onDate)) continue;
+      const held = counts.get(link.accountId);
+      // Doan noi tro toi mot tai khoan khong con trong danh sach thi bo qua — dem no vao se tao
+      // ra mot hang cho mot tai khoan ma man hinh khong co dong nao de gan vao.
+      if (held === undefined) continue;
+      counts.set(link.accountId, held + 1);
+    }
+
+    return [...counts].map(([accountId, effectiveLinkCount]) => ({
+      accountId,
+      effectiveLinkCount,
+      onDate,
+    }));
   }
 
   /**

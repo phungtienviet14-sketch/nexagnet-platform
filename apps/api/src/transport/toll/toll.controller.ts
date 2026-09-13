@@ -100,6 +100,22 @@ export class TollController {
     return this.guard(() => this.accounts.setAccountActive(id, active, transportActorOf(request)));
   }
 
+  /**
+   * SO XE DANG NHAN CHI TRA cua TUNG tai khoan — mot lan hoi cho ca bang.
+   *
+   * KHONG long duoi `accounts/:id`, va do la co y: day la mot cau hoi ve TOAN BO danh sach, nen
+   * mot duong khong mang `:id` phan anh dung dieu do. No cung tranh duoc ca duong `accounts/:id`
+   * bat nham chuoi `link-counts` lam mot ma tai khoan.
+   *
+   * Cung ma quyen voi phep doc tai khoan (`transport.toll.account.read`): day la mot phep DEM tren
+   * chinh du lieu ma nguoi goi da duoc phep doc, khong mo them mot pham vi nao.
+   */
+  @Get('accounts/link-counts')
+  @RequiresTransportAction('transport.toll.account.read')
+  linkCounts() {
+    return this.guard(() => this.accounts.countEffectiveLinksByAccount());
+  }
+
   @Get('accounts/:id/links')
   @RequiresTransportAction('transport.toll.account.read')
   listLinks(@Param('id') id: string) {

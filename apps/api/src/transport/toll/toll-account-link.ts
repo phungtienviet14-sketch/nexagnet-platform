@@ -88,7 +88,18 @@ export type TollVehicleResolution =
   | { readonly kind: 'UNRESOLVED' }
   | { readonly kind: 'AMBIGUOUS'; readonly vehicleIds: readonly string[] };
 
-const effectiveOn = (link: TollActiveLinkView, date: BusinessDate): boolean =>
+/**
+ * MOT DOAN NOI CO DANG HIEU LUC VAO MOT NGAY KHONG — DINH NGHIA DUY NHAT trong ca he.
+ *
+ * Nhan `TollLinkPeriod` (chi hai truong ngay) chu khong `TollActiveLinkView`, de CA hai nguoi goi
+ * dung chung mot dinh nghia: phep doc mot dong ve mot chiec xe, va phep dem "xe dang nhan chi tra"
+ * cua mot tai khoan. Hai cho tu viet lay mot phep so sanh ngay la hai cho se lech nhau — va luc do
+ * mot chiec xe co the dang hieu luc theo man hinh nay ma khong theo man hinh kia.
+ *
+ * `effectiveTo === null` KHONG dong nghia "dang hieu luc": mot doan mo tu thang sau cung co
+ * `effectiveTo` rong. Moc hai dau la bat buoc.
+ */
+export const tollLinkEffectiveOn = (link: TollLinkPeriod, date: BusinessDate): boolean =>
   link.effectiveFrom <= date && (link.effectiveTo === null || date <= link.effectiveTo);
 
 /**
@@ -113,7 +124,7 @@ const effectiveOn = (link: TollActiveLinkView, date: BusinessDate): boolean =>
  * §2.3 muc `UNKNOWN`. Nen day la mot duong DU PHONG san sang, khong phai mot duong bat buoc.)
  */
 export function resolveLinkedVehicle(input: TollVehicleResolutionInput): TollVehicleResolution {
-  const active = input.links.filter((link) => effectiveOn(link, input.onDate));
+  const active = input.links.filter((link) => tollLinkEffectiveOn(link, input.onDate));
 
   const ref = input.providerVehicleRef?.trim();
   if (ref !== undefined && ref !== '') {

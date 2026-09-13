@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { DataTable } from '../components/primitives';
 import { ErrorState } from '../components/SectionState';
 import { formatBusinessDate, formatLiters, formatMoney, rejectReasonLabel } from '../customer-view';
+import { readUploadAsBase64 } from '../file-base64';
 import type { AuthRole } from '../../../lib/auth';
 import { canPerform } from '../transport-actions';
 import { transportApi, type ImportStatementInput } from '../transport-api';
@@ -55,10 +56,8 @@ export function StatementImport({
 
   const buildInput = async (): Promise<ImportStatementInput> => {
     if (file === null) throw new Error('Chưa chọn tệp bảng kê.');
-    const contentBase64 = await readAsBase64(file);
-    if (contentBase64.length > MAX_BASE64_LENGTH) {
-      throw new Error('Tệp quá lớn so với giới hạn của máy chủ. Kiểm tra lại có đúng tệp không.');
-    }
+    // Doc tep + kiem tran o MOT cho — xem `file-base64.ts`.
+    const contentBase64 = await readUploadAsBase64(file);
     return { supplierId, periodStart, periodEnd, filename: file.name, format, contentBase64 };
   };
 
@@ -190,26 +189,6 @@ export function StatementImport({
     </section>
   );
 }
-
-/** Tran cua may chu la ~7.000.000 KY TU base64, khong phai byte. */
-const MAX_BASE64_LENGTH = 7_000_000;
-
-const readAsBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Không đọc được tệp đã chọn.'));
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== 'string') {
-        reject(new Error('Không đọc được tệp đã chọn.'));
-        return;
-      }
-      // `data:<mime>;base64,<payload>` — chi lay phan payload.
-      const comma = result.indexOf(',');
-      resolve(comma === -1 ? result : result.slice(comma + 1));
-    };
-    reader.readAsDataURL(file);
-  });
 
 /**
  * KET QUA XEM TRUOC — dem duoc, va noi ro dong nao BI LOAI vi ly do gi.
