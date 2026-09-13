@@ -1,0 +1,57 @@
+name: autopilot-poc-state
+
+# POC-5: prove GitHub can act as the engineering state machine.
+#
+# The interesting property is not that a script can flip labels. It is that running the
+# resolver AGAIN over the same state does nothing. Events get delivered more than once, and
+# an orchestrator that starts the same task twice is worse than one that never starts it.
+#
+# The resolver holds no memory of its own. The record that a task was dispatched lives on
+# the issue, where the next run can see it.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - tools/autopilot-poc-state/**
+      - .github/workflows/autopilot-poc-state.yml
+
+permissions:
+  contents: read
+
+jobs:
+  state:
+    name: autopilot-poc-state
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: State machine matrix
+        run: node --test tools/autopilot-poc-state/resolver.test.mjs
+      # A dependency graph is only interesting when it refuses to run ahead of itself, so
+      # walk the A -> B chain here rather than trusting the unit tests alone.
+      - name: Walk the dependency chain end to end
+        run: |
+          set -euo pipefail
+          a_open='[{"number":1,"state":"open","labels":[],"body":"","comments":[]},
+                   {"number":2,"state":"open","labels":[],"body":"AUTOPILOT_DEPENDS_ON=#1","comments":[]}]'
+          a_done='[{"number":1,"state":"closed","labels":[],"body":"","comments":[]},
+                   {"number":2,"state":"open","labels":[],"body":"AUTOPILOT_DEPENDS_ON=#1","comments":[]}]'
+          b_sent='[{"number":1,"state":"closed","labels":[],"body":"","comments":[]},
+                   {"number":2,"state":"open","labels":[],"body":"AUTOPILOT_DEPENDS_ON=#1","comments":[{"body":"AUTOPILOT_DISPATCHED run=1"}]}]'
+
+          echo "== A still open: only A may start =="
+          printf '%s' "${a_open}" | node tools/autopilot-poc-state/resolve-cli.mjs --expect-dispatch 1
+
+          echo "== A complete: B is released =="
+          printf '%s' "${a_done}" | node tools/autopilot-poc-state/resolve-cli.mjs --expect-dispatch 2
+
+          echo "== the same event again: nothing starts twice =="
+          printf '%s' "${b_sent}" | node tools/autopilot-poc-state/resolve-cli.mjs --expect-dispatch none
+          printf '%s' "${b_sent}" | node tools/autopilot-poc-state/resolve-cli.mjs --expect-dispatch none
+          echo "STATE_MACHINE_VERDICT=PASS"
