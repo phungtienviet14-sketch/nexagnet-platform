@@ -844,7 +844,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/waiting/waiting.service.ts"
     },
     "waiting_allowance.decide": {
-      "functionName": "WaitingAllowanceService.decide",
       "filePath": "apps/api/src/transport/waiting/allowance.service.ts"
     },
     "waiting_allowance.propose": {

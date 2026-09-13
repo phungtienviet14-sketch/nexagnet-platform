@@ -413,6 +413,145 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('phu cap cho tren Postgres tha
     ).toBe(0);
   });
 
+  /* ================================================================== *
+   * WA-IT-09..12 — KHOA CHONG GHI TRUNG PHAI DUNG NGHIA, tren Postgres that
+   *
+   * WA-IT-03 da chung minh khoa la mot unique THAT. Nhung mot unique chi chan lan GHI thu hai; no
+   * khong noi gi ve cau tra loi ma nguoi goi nhan duoc. Bon bai duoi day do dung cho do: cung mot
+   * khoa, bon lenh khac nhau, va chi MOT trong so do duoc phep tra ve hang cu.
+   *
+   * Do tren Postgres chu khong chi tren kho trong bo nho vi day la duong that: hang duoc doc lai
+   * tu dia, `status` va `approvedAmount` di qua phep chuyen kieu cua Prisma (`BigInt` -> `number`),
+   * va mot phep so sanh dung `!==` tren hai kieu khac nhau se lech dung o duong nay.
+   * ================================================================== */
+
+  it('WA-IT-09 — gui lai DUNG lenh cu tra ve chinh hang do, khong ghi lan hai', async () => {
+    const session = await freshClosedSession();
+    const allowance = await propose(session, 200_000);
+    const command = {
+      allowanceId: allowance.id,
+      outcome: 'APPROVED' as const,
+      approvedAmount: 150_000,
+      note: 'Cat theo muc thoa thuan',
+      idempotencyKey: `${RUN_PREFIX}-k8`,
+      authUserId: BOSS,
+    };
+
+    const first = await service.decide(command);
+    const again = await service.decide(command);
+
+    expect(again.id).toBe(first.id);
+    expect(again.decidedAt).toEqual(first.decidedAt);
+    expect(again.approvedAmount).toBe(150_000);
+    expect(
+      await prisma.transportDriverWaitingAllowance.count({
+        where: { waitingSessionId: session, status: 'APPROVED' },
+      }),
+    ).toBe(1);
+  });
+
+  it('WA-IT-10 — cung khoa tro vao mot DE NGHI KHAC bi tu choi, va de nghi kia van dang cho', async () => {
+    const sessionA = await freshClosedSession();
+    const key = `${RUN_PREFIX}-k9`;
+    const decided = await propose(sessionA, 200_000);
+    await service.decide({
+      allowanceId: decided.id,
+      outcome: 'APPROVED',
+      approvedAmount: 200_000,
+      note: null,
+      idempotencyKey: key,
+      authUserId: BOSS,
+    });
+
+    const sessionB = await freshClosedSession();
+    const other = await propose(sessionB, 300_000);
+
+    expect(
+      await reasonOf(
+        service.decide({
+          allowanceId: other.id,
+          outcome: 'APPROVED',
+          approvedAmount: 300_000,
+          note: null,
+          idempotencyKey: key,
+          authUserId: BOSS,
+        }),
+      ),
+    ).toBe('WAITING_ALLOWANCE_DECISION_KEY_REUSED');
+
+    // De nghi thu hai KHONG bi mot lan gui lai gia lam cho thanh da quyet.
+    const stillPending = await prisma.transportDriverWaitingAllowance.findUniqueOrThrow({
+      where: { id: other.id },
+    });
+    expect(stillPending.status).toBe('PENDING');
+    expect(stillPending.decisionIdempotencyKey).toBeNull();
+  });
+
+  it('WA-IT-11 — cung khoa nhung DOI KET QUA bi tu choi, hang cu khong doi', async () => {
+    const session = await freshClosedSession();
+    const key = `${RUN_PREFIX}-k10`;
+    const allowance = await propose(session, 200_000);
+    await service.decide({
+      allowanceId: allowance.id,
+      outcome: 'APPROVED',
+      approvedAmount: 120_000,
+      note: null,
+      idempotencyKey: key,
+      authUserId: BOSS,
+    });
+
+    expect(
+      await reasonOf(
+        service.decide({
+          allowanceId: allowance.id,
+          outcome: 'REJECTED',
+          approvedAmount: null,
+          note: null,
+          idempotencyKey: key,
+          authUserId: BOSS,
+        }),
+      ),
+    ).toBe('WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH');
+
+    const row = await prisma.transportDriverWaitingAllowance.findUniqueOrThrow({
+      where: { id: allowance.id },
+    });
+    expect(row.status).toBe('APPROVED');
+    expect(row.approvedAmount).toBe(120_000n);
+  });
+
+  it('WA-IT-12 — cung khoa, cung ket qua, nhung DOI SO TIEN bi tu choi va tong khong doi', async () => {
+    const session = await freshClosedSession();
+    const key = `${RUN_PREFIX}-k11`;
+    const allowance = await propose(session, 400_000);
+    await service.decide({
+      allowanceId: allowance.id,
+      outcome: 'APPROVED',
+      approvedAmount: 100_000,
+      note: null,
+      idempotencyKey: key,
+      authUserId: BOSS,
+    });
+
+    expect(
+      await reasonOf(
+        service.decide({
+          allowanceId: allowance.id,
+          outcome: 'APPROVED',
+          approvedAmount: 400_000,
+          note: null,
+          idempotencyKey: key,
+          authUserId: BOSS,
+        }),
+      ),
+    ).toBe('WAITING_ALLOWANCE_DECISION_AMOUNT_MISMATCH');
+
+    const row = await prisma.transportDriverWaitingAllowance.findUniqueOrThrow({
+      where: { id: allowance.id },
+    });
+    expect(row.approvedAmount).toBe(100_000n);
+  });
+
   it('WA-IT-08 — lai xe khong tu duyet duoc khoan cua chinh minh', async () => {
     const session = await freshClosedSession();
     const allowance = await propose(session, 100_000);

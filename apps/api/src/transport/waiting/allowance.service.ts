@@ -12,7 +12,11 @@ import {
   TRANSPORT_WAITING_ALLOWANCE_DECISIONS,
   type TransportWaitingAllowanceDecisionReason,
 } from './allowance-decisions.js';
-import { evaluateAllowanceDecision, evaluateAllowanceProposal } from './allowance-lifecycle.js';
+import {
+  evaluateAllowanceDecision,
+  evaluateAllowanceProposal,
+  evaluateDecisionReplay,
+} from './allowance-lifecycle.js';
 import {
   WAITING_ALLOWANCE_APPROVED_PER_SESSION,
   WAITING_ALLOWANCE_DECISION_KEY,
@@ -117,14 +121,13 @@ export class WaitingAllowanceService {
     // GUI LAI TRUOC MOI PHEP KIEM KHAC — cung quy uoc voi `CheckpointService.append`. Mot lan bam
     // `Duyet` da thanh cong roi mat song tren duong ve phai tra ve dung ket qua cu, KHONG quyet lan
     // hai. `#279` O13 bai 11.
+    //
+    // Nhung "tra ve ket qua cu" chi dung khi lan gui nay LA quyet dinh cu. Doc theo khoa roi tra ve
+    // ngay la mot cong chua dong: cung khoa deo mot de nghi khac, mot ket qua khac hay mot so tien
+    // khac se nhan mot 200 mang du lieu cu, va quyet dinh MOI bien mat ma khong ai thay. Nen phep
+    // so sanh nam o `replayOrConflict`, va no dong CA BA duong.
     const replayed = await this.allowances.findByDecisionKey(command.idempotencyKey);
-    if (replayed) {
-      this.allow('waiting_allowance.decide', 'WAITING_ALLOWANCE_DECISION_REPLAYED', {
-        allowanceId: replayed.id,
-        status: replayed.status,
-      });
-      return replayed;
-    }
+    if (replayed) return this.replayOrConflict(replayed, command);
 
     const allowance = await this.allowances.find(command.allowanceId);
     if (!allowance) {
@@ -169,12 +172,7 @@ export class WaitingAllowanceService {
     } catch (error) {
       if (isUniqueViolationOn(error, WAITING_ALLOWANCE_DECISION_KEY)) {
         const already = await this.allowances.findByDecisionKey(command.idempotencyKey);
-        if (already) {
-          this.allow('waiting_allowance.decide', 'WAITING_ALLOWANCE_DECISION_REPLAYED', {
-            allowanceId: already.id,
-          });
-          return already;
-        }
+        if (already) return this.replayOrConflict(already, command);
       }
       // HAI DE NGHI KHAC NHAU tren cung mot phien, ca hai duoc duyet cung luc. Unique MOT PHAN
       // chan ban thu hai — va do CHINH LA cau tra loi dung: mot khoang cho khong duoc tra tien
@@ -199,6 +197,48 @@ export class WaitingAllowanceService {
       }
       throw error;
     }
+  }
+
+  /**
+   * HAI DUONG cua `decide()` deu di qua day, va do la co y.
+   *
+   * Duong thu nhat doc theo khoa TRUOC khi ghi; duong thu hai bat va cham unique SAU khi ghi hong.
+   * Ca hai deu ket thuc o cung mot cau hoi — *"hang mang khoa nay co phai chinh quyet dinh dang
+   * duoc gui khong"* — nen chung phai tra loi giong het nhau. Hai ban sao cua phep so sanh se lech
+   * nhau o lan sua thu ba, va ban bi bo quen chinh la ban chay khi hai nguoi bam cung luc.
+   */
+  private replayOrConflict(
+    recorded: DriverWaitingAllowance,
+    command: DecideWaitingAllowanceCommand,
+  ): DriverWaitingAllowance {
+    const verdict = evaluateDecisionReplay({
+      recorded: {
+        allowanceId: recorded.id,
+        status: recorded.status,
+        approvedAmount: recorded.approvedAmount,
+      },
+      incoming: {
+        allowanceId: command.allowanceId,
+        outcome: command.outcome,
+        approvedAmount: command.approvedAmount,
+      },
+    });
+
+    if (!verdict.allowed) {
+      // KHONG log so tien — cung quy uoc voi duong ghi thanh cong. Hai dinh danh de nghi la du de
+      // nguoi truc doc ra chuyen gi da xay ra.
+      this.deny('waiting_allowance.decide', verdict.reason, {
+        allowanceId: command.allowanceId,
+        recordedAllowanceId: recorded.id,
+      });
+      throw this.decideErrorFor(verdict.reason);
+    }
+
+    this.allow('waiting_allowance.decide', verdict.reason, {
+      allowanceId: recorded.id,
+      status: recorded.status,
+    });
+    return recorded;
   }
 
   async listForSession(waitingSessionId: string): Promise<readonly DriverWaitingAllowance[]> {
@@ -254,6 +294,21 @@ export class WaitingAllowanceService {
         return TransportDomainError.denied(reason, 'Khong tu duyet khoan phu cap cua chinh minh');
       case 'WAITING_ALLOWANCE_ALREADY_DECIDED':
         return TransportDomainError.conflict(reason, 'De nghi nay da duoc quyet tu truoc');
+      case 'WAITING_ALLOWANCE_DECISION_KEY_REUSED':
+        return TransportDomainError.conflict(
+          reason,
+          'Khoa chong ghi trung nay da duoc dung cho mot de nghi khac',
+        );
+      case 'WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH':
+        return TransportDomainError.conflict(
+          reason,
+          'Cung khoa nhung khac ket qua — hay dung mot khoa moi cho mot quyet dinh moi',
+        );
+      case 'WAITING_ALLOWANCE_DECISION_AMOUNT_MISMATCH':
+        return TransportDomainError.conflict(
+          reason,
+          'Cung khoa nhung khac so tien duyet — hay dung mot khoa moi cho mot quyet dinh moi',
+        );
       case 'WAITING_ALLOWANCE_ABOVE_CANDIDATE':
         return TransportDomainError.invalid(reason, 'So duyet khong duoc lon hon so de nghi');
       default:

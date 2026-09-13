@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateAllowanceDecision, evaluateAllowanceProposal } from './allowance-lifecycle.js';
+import {
+  evaluateAllowanceDecision,
+  evaluateAllowanceProposal,
+  evaluateDecisionReplay,
+} from './allowance-lifecycle.js';
 
 /**
  * WA-010 — luat cua phu cap cho, do o tang HAM THUAN.
@@ -137,5 +141,80 @@ describe('Quyet dinh mot khoan phu cap cho — WA-010', () => {
     expect(
       evaluateAllowanceDecision(decision({ selfDealing: true, status: 'APPROVED' })).reason,
     ).toBe('WAITING_ALLOWANCE_SELF_DEALING');
+  });
+});
+
+/**
+ * WA-011 — MOT KHOA CU CO DUOC TRA VE HANG CU KHONG.
+ *
+ * Khoa chong ghi trung tra loi *"day co phai lan ghi cu khong"*. No KHONG tra loi *"neu dung thi
+ * noi dung co giong khong"*. Bo bai duoi day do dung cau hoi thu hai — cau giu tien.
+ */
+describe('evaluateDecisionReplay — WA-011', () => {
+  const recorded = {
+    allowanceId: 'wa_1',
+    status: 'APPROVED' as const,
+    approvedAmount: 300_000,
+  };
+
+  const incoming = (over: Record<string, unknown> = {}) =>
+    ({
+      allowanceId: 'wa_1',
+      outcome: 'APPROVED' as const,
+      approvedAmount: 300_000,
+      ...over,
+    }) as Parameters<typeof evaluateDecisionReplay>[0]['incoming'];
+
+  it('gui lai DUNG lenh cu thi duoc tra ve hang cu', () => {
+    expect(evaluateDecisionReplay({ recorded, incoming: incoming() })).toEqual({
+      allowed: true,
+      reason: 'WAITING_ALLOWANCE_DECISION_REPLAYED',
+    });
+  });
+
+  it('cung khoa nhung KHAC de nghi thi la khoa bi dung lai', () => {
+    expect(
+      evaluateDecisionReplay({ recorded, incoming: incoming({ allowanceId: 'wa_2' }) }).reason,
+    ).toBe('WAITING_ALLOWANCE_DECISION_KEY_REUSED');
+  });
+
+  it('cung khoa nhung KHAC ket qua thi lech ket qua', () => {
+    expect(
+      evaluateDecisionReplay({
+        recorded,
+        incoming: incoming({ outcome: 'REJECTED', approvedAmount: null }),
+      }).reason,
+    ).toBe('WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH');
+  });
+
+  it('cung khoa, cung ket qua, nhung KHAC so tien thi lech so tien', () => {
+    expect(
+      evaluateDecisionReplay({ recorded, incoming: incoming({ approvedAmount: 900_000 }) }).reason,
+    ).toBe('WAITING_ALLOWANCE_DECISION_AMOUNT_MISMATCH');
+  });
+
+  /**
+   * Mot hang bi TU CHOI khong mang duoc so tien nao, nen mot con so di kem `REJECTED` khong bao gio
+   * duoc luu. So sanh con so THO cua lenh se ket mot lan gui lai trung thuc la lech — dung hinh
+   * dang cua mot lop bao ve bien thanh nguon su co.
+   */
+  it('lan gui lai cua mot lenh TU CHOI van la lan gui lai', () => {
+    const rejected = { allowanceId: 'wa_1', status: 'REJECTED' as const, approvedAmount: null };
+    expect(
+      evaluateDecisionReplay({
+        recorded: rejected,
+        incoming: incoming({ outcome: 'REJECTED', approvedAmount: null }),
+      }).reason,
+    ).toBe('WAITING_ALLOWANCE_DECISION_REPLAYED');
+  });
+
+  /** Mot hang CHUA quyet khong bao gio la mot lan gui lai — no khong the mang khoa quyet dinh nao. */
+  it('mot hang con CHO khong duoc coi la quyet dinh cu', () => {
+    expect(
+      evaluateDecisionReplay({
+        recorded: { allowanceId: 'wa_1', status: 'PENDING', approvedAmount: null },
+        incoming: incoming(),
+      }).reason,
+    ).toBe('WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH');
   });
 });

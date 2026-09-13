@@ -148,6 +148,127 @@ describe('WaitingAllowanceService — WA-030', () => {
   });
 
   /**
+   * BON LAN GUI, MOT KHOA — va chi MOT trong so do la mot lan gui lai.
+   *
+   * Doc theo khoa roi tra ve ngay la mot cong CHUA DONG. Ba bai duoi day di qua dung ba mat mang
+   * nghia kinh te cua mot lan quyet — de nghi nao, ket qua gi, bao nhieu tien — va moi mat lech
+   * phai ra mot ma RIENG. Neu bat ky mat nao lot qua, nguoi bam nhan 200 mang du lieu CU trong khi
+   * quyet dinh MOI cua ho chua he duoc ghi.
+   */
+  it('cung khoa nhung tro vao mot DE NGHI KHAC thi bi tu choi, khong tra ve hang cu', async () => {
+    const first = await propose();
+    await service.decide({
+      allowanceId: first.id,
+      outcome: 'APPROVED',
+      approvedAmount: 300_000,
+      note: null,
+      idempotencyKey: 'k-1',
+      authUserId: 'u.sep',
+    });
+
+    // Mot phien KHAC, mot de nghi KHAC — nhung nguoi goi deo lai dung khoa cu.
+    const otherSession = await closedSession('2');
+    const second = await propose({ waitingSessionId: otherSession, candidateAmount: 400_000 });
+
+    expect(
+      await reasonOf(
+        service.decide({
+          allowanceId: second.id,
+          outcome: 'APPROVED',
+          approvedAmount: 400_000,
+          note: null,
+          idempotencyKey: 'k-1',
+          authUserId: 'u.sep',
+        }),
+      ),
+    ).toBe('WAITING_ALLOWANCE_DECISION_KEY_REUSED');
+
+    // Va de nghi thu hai VAN dang cho — khong bi mot lan gui lai gia lam cho thanh da quyet.
+    expect((await service.listPending()).map((row) => row.id)).toEqual([second.id]);
+    expect(await service.approvedTotalsBetween('2026-09-01', '2026-09-30')).toEqual([
+      { driverId: 'drv_a', totalAmount: 300_000, count: 1 },
+    ]);
+  });
+
+  it('cung khoa, cung de nghi, nhung DOI KET QUA thi bi tu choi', async () => {
+    const allowance = await propose();
+    await service.decide({
+      allowanceId: allowance.id,
+      outcome: 'APPROVED',
+      approvedAmount: 300_000,
+      note: null,
+      idempotencyKey: 'k-1',
+      authUserId: 'u.sep',
+    });
+
+    expect(
+      await reasonOf(
+        service.decide({
+          allowanceId: allowance.id,
+          outcome: 'REJECTED',
+          approvedAmount: null,
+          note: null,
+          idempotencyKey: 'k-1',
+          authUserId: 'u.sep',
+        }),
+      ),
+    ).toBe('WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH');
+
+    // Hang cu KHONG bi doi, va khong bi tra ve nhu mot thanh cong.
+    const row = (await service.listForSession(sessionId))[0];
+    expect(row?.status).toBe('APPROVED');
+    expect(row?.approvedAmount).toBe(300_000);
+  });
+
+  it('cung khoa, cung de nghi, cung ket qua, nhung DOI SO TIEN thi bi tu choi', async () => {
+    const allowance = await propose();
+    await service.decide({
+      allowanceId: allowance.id,
+      outcome: 'APPROVED',
+      approvedAmount: 300_000,
+      note: null,
+      idempotencyKey: 'k-1',
+      authUserId: 'u.sep',
+    });
+
+    expect(
+      await reasonOf(
+        service.decide({
+          allowanceId: allowance.id,
+          outcome: 'APPROVED',
+          approvedAmount: 500_000,
+          note: null,
+          idempotencyKey: 'k-1',
+          authUserId: 'u.sep',
+        }),
+      ),
+    ).toBe('WAITING_ALLOWANCE_DECISION_AMOUNT_MISMATCH');
+
+    expect(await service.approvedTotalsBetween('2026-09-01', '2026-09-30')).toEqual([
+      { driverId: 'drv_a', totalAmount: 300_000, count: 1 },
+    ]);
+  });
+
+  /** Mot lenh TU CHOI gui lai van la mot lan gui lai — lop bao ve khong duoc thanh nguon su co. */
+  it('gui lai DUNG mot lenh tu choi thi tra ve chinh hang do', async () => {
+    const allowance = await propose();
+    const command = {
+      allowanceId: allowance.id,
+      outcome: 'REJECTED' as const,
+      approvedAmount: null,
+      note: 'Khong co bien ban',
+      idempotencyKey: 'k-r',
+      authUserId: 'u.sep',
+    };
+    const first = await service.decide(command);
+    const again = await service.decide(command);
+
+    expect(again.id).toBe(first.id);
+    expect(again.status).toBe('REJECTED');
+    expect(again.decidedAt).toEqual(first.decidedAt);
+  });
+
+  /**
    * Mot khoa KHAC tren mot de nghi DA quyet phai bi tu choi.
    *
    * Khac bai tren: day khong phai mot lan gui lai, day la mot nguoi thu hai quyet lai. Chap nhan no

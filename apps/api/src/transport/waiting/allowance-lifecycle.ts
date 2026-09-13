@@ -109,4 +109,67 @@ export function evaluateAllowanceDecision(
   return { allowed: true, reason: 'WAITING_ALLOWANCE_APPROVED' };
 }
 
+/**
+ * SO TIEN THUC SU se duoc ghi cho mot lenh quyet dinh — `null` khi TU CHOI.
+ *
+ * Mot hang bi tu choi KHONG mang duoc mot so tien nao (`CHECK`
+ * `TransportDriverWaitingAllowance_decision_shape`), nen mot con so di kem `REJECTED` khong bao gio
+ * duoc luu. Phep so sanh cua `evaluateDecisionReplay` phai dung DUNG con so nay, khong dung con so
+ * tho cua lenh: neu khong, mot lan gui lai trung thuc cua mot lenh TU CHOI se bi ket la lech.
+ */
+export function effectiveApprovedAmount(
+  outcome: WaitingAllowanceOutcome,
+  approvedAmount: number | null,
+): number | null {
+  return outcome === 'APPROVED' ? approvedAmount : null;
+}
+
+export interface DecisionReplayEvaluation {
+  /** Hang DA GHI dang mang dung khoa chong ghi trung nay. */
+  readonly recorded: {
+    readonly allowanceId: string;
+    readonly status: WaitingAllowanceStatus;
+    readonly approvedAmount: number | null;
+  };
+  /** Lenh vua den, deo cung khoa do. */
+  readonly incoming: {
+    readonly allowanceId: string;
+    readonly outcome: WaitingAllowanceOutcome;
+    readonly approvedAmount: number | null;
+  };
+}
+
+/**
+ * MOT KHOA CU CO DUOC PHEP TRA VE HANG CU KHONG.
+ *
+ * Doc theo khoa roi tra ve hang tim thay la mot cong CHUA DONG: khoa chi tra loi *"day co phai lan
+ * ghi cu khong"*, no khong tra loi *"neu dung thi noi dung co giong khong"*. Hai cau hoi khac nhau,
+ * va cai thu hai la cai giu tien.
+ *
+ * Nen o day so sanh CA BA mat mang nghia kinh te cua mot lan quyet:
+ *
+ *     de nghi nao   ->  `allowanceId`
+ *     ket qua gi     ->  `outcome` doi chieu `status` da ghi
+ *     bao nhieu tien ->  `approvedAmount` sau khi chuan hoa theo ket qua
+ *
+ * Nguoi bam nut va gio may chu CO Y khong nam trong phep so sanh: mot lan gui lai that su den tu
+ * cung mot cu bam, va dong ho cua hai lan chay khac nhau la binh thuong. Giu chung lai se bien moi
+ * lan thu lai binh thuong thanh mot su co — cung ly le da ghi o `decision-idempotency.ts`.
+ */
+export function evaluateDecisionReplay(input: DecisionReplayEvaluation): DecideAllowanceDecision {
+  const { recorded, incoming } = input;
+  if (recorded.allowanceId !== incoming.allowanceId) {
+    return { allowed: false, reason: 'WAITING_ALLOWANCE_DECISION_KEY_REUSED' };
+  }
+  if (recorded.status !== incoming.outcome) {
+    return { allowed: false, reason: 'WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH' };
+  }
+  if (
+    recorded.approvedAmount !== effectiveApprovedAmount(incoming.outcome, incoming.approvedAmount)
+  ) {
+    return { allowed: false, reason: 'WAITING_ALLOWANCE_DECISION_AMOUNT_MISMATCH' };
+  }
+  return { allowed: true, reason: 'WAITING_ALLOWANCE_DECISION_REPLAYED' };
+}
+
 const isPositiveInteger = (value: number): boolean => Number.isInteger(value) && value > 0;

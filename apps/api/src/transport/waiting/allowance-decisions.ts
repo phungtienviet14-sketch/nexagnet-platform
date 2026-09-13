@@ -54,6 +54,26 @@ export const WAITING_ALLOWANCE_DECIDE_REASONS = [
   /** Duyet mot so LON HON so van phong de nghi. Nguoi duyet cat bot duoc, khong cong them duoc. */
   'WAITING_ALLOWANCE_ABOVE_CANDIDATE',
   'WAITING_ALLOWANCE_SELF_DEALING',
+  /* ---------------------------------------------------------------- *
+   * BA DUONG TU CHOI cua mot khoa chong ghi trung DUNG LAI
+   *
+   * Mot khoa da nam tren mot hang DA QUYET chi duoc tra ve hang do khi lan gui nay la CUNG mot
+   * quyet dinh: cung de nghi, cung ket qua, cung so tien. Lech bat cu mat nao thi day khong phai
+   * mot lan gui lai — day la mot lenh KHAC deo mot khoa cu.
+   *
+   * Tra ve hang cu luc do se bao "da ghi" cho mot quyet dinh CHUA HE duoc ghi: nguoi bam thay 200,
+   * ke toan doc con so cu, va quyet dinh moi bien mat trong im lang. Duong dung la nem.
+   *
+   * BA ma chu khong MOT: mot cong co ba duong tu choi phai phan biet duoc ba ly do. Nguoi doc trace
+   * can biet khoa bi dung lai cho mot DE NGHI khac hay cho mot SO TIEN khac — hai su co khac han
+   * nhau, va cach sua cung khac han nhau.
+   * ---------------------------------------------------------------- */
+  /** Khoa nay da nam tren mot DE NGHI KHAC. Khoa bi dung lai, khong phai mot lan gui lai. */
+  'WAITING_ALLOWANCE_DECISION_KEY_REUSED',
+  /** Cung de nghi, cung khoa, nhung lan nay DUYET con lan da ghi TU CHOI (hoac nguoc lai). */
+  'WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH',
+  /** Cung de nghi, cung ket qua, nhung SO TIEN duoc chot khac lan da ghi. */
+  'WAITING_ALLOWANCE_DECISION_AMOUNT_MISMATCH',
 ] as const;
 export type WaitingAllowanceDecideReason = (typeof WAITING_ALLOWANCE_DECIDE_REASONS)[number];
 
@@ -79,5 +99,11 @@ export const TRANSPORT_WAITING_ALLOWANCE_DECISIONS = defineDecisionVocabulary({
     WAITING_ALLOWANCE_NOT_FOUND: 'Khong tim thay de nghi phu cap',
     WAITING_ALLOWANCE_ALREADY_DECIDED: 'De nghi nay da duoc quyet tu truoc',
     WAITING_ALLOWANCE_ABOVE_CANDIDATE: 'So duyet khong duoc lon hon so de nghi',
+    WAITING_ALLOWANCE_DECISION_KEY_REUSED:
+      'Khoa chong ghi trung nay da duoc dung cho mot de nghi khac',
+    WAITING_ALLOWANCE_DECISION_OUTCOME_MISMATCH:
+      'Cung khoa nhung khac ket qua — day khong phai mot lan gui lai',
+    WAITING_ALLOWANCE_DECISION_AMOUNT_MISMATCH:
+      'Cung khoa nhung khac so tien duoc duyet — day khong phai mot lan gui lai',
   } satisfies Record<TransportWaitingAllowanceDecisionReason, string>,
 });
