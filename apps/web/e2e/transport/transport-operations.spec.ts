@@ -1480,6 +1480,10 @@ test.describe('anh chup lam bang chung', () => {
     // review can thay ca cac muc chua noi vao may chu, dung nhu chung dang hien ra.
     for (const section of [
       '',
+      // `control-tower` la man DAY NHAT cua be mat nay — the so, bang bay cot, hang viec va ngan
+      // ghi chu, tat ca tren mot trang. Neu mot lan sua lam nhip trang hong o dau thi hong o day
+      // truoc tien, nen no phai co trong bo anh nguoi review nhin.
+      'control-tower',
       'trips',
       'fleet',
       'driver-fund',
@@ -1599,7 +1603,14 @@ test.describe('ban do vong chay (Lane N)', () => {
     await mockTransport(page, 'ADMIN');
     await page.goto('/?section=executive');
 
-    await expect(page.getByRole('heading', { level: 1, name: 'Bảng điều hành' })).toBeVisible();
+    /*
+     * `Tổng hợp giám đốc`, KHONG phai `Bảng điều hành`.
+     *
+     * Hai muc — `control-tower` va `executive` — tung cung mang nhan `Bảng điều hành` va cung hien
+     * tren mot thanh ben, nen nguoi dung thay hai dong chu giong het nhau va khong doan duoc bam
+     * cai nao. Khang dinh nay khoa lai ket qua: mo dia chi cua `executive` phai ra mot ten RIENG.
+     */
+    await expect(page.getByRole('heading', { level: 1, name: 'Tổng hợp giám đốc' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Vận hành' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Hiệu quả chạy xe' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Việc cần xử lý' })).toBeVisible();

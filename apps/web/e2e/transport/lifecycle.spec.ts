@@ -102,7 +102,16 @@ test.describe('chuoi nghiep vu — bang ke cay xang', () => {
     const state = await mockLifecycle(page, 'ACCOUNTING');
     await page.goto('/?section=fuel');
 
+    /*
+     * BIEU NHAP NAM TRONG MOT NGAN DONG SAN.
+     *
+     * Nhap bang ke la viec CUOI THANG, con man `Nhiên liệu` duoc mo hang ngay de xac thuc phieu —
+     * nen nam o nhap khong con dung truoc bang so lieu. Mot lan bam la gia phai tra, va no la gia
+     * dung: bo E2E nay mo ta thao tac THAT cua ke toan, nen no phai bam dung cai nut do.
+     */
     const panel = page.getByRole('region', { name: 'Nhập bảng kê cây xăng' });
+    await panel.getByRole('button', { name: 'Mở biểu nhập' }).click();
+
     await panel.getByLabel('Cây xăng').selectOption({ label: 'Petrolimex Cầu Giấy' });
     await panel.getByLabel('Từ ngày').fill('2026-09-01');
     await panel.getByLabel('Đến ngày').fill('2026-09-30');
@@ -136,6 +145,9 @@ test.describe('chuoi nghiep vu — bao duong va giay to', () => {
     const state = await mockLifecycle(page, 'ADMIN');
     await page.goto('/?section=maintenance');
 
+    /* Cung ly le voi bang ke cay xang: bieu nhap nam trong mot ngan dong san. */
+    await page.getByRole('button', { name: 'Ghi lệnh mới' }).click();
+
     const openForm = page.getByRole('form', { name: 'Mở lệnh sửa chữa' });
     await openForm.getByLabel('Xe', { exact: true }).selectOption({ label: '29H-123.45' });
     await openForm.getByLabel('Nội dung').fill('Thay dầu máy và lọc gió');
@@ -155,6 +167,8 @@ test.describe('chuoi nghiep vu — bao duong va giay to', () => {
 
     await expect.poll(() => state.workOrders.get(order.id)?.status).toBe('COMPLETED');
     expect(state.workOrders.get(order.id)?.costAmount).toBe(2_400_000);
+
+    await page.getByRole('button', { name: 'Ghi giấy tờ mới' }).click();
 
     const docForm = page.getByRole('form', { name: 'Đăng ký giấy tờ' });
     await docForm.getByLabel('Hiệu lực từ').fill('2026-09-01');

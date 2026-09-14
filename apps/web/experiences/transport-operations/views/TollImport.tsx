@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { DataTable, StatusBadge } from '../components/primitives';
+import { CommandPanel, DataTable, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   TOLL_PROVIDER_LABEL,
@@ -181,13 +181,19 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
   const ready = tollImportReady(draft, statementReady);
 
   return (
-    <section className="tx-panel tx-panel--form" aria-labelledby="toll-import-heading">
-      <h2 id="toll-import-heading">Nạp bảng kê phí đường bộ</h2>
-      <p className="tx-panel__lead">
-        Xem trước không ghi gì. Nạp thật sẽ sinh các dòng vào hàng chờ đối soát — không có đường
-        xoá, nên hãy xem trước đã.
-      </p>
-
+    /*
+     * NGAN DONG SAN — cung ly le voi `StatementImport`.
+     *
+     * Nap bang ke ETC la viec theo KY, con man `Phí đường bộ` duoc mo hang ngay de nhin hang cho
+     * doi soat. Mot bieu nhap co the bung ra thanh mot bang go tay nhieu dong khong duoc dung
+     * truoc cai hang cho do.
+     */
+    <CommandPanel
+      title="Nạp bảng kê phí đường bộ"
+      /* Cung ly do voi `StatementImport`: nut gui ten `Nạp bảng kê`, nen nut mo phai mang ten khac. */
+      openLabel="Mở biểu nhập"
+      hint="Xem trước không ghi gì. Nạp thật sẽ sinh các dòng vào hàng chờ đối soát — không có đường xoá, nên hãy xem trước đã."
+    >
       {failure === null ? null : <ErrorState message={failure} />}
       {!stale ? null : (
         <p className="tx-note" role="status">
@@ -305,7 +311,7 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
       </div>
 
       {binding === null ? null : <PreviewPanel model={binding.model} stale={stale} />}
-    </section>
+    </CommandPanel>
   );
 }
 

@@ -138,26 +138,45 @@ export function ControlTowerView() {
             )}
           </section>
 
-          {model.disabledSourceNotes.length === 0 ? null : (
-            <section className="tx-panel" aria-label="Nghiệp vụ chưa bật">
-              <h2>Mục bảng không có, vì khách chưa bật nghiệp vụ</h2>
-              <ul className="tx-notes">
-                {model.disabledSourceNotes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {/*
+            HAI KHOI GHI CHU VAO CHUNG MOT NGAN, DONG SAN.
 
-          {model.pendingWorkNotes.length === 0 ? null : (
-            <section className="tx-panel" aria-label="Việc hệ thống chưa theo dõi được">
-              <h2>Việc hệ thống chưa theo dõi được</h2>
-              <ul className="tx-notes">
-                {model.pendingWorkNotes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </section>
+            Ba muc o tren van KHONG duoc gop — nguon bi TAT va viec CHUA THEO DOI DUOC la hai su
+            that khac nhau, va chu thich dau tep noi ro ly do. Cai thay doi o day la CHO DUNG cua
+            chung, khong phai y nghia: ca hai tra loi cung mot cau hoi ("sao bang thieu cho nay"),
+            va ca hai la thu doc MOT lan roi thoi. Truoc day chung la hai khoi trang co vien, nang
+            ngang bang vong chay va hang viec — tuc la hai thu nguoi truc phai nhin moi ngay.
+
+            Hai tieu de giu NGUYEN VAN, chi tut xuong `h3`: chung nam trong mot ngan co dong tieu
+            de rieng, nen giu `h2` se lam cay tieu de cua trang doc ra sai thu bac.
+          */}
+          {model.disabledSourceNotes.length === 0 && model.pendingWorkNotes.length === 0 ? null : (
+            <details className="tx-aside">
+              <summary>Vì sao bảng thiếu một số mục?</summary>
+              <div className="tx-aside__body">
+                {model.disabledSourceNotes.length === 0 ? null : (
+                  <section aria-label="Nghiệp vụ chưa bật">
+                    <h3>Mục bảng không có, vì khách chưa bật nghiệp vụ</h3>
+                    <ul className="tx-notes">
+                      {model.disabledSourceNotes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {model.pendingWorkNotes.length === 0 ? null : (
+                  <section aria-label="Việc hệ thống chưa theo dõi được">
+                    <h3>Việc hệ thống chưa theo dõi được</h3>
+                    <ul className="tx-notes">
+                      {model.pendingWorkNotes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </div>
+            </details>
           )}
         </>
       )}

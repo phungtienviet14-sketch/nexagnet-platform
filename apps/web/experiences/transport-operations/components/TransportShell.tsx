@@ -6,6 +6,7 @@ import { AccountMenu } from './AccountMenu';
 import {
   buildDriverUrl,
   buildSectionUrl,
+  filterNavigationGroups,
   NAVIGATION_ENFORCEMENT_NOTE,
   type DriverScreen,
   type DriverScreenId,
@@ -55,6 +56,14 @@ export function TransportShell({
 }) {
   const branding = useBranding();
   const [isDrawerOpen, setDrawerOpen] = useState(false);
+  /*
+   * Chu go vao o loc danh muc. Trang thai nay KHONG len dia chi, va do la co y: no khong tra loi
+   * cau hoi "dia chi nay nghia la gi" (`resolveNavigation` giu doc quyen cau do), no chi la mot
+   * loi tat cua mat trong mot lan nhin. Day mot o tim kiem danh muc len URL se lam Back thanh nut
+   * xoa tung chu — dung loi ma `filterWithin` da phai tranh o `TransportOperations`.
+   */
+  const [navQuery, setNavQuery] = useState('');
+  const shownGroups = filterNavigationGroups(groups, navQuery);
 
   return (
     <div
@@ -84,8 +93,41 @@ export function TransportShell({
           </span>
         </div>
 
+        {/*
+          O LOC DANH MUC.
+
+          Chi bay khi danh muc DAI. Voi vai Ke toan (7 muc) thi mot o tim kiem tren mot danh sach
+          nhin het mot luot la them viec, khong phai bot; voi vai Giam doc (23 muc) thi no la thu
+          duy nhat lam cot danh muc dung duoc ma khong phai doc tu dau.
+
+          `type="search"` chu khong `type="text"`: trinh duyet cho san nut xoa, va tren dien thoai
+          ban phim hien dung phim `Tìm`.
+        */}
+        {groups.reduce((total, entry) => total + entry.sections.length, 0) < 12 ? null : (
+          <div className="tx-nav__filter">
+            <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+            <input
+              type="search"
+              value={navQuery}
+              onChange={(event) => setNavQuery(event.target.value)}
+              placeholder="Lọc danh mục"
+              aria-label="Lọc danh mục vận hành vận tải"
+            />
+          </div>
+        )}
+
         <nav className="tx-nav" aria-label="Điều hướng vận hành vận tải">
-          {groups.map((entry) => (
+          {shownGroups.length === 0 ? (
+            /*
+              KHONG de mot cot trong. Mot danh muc bien mat khong loi giai doc ra y het mot lan mat
+              quyen — va do la ket luan dat nhat nguoi dung co the rut ra tu mot thanh ben rong.
+            */
+            <p className="tx-nav__none">Không có mục nào khớp “{navQuery}”.</p>
+          ) : null}
+          {shownGroups.map((entry) => (
             <div className="tx-nav__group" key={entry.group.id}>
               {entry.group.label === '' ? null : (
                 <p className="tx-nav__grouplabel">{entry.group.label}</p>
@@ -130,7 +172,15 @@ export function TransportShell({
               Mở màn hình lái xe →
             </a>
           )}
-          <p className="tx-rail__note">{NAVIGATION_ENFORCEMENT_NOTE}</p>
+          {/*
+            Ghi chu hieu luc dieu huong van o day, NGUYEN VAN — chi khong con la ba dong chu xam
+            nam duoi moi man hinh. No tra loi dung mot cau hoi, va cau hoi do bay gio duoc hoi ra
+            thanh loi. Chu van nam trong DOM khi ngan dong, nen tro ho tro va bo E2E doc duoc.
+          */}
+          <details className="tx-rail__why">
+            <summary>Sao tôi không thấy mục nào đó?</summary>
+            <p className="tx-rail__note">{NAVIGATION_ENFORCEMENT_NOTE}</p>
+          </details>
         </div>
       </aside>
 

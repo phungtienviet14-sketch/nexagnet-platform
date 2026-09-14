@@ -2,7 +2,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { DataTable } from '../components/primitives';
+import { CommandPanel, DataTable } from '../components/primitives';
 import { ErrorState } from '../components/SectionState';
 import { formatBusinessDate, formatLiters, formatMoney, rejectReasonLabel } from '../customer-view';
 import { readUploadAsBase64 } from '../file-base64';
@@ -94,12 +94,25 @@ export function StatementImport({
   const ready = supplierId !== '' && periodStart !== '' && periodEnd !== '' && file !== null;
 
   return (
-    <section className="tx-panel tx-panel--form" aria-label="Nhập bảng kê cây xăng">
-      <h2>Nhập bảng kê cây xăng</h2>
-      <p className="tx-panel__lead">
-        Xem trước không ghi gì. Nhập bảng kê sẽ tạo kỳ đối soát cho khoảng thời gian đã chọn.
-      </p>
-
+    /*
+     * NGAN DONG SAN.
+     *
+     * Truoc day khoi nay la mot `tx-panel--form` luon mo, nam NGA GIUA hop thu phieu (viec hang
+     * ngay) va bang ky doi soat (thu nguoi ta vao de xem). Nam o nhap voi mot nut `Chọn tệp` chan
+     * ngang duong doc cua mot man hinh ma phan lon lan mo ra la de tra cuu.
+     *
+     * Nhap bang ke la viec CUOI THANG — dung mot lan moi ky, moi cay xang. Cho no mot ngan la dung
+     * tan suat that cua no; tieu de va nut mo van o nguyen vi tri cu nen khong ai mat duong vao.
+     */
+    <CommandPanel
+      title="Nhập bảng kê cây xăng"
+      /*
+       * KHONG duoc chua chuoi `Nhập bảng kê` — do la ten nut GUI ben trong, va Playwright khop ten
+       * nut theo chuoi con. Hai nut cung khop se lam bo E2E do vi `strict mode violation`.
+       */
+      openLabel="Mở biểu nhập"
+      hint="Xem trước không ghi gì. Nhập bảng kê sẽ tạo kỳ đối soát cho khoảng thời gian đã chọn."
+    >
       {failure === null ? null : <ErrorState message={failure} />}
       {imported === null ? null : (
         <p className="tx-note" role="status">
@@ -186,7 +199,7 @@ export function StatementImport({
       </div>
 
       {preview === null ? null : <StatementPreview preview={preview} />}
-    </section>
+    </CommandPanel>
   );
 }
 

@@ -5,6 +5,7 @@ import {
   buildSectionUrl,
   canNavigateTo,
   DRIVER_SCREENS,
+  filterNavigationGroups,
   navigationGroups,
   parseNavigationFromSearch,
   resolveNavigation,
@@ -204,6 +205,29 @@ describe('moi muc phai khai du hai truc', () => {
     }
   });
 
+  /**
+   * HAI MUC KHONG DUOC TRUNG NHAN — va day la mot loi DA XAY RA, khong phai mot lo xa.
+   *
+   * `control-tower` va `executive` tung cung mang nhan `Bảng điều hành`. Voi vai Giam doc ca hai
+   * deu hien, va chung nam o hai nhom khac nhau tren CUNG mot thanh ben: nguoi dung thay hai dong
+   * chu giong het nhau va khong co cach nao doan duoc bam cai nao dan toi dau.
+   *
+   * Bai nay do TOAN BO danh muc chu khong rieng hai muc do, vi cai can chan la HANH VI them mot
+   * muc trung ten — mot viec de lam nham khi danh muc da co 23 muc va nguoi them chi nhin mot nhom.
+   */
+  it('khong hai muc nao mang cung mot nhan', () => {
+    const seen = new Map<string, string>();
+    for (const section of TRANSPORT_SECTIONS) {
+      const existing = seen.get(section.label);
+      expect(
+        existing,
+        `Nhan "${section.label}" bi dung cho ca "${existing}" lan "${section.id}". Hai muc tren` +
+          ' cung mot thanh ben ma cung ten thi nguoi dung khong doan duoc bam cai nao.',
+      ).toBeUndefined();
+      seen.set(section.label, section.id);
+    }
+  });
+
   it('moi man cua lai xe deu doi mot hanh dong thuoc pham vi CUA CHINH MINH', () => {
     for (const screen of DRIVER_SCREENS) {
       expect(screen.requiredAction.startsWith('transport.driver.self.')).toBe(true);
@@ -308,5 +332,68 @@ describe('#275 K4 — muc Ket thuc don', () => {
     expect(section?.group).toBe('cost');
     expect(section?.requiredAction).toBe('transport.commercial_acceptance.read');
     expect(section?.requiredCapabilities).toEqual(['transport-acceptance']);
+  });
+});
+
+/**
+ * ====================================================================================================
+ * O LOC DANH MUC
+ * ====================================================================================================
+ *
+ * Voi vai Giam doc, thanh ben co 23 muc trong bon nhom — mot cot chu cao gan het man hinh 1440px,
+ * khong icon, khong so dem. O loc doi viec "doc het 23 dong" thanh "go hai chu".
+ *
+ * Hai luat duoi la luat AN TOAN chu khong phai luat tien nghi, nen chung nam o day chu khong o mot
+ * bai E2E: mot o loc an nham mot muc trong y het mot lan mat quyen, va do la ket luan dat nhat
+ * nguoi dung co the rut ra.
+ */
+describe('loc danh muc theo chu go vao', () => {
+  const groups = navigationGroups(director(FULL));
+
+  it('chuoi rong tra ve NGUYEN danh sach — o loc la loi tat, khong phai mot cong', () => {
+    expect(filterNavigationGroups(groups, '')).toBe(groups);
+    expect(filterNavigationGroups(groups, '   ')).toBe(groups);
+  });
+
+  it('go khong dau van tim ra nhan co dau', () => {
+    const found = filterNavigationGroups(groups, 'doi xe').flatMap((entry) =>
+      entry.sections.map((section) => section.id),
+    );
+    expect(found).toContain('fleet');
+  });
+
+  /**
+   * `Đ`/`đ` (U+0110/U+0111) la chu RIENG, khong phai `D` co dau, nen `normalize('NFD')` KHONG tach
+   * no ra. Bo qua dieu nay thi go "don hang" khong bao gio tim ra "Đơn hàng & vòng chạy" — va danh
+   * muc van tai day chu do: Đơn hàng, Đội xe, Điều xe, Đối soát.
+   */
+  it('`Đ` la chu rieng, nen "don hang" phai tim ra "Đơn hàng & vòng chạy"', () => {
+    const found = filterNavigationGroups(groups, 'don hang').flatMap((entry) =>
+      entry.sections.map((section) => section.id),
+    );
+    expect(found).toContain('movement');
+  });
+
+  /**
+   * Loc theo NHAN, khong theo `id`. `id` la ma ky thuat (`driver-fund`, `ar-ap`) va nguoi dung
+   * khong nhin thay no o dau ca; go dung chu minh DOC DUOC tren man hinh phai ra ket qua.
+   */
+  it('loc theo nhan chu khong theo ma ky thuat', () => {
+    const byLabel = filterNavigationGroups(groups, 'quỹ').flatMap((entry) =>
+      entry.sections.map((section) => section.id),
+    );
+    expect(byLabel).toContain('driver-fund');
+
+    expect(filterNavigationGroups(groups, 'driver-fund')).toEqual([]);
+  });
+
+  it('nhom khong con muc nao bi bo han — khong de lai tieu de mo coi', () => {
+    for (const entry of filterNavigationGroups(groups, 'nhien lieu')) {
+      expect(entry.sections.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('khong khop gi thi tra ve rong, de vo noi ro thay vi ve mot cot trang', () => {
+    expect(filterNavigationGroups(groups, 'khong-co-muc-nao-ten-the-nay')).toEqual([]);
   });
 });
