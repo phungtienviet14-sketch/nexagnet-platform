@@ -35,10 +35,36 @@
   --tx-done: #2b4f7a;
   --tx-done-wash: #eaf0f8;
 
-  --tx-rail: 264px;
+  --tx-rail: 232px;
   --tx-gutter: clamp(1rem, 0.5rem + 1.8vw, 2.25rem);
-  --tx-radius: 12px;
-  --tx-radius-sm: 7px;
+  --tx-radius: 10px;
+  --tx-radius-sm: 6px;
+
+  /*
+   * NHIP TRANG — ba khoang cach, khong phai mot.
+   *
+   * Truoc day `.tx-main` dung MOT khoang cach (1.35rem) giua moi khoi, nen bang du lieu, the so,
+   * form nhap va ghi chu phu deu cach nhau bang nhau: mat khong doc ra duoc cai nao thuoc cai nao.
+   * Ba bien duoi cho phep noi "hai khoi nay di voi nhau" va "khoi nay la mot phan khac" bang chinh
+   * khoang trang, thay vi phai ve them mot duong ke.
+   */
+  --tx-space-tight: 0.6rem;
+  --tx-space-block: 1.15rem;
+  --tx-space-section: 2.1rem;
+
+  /*
+   * BA MUC BE MAT — va CHI ba.
+   *
+   * Truoc day `.tx-panel`, `.tx-tablewrap`, `.tx-metric` va `.tx-state` deu la `nen trang + vien
+   * 1px + bo goc`: mot trang bay ra sau khoi thi thanh sau cai hop giong het nhau, khong cai nao
+   * to hon cai nao. Gio VIEN la dau hieu cua viec GO VAO (form, o nhap, nut), con khoi DOC chi
+   * duoc nen giay + mot duong day rat mong.
+   */
+  --tx-lift: 0 1px 0 var(--tx-line), 0 1px 3px rgb(27 26 23 / 4%);
+  --tx-lift-strong: 0 1px 0 var(--tx-line-strong), 0 6px 18px rgb(27 26 23 / 7%);
+
+  /* Be rong doc toi da. 1440px ma bang chi rong 700px thi phan con lai la khoang trang cheo. */
+  --tx-measure: 1340px;
 
   color: var(--tx-ink);
   font-family: var(--font-body);
@@ -75,11 +101,19 @@
 .tx-rail {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 1.25rem 1rem;
+  gap: 0.9rem;
+  padding: 1.1rem 0.75rem 0.9rem;
   background: var(--tx-paper);
   border-right: 1px solid var(--tx-line);
   min-width: 0;
+  /*
+   * Thanh ben DUNG YEN khi than trang cuon. Man Bao duong dai 1370px, va truoc day cuon xuong doc
+   * bang thi danh muc troi mat — muon sang muc khac phai cuon nguoc len het trang.
+   */
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
 }
 
 .tx-brand {
@@ -118,12 +152,77 @@
   color: var(--tx-ink-faint);
 }
 
+/*
+ * O LOC DANH MUC.
+ *
+ * Vai Giam doc thay 23 muc. Mot cot 23 dong chu cung co, cung mau, khong moc thi phai DOC het moi
+ * lan muon di dau do. O nay doi "doc het" thanh "go hai chu" — va no KHONG AN GI khi o rong, nen
+ * nguoi quen vi tri tung muc van dung duoc dung nhu cu.
+ */
+.tx-nav__filter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-canvas);
+}
+
+.tx-nav__filter:focus-within {
+  border-color: var(--tx-accent);
+  background: var(--tx-paper);
+}
+
+.tx-nav__filter input {
+  font: inherit;
+  font-size: 0.82rem;
+  border: none;
+  background: none;
+  color: var(--tx-ink);
+  min-width: 0;
+  flex: 1;
+}
+
+.tx-nav__filter input:focus {
+  outline: none;
+}
+
+.tx-nav__filter svg {
+  flex: none;
+  color: var(--tx-ink-faint);
+}
+
+/*
+ * DANH MUC CUON TRONG THANH BEN, va PHAI NOI RA rang no dang cuon.
+ *
+ * Voi vai Giam doc, 23 muc + bon nhan nhom cao hon mot khung nhin 900px, nen danh muc co vung cuon
+ * cua rieng no (thanh ben `position: sticky`, khong troi theo trang nua). Nhung mot vung cuon KHONG
+ * co dau hieu gi thi te hon mot trang dai: muc cuoi bi cat ngang chu trong y nhu mot loi ve, va bon
+ * muc duoi cung (`Bản đồ vòng chạy`, `Biên trực tiếp`, `AR/AP`, `Xuất dữ liệu`) bien mat ma khong
+ * ai biet chung con o do.
+ *
+ * Bon lop nen duoi la ky thuat `scroll shadow` cua Roman Komarov: hai lop `local` la mang giay che,
+ * hai lop `scroll` la vet do. Khi cuon het co, mang che nam dung tren vet do va khong thay gi; khi
+ * con noi dung, mang che troi di va vet do lo ra. Nen bong CHI hien dung luc that su con muc ben
+ * duoi — khong phai mot duong ke ve san.
+ */
 .tx-nav {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 0.2rem;
   flex: 1;
   overflow-y: auto;
+  /* Khoang tho hai ben de thanh cuon khong de len chu. */
+  margin: 0 -0.25rem;
+  padding: 0.25rem;
+  background:
+    linear-gradient(var(--tx-paper) 30%, rgb(255 255 255 / 0%)) top / 100% 1.1rem no-repeat local,
+    linear-gradient(rgb(255 255 255 / 0%), var(--tx-paper) 70%) bottom / 100% 1.1rem no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgb(27 26 23 / 13%), rgb(27 26 23 / 0%)) top / 100%
+      0.45rem no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgb(27 26 23 / 13%), rgb(27 26 23 / 0%)) bottom /
+      100% 0.45rem no-repeat scroll;
 }
 
 .tx-nav__group ul {
@@ -132,13 +231,25 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+}
+
+/*
+ * Nhan nhom la DUONG PHAN CACH, khong phai mot dong chu nua.
+ *
+ * Truoc day nhan nhom chi khac cac muc o co chu, nen mat doc ca thanh ben thanh mot danh sach 28
+ * dong lien tuc. Duong ke lam bon nhom tach ra thanh bon khoi nhin mot cai la ra.
+ */
+.tx-nav__group + .tx-nav__group {
+  margin-top: 0.6rem;
 }
 
 .tx-nav__grouplabel {
-  margin: 0 0 0.4rem;
-  font-size: 0.68rem;
-  letter-spacing: 0.11em;
+  margin: 0 0 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--tx-line);
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--tx-ink-faint);
 }
@@ -146,13 +257,18 @@
 .tx-nav__item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: var(--tx-radius-sm);
+  /*
+   * Vien trai 2px la cho danh cho DAU HIEU dang o dau. No luon chiem cho, ke ca khi trong suot —
+   * nen muc dang chon khong lam ca cot nhich sang phai mot lan nua.
+   */
+  padding: 0.32rem 0.5rem 0.32rem 0.55rem;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--tx-radius-sm) var(--tx-radius-sm) 0;
   color: var(--tx-ink-soft);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.855rem;
+  line-height: 1.35;
 }
 
 .tx-nav__item:hover {
@@ -162,21 +278,36 @@
 
 .tx-nav__item:focus-visible {
   outline: 2px solid var(--tx-accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
 
+/*
+ * Muc dang xem: THANH DOC + chu dam, khong phai mot mang nen mau.
+ *
+ * Mang nen wash 12% truoc day ve ra mot hinh chu nhat to bang ca dong, nen tren mot cot 23 dong no
+ * la vet dam nhat man hinh — mat bi keo ve danh muc thay vi ve noi dung. Thanh doc noi dung mot
+ * dieu ("dang o day") bang mot phan muoi luong muc.
+ */
 .tx-nav__item[aria-current='page'] {
-  background: color-mix(in oklab, var(--tx-accent) 12%, transparent);
-  color: var(--tx-accent);
+  border-left-color: var(--tx-accent);
+  background: var(--tx-canvas);
+  color: var(--tx-ink);
   font-weight: 600;
+}
+
+/* Khong con muc nao khop o loc — noi ra, dung de mot cot trong. */
+.tx-nav__none {
+  margin: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--tx-ink-faint);
 }
 
 .tx-rail__foot {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.45rem;
   border-top: 1px solid var(--tx-line);
-  padding-top: 0.85rem;
+  padding-top: 0.7rem;
 }
 
 .tx-rail__role {
@@ -195,8 +326,45 @@
   text-decoration: underline;
 }
 
+/*
+ * GHI CHU HIEU LUC DIEU HUONG — giu nguyen van, nhung khong con chiem cho vinh vien.
+ *
+ * Ba dong chu xam o chan MOI man hinh la thu mat phai luot qua moi lan nhin xuong danh muc, va no
+ * chi can thiet DUNG mot lan: luc nguoi dung hoi "sao toi khong thay muc kia". Nen no nam sau mot
+ * dong hoi dung cau hoi do. Chu van o trong DOM, nen tro ho tro va bo E2E van doc duoc.
+ */
+.tx-rail__why {
+  font-size: 0.72rem;
+  color: var(--tx-ink-faint);
+}
+
+.tx-rail__why > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.2rem 0;
+}
+
+.tx-rail__why > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tx-rail__why > summary::before {
+  content: '›';
+  display: inline-block;
+  margin-right: 0.3rem;
+  transition: transform 120ms ease;
+}
+
+.tx-rail__why[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.tx-rail__why > summary:hover {
+  color: var(--tx-ink-soft);
+}
+
 .tx-rail__note {
-  margin: 0;
+  margin: 0.3rem 0 0;
   font-size: 0.72rem;
   line-height: 1.45;
   color: var(--tx-ink-faint);
@@ -233,38 +401,78 @@
 .tx-main {
   display: flex;
   flex-direction: column;
-  gap: 1.35rem;
+  gap: var(--tx-space-block);
   padding: var(--tx-gutter);
   min-width: 0;
+  width: 100%;
+  max-width: var(--tx-measure);
 }
 
 .tx-main:focus {
   outline: none;
 }
 
+/*
+ * MOT `<section>` TRAN LA MOT MUC CUA TRANG, khong phai mot khoi nua.
+ *
+ * Cac man hinh nang nhat (Bao duong, Nhien lieu, Quy lai xe) deu la mot chuoi `<section>` moi cai
+ * mot tieu de. Truoc day chung cach nhau dung bang khoang cach giua the so va bang, nen nam khoi
+ * lien nhau doc ra nhu mot danh sach phang. Cho them khong khi o day la cach re nhat de noi "day
+ * la mot muc khac".
+ */
+.tx-main > section:not(.tx-cards, .tx-panel, .tx-detail, .tx-command) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-space-tight);
+  margin-top: calc(var(--tx-space-section) - var(--tx-space-block));
+}
+
+.tx-main > section > h2,
+.tx-main > section > h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  line-height: 1.25;
+}
+
 /* ---------------------------------------------------------------- *
  * Dau trang · the so · bang
  * ---------------------------------------------------------------- */
 
+/*
+ * DAU TRANG — mot vung rieng, co day.
+ *
+ * Truoc day dau trang chi la mot khoi flex nua, cach khoi ke tiep dung bang khoang cach giua hai
+ * bang. Duong day mong duoi day noi "tren day la ten man hinh, duoi day la noi dung" — va no la
+ * duong ke DUY NHAT tren ca trang, nen no khong canh tranh voi thu gi.
+ */
 .tx-pagehead {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem 1.5rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--tx-line);
 }
 
 .tx-pagehead h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.1rem);
+  font-size: clamp(1.35rem, 1.05rem + 0.9vw, 1.75rem);
   line-height: 1.15;
 }
 
+/*
+ * Cau tom tat la CHU GIAI, khong phai mot cau ngang hang voi tieu de. Truoc day no dung co chu
+ * than trang (1rem) va chay dai 62ch, nen no nang bang chinh dong tieu de.
+ */
 .tx-pagehead__summary {
-  margin: 0.3rem 0 0;
+  margin: 0.25rem 0 0;
+  font-size: 0.855rem;
+  line-height: 1.45;
   color: var(--tx-ink-soft);
-  max-width: 62ch;
+  max-width: 68ch;
 }
 
 .tx-pagehead__context,
@@ -280,48 +488,73 @@
   gap: 0.5rem;
 }
 
+/*
+ * ==================================================================================================
+ * DAI SO LIEU — mot dai lien, khong phai N cai hop roi
+ * ==================================================================================================
+ *
+ * Truoc day moi con so la mot `the` rieng: nen trang, vien 1px, bo goc 12px, cach nhau 12px. Bay
+ * bay con so ra thanh bay cai hop giong het nhau, va `auto-fill` con de lai mot hang cuoi lech
+ * (5 + 2 o man Tong quan, 5 + 1 o man Cong no) — mot hinh dang khong mang y nghia gi ma mat van
+ * phai xu ly.
+ *
+ * Gio ca dai la MOT be mat. Duong ke mong giua cac o la chinh nen `--tx-line` lo ra qua khe
+ * `gap: 1px` — nen khong co mot vien nao duoc ve, va so o tren mot hang khong con quan trong.
+ *
+ * `auto-fit` chu khong `auto-fill`: `auto-fill` giu lai cac cot RONG o cuoi, va vi nen cua dai la
+ * mau duong ke, mot cot rong se ve ra mot mang xam khong co noi dung gi trong do.
+ */
 .tx-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
+  gap: 1px;
+  background: var(--tx-line);
+  border-radius: var(--tx-radius);
+  overflow: hidden;
+  box-shadow: var(--tx-lift);
 }
 
 .tx-metric {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.85rem 0.95rem;
+  gap: 0.15rem;
+  padding: 0.8rem 0.95rem 0.85rem;
   background: var(--tx-paper);
-  border: 1px solid var(--tx-line);
-  border-radius: var(--tx-radius);
   text-decoration: none;
   color: inherit;
 }
 
 .tx-metric--link:hover {
-  border-color: var(--tx-accent);
+  background: var(--tx-canvas);
 }
 
 .tx-metric--link:focus-visible {
   outline: 2px solid var(--tx-accent);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .tx-metric__label {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
   color: var(--tx-ink-faint);
 }
 
 .tx-metric__value {
   font-family: var(--font-display);
-  font-size: 1.55rem;
+  font-size: 1.4rem;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
+/*
+ * Goi y duoi con so la thu DOC SAU CUNG tren dai, nen no phai nho nhat. Truoc day no dung 0.74rem
+ * mau `--tx-ink-soft` — gan bang nhan o tren, nen mot the co goi y ba dong (vd "Chot doi soat se
+ * khoa chuyen khoi moi khoan chi moi") cao gap doi cac the con lai va keo lech ca hang.
+ */
 .tx-metric__hint {
-  font-size: 0.74rem;
-  color: var(--tx-ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--tx-ink-faint);
 }
 
 /* Tran ngang nam TRONG khung bang, khong bao gio o than trang. */
@@ -345,8 +578,8 @@
 .tx-tablewrap {
   overflow-x: auto;
   background: var(--tx-paper);
-  border: 1px solid var(--tx-line);
   border-radius: var(--tx-radius);
+  box-shadow: var(--tx-lift);
 }
 
 .tx-table {
@@ -595,29 +828,33 @@
 
 .tx-panel {
   background: var(--tx-paper);
-  border: 1px solid var(--tx-line);
   border-radius: var(--tx-radius);
+  box-shadow: var(--tx-lift);
   padding: 1rem 1.1rem;
 }
 
 .tx-panel--muted {
   background: transparent;
-  border-style: dashed;
+  border: 1px dashed var(--tx-line-strong);
+  box-shadow: none;
 }
 
+/* Khoi CO O NHAP giu vien — vien la dau hieu cua viec go vao, khong phai cua viec doc. */
 .tx-panel--form {
-  border-color: var(--tx-accent);
+  border: 1px solid var(--tx-accent);
+  box-shadow: none;
 }
 
 .tx-panel h2,
 .tx-panel h3 {
   margin: 0 0 0.35rem;
   font-family: var(--font-display);
-  font-size: 1.1rem;
+  font-size: 1.05rem;
 }
 
 .tx-panel__lead {
   margin: 0 0 0.75rem;
+  font-size: 0.875rem;
   color: var(--tx-ink-soft);
   max-width: 72ch;
 }
@@ -627,15 +864,23 @@
   padding: 0.9rem 1rem;
   border-radius: var(--tx-radius);
   background: var(--tx-paper);
-  border: 1px solid var(--tx-line);
+  box-shadow: var(--tx-lift);
+  font-size: 0.9rem;
   color: var(--tx-ink-soft);
 }
 
+/*
+ * TRANG THAI RONG khong duoc nang bang mot bang co du lieu. Nen giay am + vien dut, khong bong.
+ * Truoc day no la mot hop trang y het mot bang, nen mot man hinh ba khoi rong doc ra nhu mot man
+ * hinh ba khoi day.
+ */
 .tx-state--empty {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  border-style: dashed;
+  background: transparent;
+  border: 1px dashed var(--tx-line-strong);
+  box-shadow: none;
 }
 
 .tx-state--empty p {
@@ -649,7 +894,8 @@
   justify-content: space-between;
   gap: 0.75rem;
   background: var(--tx-stop-wash);
-  border-color: var(--tx-stop);
+  border: 1px solid var(--tx-stop);
+  box-shadow: none;
   color: var(--tx-stop);
 }
 
@@ -680,19 +926,40 @@
   gap: 0.5rem;
 }
 
+/*
+ * HANG VIEC — mot danh sach, khong phai mot chong the.
+ *
+ * Truoc day moi muc co vien rieng va bo goc rieng, nen mot hang viec hai dong ve ra hai cai hop
+ * nho long trong mot cai hop to. Gio cac muc dinh lien nhau va chi cach nhau bang mot duong day
+ * mong — dung nhu cach mot so sach ke dong.
+ */
+.tx-worklist {
+  gap: 0;
+}
+
+.tx-worklist li + li {
+  border-top: 1px solid var(--tx-line);
+}
+
 .tx-worklist a {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--tx-line);
+  padding: 0.55rem 0.6rem;
+  margin: 0 -0.6rem;
   border-radius: var(--tx-radius-sm);
   text-decoration: none;
   color: inherit;
 }
 
 .tx-worklist a:hover {
-  border-color: var(--tx-accent);
+  background: var(--tx-canvas);
+  color: var(--tx-accent);
+}
+
+/* Muc KHONG phai lien ket (vd mot dong canh bao) phai cao bang muc la lien ket. */
+.tx-worklist li > div:first-child {
+  padding: 0.55rem 0;
 }
 
 /*
@@ -761,14 +1028,18 @@
  * Khoi chi tiet
  * ---------------------------------------------------------------- */
 
+/*
+ * KHOI CHI TIET cua dong dang chon. Day la khoi DUY NHAT tren trang duoc phep noi len — no la cau
+ * tra loi cho lan bam vua roi, nen mat phai tim thay no ngay.
+ */
 .tx-detail {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem 1.1rem;
+  padding: 1.1rem 1.2rem;
   background: var(--tx-paper);
-  border: 1px solid var(--tx-line-strong);
   border-radius: var(--tx-radius);
+  box-shadow: var(--tx-lift-strong);
 }
 
 .tx-detail__head {
@@ -1336,19 +1607,22 @@
   padding-bottom: 0.5rem;
 }
 
+/*
+ * Cot cua bang la mot CHO DUNG, khong phai mot cai the. Nen giay am + khong vien: bay cot canh
+ * nhau ma cai nao cung co vien rieng thi ca bang doc ra nhu bay bang roi nhau.
+ */
 .tx-board__col {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.7rem;
-  border: 1px solid var(--tx-line);
   border-radius: var(--tx-radius-sm);
-  background: var(--tx-paper);
+  background: var(--tx-canvas);
 }
 
 /* Cot chua co nguon: nhat di va co vien dut — nhin ra ngay la CHUA DUNG DUOC, khong phai RONG. */
 .tx-board__col--pending {
-  border-style: dashed;
+  border: 1px dashed var(--tx-line-strong);
   background: transparent;
   color: var(--tx-ink-faint);
 }
@@ -1395,16 +1669,16 @@
   flex-direction: column;
   gap: 0.1rem;
   padding: 0.5rem 0.6rem;
-  border: 1px solid var(--tx-line);
   border-radius: var(--tx-radius-sm);
-  background: var(--tx-canvas);
+  background: var(--tx-paper);
+  box-shadow: var(--tx-lift);
   text-decoration: none;
   color: inherit;
   font-size: 0.78rem;
 }
 
 .tx-board__cards a:hover {
-  border-color: var(--tx-accent);
+  box-shadow: var(--tx-lift-strong);
 }
 
 .tx-board__cards strong {
@@ -1650,4 +1924,168 @@
   margin: 0;
   color: var(--tx-ink-faint);
   font-size: 0.8rem;
+}
+
+/* ==================================================================================================
+ * NGAN THAO TAC — form nhap lieu khong con chan dong doc
+ * ==================================================================================================
+ *
+ * VI SAO CO KHOI NAY.
+ *
+ * Man `Bao duong & giay to` truoc day cao 1370px, va hai trong sau khoi cua no la form nhap lieu
+ * LUON MO: mot form bon truong (`Lenh sua chua`) va mot form sau truong (`Ho so giay to`), nam xen
+ * giua ba bang du lieu. Man `Nhien lieu` co mot form nam nga hAn GIUA bo loc va bang. Nguoi vao xem
+ * *hom nay co gi den han* phai luot qua mot bai form de toi duoc bang — moi lan, ke ca nhung ngay
+ * khong nhap gi.
+ *
+ * Ngan nay DONG SAN. Tieu de va nut van o day, nen khong ai mat duong vao; chi cac o nhap la
+ * khong con chiem cho khi khong dung toi.
+ *
+ * NOI DUNG VAN NAM TRONG DOM khi ngan dong (`hidden`, khong phai go khoi cay). Do la co y: bo E2E
+ * hien co doc van ban cua ca `#tx-main` bang `toContainText`, va mot lan go khoi cay se lam cac bai
+ * do doi nghia mot cach am tham.
+ */
+
+.tx-command {
+  background: var(--tx-paper);
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius);
+}
+
+.tx-command[data-open='open'] {
+  border-color: var(--tx-accent);
+}
+
+.tx-command__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.tx-command__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.tx-command__text h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.tx-command__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--tx-ink-faint);
+}
+
+.tx-command__toggle {
+  font: inherit;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--tx-line-strong);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-paper);
+  color: var(--tx-ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tx-command__toggle:hover {
+  border-color: var(--tx-accent);
+  color: var(--tx-accent);
+}
+
+.tx-command__toggle:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 1px;
+}
+
+.tx-command__toggle::after {
+  content: '+';
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.tx-command[data-open='open'] .tx-command__toggle::after {
+  content: '×';
+}
+
+.tx-command__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 0.9rem 0.9rem;
+  border-top: 1px solid var(--tx-line);
+  padding-top: 0.9rem;
+}
+
+.tx-command__body[hidden] {
+  display: none;
+}
+
+/* ==================================================================================================
+ * GHI CHU PHU GOM VAO MOT NGAN
+ *
+ * Bang dieu hanh truoc day ket thuc bang HAI khoi ghi chu roi nhau — `Muc bang khong co, vi khach
+ * chua bat nghiep vu` va `Viec he thong chua theo doi duoc`. Ca hai la cau tra loi cho cung mot
+ * cau hoi ("sao bang thieu cho nay"), va ca hai deu la thu doc MOT lan roi thoi. Chung vao chung
+ * mot ngan, dong san.
+ * ================================================================================================== */
+
+.tx-aside {
+  border-top: 1px solid var(--tx-line);
+  padding-top: 0.7rem;
+  font-size: 0.85rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-aside > summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--tx-ink-faint);
+  font-size: 0.82rem;
+}
+
+.tx-aside > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tx-aside > summary::before {
+  content: '›';
+  display: inline-block;
+  margin-right: 0.35rem;
+  transition: transform 120ms ease;
+}
+
+.tx-aside[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.tx-aside > summary:hover {
+  color: var(--tx-ink-soft);
+}
+
+.tx-aside__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.7rem;
+}
+
+.tx-aside__body h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--tx-ink);
 }

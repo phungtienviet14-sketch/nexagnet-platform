@@ -49,7 +49,14 @@ export function ExecutiveView(): React.ReactElement {
   return (
     <>
       <PageHeader
-        title="Bảng điều hành"
+        /*
+         * Ten phai KHAC man `control-tower`, va do khong phai chuyen tham my.
+         *
+         * Hai man tung cung mang ten `Bảng điều hành` va cung nam tren mot thanh ben. Xem chu thich
+         * o muc `executive` trong `navigation.ts`: nhan o danh muc va `<h1>` o day phai di cung
+         * nhau, neu khong thi bam vao `Tổng hợp giám đốc` lai mo ra mot trang tu xung la thu khac.
+         */
+        title="Tổng hợp giám đốc"
         summary="Ba câu hỏi mỗi sáng: xe đang chạy thế nào, tiền đang ở đâu, và việc gì cần người xử lý."
         context={tower === null ? undefined : `Số liệu ngày ${tower.generatedFor}`}
       />

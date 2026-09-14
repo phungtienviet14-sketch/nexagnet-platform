@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { StatusTone } from '../customer-view';
 
 /**
@@ -33,6 +33,75 @@ export function PageHeader({
       </div>
       {actions === undefined ? null : <div className="tx-pagehead__actions">{actions}</div>}
     </header>
+  );
+}
+
+/**
+ * NGAN THAO TAC — mot form nhap lieu khong duoc chan dong doc.
+ *
+ * ==============================================================================================
+ * VI SAO CAN MOT THU NGUYEN LIEU RIENG CHO VIEC NAY
+ *
+ * Man `Bao duong & giay to` cao 1370px o 1440px, va HAI trong sau khoi cua no la form luon mo:
+ * `Lenh sua chua` (4 truong) va `Ho so giay to` (6 truong), nam xen giua ba bang du lieu. Man
+ * `Nhien lieu` co form `Nhap bang ke cay xang` (5 truong) nam nga giua bo loc va bang. Nguoi mo
+ * man hinh de xem *hom nay co gi den han* phai luot qua mot bai form moi toi duoc so lieu — moi
+ * lan, ke ca nhung ngay khong nhap gi.
+ *
+ * Ngan nay DONG SAN. Tieu de + cau mo ta + nut mo van o day, nen khong ai mat duong vao; chi cac
+ * o nhap la khong con chiem cho khi khong dung toi.
+ *
+ * ==============================================================================================
+ * MOT QUYET DINH KHONG DUOC DAO NGUOC: `hidden`, KHONG phai thao khoi cay
+ *
+ * Khi dong, than ngan van nam trong DOM voi thuoc tinh `hidden`. Neu doi thanh `{isOpen && ...}`
+ * thi:
+ *
+ *   · cac bai E2E doc van ban ca `#tx-main` bang `toContainText`/`not.toContainText` se doi nghia
+ *     mot cach am tham — chung dang do NOI DUNG CO MAT, khong phai noi dung NHIN THAY;
+ *   · moi lan mo ngan se dung lai state cua form tu dau, nen mot nguoi go nua chung roi dong nham
+ *     mat sach nhung gi vua go.
+ *
+ * `hidden` giu ca hai tinh chat do, va van dung o muc tro ho tro: noi dung `hidden` khong duoc
+ * trinh doc man hinh doc toi, va khong bat duoc tieu diem ban phim.
+ */
+export function CommandPanel({
+  title,
+  hint,
+  openLabel,
+  children,
+}: {
+  readonly title: string;
+  /** Mot cau noi ngan nay LAM GI. Khong co thi tieu de phai tu noi du. */
+  readonly hint?: string;
+  /** Chu tren nut mo. Mac dinh dung chinh tieu de, vi do thuong da la mot dong lenh. */
+  readonly openLabel?: string;
+  readonly children: ReactNode;
+}) {
+  const [isOpen, setOpen] = useState(false);
+  const bodyId = useId();
+
+  return (
+    <section className="tx-command" data-open={isOpen ? 'open' : 'closed'} aria-label={title}>
+      <div className="tx-command__head">
+        <div className="tx-command__text">
+          <h3>{title}</h3>
+          {hint === undefined ? null : <p className="tx-command__hint">{hint}</p>}
+        </div>
+        <button
+          type="button"
+          className="tx-command__toggle"
+          aria-expanded={isOpen}
+          aria-controls={bodyId}
+          onClick={() => setOpen((open) => !open)}
+        >
+          {isOpen ? 'Đóng' : (openLabel ?? title)}
+        </button>
+      </div>
+      <div className="tx-command__body" id={bodyId} hidden={!isOpen}>
+        {children}
+      </div>
+    </section>
   );
 }
 

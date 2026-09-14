@@ -3,7 +3,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useMemo } from 'react';
-import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
+import {
+  CommandPanel,
+  DataTable,
+  MetricCard,
+  PageHeader,
+  StatusBadge,
+} from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
@@ -164,11 +170,32 @@ export function MaintenanceComplianceView() {
 
       <section className="tx-panel" aria-label="Lệnh sửa chữa">
         <h2>Lệnh sửa chữa</h2>
-        <WorkOrderCommands
-          vehicles={vehicles.data ?? []}
-          role={navigation.role}
-          onChanged={refreshAssets}
-        />
+        {/*
+          Form MO LENH nam trong mot ngan dong san.
+
+          Man nay cao 1370px o 1440px, va hai trong sau khoi cua no la form luon mo. Nguoi mo man
+          hinh gan nhu bao gio cung de XEM co gi den han, khong phai de mo mot lenh sua chua — nen
+          bon o nhap khong duoc dung truoc bang. Xem `CommandPanel` trong `components/primitives`.
+        */}
+        {/*
+          `openLabel` KHONG duoc chua ten nut gui cua form ben trong.
+
+          Playwright khop `getByRole('button', { name })` theo CHUOI CON. Nut gui cua form la
+          `Mở lệnh sửa chữa`; de nut mo ngan mang dung chuoi do se lam moi lan chon nut gui trong
+          bo E2E thanh mot loi `strict mode violation` — hai nut cung khop. Nen nut mo mang mot ten
+          RIENG, va do la mot rang buoc that chu khong phai mot so thich dat ten.
+        */}
+        <CommandPanel
+          title="Mở lệnh sửa chữa"
+          openLabel="Ghi lệnh mới"
+          hint="Ghi một lệnh sửa chữa mới cho một xe."
+        >
+          <WorkOrderCommands
+            vehicles={vehicles.data ?? []}
+            role={navigation.role}
+            onChanged={refreshAssets}
+          />
+        </CommandPanel>
         {(workOrders.data ?? [])
           .filter((row) => row.status === 'OPEN')
           .map((row) => (
@@ -243,12 +270,18 @@ export function MaintenanceComplianceView() {
 
       <section className="tx-panel" aria-label="Hồ sơ giấy tờ">
         <h2>Hồ sơ giấy tờ</h2>
-        <ComplianceDocumentForm
-          vehicles={vehicles.data ?? []}
-          drivers={drivers.data ?? []}
-          role={navigation.role}
-          onChanged={refreshAssets}
-        />
+        <CommandPanel
+          title="Đăng ký giấy tờ"
+          openLabel="Ghi giấy tờ mới"
+          hint="Ghi một giấy tờ mới cho xe hoặc lái xe, kèm khoảng hiệu lực."
+        >
+          <ComplianceDocumentForm
+            vehicles={vehicles.data ?? []}
+            drivers={drivers.data ?? []}
+            role={navigation.role}
+            onChanged={refreshAssets}
+          />
+        </CommandPanel>
         {documentRows.length === 0 ? (
           <EmptyState title="Chưa có giấy tờ nào được ghi nhận." />
         ) : (

@@ -264,7 +264,22 @@ export const TRANSPORT_SECTIONS = [
   },
   {
     id: 'executive',
-    label: 'Bảng điều hành',
+    /**
+     * KHONG duoc trung nhan voi `control-tower`.
+     *
+     * Ca hai muc TUNG cung mang nhan `Bảng điều hành`, va chung nam trong cung mot thanh ben: nguoi
+     * dung thay hai dong chu giong het nhau o hai nhom khac nhau va khong co cach nao doan duoc
+     * bam cai nao. Do la mot loi KIEN TRUC THONG TIN, khong phai mot lan dat ten khong dep.
+     *
+     * Hai muc tra loi hai cau hoi that su khac nhau, va ten phai noi ra dieu do:
+     *
+     *   · `control-tower` — *hom nay xe dang o dau, viec nao dang cho ai* (nguoi truc dung de LAM);
+     *   · `executive`     — *ca cong ty dang the nao* (ghep ba read model de DOC trong 5 phut).
+     *
+     * Co mot bai E2E neo vao `<h1>` cua man nay; doi nhan thi doi ca bai do, vi chinh bai do la
+     * cho ghi lai rang hai man khong con trung ten.
+     */
+    label: 'Tổng hợp giám đốc',
     group: 'reports',
     summary: 'Xe đang chạy thế nào, tiền đang ở đâu, việc gì cần người xử lý — trong 5 phút.',
     /**
@@ -487,6 +502,55 @@ export const navigationGroups = (input: NavigationInput): readonly TransportNavi
     group,
     sections: sections.filter((section) => section.group === group.id),
   })).filter((entry) => entry.sections.length > 0);
+};
+
+/* ------------------------------------------------------------------ *
+ * Loc danh muc theo chu go vao
+ * ------------------------------------------------------------------ */
+
+const COMBINING_MARKS = /[̀-ͯ]/g;
+/**
+ * `Đ`/`đ` (U+0110/U+0111) la chu RIENG, khong phai `D` co dau, nen `normalize('NFD')` KHONG tach no
+ * ra. Cung ly le voi `workspace/trips.ts` — o day la de go "doi xe" tim ra "Đội xe & lái xe".
+ */
+const D_STROKE = /[Đđ]/g;
+
+/**
+ * Bo dau truoc khi so. Nguoi dieu hanh go nhanh va hau nhu khong bo dau.
+ *
+ * Khong tai su dung ham cung ten trong `workspace/trips.ts`: ham do khong duoc xuat ra, va no
+ * thuoc ve mot mien khac (tim CHUYEN theo dia danh). Hai ban sao ba dong cua cung mot phep chuan
+ * hoa chuoi la gia re hon mot lan phu thuoc giua kien truc thong tin va mo hinh chuyen xe.
+ */
+const foldForSearch = (value: string): string =>
+  value.normalize('NFD').replace(COMBINING_MARKS, '').replace(D_STROKE, 'd').toLowerCase().trim();
+
+/**
+ * LOC DANH MUC — ham thuan, de bai kiem giu duoc hai luat duoi thay vi phai mo trinh duyet.
+ *
+ * Hai luat, va chung deu la luat AN TOAN chu khong phai luat tien nghi:
+ *
+ *   1. **Chuoi rong tra ve NGUYEN danh sach.** O loc la mot loi tat, khong phai mot cong. Neu no
+ *      an bot khi chua ai go gi, thi mot nguoi khong nhin thay o do se ket luan la minh mat quyen.
+ *   2. **Loc theo NHAN, khong theo `id`.** `id` la ma ky thuat (`driver-fund`, `ar-ap`); go "quy"
+ *      phai tim ra "Quỹ lái xe / Chi phí", va go "ar-ap" khong duoc la cach duy nhat tim ra "AR/AP".
+ *      Nhan la thu nguoi dung doc duoc, nen nhan la thu duoc so.
+ *
+ * Nhom rong sau khi loc bi bo han — cung luat voi `navigationGroups`: khong de lai mot tieu de
+ * nhom khong con muc nao ben duoi.
+ */
+export const filterNavigationGroups = (
+  groups: readonly TransportNavigationGroup[],
+  query: string,
+): readonly TransportNavigationGroup[] => {
+  const needle = foldForSearch(query);
+  if (needle.length === 0) return groups;
+  return groups
+    .map((entry) => ({
+      group: entry.group,
+      sections: entry.sections.filter((section) => foldForSearch(section.label).includes(needle)),
+    }))
+    .filter((entry) => entry.sections.length > 0);
 };
 
 export const isDriverScreenEnabled = (screen: DriverScreen, input: NavigationInput): boolean =>
