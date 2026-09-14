@@ -302,6 +302,10 @@ async function probeTurnRecords() {
  *
  * Nen no hoi bang MOT ma don KHONG CO THAT va doi dung mot cau tra loi: 404.
  *
+ * (NGOAI LE DUY NHAT, xem khoi chu thich o giua ham: khach dang o che do `ONE_ORDER_PER_RUN` thi
+ * cong chinh sach cua `#294` dong TRUOC khi co ai tra don, nen 404 khong the xay ra. Luc do phep
+ * do thu hep lai va IN RA phan da bo.)
+ *
  * Cai do chung minh duoc ba dieu, va ca ba deu la nhung dieu tung hong that:
  *
  *   1. ROUTE CO THAT tren ban dang chay — `POST /transport/orders/:id/dispatch-suggestions` da
@@ -327,13 +331,58 @@ async function probeDispatchSuggestions() {
       body: JSON.stringify({}),
     },
   );
-  if (response.status !== 404) {
-    throw new SmokeFailure(
-      'DISPATCH_CONTRACT_FAILED',
-      `/transport/orders/:id/dispatch-suggestions voi ma la tra HTTP ${response.status}, doi 404`,
-    );
+  if (response.status === 404) {
+    record('dispatch', 'ma-la=404');
+    return;
   }
-  record('dispatch', 'ma-la=404');
+
+  /**
+   * THU HEP THEO NANG LUC KHACH — `§6.7` cua `ci-cd.md`, khong phai mot ngoai le cho rieng mot
+   * lan deploy do.
+   *
+   * `#294` dat mot cong CHINH SACH ngay dau `DispatchService.suggest()`: khach nao dang o che do
+   * `ONE_ORDER_PER_RUN` thi be mat de nghi dieu xe KHONG TON TAI voi khach do, va cong ay dong
+   * TRUOC khi co ai tra don. Voi mot khach nhu vay (`tenants/transport-preview` khai dung the),
+   * mot ma don khong co that KHONG THE ra 404 — no ra 403 truoc do mot buoc. Doi 404 o day la doi
+   * mot cau tra loi ma ban phat hanh dung dan cung khong the dua ra.
+   *
+   * Thu hep DUNG MOT DUONG, va chi khi may chu tu khai bang `reason` CO KIEU cua no. Hai trong ba
+   * dieu ban dau VAN duoc chung minh, vi ca hai deu nam TRUOC cho nem:
+   *
+   *   1. ROUTE CO THAT — than route da chay thi Nest da gan duoc no va Caddy da cho di qua;
+   *   2. PHIEN DI QUA CONG QUYEN — `@Roles` va `TransportActionGuard` chay TRUOC than route, nen
+   *      mot 403 vi thieu quyen khong bao gio mang `reason` nay.
+   *
+   * Cai KHONG con chung minh duoc la fail-closed tren ma la (`#277 M13`) — va no duoc IN RA chu
+   * khong im lang, dung yeu cau "thu hep toi dau phai in ra toi do" cua bat bien 7.
+   *
+   * MOI 403 KHAC VAN DO: thieu quyen, CSRF hong, hay mot `reason` khac deu roi xuong cho nem ben
+   * duoi. Day la mot cua hep, khong phai mot cong mo.
+   */
+  if (response.status === 403 && (await denyReason(response)) === 'DISPATCH_MULTI_ORDER_DISABLED') {
+    record('dispatch', 'bo-qua(mot-don-mot-vong-chay)');
+    return;
+  }
+
+  throw new SmokeFailure(
+    'DISPATCH_CONTRACT_FAILED',
+    `/transport/orders/:id/dispatch-suggestions voi ma la tra HTTP ${response.status}, doi 404`,
+  );
+}
+
+/**
+ * `reason` CO KIEU cua mien van tai, hoac `undefined` neu than phan hoi khong noi gi.
+ *
+ * Doc bang `text()` roi moi `JSON.parse` de mot than rong hay mot trang HTML cua edge khong nem —
+ * o day mot than khong doc duoc PHAI dan toi "khong khop", tuc roi xuong cho nem, chu khong duoc
+ * lam sap chinh phep do.
+ */
+async function denyReason(response) {
+  try {
+    return JSON.parse(await response.text())?.reason;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

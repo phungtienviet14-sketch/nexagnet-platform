@@ -16,6 +16,14 @@ const deployPs1 = await readFile(new URL('./deploy.ps1', import.meta.url), 'utf8
 const deployCi = await readFile(new URL('./deploy-ci.sh', import.meta.url), 'utf8');
 const deployRemote = await readFile(new URL('./deploy-remote.sh', import.meta.url), 'utf8');
 const smokeTest = await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8');
+const deterministicSmoke = await readFile(
+  new URL('./deterministic-smoke.mjs', import.meta.url),
+  'utf8',
+);
+const dispatchErrors = await readFile(
+  new URL('../../apps/api/src/transport/dispatch/dispatch.errors.ts', import.meta.url),
+  'utf8',
+);
 const authBootstrap = await readFile(new URL('./bootstrap-auth-user.mjs', import.meta.url), 'utf8');
 const rollback = await readFile(new URL('./rollback.sh', import.meta.url), 'utf8');
 const backup = await readFile(new URL('./backup.sh', import.meta.url), 'utf8');
@@ -457,6 +465,36 @@ test('public pilot uses persistent session auth and bootstraps one operator with
   assert.match(smokeTest, /\/auth\/login/);
   assert.match(smokeTest, /x-csrf-token/);
   assert.match(smokeTest, /cookie/i);
+});
+
+// PHEP DO DIEU XE THU HEP THEO NANG LUC KHACH — `ci-cd.md` §6.7, bat bien 7.
+//
+// `#277 M15` viet phep do nay doi 404 cho mot ma don khong co that. `#294` (12/09/2026) sau do dat
+// mot cong CHINH SACH ngay dau `DispatchService.suggest()`, dong TRUOC khi co ai tra don: khach
+// dang `ONE_ORDER_PER_RUN` nhan 403 `DISPATCH_MULTI_ORDER_DISABLED`. Ke tu do `transport-preview`
+// (khach DUY NHAT khai the) khong the ra 404 — va moi lan deploy cua no do o buoc smoke.
+//
+// Bai nay khoa CACH thu hep, khong khoa viec co thu hep hay khong: mot cua HEP (doi ca ma 403 LAN
+// `reason` co kieu), co IN RA phan da bo, va moi 403 khac VAN do.
+test('phep do dieu xe thu hep dung mot duong, va chi theo `reason` co kieu', () => {
+  // 1. Cua hep doi CA HAI dieu kien. Chi kiem 403 la mo cong cho ca loi thieu quyen lan CSRF hong.
+  assert.match(
+    deterministicSmoke,
+    /response\.status === 403 &&[\s\S]{0,160}?DISPATCH_MULTI_ORDER_DISABLED/,
+  );
+
+  // 2. THU HEP TOI DAU PHAI IN RA TOI DO — neu khong, mot lan deploy xanh bi doc nham la da kiem het.
+  assert.match(deterministicSmoke, /record\('dispatch', 'bo-qua\(mot-don-mot-vong-chay\)'\)/);
+
+  // 3. Duong manh nhat VAN con: 404 that thi van ghi la da chung minh fail-closed.
+  assert.match(deterministicSmoke, /record\('dispatch', 'ma-la=404'\)/);
+
+  // 4. Va cho nem VAN con — moi ma khac 404/403-dung-reason deu phai do.
+  assert.match(deterministicSmoke, /SmokeFailure\(\s*'DISPATCH_CONTRACT_FAILED'/);
+
+  // 5. `reason` phai la mot hang CO THAT cua mien. Go sai mot chu o day thi cua hep khong bao gio
+  //    mo — va moi lan deploy cua khach `ONE_ORDER_PER_RUN` lai do, dung cai loi bai nay va ra.
+  assert.match(dispatchErrors, /'DISPATCH_MULTI_ORDER_DISABLED'/);
 });
 
 // MOT IMAGE — MOI KHACH. Truoc 12/08/2026 image co `ARG TENANT=ultty` va `next build` nuong ten
