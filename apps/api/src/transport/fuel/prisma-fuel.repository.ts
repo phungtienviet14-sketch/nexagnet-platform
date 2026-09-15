@@ -1208,6 +1208,27 @@ export class PrismaFuelRepository extends FuelRepository {
     return rows.map(toHandoff);
   }
 
+  /**
+   * "MOI NHAT" DOC TU CHINH CHUOI, khong tu mot phep `MAX(revision)` theo nhom.
+   *
+   * ===========================================================================
+   * `supersedesId` la UNIQUE (xem `schema.prisma`), nen moi ban giao bi THAY THE nhieu nhat mot
+   * lan. Suy ra ban moi nhat cua mot ky chinh la ban ma KHONG BAN NAO thay the — `supersededBy`
+   * rong. Do la mot dieu kien tren MOT hang, nen `LIMIT` chay duoc o CSDL.
+   *
+   * Cach kia — gom nhom roi lay `revision` lon nhat — phai doc het moi ban sua doi cua moi ky roi
+   * moi bot, tuc `limit` khong con la mot chan that su. Va no viet lai luat "ban nao la moi nhat"
+   * lan thu hai ben canh rang buoc da co trong schema; hai ban sao cua mot luat thi som muon lech.
+   */
+  async listLatestHandoffs(limit: number): Promise<FuelSettlementHandoff[]> {
+    const rows = await model(this.prisma, 'transportFuelSettlementHandoff').findMany({
+      where: { supersededBy: { is: null } },
+      orderBy: [{ emittedAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+    return rows.map(toHandoff);
+  }
+
   /* --------------------------- Noi bo ----------------------------- */
 
   /**

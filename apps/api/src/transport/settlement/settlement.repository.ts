@@ -287,4 +287,36 @@ export abstract class SettlementRepository {
   }>;
 
   abstract findCommissionByTrip(tripId: string): Promise<CommissionCalculation | null>;
+
+  /* --------------------- Con tro tieu thu ban giao --------------------- */
+
+  /**
+   * DA DOC TOI BAN NAO cua nhung ky duoc hoi. Tra ve mot ban do `reconciliationId -> revision`.
+   *
+   * Hoi CA LO chu khong tung ky: vong quet vua doc mot lo ban giao va can biet lo do con viec gi.
+   * Hoi tung ky se thanh N+1 truy van cho mot cau hoi von la mot.
+   *
+   * Ky VANG MAT khoi ban do = chua tieu thu ban nao. Do la mot trang thai KHAC voi "da tieu thu
+   * ban 0" — khong co ban 0, `revision` dem tu 1 (xem `TransportFuelSettlementHandoff`).
+   */
+  abstract fuelHandoffCursors(reconciliationIds: readonly string[]): Promise<Map<string, number>>;
+
+  /**
+   * DAY con tro len sau khi ban giao da duoc ghi thanh cong.
+   *
+   * ===========================================================================
+   * CHI TIEN, KHONG LUI. Lenh ghi co dieu kien `consumedRevision < revision`: hai vong quet chay
+   * song song, ben cham hon KHONG duoc keo con tro ve so cu cua no. Neu khong co dieu kien do,
+   * mot vong quet cham mot nhip se lam ky do duoc doc lai mai mai.
+   *
+   * Goi SAU khi ghi chung tu, khong truoc. Mot lan ghi hong phai de lai viec cho luot sau, chu
+   * khong de lai mot dau "da xong" gia — do la yeu cau 6 cua `#295` P0.
+   *
+   * `advanced: false` nghia la mot ai do da di truoc toi day roi, va do khong phai loi.
+   */
+  abstract advanceFuelHandoffCursor(input: {
+    readonly reconciliationId: string;
+    readonly revision: number;
+    readonly handoffId: string;
+  }): Promise<{ readonly advanced: boolean }>;
 }

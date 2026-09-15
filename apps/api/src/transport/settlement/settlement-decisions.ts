@@ -156,13 +156,54 @@ export const SETTLEMENT_PERIOD_TRANSITION_REASONS = [
 export type SettlementPeriodTransitionReason =
   (typeof SETTLEMENT_PERIOD_TRANSITION_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * fuel_handoff.drain — vong quet doc hop thu di cua TX-04 (`#295` Lane V, P0)
+ * ------------------------------------------------------------------ */
+export const FUEL_HANDOFF_DRAIN_REASONS = [
+  /** Mot ban giao vua duoc doc thanh cong sang cong no cay xang. */
+  'FUEL_HANDOFF_INGESTED',
+  /**
+   * Con tro DA o ban moi nhat — khong con viec gi.
+   *
+   * Tach khoi `FUEL_HANDOFF_INGESTED` de dem duoc: mot vong quet lanh manh phat ma nay o hau het
+   * cac nhip, con mot he thong phat ma kia lien tuc la mot he thong dang co ky dong lien tuc — hai
+   * hinh anh rat khac nhau ma mot ma gop se xoa mat.
+   */
+  'FUEL_HANDOFF_ALREADY_CURRENT',
+  /**
+   * DOC nguon that bai — FAIL CLOSED.
+   *
+   * `OWNER_DECISION_2026_09_13`: *"fail-closed khi source lỗi/ambiguous"*. Khong doc duoc hop thu
+   * KHONG duoc dan toi ket luan "vay la khong co gi de lam": no dan toi mot luot quet bo qua, va
+   * luot sau hoi lai.
+   */
+  'FUEL_HANDOFF_SOURCE_UNAVAILABLE',
+  /**
+   * GHI that bai o DUNG MOT ky — viec do van con, con tro KHONG duoc day len.
+   *
+   * Yeu cau 6 cua `#295` P0: *"lỗi tạm thời không làm mất nghĩa vụ và không biến thành 'đã xử lý'
+   * giả"*. Mot ky hong khong lam chet ca luot quet: nhung ky con lai trong lo van duoc xu ly.
+   */
+  'FUEL_HANDOFF_INGEST_FAILED',
+  /**
+   * Lo doc da CHAM TRAN. Con ky chua duoc nhin toi trong nhip nay.
+   *
+   * Khong phai loi — chan la co y (`bounded batch`). Nhung no phai NOI RA: mot he thong lien tuc
+   * cham tran la mot he thong co ton dong, va su im lang o day se lam ton dong do vo hinh cho toi
+   * luc ke toan hoi vi sao mot ky dong tu tuan truoc chua len cong no.
+   */
+  'FUEL_HANDOFF_BATCH_SATURATED',
+] as const;
+export type FuelHandoffDrainReason = (typeof FUEL_HANDOFF_DRAIN_REASONS)[number];
+
 export type TransportSettlementDecisionReason =
   | SettlementRecogniseReason
   | SettlementCorrectReason
   | SettlementAllocateReason
   | CommissionSelectReason
   | SettlementCreditCheckReason
-  | SettlementPeriodTransitionReason;
+  | SettlementPeriodTransitionReason
+  | FuelHandoffDrainReason;
 
 export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-settlement',
@@ -173,6 +214,7 @@ export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
     'commission.select',
     'settlement.credit_check',
     'settlement_period.transition',
+    'fuel_handoff.drain',
   ],
   labels: {
     SETTLEMENT_RECOGNISED: 'Đã ghi nhận nghĩa vụ tiền',
@@ -221,5 +263,11 @@ export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
     PERIOD_TRANSITION_NOT_PERMITTED: 'Máy trạng thái kỳ quyết toán không có cạnh này',
     PERIOD_ALREADY_IN_STATE: 'Kỳ quyết toán đã ở đúng trạng thái đó rồi',
     PERIOD_OVERLAP: 'Kỳ mới chồng lấp một kỳ đã có trong cùng dòng tiền',
+
+    FUEL_HANDOFF_INGESTED: 'Đã đọc bàn giao của kỳ đối soát sang công nợ cây xăng',
+    FUEL_HANDOFF_ALREADY_CURRENT: 'Kỳ này đã đọc tới bản mới nhất — không còn việc',
+    FUEL_HANDOFF_SOURCE_UNAVAILABLE: 'Không đọc được hộp thư bàn giao — bỏ qua lượt, không ghi gì',
+    FUEL_HANDOFF_INGEST_FAILED: 'Ghi công nợ thất bại — việc vẫn còn, con trỏ giữ nguyên',
+    FUEL_HANDOFF_BATCH_SATURATED: 'Lô đọc chạm trần — còn kỳ chưa nhìn tới trong nhịp này',
   } satisfies Record<TransportSettlementDecisionReason, string>,
 });

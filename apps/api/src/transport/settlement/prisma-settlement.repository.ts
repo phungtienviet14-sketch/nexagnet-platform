@@ -188,7 +188,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
     flow: SettlementFlow,
     businessDate: BusinessDate,
   ): Promise<void> {
-    await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${flow}`}, 0))`;
+    await (tx as any)
+      .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${flow}`}, 0))`;
     const period = await model(tx, 'transportSettlementPeriod').findFirst({
       where: { flow, startDate: { lte: businessDate }, endDate: { gte: businessDate } },
     });
@@ -205,7 +206,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
 
   async recogniseDocument(command: RecogniseDocumentCommand): Promise<SettlementRecognition> {
     return this.prisma.$transaction(async (tx) => {
-      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
+      await (tx as any)
+        .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
       const existing = await model(tx, 'transportSettlementDocument').findUnique({
         where: {
           sourceContext_sourceId: {
@@ -258,7 +260,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
     command: CorrectDocumentCommand,
   ): Promise<{ readonly document: SettlementDocument; readonly replayed: boolean }> {
     return this.prisma.$transaction(async (tx) => {
-      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
+      await (tx as any)
+        .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
       /*
        * CHONG GHI TRUNG cho ca duong SUA, khong chi duong ghi nhan.
        *
@@ -449,7 +452,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
         allocations.map((alloc: any) => ({ amount: amount(alloc.amount) })),
       );
       const customerAllocated = customerAllocations.reduce(
-        (total: number, row: any) => total + (row.kind === 'APPLY' ? amount(row.amount) : -amount(row.amount)),
+        (total: number, row: any) =>
+          total + (row.kind === 'APPLY' ? amount(row.amount) : -amount(row.amount)),
         0,
       );
       const outstanding = legacyOutstanding - customerAllocated;
@@ -627,7 +631,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
   }): Promise<SettlementPeriod> {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
-        await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${input.flow}`}, 0))`;
+        await (tx as any)
+          .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${input.flow}`}, 0))`;
         return model(tx, 'transportSettlementPeriod').create({
           data: { flow: input.flow, startDate: input.startDate, endDate: input.endDate },
         });
@@ -674,7 +679,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
           `Khong thay ky ${input.periodId}`,
         );
       }
-      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${candidate.flow}`}, 0))`;
+      await (tx as any)
+        .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${candidate.flow}`}, 0))`;
       await (tx as any)
         .$executeRaw`SELECT "id" FROM "TransportSettlementPeriod" WHERE "id" = ${input.periodId} FOR UPDATE`;
 
@@ -970,4 +976,72 @@ export class PrismaSettlementRepository extends SettlementRepository {
     });
     return row ? toCommission(row) : null;
   }
+
+  /* --------------------- Con tro tieu thu ban giao --------------------- */
+
+  async fuelHandoffCursors(reconciliationIds: readonly string[]): Promise<Map<string, number>> {
+    if (reconciliationIds.length === 0) return new Map();
+    const rows: { reconciliationId: string; consumedRevision: number }[] = await model(
+      this.prisma,
+      'transportSettlementFuelHandoffCursor',
+    ).findMany({
+      where: { reconciliationId: { in: [...reconciliationIds] } },
+      select: { reconciliationId: true, consumedRevision: true },
+    });
+    return new Map(rows.map((row) => [row.reconciliationId, row.consumedRevision]));
+  }
+
+  /**
+   * MOT LENH GHI CO DIEU KIEN, khong phai "doc roi quyet dinh roi ghi".
+   *
+   * ===========================================================================
+   * `upsert` cua Prisma khong nhan dieu kien tren nhanh `update`, nen mot `upsert` tran se keo con
+   * tro LUI khi hai vong quet chay lech nhip. Nen day la hai lenh, va thu tu cua chung quan trong:
+   *
+   *   1. `updateMany` CO DIEU KIEN `consumedRevision < revision` — hang da co thi CHI TIEN;
+   *   2. chi khi khong hang nao doi moi thu `create`, va mot lan dua vi khoa chinh trung nghia la
+   *      mot vong quet khac vua tao hang do — khong phai loi.
+   *
+   * Ca hai deu la lenh ghi co dieu kien cua CSDL chu khong phai mot phep kiem o tang ung dung:
+   * giua mot lan doc va mot lan ghi cua tang ung dung luon co cho cho lenh ghi khac chen vao.
+   */
+  async advanceFuelHandoffCursor(input: {
+    readonly reconciliationId: string;
+    readonly revision: number;
+    readonly handoffId: string;
+  }): Promise<{ readonly advanced: boolean }> {
+    const cursors = model(this.prisma, 'transportSettlementFuelHandoffCursor');
+
+    const moved: { count: number } = await cursors.updateMany({
+      where: {
+        reconciliationId: input.reconciliationId,
+        consumedRevision: { lt: input.revision },
+      },
+      data: { consumedRevision: input.revision, consumedHandoffId: input.handoffId },
+    });
+    if (moved.count > 0) return { advanced: true };
+
+    try {
+      await cursors.create({
+        data: {
+          reconciliationId: input.reconciliationId,
+          consumedRevision: input.revision,
+          consumedHandoffId: input.handoffId,
+        },
+      });
+      return { advanced: true };
+    } catch (error) {
+      /*
+       * `P2002` = khoa chinh trung: hang DA ton tai o mot ban bang hoac moi hon — mot vong quet
+       * khac da lam xong viec nay. Nuot DUNG ma do va khong nuot ma khac: mot loi CSDL that su
+       * (mat ket noi, vi pham `CHECK`) phai noi len de luot quet ghi log va thu lai.
+       */
+      if (isUniqueViolation(error)) return { advanced: false };
+      throw error;
+    }
+  }
 }
+
+/** `P2002` cua Prisma, doc qua `unknown` de khong phai import kieu loi cua client. */
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';

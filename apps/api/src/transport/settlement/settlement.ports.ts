@@ -154,6 +154,17 @@ export abstract class FuelSettlementSource {
   abstract latestHandoff(reconciliationId: string): Promise<FuelHandoffFacts | null>;
   /** CA chuoi ban sua doi, theo thu tu `revision` tang dan. */
   abstract handoffRevisions(reconciliationId: string): Promise<FuelHandoffFacts[]>;
+  /**
+   * MOT LUOT MO HOP THU: ban giao moi nhat cua MOI ky, cu truoc moi sau, nhieu nhat `limit` hang.
+   *
+   * ===========================================================================
+   * Hai ham tren tra loi cau hoi cua mot NGUOI DUNG dang xem mot ky. Ham nay tra loi cau hoi cua
+   * mot VONG QUET khong xem ky nao ca: *"con viec gi chua ai lam khong"*.
+   *
+   * Van khong co ham ghi nao o cong nay. Vong quet doc ban giao, doi chieu voi CON TRO TIEU THU
+   * cua chinh `TX-05`, roi ghi vao bang cua `TX-05`. `transport-fuel` khong bi cham vao.
+   */
+  abstract pendingHandoffs(limit: number): Promise<FuelHandoffFacts[]>;
 }
 
 interface HandoffRow {
@@ -198,5 +209,10 @@ export class FuelSettlementSourceAdapter extends FuelSettlementSource {
   async handoffRevisions(reconciliationId: string): Promise<FuelHandoffFacts[]> {
     const revisions = await this.fuel.listHandoffRevisions(reconciliationId);
     return revisions.map(toHandoffFacts);
+  }
+
+  async pendingHandoffs(limit: number): Promise<FuelHandoffFacts[]> {
+    const latest = await this.fuel.listLatestHandoffs(limit);
+    return latest.map(toHandoffFacts);
   }
 }

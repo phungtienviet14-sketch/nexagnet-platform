@@ -1403,6 +1403,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
       "line": 786
     },
+    "fuel_handoff.drain|*": {
+      "functionName": "FuelHandoffDrainService.report",
+      "filePath": "apps/api/src/transport/settlement/fuel-handoff-drain.service.ts",
+      "line": 230
+    },
     "fuel_reconciliation.transition|*": {
       "functionName": "FuelReconciliationService.denyFrozen",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",

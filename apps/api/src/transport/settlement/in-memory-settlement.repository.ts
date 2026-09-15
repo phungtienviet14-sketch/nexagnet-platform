@@ -50,6 +50,8 @@ export class InMemorySettlementRepository extends SettlementRepository {
   private readonly rules = new Map<string, CommissionRule>();
   private readonly ruleVersions = new Map<string, CommissionRuleVersion>();
   private readonly commissions = new Map<string, CommissionCalculation>();
+  /** Con tro tieu thu ban giao cua `TX-04` — xem `TransportSettlementFuelHandoffCursor`. */
+  private readonly fuelCursors = new Map<string, { revision: number; handoffId: string }>();
 
   private now(): string {
     return new Date().toISOString();
@@ -177,9 +179,14 @@ export class InMemorySettlementRepository extends SettlementRepository {
     }
 
     const currentGrossAmount = [...this.documents.values()]
-      .filter((doc) => doc.id === target.id || (doc.adjustsId === target.id && doc.status === 'POSTED'))
+      .filter(
+        (doc) => doc.id === target.id || (doc.adjustsId === target.id && doc.status === 'POSTED'),
+      )
       .reduce((total, doc) => total + doc.signedAmount, 0);
-    if (command.expectedGrossAmount !== undefined && currentGrossAmount !== command.expectedGrossAmount) {
+    if (
+      command.expectedGrossAmount !== undefined &&
+      currentGrossAmount !== command.expectedGrossAmount
+    ) {
       throw TransportDomainError.denied(
         'SETTLEMENT_TARGET_CONCURRENTLY_CHANGED',
         `Chuoi chung tu ${target.id} da doi tu ${command.expectedGrossAmount} thanh ${currentGrossAmount}`,
@@ -601,5 +608,35 @@ export class InMemorySettlementRepository extends SettlementRepository {
 
   async findCommissionByTrip(tripId: string): Promise<CommissionCalculation | null> {
     return this.commissions.get(tripId) ?? null;
+  }
+
+  /* --------------------- Con tro tieu thu ban giao --------------------- */
+
+  async fuelHandoffCursors(reconciliationIds: readonly string[]): Promise<Map<string, number>> {
+    const found = new Map<string, number>();
+    for (const id of reconciliationIds) {
+      const cursor = this.fuelCursors.get(id);
+      if (cursor) found.set(id, cursor.revision);
+    }
+    return found;
+  }
+
+  /**
+   * CHI TIEN, KHONG LUI — cung luat voi ban Prisma, viet ra vi day la mot BAT BIEN chu khong phai
+   * mot chi tiet cua CSDL. Mot ban in-memory "de tinh" hon se lam bo bai don vi xanh trong khi ban
+   * that do o tang tren.
+   */
+  async advanceFuelHandoffCursor(input: {
+    readonly reconciliationId: string;
+    readonly revision: number;
+    readonly handoffId: string;
+  }): Promise<{ readonly advanced: boolean }> {
+    const current = this.fuelCursors.get(input.reconciliationId);
+    if (current && current.revision >= input.revision) return { advanced: false };
+    this.fuelCursors.set(input.reconciliationId, {
+      revision: input.revision,
+      handoffId: input.handoffId,
+    });
+    return { advanced: true };
   }
 }

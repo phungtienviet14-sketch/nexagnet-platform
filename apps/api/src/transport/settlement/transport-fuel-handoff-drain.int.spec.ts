@@ -1,0 +1,576 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
+import { AuditLogService } from '../../audit/audit-log.service.js';
+import { PrismaService } from '../../config/prisma.service.js';
+import type { TransportCostingPolicy } from '../costing/costing-policy.js';
+import { CostingService } from '../costing/costing.service.js';
+import { PrismaCostingRepository } from '../costing/prisma-costing.repository.js';
+import { TransportCoreFactsAdapter } from '../costing/transport-core-facts.port.js';
+import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
+import { DEFAULT_FUEL_STATEMENT_COLUMNS, type TransportFuelPolicy } from '../fuel/fuel-policy.js';
+import { FuelReconciliationService } from '../fuel/fuel-reconciliation.service.js';
+import { FileFuelStatementSource } from '../fuel/fuel-statement-source.js';
+import { FuelStatementService } from '../fuel/fuel-statement.service.js';
+import { CostingFuelExpenseAdapter, TransportFuelCoreFactsAdapter } from '../fuel/fuel.ports.js';
+import { FuelService } from '../fuel/fuel.service.js';
+import { PrismaFuelRepository } from '../fuel/prisma-fuel.repository.js';
+import type { TransportCorePolicy } from '../transport-policy.js';
+import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { FuelHandoffDrainService } from './fuel-handoff-drain.service.js';
+import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
+import type { OrderCompletionEligibility } from '../acceptance/acceptance.types.js';
+import { SettlementOrderCompletionGate } from './settlement-order-completion.port.js';
+import {
+  FuelSettlementSource,
+  FuelSettlementSourceAdapter,
+  SettlementCoreFactsAdapter,
+  type FuelHandoffFacts,
+} from './settlement.ports.js';
+import { SettlementService } from './settlement.service.js';
+
+/**
+ * `#295` Lane V P0 — DUONG TU MOT KY DOI SOAT DA DONG TOI CONG NO CAY XANG, TREN POSTGRES THAT.
+ *
+ * ============================================================================================
+ * VI SAO KHONG THE CHUNG MINH BANG KHO IN-MEMORY
+ *
+ * Bon dieu bo bai nay hua deu song o ranh gioi voi CSDL, khong o tang ung dung:
+ *
+ *   · `@@unique([sourceContext, sourceId])` — thu that su chan mot ban giao sinh hai cong no;
+ *   · lenh ghi CO DIEU KIEN cua con tro (`consumedRevision < revision`) — thu chan hai vong quet
+ *     song song keo con tro lui;
+ *   · `P2002` tren khoa chinh con tro — duong ma hai vong quet cung TAO mot hang di vao;
+ *   · tinh ben qua mot lan khoi dong lai — doc lai bang mot BO DOI TUONG MOI hoan toan.
+ *
+ * Mot kho in-memory se XANH ca bon du khong cai nao ton tai.
+ *
+ * ============================================================================================
+ * KHONG GIEO THANG VAO BANG BAN GIAO
+ *
+ * `transport-settlement.int.spec.ts` (P4/P5) co y gieo thang hang ban giao, vi cai no chung minh la
+ * T5 DOC chuoi do dung. Bo bai nay chung minh mot thu khac han: rang mot ke toan BAM NUT DONG KY
+ * tren du lieu that lam cong no xuat hien ma khong ai goi gi them. Nen o day ky doi soat duoc dung
+ * qua dung duong that — nop phieu, duyet, nhap bang ke, so khop, quyet chenh lech, dong ky — va
+ * vong quet la thu duy nhat chay sau do.
+ */
+describe.runIf(process.env.RUN_PRISMA_IT === '1')(
+  'Ban giao cay xang -> cong no nha cung cap, tren Postgres THAT — #295 Lane V P0',
+  () => {
+    const prisma = new PrismaService();
+    const fuelRepo = new PrismaFuelRepository(prisma);
+    const settlementRepo = new PrismaSettlementRepository(prisma);
+    const costingRepo = new PrismaCostingRepository(prisma);
+    const trips = new PrismaTripRepository(prisma);
+    const fleet = new PrismaFleetRepository(prisma);
+
+    const CORE_POLICY: TransportCorePolicy = { timeZone: 'Asia/Ho_Chi_Minh' };
+    const COSTING_POLICY: TransportCostingPolicy = {
+      expenseCategories: [],
+      advanceApprovalRequired: false,
+    };
+    const FUEL_POLICY: TransportFuelPolicy = {
+      matching: { amountVnd: 1_000, businessDateDays: 1 },
+      statement: { columns: DEFAULT_FUEL_STATEMENT_COLUMNS, dateFormat: 'iso' },
+      consumption: { normsByVehicleClass: {}, tolerancePercent: 10 },
+    };
+
+    const audit = new AuditLogService(new InMemoryAuditLogRepository());
+    const costing = new CostingService(
+      costingRepo,
+      new TransportCoreFactsAdapter(trips, fleet),
+      audit,
+      CORE_POLICY,
+      COSTING_POLICY,
+    );
+    const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
+    const fuel = new FuelService(
+      fuelRepo,
+      fuelCore,
+      new CostingFuelExpenseAdapter(costing),
+      audit,
+      CORE_POLICY,
+      FUEL_POLICY,
+    );
+    const statements = new FuelStatementService(
+      fuelRepo,
+      new FileFuelStatementSource(),
+      fuelCore,
+      audit,
+      FUEL_POLICY,
+    );
+    const reconciliation = new FuelReconciliationService(fuelRepo, audit, FUEL_POLICY);
+
+    /**
+     * CONG KET THUC DON KHONG NAM TREN DUONG NAY, va ban gia duoi day NOI RA dieu do.
+     *
+     * `ingestFuelHandoff()` khong hoi cong nghiem thu mot lan nao — cong do gac dong doanh thu
+     * khach (`#275` K5), khong gac dong cay xang. Ban gia nay NEM neu bi hoi, nen neu mot ngay nao
+     * do ai do noi hai duong lai voi nhau, bo bai se do ngay thay vi im lang di qua mot cong da bi
+     * vo hieu hoa.
+     */
+    class UnusedCompletionGate extends SettlementOrderCompletionGate {
+      eligibilityForTrip(): Promise<OrderCompletionEligibility> {
+        throw new Error('Duong ban giao cay xang khong duoc hoi cong ket thuc don');
+      }
+
+      eligibilityForOrder(): Promise<OrderCompletionEligibility> {
+        throw new Error('Duong ban giao cay xang khong duoc hoi cong ket thuc don');
+      }
+    }
+
+    const buildDrain = (
+      fuelSource: FuelSettlementSource = new FuelSettlementSourceAdapter(fuelRepo),
+    ): FuelHandoffDrainService =>
+      new FuelHandoffDrainService(
+        new SettlementService(
+          settlementRepo,
+          new SettlementCoreFactsAdapter(trips),
+          fuelSource,
+          new UnusedCompletionGate(),
+        ),
+        settlementRepo,
+        fuelSource,
+      );
+
+    const SUPPLIER_CODE = 'IT-LV-CX';
+    const CODE_PREFIX = 'IT-LV-CH';
+    const PHONE_PREFIX = '0977LV';
+    const PLATE_PREFIX = 'IT-LV-XE';
+    const ACTOR = 'it-lv-ke-toan';
+    const PERIOD = { start: '2026-09-01', end: '2026-09-30' };
+
+    const state = {
+      supplierId: '',
+      driverId: '',
+      vehicleId: '',
+      tripId: '',
+      reconciliationId: '',
+    };
+
+    /** Thu tu xoa theo dung chieu khoa ngoai — xem khoi cleanup cua `transport-fuel.int.spec.ts`. */
+    async function cleanup(): Promise<void> {
+      const suppliers = await prisma.transportFuelSupplier.findMany({
+        where: { code: { startsWith: SUPPLIER_CODE } },
+        select: { id: true },
+      });
+      const supplierIds = suppliers.map((row) => row.id);
+
+      const recons = await prisma.transportFuelReconciliation.findMany({
+        where: { supplierId: { in: supplierIds } },
+        select: { id: true },
+      });
+      const reconIds = recons.map((row) => row.id);
+
+      await prisma.transportSettlementFuelHandoffCursor.deleteMany({
+        where: { reconciliationId: { in: reconIds } },
+      });
+      await prisma.transportFuelSettlementHandoff.deleteMany({
+        where: { reconciliationId: { in: reconIds } },
+      });
+      await prisma.transportFuelMatch.deleteMany({ where: { reconciliationId: { in: reconIds } } });
+      await prisma.transportFuelDiscrepancy.deleteMany({
+        where: { reconciliationId: { in: reconIds } },
+      });
+      await prisma.transportFuelReconciliation.deleteMany({ where: { id: { in: reconIds } } });
+
+      const statementRows = await prisma.transportFuelSupplierStatement.findMany({
+        where: { supplierId: { in: supplierIds } },
+        select: { id: true },
+      });
+      const statementIds = statementRows.map((row) => row.id);
+      await prisma.transportFuelStatementLine.deleteMany({
+        where: { statementId: { in: statementIds } },
+      });
+
+      const entries = await prisma.transportFuelEntry.findMany({
+        where: { supplierId: { in: supplierIds } },
+        select: { id: true },
+      });
+      await prisma.transportFuelReceiptEvidence.deleteMany({
+        where: { fuelEntryId: { in: entries.map((row) => row.id) } },
+      });
+      await prisma.transportFuelEntry.deleteMany({ where: { supplierId: { in: supplierIds } } });
+      await prisma.transportFuelSupplierStatement.deleteMany({
+        where: { id: { in: statementIds } },
+      });
+
+      /* Ban sua doi tro toi ban goc (`adjustsId`, onDelete: Restrict) — xoa tu ban sua ve ban goc. */
+      for (const kind of ['ADJUSTMENT', 'REVERSAL', 'ORIGINAL'] as const) {
+        await prisma.transportSettlementDocument.deleteMany({
+          where: { counterpartyId: { in: supplierIds }, kind },
+        });
+      }
+      await prisma.transportFuelSupplier.deleteMany({ where: { id: { in: supplierIds } } });
+
+      const owned = await prisma.transportTrip.findMany({
+        where: { code: { startsWith: CODE_PREFIX } },
+        select: { id: true },
+      });
+      const tripIds = owned.map((row) => row.id);
+      const accounts = await prisma.transportDriverFundAccount.findMany({
+        where: { driver: { phone: { startsWith: PHONE_PREFIX } } },
+        select: { id: true },
+      });
+      const accountIds = accounts.map((row) => row.id);
+
+      for (const kind of ['REVERSAL', 'EXPENSE'] as const) {
+        await prisma.transportTripExpense.deleteMany({ where: { tripId: { in: tripIds }, kind } });
+      }
+      for (const kind of ['REVERSAL', 'ADVANCE', 'RETURN', 'TRIP_EXPENSE', 'ADJUSTMENT'] as const) {
+        await prisma.transportDriverFundEntry.deleteMany({
+          where: { accountId: { in: accountIds }, kind },
+        });
+      }
+      await prisma.transportDriverFundAccount.deleteMany({ where: { id: { in: accountIds } } });
+      await prisma.transportTripAssignment.deleteMany({ where: { tripId: { in: tripIds } } });
+      await prisma.transportTrip.deleteMany({ where: { code: { startsWith: CODE_PREFIX } } });
+      await prisma.transportVehicle.deleteMany({
+        where: { registrationPlate: { startsWith: PLATE_PREFIX } },
+      });
+      await prisma.transportDriver.deleteMany({ where: { phone: { startsWith: PHONE_PREFIX } } });
+    }
+
+    const supplierDocuments = () =>
+      prisma.transportSettlementDocument.findMany({
+        where: { counterpartyId: state.supplierId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+    /**
+     * Quyet MOI cau hoi con treo bang mot cach da chon — khuon cua `transport-fuel-recovery.int.spec`.
+     *
+     * Chi dong `PENDING` moi duoc dong vao: mot dong da quyet ma quyet lai se bi may trang thai cua
+     * `TX-04` tu choi, va bai test se do vi mot ly do khong lien quan gi den cai no dang do.
+     */
+    async function resolveAllPending(
+      resolution: 'IGNORE_WITH_REASON' | 'ACCEPT_SUPPLIER_AMOUNT',
+    ): Promise<void> {
+      for (const item of await fuelRepo.listDiscrepancies(state.reconciliationId)) {
+        if (item.status !== 'PENDING') continue;
+        await reconciliation.resolveDiscrepancy(
+          item.id,
+          { resolution, note: `Quyet trong bai Lane V (${resolution})` },
+          ACTOR,
+        );
+      }
+    }
+
+    const driverFundEntryCount = () =>
+      prisma.transportDriverFundEntry.count({
+        where: { account: { driver: { phone: { startsWith: PHONE_PREFIX } } } },
+      });
+
+    beforeAll(async () => {
+      await cleanup();
+
+      state.supplierId = (
+        await fuelRepo.createSupplier({
+          name: 'Cay xang kiem thu Lane V',
+          code: SUPPLIER_CODE,
+          phone: null,
+          address: null,
+          taxCode: null,
+          at: new Date('2026-09-01T00:00:00Z'),
+        })
+      ).id;
+
+      state.driverId = (
+        await fleet.createDriver({
+          fullName: 'IT LV Lai xe',
+          phone: `${PHONE_PREFIX}A`,
+          licenceClass: 'C',
+          licenceExpiry: '2030-01-01',
+          authUserId: 'IT-LV-user',
+        })
+      ).id;
+
+      state.vehicleId = (
+        await fleet.createVehicle({
+          registrationPlate: `${PLATE_PREFIX}-A`,
+          vehicleClass: 'tai-5-tan',
+          allowedPayloadKg: 5_000,
+        })
+      ).id;
+
+      state.tripId = (
+        await trips.create({
+          code: `${CODE_PREFIX}-OWN`,
+          kind: 'OWN_DIRECT',
+          businessDate: '2026-09-05',
+          originLabel: 'Ha Noi',
+          destinationLabel: 'Thai Nguyen',
+          cargoDescription: null,
+          customerId: null,
+          carrierPartnerId: null,
+          referrerPartnerId: null,
+          freightAmount: 12_000_000,
+          distanceKm: 500,
+        })
+      ).id;
+
+      await trips.assign(state.tripId, {
+        vehicleId: state.vehicleId,
+        driverId: state.driverId,
+        assignedBy: 'it-lv',
+        at: new Date('2026-09-05T00:00:00Z'),
+      });
+
+      /* MOT phieu khop tuyet doi, va MOT dong bang ke khong co phieu -> mot chenh lech phai quyet. */
+      const entry = await fuel.submitFuelEntry(
+        {
+          tripId: state.tripId,
+          vehicleId: state.vehicleId,
+          driverId: state.driverId,
+          supplierId: state.supplierId,
+          liters: '200',
+          amount: 4_200_000,
+          odometerKm: 300_000,
+          occurredAt: '2026-09-05T06:00:00+07:00',
+          businessDate: '2026-09-05',
+          paymentMethod: 'SUPPLIER_ACCOUNT',
+          correlationKey: 'it-lv-phieu-khop',
+        },
+        ACTOR,
+      );
+      await fuel.verifyFuelEntry(entry.id, ACTOR);
+
+      const plate = `${PLATE_PREFIX}-A`;
+      const csv = [
+        'Bien so,Ngay,So lit,Thanh tien,So hoa don,Ghi chu',
+        `${plate},2026-09-05,200,4.200.000,HD-LV-KHOP,`,
+        `${plate},2026-09-20,90,2.000.000,HD-LV-LE,khong co phieu tuong ung`,
+      ].join('\n');
+
+      const imported = await statements.commitImport(
+        {
+          supplierId: state.supplierId,
+          periodStart: PERIOD.start,
+          periodEnd: PERIOD.end,
+          filename: 'it-lv-bang-ke.csv',
+          format: 'CSV',
+          contentBase64: Buffer.from(csv, 'utf8').toString('base64'),
+        },
+        ACTOR,
+      );
+      state.reconciliationId = imported.reconciliation.id;
+
+      await reconciliation.runMatching(state.reconciliationId, ACTOR);
+    });
+
+    /* ================================================================ *
+     * V-P0-1, V-P0-2 — TRUOC khi dong ky: khong mot dong cong no nao
+     * ================================================================ */
+
+    it('V-P0-1 — to khai lai xe + chenh lech chua quyet: quet KHONG sinh cong no nao', async () => {
+      /*
+       * Trang thai luc nay: mot phieu DA DUYET, mot dong bang ke le, mot chenh lech PENDING. Day la
+       * hai bai acceptance 9 va 8 cua `#295` gop lam mot: *"driver-only declaration -> no supplier
+       * payable"* va *"unresolved/mismatch chua human-resolve -> zero AP"*.
+       */
+      const summary = await buildDrain().drain();
+      expect(summary.ingested).toBe(0);
+
+      expect(await supplierDocuments()).toHaveLength(0);
+      expect(
+        await prisma.transportSettlementFuelHandoffCursor.count({
+          where: { reconciliationId: state.reconciliationId },
+        }),
+      ).toBe(0);
+    });
+
+    it('V-P0-2 — con chenh lech PENDING thi KHONG dong duoc ky (cong cua T4 van dong)', async () => {
+      await expect(
+        reconciliation.closeReconciliation(state.reconciliationId, ACTOR),
+      ).rejects.toMatchObject({ reason: 'RECONCILIATION_HAS_PENDING_DISCREPANCY' });
+    });
+
+    /* ================================================================ *
+     * V-P0-3..6 — dong ky roi: cong no xuat hien DUNG MOT LAN
+     * ================================================================ */
+
+    it('V-P0-3 — quyet chenh lech + dong ky -> mot luot quet sinh DUNG MOT cong no goc', async () => {
+      await resolveAllPending('ACCEPT_SUPPLIER_AMOUNT');
+
+      const closed = await reconciliation.closeReconciliation(state.reconciliationId, ACTOR);
+      expect(closed.handoff.revision).toBe(1);
+
+      const summary = await buildDrain().drain();
+      expect(summary.ingested).toBe(1);
+
+      const documents = await supplierDocuments();
+      expect(documents).toHaveLength(1);
+      expect(documents[0]!.kind).toBe('ORIGINAL');
+      expect(documents[0]!.flow).toBe('FUEL_SUPPLIER');
+      expect(documents[0]!.sourceContext).toBe('FUEL_SETTLEMENT_HANDOFF');
+      expect(documents[0]!.sourceId).toBe(closed.handoff.id);
+      /* 4.200.000 + 2.000.000, ghi AM vi day la chieu PHAI TRA. */
+      expect(Number(documents[0]!.signedAmount)).toBe(-6_200_000);
+
+      const cursor = await prisma.transportSettlementFuelHandoffCursor.findUnique({
+        where: { reconciliationId: state.reconciliationId },
+      });
+      expect(cursor?.consumedRevision).toBe(1);
+      expect(cursor?.consumedHandoffId).toBe(closed.handoff.id);
+    });
+
+    it('V-P0-4 — quet lai ba lan nua: van DUNG MOT cong no', async () => {
+      const drain = buildDrain();
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const summary = await drain.drain();
+        expect(summary.ingested).toBe(0);
+        expect(summary.alreadyCurrent).toBeGreaterThanOrEqual(1);
+      }
+
+      expect(await supplierDocuments()).toHaveLength(1);
+    });
+
+    it('V-P0-5 — BON vong quet chay song song: van DUNG MOT cong no', async () => {
+      /*
+       * Bon ban sao doc lap, dung khuon "bon tien trinh API cung chay". Con tro bi xoa truoc de ca
+       * bon deu THAY viec. Neu phep chong ghi trung chi song o tang ung dung, bai nay se thay nhieu
+       * hon mot hang: giua lan doc va lan ghi cua moi ban sao co du cho cho ba ban con lai chen vao.
+       */
+      await prisma.transportSettlementFuelHandoffCursor.deleteMany({
+        where: { reconciliationId: state.reconciliationId },
+      });
+
+      const results = await Promise.all([
+        buildDrain().drain(),
+        buildDrain().drain(),
+        buildDrain().drain(),
+        buildDrain().drain(),
+      ]);
+
+      expect(await supplierDocuments()).toHaveLength(1);
+      expect(results.some((summary) => summary.ingested === 1)).toBe(true);
+      expect(results.every((summary) => summary.failed === 0)).toBe(true);
+    });
+
+    it('V-P0-6 — mot BO DOI TUONG MOI (khoi dong lai) doc lai dung trang thai da chot', async () => {
+      const freshPrisma = new PrismaService();
+      const freshRepo = new PrismaSettlementRepository(freshPrisma);
+      const freshCursors = await freshRepo.fuelHandoffCursors([state.reconciliationId]);
+      expect(freshCursors.get(state.reconciliationId)).toBe(1);
+
+      const summary = await buildDrain().drain();
+      expect(summary.ingested).toBe(0);
+      expect(await supplierDocuments()).toHaveLength(1);
+    });
+
+    /* ================================================================ *
+     * V-P0-7, V-P0-8 — mo lai, sua so lieu, dong lai -> BAN DIEU CHINH
+     * ================================================================ */
+
+    it('V-P0-7 — mo lai + sua quyet dinh + dong lai -> mot ban DIEU CHINH dung chenh lech', async () => {
+      await reconciliation.reopenReconciliation(
+        state.reconciliationId,
+        'cay xang gui lai so lieu',
+        ACTOR,
+      );
+
+      /*
+       * CHAY LAI SO KHOP la bat buoc sau khi mo lai — do la khuon cua `R4`/`R5` trong
+       * `transport-fuel-recovery.int.spec.ts`, va la thu dua chenh lech ve lai `PENDING`.
+       *
+       * Roi doi quyet dinh cua dong le: tu "chap nhan so cua ho" sang "bo qua co ly do". Dong do
+       * roi khoi tong duoc chap nhan, nen ky nay con 4.200.000 thay vi 6.200.000 — tuc ket qua
+       * kinh te DOI, va do la dieu kien de `TX-04` phat ban sua doi so 2 thay vi phat lai ban 1.
+       */
+      await reconciliation.runMatching(state.reconciliationId, ACTOR);
+      await resolveAllPending('IGNORE_WITH_REASON');
+
+      const closedAgain = await reconciliation.closeReconciliation(state.reconciliationId, ACTOR);
+      expect(closedAgain.handoff.revision).toBe(2);
+
+      const summary = await buildDrain().drain();
+      expect(summary.ingested).toBe(1);
+
+      const documents = await supplierDocuments();
+      expect(documents).toHaveLength(2);
+
+      const original = documents.find((row) => row.kind === 'ORIGINAL');
+      const adjustment = documents.find((row) => row.kind === 'ADJUSTMENT');
+      expect(Number(original!.signedAmount)).toBe(-6_200_000);
+      /* -4.200.000 - (-6.200.000) = +2.000.000: no GIAM di, khong phai mot cong no thu hai. */
+      expect(Number(adjustment!.signedAmount)).toBe(2_000_000);
+      expect(adjustment!.adjustsId).toBe(original!.id);
+      expect(adjustment!.sourceId).toBe(closedAgain.handoff.id);
+
+      const cursor = await prisma.transportSettlementFuelHandoffCursor.findUnique({
+        where: { reconciliationId: state.reconciliationId },
+      });
+      expect(cursor?.consumedRevision).toBe(2);
+    });
+
+    it('V-P0-8 — quet lai sau ban sua doi: khong sinh them hang nao', async () => {
+      await buildDrain().drain();
+      await buildDrain().drain();
+      expect(await supplierDocuments()).toHaveLength(2);
+    });
+
+    /* ================================================================ *
+     * V-P0-9..11 — cac bat bien phai giu
+     * ================================================================ */
+
+    it('V-P0-9 — doc nguon that bai: KHONG ghi gi (fail closed)', async () => {
+      const broken = {
+        latestHandoff: async () => null,
+        handoffRevisions: async () => [],
+        pendingHandoffs: async (): Promise<FuelHandoffFacts[]> => {
+          throw new Error('CSDL ngat giua chung');
+        },
+      } as unknown as FuelSettlementSource;
+
+      const summary = await buildDrain(broken).drain();
+      expect(summary).toEqual({ ingested: 0, alreadyCurrent: 0, failed: 0, saturated: false });
+      expect(await supplierDocuments()).toHaveLength(2);
+    });
+
+    it('V-P0-10 — ghi cong no that bai: con tro giu nguyen, khong co dau "da xong" gia', async () => {
+      /*
+       * Mot nguon tra ve mot ky KHONG TON TAI: `ingestFuelHandoff()` nem
+       * `SETTLEMENT_DOCUMENT_NOT_FOUND`. Cai bai nay do la duong xu ly LOI, khong phai phep tinh.
+       */
+      const real = new FuelSettlementSourceAdapter(fuelRepo);
+      const lying = {
+        latestHandoff: (id: string) => real.latestHandoff(id),
+        handoffRevisions: (id: string) => real.handoffRevisions(id),
+        pendingHandoffs: async (): Promise<FuelHandoffFacts[]> => [
+          {
+            handoffId: 'it-lv-khong-ton-tai',
+            reconciliationId: 'it-lv-ky-khong-ton-tai',
+            revision: 1,
+            supersedesId: null,
+            supplierId: state.supplierId,
+            periodStart: PERIOD.start,
+            periodEnd: PERIOD.end,
+            acceptedAmount: 1_000_000,
+            currencyCode: 'VND',
+            acceptedLineCount: 1,
+            acceptedLineIds: ['khong-ton-tai'],
+          },
+        ],
+      } as unknown as FuelSettlementSource;
+
+      const summary = await buildDrain(lying).drain();
+      expect(summary.failed).toBe(1);
+      expect(summary.ingested).toBe(0);
+
+      expect(
+        await prisma.transportSettlementFuelHandoffCursor.count({
+          where: { reconciliationId: 'it-lv-ky-khong-ton-tai' },
+        }),
+      ).toBe(0);
+      expect(await supplierDocuments()).toHaveLength(2);
+    });
+
+    it('V-P0-11 — khong mot dong nao cua duong nay cham vao Quy lai xe', async () => {
+      /*
+       * Bat bien 1 va 3 cua `#295`. Ca bo bai tren da: nop phieu, duyet, so khop, quyet chenh lech
+       * (ca ACCEPT lan IGNORE), dong ky hai lan, va quet nhieu lan. Neu bat ky duong nao trong so
+       * do cham vao quy lai xe, con so duoi khong con la 0.
+       */
+      expect(await driverFundEntryCount()).toBe(0);
+    });
+  },
+);

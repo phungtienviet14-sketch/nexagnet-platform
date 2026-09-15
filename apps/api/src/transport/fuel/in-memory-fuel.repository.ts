@@ -800,6 +800,27 @@ export class InMemoryFuelRepository extends FuelRepository {
     return (this.handoffs.get(reconciliationId) ?? []).map(clone);
   }
 
+  /**
+   * Cung HOP DONG voi ban Prisma: mot hang cho moi ky, `emittedAt` tang dan roi `id` pha hoa.
+   *
+   * Ban nay lay phan tu CUOI cua chuoi thay vi hoi `supersededBy` — hai cach cho cung ket qua vi
+   * chuoi o day CHI THEM (xem `closeReconciliation`), va giu the cho phep so sanh hai ban hien
+   * thuc bang cung mot bo bai. Phep sap xep phai VIET RA du `Map` von giu thu tu chen: thu tu chen
+   * la thu tu KY duoc dong lan dau, con cai vong quet can la thu tu BAN GIAO duoc phat.
+   */
+  async listLatestHandoffs(limit: number): Promise<FuelSettlementHandoff[]> {
+    const latest: FuelSettlementHandoff[] = [];
+    for (const revisions of this.handoffs.values()) {
+      const newest = revisions.at(-1);
+      if (newest) latest.push(newest);
+    }
+    latest.sort(
+      (left, right) =>
+        left.emittedAt.localeCompare(right.emittedAt) || left.id.localeCompare(right.id),
+    );
+    return latest.slice(0, limit).map(clone);
+  }
+
   /* --------------------------- Noi bo ----------------------------- */
 
   /** Doi tuong doi cua `walkToState` o kho Prisma — cung may trang thai, cung mot ham thuan. */
