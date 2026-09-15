@@ -1,0 +1,7 @@
+{
+  "name": "com.nexagnet.conversation_bridge",
+  "description": "Nexagnet Conversation Bridge V0 — doc GitHub mot chieu ra, day mot tin nhan danh thuc co dinh vao dung mot cuoc hoi thoai ChatGPT da arm",
+  "path": "{{LAUNCHER_PATH}}",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://{{EXTENSION_ID}}/"]
+}
