@@ -629,9 +629,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.fleet_status.read": {
       "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
     },
-    "transport.fuel.document.ingest": {
-      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"
-    },
     "transport.fuel.document.read": {
       "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"
     },
