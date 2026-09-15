@@ -38,6 +38,7 @@ import {
 import type {
   FuelDiscrepancy,
   FuelEntry,
+  FuelHandoffKeyset,
   FuelMatch,
   FuelReceiptEvidence,
   FuelReconciliation,
@@ -808,7 +809,17 @@ export class InMemoryFuelRepository extends FuelRepository {
    * thuc bang cung mot bo bai. Phep sap xep phai VIET RA du `Map` von giu thu tu chen: thu tu chen
    * la thu tu KY duoc dong lan dau, con cai vong quet can la thu tu BAN GIAO duoc phat.
    */
-  async listLatestHandoffs(limit: number): Promise<FuelSettlementHandoff[]> {
+  /**
+   * Doi tuong doi cua ban Prisma — CUNG MOT keyset, viet lai bang so sanh chuoi.
+   *
+   * `emittedAt` la ISO-8601 co `Z`, nen thu tu tu dien TRUNG voi thu tu thoi gian. Neu mot ngay nao
+   * do truong do doi sang dang khac (thieu `Z`, hay lech mui gio), phep so sanh o day se lech khoi
+   * ban Prisma trong im lang — va bo bai don vi se xanh trong khi ban that hong.
+   */
+  async listLatestHandoffs(input: {
+    readonly after: FuelHandoffKeyset | null;
+    readonly limit: number;
+  }): Promise<FuelSettlementHandoff[]> {
     const latest: FuelSettlementHandoff[] = [];
     for (const revisions of this.handoffs.values()) {
       const newest = revisions.at(-1);
@@ -818,7 +829,17 @@ export class InMemoryFuelRepository extends FuelRepository {
       (left, right) =>
         left.emittedAt.localeCompare(right.emittedAt) || left.id.localeCompare(right.id),
     );
-    return latest.slice(0, limit).map(clone);
+
+    const after = input.after;
+    const page =
+      after === null
+        ? latest
+        : latest.filter((handoff) => {
+            const byTime = handoff.emittedAt.localeCompare(after.emittedAt);
+            return byTime > 0 || (byTime === 0 && handoff.id.localeCompare(after.handoffId) > 0);
+          });
+
+    return page.slice(0, input.limit).map(clone);
   }
 
   /* --------------------------- Noi bo ----------------------------- */

@@ -17,7 +17,10 @@ import { PrismaFuelRepository } from '../fuel/prisma-fuel.repository.js';
 import type { TransportCorePolicy } from '../transport-policy.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import { FuelHandoffDrainService } from './fuel-handoff-drain.service.js';
-import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
+import {
+  FUEL_HANDOFF_SCAN_ROW,
+  PrismaSettlementRepository,
+} from './prisma-settlement.repository.js';
 import type { OrderCompletionEligibility } from '../acceptance/acceptance.types.js';
 import { SettlementOrderCompletionGate } from './settlement-order-completion.port.js';
 import {
@@ -166,6 +169,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportSettlementFuelHandoffCursor.deleteMany({
         where: { reconciliationId: { in: reconIds } },
       });
+      /*
+       * VI TRI QUET la mot hang DON toan cuc, khong gan voi cay xang nao — nen no khong loc duoc
+       * theo `supplierIds` nhu moi thu khac o ham nay. Xoa duoc vi `FuelHandoffDrainService` chi co
+       * DUNG MOT nguoi goi trong ca bo int: chinh tep nay. Neu mot ngay nao do co tep thu hai chay
+       * vong quet, dong nay phai bo di — no se lam hai tep giat vi tri cua nhau.
+       */
+      await prisma.transportSettlementFuelHandoffScan.deleteMany({
+        where: { id: FUEL_HANDOFF_SCAN_ROW },
+      });
       await prisma.transportFuelSettlementHandoff.deleteMany({
         where: { reconciliationId: { in: reconIds } },
       });
@@ -275,15 +287,31 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
      *
      * Nen moi khang dinh cua bo bai deu PHAI pham vi hoa theo `state.supplierId` /
      * `state.reconciliationId`, va viec quet phai lap cho toi khi con tro cua CHINH ky nay toi noi.
+     *
+     * ===========================================================================
+     * SO LAN LAP: mot nhip di duoc nhieu nhat `FUEL_HANDOFF_DRAIN_BATCH` (25) ky con viec, va vi
+     * tri quet giu cho nhip sau di TIEP chu khong doc lai tu dau. 40 nhip la 1000 ky cua nguoi khac
+     * — rong rai hon nhieu lan so ky ma ca bo int co the de lai.
      */
     async function drainUntilConsumed(revision: number): Promise<void> {
-      for (let attempt = 0; attempt < 8; attempt += 1) {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
         const cursors = await settlementRepo.fuelHandoffCursors([state.reconciliationId]);
         if ((cursors.get(state.reconciliationId) ?? 0) >= revision) return;
         await buildDrain().drain();
       }
       throw new Error(`Vong quet khong doc toi ban ${revision} cua ky ${state.reconciliationId}`);
     }
+
+    /** Khoa doc cua mot ban giao, dung dang ma vi tri quet luu. */
+    const keyOf = (handoff: { readonly emittedAt: string; readonly id: string }) => ({
+      emittedAt: handoff.emittedAt,
+      handoffId: handoff.id,
+    });
+
+    const scanRow = () =>
+      prisma.transportSettlementFuelHandoffScan.findUnique({
+        where: { id: FUEL_HANDOFF_SCAN_ROW },
+      });
 
     const driverFundEntryCount = () =>
       prisma.transportDriverFundEntry.count({
@@ -573,6 +601,149 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
 
     /* ================================================================ *
+     * V-P0-12..16 — TIEN DO cua vong quet, tren Postgres THAT
+     *
+     * Nam bai nay duoc them sau `INDEPENDENT_CHATGPT_REVIEW` (15/09/2026), va chung kiem mot tinh
+     * chat KHAC han muoi mot bai tren: khong phai "so tien co dung khong" ma "moi ban giao co bao
+     * gio toi luot khong".
+     *
+     * `fuel-handoff-drain.service.spec.ts` dung lai canh 501 ky va canh 25 ky hong o dung con so
+     * san xuat, nhanh gap tram lan. Cai no KHONG kiem duoc, va nam bai duoi day kiem, la phan nam
+     * duoi tang ung dung:
+     *
+     *   · menh de keyset that su dich ra SQL dung — mot ban gia trong bo don vi chi BAT CHUOC no;
+     *   · hang vi tri quet ben qua mot doi tuong kho moi, va lenh ghi co dieu kien that su tu choi
+     *     mot buoc lui;
+     *   · rang buoc `CHECK` tu choi nua keyset;
+     *   · va sau cung: mot ban giao nam SAU vi tri quet VAN toi luot — dung hinh dang cua ky thu
+     *     501, chi khac la dung mot cho do thay vi 501 ky that.
+     *
+     * So thu tu nhay coc (12..16 dung TRUOC 9..11) la CO Y: `V-P0-11` dem hang quy lai xe sau khi
+     * ca tep da chay, nen no phai o cuoi cung de phu luon nhung luot quet moi them o day. Doi cho
+     * de so lien mach se lam bat bien 1/3 cua `#295` khong con che duoc nam bai nay.
+     * ================================================================ */
+
+    it('V-P0-12 — truy van keyset KHONG tra lai hang da di qua', async () => {
+      const first = await fuelRepo.listLatestHandoffs({ after: null, limit: 1 });
+      expect(first).toHaveLength(1);
+      const moc = first[0]!;
+
+      const next = await fuelRepo.listLatestHandoffs({ after: keyOf(moc), limit: 50 });
+
+      expect(next.map((row) => row.id)).not.toContain(moc.id);
+      /* Va moi hang tra ve deu dung SAU moc theo dung thu tu doc `(emittedAt, id)`. */
+      for (const row of next) {
+        const sau =
+          row.emittedAt > moc.emittedAt || (row.emittedAt === moc.emittedAt && row.id > moc.id);
+        expect(sau).toBe(true);
+      }
+    });
+
+    it('V-P0-13 — vi tri quet ben qua mot doi tuong kho MOI, va tu choi buoc lui', async () => {
+      const handoff = await fuelRepo.findHandoff(state.reconciliationId);
+      const day = keyOf(handoff!);
+
+      /*
+       * QUAY VE DAU TRUOC DA, va day khong phai mot dong don dep cho gon.
+       *
+       * Muoi mot bai tren da quet nhieu luot, va CSDL nay dung chung voi 428 tep spec khac — vi tri
+       * quet luc nay co the DA o sau ban giao cua bo bai. Ma lenh ghi chi-tien se TU CHOI mot buoc
+       * lui, nen khong quay ve dau truoc thi bai duoi do vi chinh cai tinh chat no dang kiem.
+       */
+      await settlementRepo.rewindFuelHandoffScan();
+      await settlementRepo.advanceFuelHandoffScan(day);
+
+      /*
+       * Mot "tien trinh API" khac: doi tuong kho MOI hoan toan, cung PostgreSQL. Day la noi dung
+       * that su cua `restart-safe` — khong phai timer nho duoc, ma khong CAN nho.
+       */
+      const sauKhoiDongLai = await new PrismaSettlementRepository(prisma).fuelHandoffScanPosition();
+      expect(sauKhoiDongLai).toEqual(day);
+
+      /*
+       * Mot vong quet cham nhip hon co gang keo vi tri VE cho cu cua no. Lenh ghi co dieu kien o
+       * `WHERE` tu choi — neu khong, hai tien trinh se giat nhau va vong quet co the khong bao gio
+       * toi duoi hop thu, tuc khong bao gio quay ve dau, tuc viec cua nhung ky ghi hong khong bao
+       * gio duoc lam lai.
+       */
+      await settlementRepo.advanceFuelHandoffScan({
+        emittedAt: '2020-01-01T00:00:00.000Z',
+        handoffId: 'it-lv-cu-hon',
+      });
+      expect(await settlementRepo.fuelHandoffScanPosition()).toEqual(day);
+    });
+
+    it('V-P0-14 — het hop thu: quay ve dau va dem them mot vong', async () => {
+      /* Do vi tri quet o mot thoi diem sau MOI ban giao co the co trong CSDL dung chung. */
+      await settlementRepo.advanceFuelHandoffScan({
+        emittedAt: '2099-01-01T00:00:00.000Z',
+        handoffId: 'it-lv-cuoi-hop-thu',
+      });
+      const truoc = (await scanRow())?.cycles ?? 0;
+
+      const summary = await buildDrain().drain();
+
+      expect(summary.wrapped).toBe(true);
+      const sau = await scanRow();
+      expect(sau?.lastEmittedAt).toBeNull();
+      expect(sau?.lastHandoffId).toBeNull();
+      expect(sau?.cycles).toBe(truoc + 1);
+    });
+
+    it('V-P0-15 — CSDL tu choi mot NUA keyset', async () => {
+      await settlementRepo.advanceFuelHandoffScan({
+        emittedAt: '2026-09-20T00:00:00.000Z',
+        handoffId: 'it-lv-nua-keyset',
+      });
+
+      /*
+       * Mot nua keyset la mot vi tri KHONG SO SANH DUOC, va mot vi tri nhu vay lam vong quet hoac
+       * nhay qua mot hang hoac doc lai mot hang mai mai. Rang buoc nay o tang CSDL chu khong o tang
+       * ung dung vi mot ban va sau nay ghi nua keyset se hong IM LANG.
+       */
+      await expect(
+        prisma.$executeRawUnsafe(
+          'UPDATE "TransportSettlementFuelHandoffScan" SET "lastHandoffId" = NULL WHERE "id" = $1',
+          FUEL_HANDOFF_SCAN_ROW,
+        ),
+      ).rejects.toThrow();
+
+      expect((await scanRow())?.lastHandoffId).toBe('it-lv-nua-keyset');
+    });
+
+    it('V-P0-16 — ban giao nam SAU vi tri quet VAN toi luot sau khi vong quan', async () => {
+      /*
+       * ===========================================================================
+       * DAY LA KY THU 501, dung lai bang mot cho do thay vi 501 ky that.
+       *
+       * Xoa con tro tieu thu => ky nay "con viec". Do vi tri quet o phia SAU ban giao cua no => mot
+       * vong quet chi-tien se KHONG BAO GIO nhin thay no nua. Dung canh ma ban truoc chet, va dung
+       * ly do vi sao `rewindFuelHandoffScan` phai ton tai.
+       */
+      await prisma.transportSettlementFuelHandoffCursor.delete({
+        where: { reconciliationId: state.reconciliationId },
+      });
+      await settlementRepo.advanceFuelHandoffScan({
+        emittedAt: '2099-01-01T00:00:00.000Z',
+        handoffId: 'it-lv-qua-xa',
+      });
+
+      await drainUntilConsumed(2);
+
+      const cursor = await prisma.transportSettlementFuelHandoffCursor.findUnique({
+        where: { reconciliationId: state.reconciliationId },
+      });
+      expect(cursor?.consumedRevision).toBe(2);
+
+      /*
+       * Va KHONG mot chung tu nao sinh them. Lan doc lai nay la mot lan doc THU HAI tren cung mot
+       * ban giao — dung luc `@@unique([sourceContext, sourceId])` phai lam viec cua no. Neu cho nay
+       * ra 3, thi cai gia cua tinh song vua la mot khoan tra hai lan.
+       */
+      expect(await supplierDocuments()).toHaveLength(2);
+    });
+
+    /* ================================================================ *
      * V-P0-9..11 — cac bat bien phai giu
      * ================================================================ */
 
@@ -586,7 +757,20 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       } as unknown as FuelSettlementSource;
 
       const summary = await buildDrain(broken).drain();
-      expect(summary).toEqual({ ingested: 0, alreadyCurrent: 0, failed: 0, saturated: false });
+      expect(summary).toEqual({
+        ingested: 0,
+        alreadyCurrent: 0,
+        failed: 0,
+        saturated: false,
+        /*
+         * `wrapped: false` la mot khang dinh RIENG, khong phai mot truong cho day du.
+         *
+         * Mot lan doc hong bi doc nham thanh "hop thu rong" se lam vi tri quet quay ve dau — tuc
+         * mot su co mang CSDL xoa sach cho dang dung cua vong quet, va moi ky dang cho o cuoi hang
+         * lui lai sau ca tram ky da xong.
+         */
+        wrapped: false,
+      });
       expect(await supplierDocuments()).toHaveLength(2);
     });
 
@@ -612,6 +796,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
             currencyCode: 'VND',
             acceptedLineCount: 1,
             acceptedLineIds: ['khong-ton-tai'],
+            emittedAt: '2026-09-30T12:00:00.000Z',
           },
         ],
       } as unknown as FuelSettlementSource;

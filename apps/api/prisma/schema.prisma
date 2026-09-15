@@ -3015,6 +3015,61 @@ model TransportSettlementFuelHandoffCursor {
   @@index([consumedAt])
 }
 
+/// VI TRI QUET hop thu di cua `TX-04` — `#295` Lane V, P0, them sau vong soat doc lap.
+///
+/// ===========================================================================
+/// BANG NAY SINH RA TU MOT LOI THAT, khong tu mot nhu cau thiet ke.
+///
+/// Ban dau vong quet doc `listLatestHandoffs(500)`: 500 hang DAU theo `emittedAt` tang dan. Con tro
+/// tieu thu thi nam o `TX-05`, nen phia `TX-04` khong biet hang nao da doc roi va van tra ve dung
+/// 500 hang do moi nhip. Hau qua: khi 500 ky dau tien deu da co cong no, ky thu 501 KHONG BAO GIO
+/// duoc nhin thay. Mot ban giao hop le, va mot khoan phai tra cho cay xang khong bao gio xuat hien.
+/// Tang `500` len chi doi cho cho cai chet, khong chua no.
+///
+/// ===========================================================================
+/// HAI CON TRO, HAI VIEC KHAC NHAU. Dung gop chung.
+///
+/// `TransportSettlementFuelHandoffCursor` tra loi *"ky NAY con viec khong"* — DUNG (correctness).
+/// Bang nay tra loi *"lan sau mo hop thu tu dau"* — SONG (liveness). Mot cai sai lam tra tien sai;
+/// cai kia lam tien khong bao gio duoc tra. Gop lai se lam ca hai deu mo nghia.
+///
+/// ===========================================================================
+/// KHOA KEYSET `(lastEmittedAt, lastHandoffId)`, va vi sao phai co CA HAI.
+///
+/// `emittedAt` khong duy nhat: hai ky dong trong cung mot mili giay la chuyen binh thuong khi ke
+/// toan dong mot loat. Keyset chi tren thoi diem se hoac bo qua hang thu hai, hoac doc lai no mai
+/// mai. `id` la thu pha hoa, va la ly do thu tu doc luon la `(emittedAt ASC, id ASC)`.
+///
+/// `NULL` o ca hai cot = BAT DAU LAI TU DAU BANG. Do la trang thai binh thuong sau moi vong, khong
+/// phai mot hang chua khoi tao.
+///
+/// ===========================================================================
+/// VI SAO PHAI QUAN VE DAU (`wrap-around`) chu khong chi tien mai.
+///
+/// Vi tri quet di qua MOI hang da nhin toi, ke ca hang GHI HONG. Do la thu cho phep 25 ky hong lien
+/// tiep khong chan duoc nhung ky lanh manh dung sau chung. Nhung no cung co nghia: viec cua mot ky
+/// hong chi duoc lam lai o VONG SAU. Nen vong phai quay lai — het duoi bang thi `lastEmittedAt` ve
+/// `NULL` va `cycles` tang mot.
+///
+/// Quan ve dau con bat mot truong hop nua: mot ban sua doi phat ra voi `emittedAt` LUI VE TRUOC vi
+/// tri quet (dong ho lech, hay mot ban duoc ghi voi thoi diem cu). Mot con tro chi-tien se bo qua
+/// no vinh vien; mot vong quay lai thi khong.
+///
+/// `cycles` khong tham gia quyet dinh nao — no la thu duy nhat trong CSDL phan biet duoc "vong quet
+/// dang chay tron vong" voi "vong quet dung yen mot cho", va cau hoi do se duoc hoi luc co su co.
+model TransportSettlementFuelHandoffScan {
+  /// Hang DON — khoa la hang so `FUEL_HANDOFF_SCAN_ROW`. Mot khoa chuoi doc len la doc duoc ten cua
+  /// cai dang quet, khac voi mot `Boolean @unique` chi noi "co mot hang".
+  id            String    @id
+  /// `emittedAt` cua ban giao CUOI CUNG da nhin toi. `NULL` = vong moi, doc tu dau bang.
+  lastEmittedAt DateTime?
+  /// `id` cua chinh ban giao do — ve phai cua keyset. Luon di cung `lastEmittedAt`.
+  lastHandoffId String?
+  /// So vong da quet tron. Chi de chan doan; khong mot nhanh logic nao doc no.
+  cycles        Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+}
+
 /// DIEU KHOAN THUONG MAI cua mot khach — han thanh toan va han muc tin dung.
 ///
 /// `paymentTermDays` la CAU HINH (15/30/45 theo Issue #87), khong phai hang so trong code: hai

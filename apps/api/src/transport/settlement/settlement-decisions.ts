@@ -193,6 +193,20 @@ export const FUEL_HANDOFF_DRAIN_REASONS = [
    * luc ke toan hoi vi sao mot ky dong tu tuan truoc chua len cong no.
    */
   'FUEL_HANDOFF_BATCH_SATURATED',
+  /**
+   * DA DOC TOI DUOI HOP THU — vi tri quet quay ve dau, va mot vong vua tron.
+   *
+   * ===========================================================================
+   * MA NAY LA THU DUY NHAT PHAN BIET DUOC "dang chay" voi "dang dung yen".
+   *
+   * `FUEL_HANDOFF_ALREADY_CURRENT` phat lien tuc o mot he thong lanh manh — nhung no cung phat lien
+   * tuc o dung cai he thong hong ma vi tri quet sinh ra de sua: doc mai 500 hang dau tien, ky thu
+   * 501 khong bao gio den luot. Hai hinh anh do trong giong het nhau tren log neu chi nhin ma kia.
+   *
+   * Mot he thong khong bao gio phat `FUEL_HANDOFF_SCAN_WRAPPED` la mot he thong khong bao gio doc
+   * het hop thu — va do la mot su co, du khong co mot dong loi nao.
+   */
+  'FUEL_HANDOFF_SCAN_WRAPPED',
 ] as const;
 export type FuelHandoffDrainReason = (typeof FUEL_HANDOFF_DRAIN_REASONS)[number];
 
@@ -269,5 +283,6 @@ export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
     FUEL_HANDOFF_SOURCE_UNAVAILABLE: 'Không đọc được hộp thư bàn giao — bỏ qua lượt, không ghi gì',
     FUEL_HANDOFF_INGEST_FAILED: 'Ghi công nợ thất bại — việc vẫn còn, con trỏ giữ nguyên',
     FUEL_HANDOFF_BATCH_SATURATED: 'Lô đọc chạm trần — còn kỳ chưa nhìn tới trong nhịp này',
+    FUEL_HANDOFF_SCAN_WRAPPED: 'Đã đọc tới cuối hộp thư — vòng quét quay về đầu',
   } satisfies Record<TransportSettlementDecisionReason, string>,
 });

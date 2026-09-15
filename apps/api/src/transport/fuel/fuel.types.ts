@@ -301,6 +301,23 @@ export interface FuelSettlementHandoff {
   readonly emittedBy: string;
 }
 
+/**
+ * MOT VI TRI trong hop thu di, theo dung thu tu doc `(emittedAt ASC, id ASC)`.
+ *
+ * ===========================================================================
+ * PHAI CO CA HAI VE. `emittedAt` mot minh khong du: hai ky dong trong cung mot mili giay la chuyen
+ * binh thuong khi ke toan dong mot loat cuoi thang, va mot keyset chi tren thoi diem se hoac nhay
+ * qua hang thu hai, hoac doc lai no mai mai.
+ *
+ * `transport-fuel` khong so huu gia tri nay va khong luu no o dau — no chi biet doc tiep TU day.
+ * Ai giu no la viec cua nguoi doc (xem `TransportSettlementFuelHandoffScan`).
+ */
+export interface FuelHandoffKeyset {
+  /** ISO-8601, lay nguyen tu `FuelSettlementHandoff.emittedAt`. */
+  readonly emittedAt: string;
+  readonly handoffId: string;
+}
+
 /* ------------------------------------------------------------------ *
  * KHUNG NHIN — khong phai bang
  * ------------------------------------------------------------------ */

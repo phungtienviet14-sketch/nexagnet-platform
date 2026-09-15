@@ -6,6 +6,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import type { CommissionCalcKind } from './commission-rules.js';
 import { canAdjust, outstandingOf } from './settlement-documents.js';
 import type { SettlementFlow } from './settlement-flows.js';
+import type { FuelHandoffScanPosition } from './settlement.ports.js';
 import {
   SettlementRepository,
   type AllocateCommand,
@@ -1040,7 +1041,94 @@ export class PrismaSettlementRepository extends SettlementRepository {
       throw error;
     }
   }
+
+  /* --------------------- Vi tri quet hop thu di ---------------------- */
+
+  async fuelHandoffScanPosition(): Promise<FuelHandoffScanPosition | null> {
+    const row: { lastEmittedAt: Date | null; lastHandoffId: string | null } | null = await model(
+      this.prisma,
+      'transportSettlementFuelHandoffScan',
+    ).findUnique({
+      where: { id: FUEL_HANDOFF_SCAN_ROW },
+      select: { lastEmittedAt: true, lastHandoffId: true },
+    });
+
+    /*
+     * Chua co hang, hay hang dang o dau vong — ca hai deu la "doc tu dau hop thu". Rang buoc
+     * `_keyset_paired` o CSDL bao dam hai cot khong bao gio le mot nua, nen phep kiem nay khong the
+     * nuot mot nua keyset that.
+     */
+    if (row === null || row.lastEmittedAt === null || row.lastHandoffId === null) return null;
+    return { emittedAt: row.lastEmittedAt.toISOString(), handoffId: row.lastHandoffId };
+  }
+
+  /**
+   * CHI TIEN TRONG MOT VONG — cung khuon voi `advanceFuelHandoffCursor`, va cung ly do.
+   *
+   * Hai tien trinh API cung quet la mot hinh dang trien khai that. Mot lenh `upsert` tran se de ben
+   * cham hon keo vi tri LUI ve cho cu cua no; lam vay lien tuc thi vong quet co the khong bao gio
+   * toi duoi hop thu, tuc khong bao gio quan ve dau, tuc viec cua nhung ky ghi hong khong bao gio
+   * duoc lam lai. Nen phep so sanh nam trong chinh menh de `WHERE` chu khong o tang ung dung.
+   *
+   * `lastEmittedAt: null` la mot ve HOP LE cua "tien": dau vong thi moi vi tri deu o phia truoc.
+   */
+  async advanceFuelHandoffScan(position: FuelHandoffScanPosition): Promise<void> {
+    const at = new Date(position.emittedAt);
+    const scans = model(this.prisma, 'transportSettlementFuelHandoffScan');
+
+    const moved: { count: number } = await scans.updateMany({
+      where: {
+        id: FUEL_HANDOFF_SCAN_ROW,
+        OR: [
+          { lastEmittedAt: null },
+          { lastEmittedAt: { lt: at } },
+          { lastEmittedAt: at, lastHandoffId: { lt: position.handoffId } },
+        ],
+      },
+      data: { lastEmittedAt: at, lastHandoffId: position.handoffId },
+    });
+    if (moved.count > 0) return;
+
+    try {
+      await scans.create({
+        data: { id: FUEL_HANDOFF_SCAN_ROW, lastEmittedAt: at, lastHandoffId: position.handoffId },
+      });
+    } catch (error) {
+      /* `P2002` = hang da co va dang o vi tri XA HON. Mot vong quet khac di truoc — khong phai loi. */
+      if (isUniqueViolation(error)) return;
+      throw error;
+    }
+  }
+
+  /**
+   * QUAY VE DAU HOP THU va dem them mot vong.
+   *
+   * Khong co dieu kien nao o day, va do la co y: quay ve dau luon hop le. Neu hai tien trinh cung
+   * toi duoi hop thu trong mot cua so, `cycles` co the tang hai — `cycles` chi de chan doan, khong
+   * mot nhanh logic nao doc no, nen mot so dem hoi cao khong lam sai dieu gi.
+   */
+  async rewindFuelHandoffScan(): Promise<void> {
+    await model(this.prisma, 'transportSettlementFuelHandoffScan').upsert({
+      where: { id: FUEL_HANDOFF_SCAN_ROW },
+      create: {
+        id: FUEL_HANDOFF_SCAN_ROW,
+        lastEmittedAt: null,
+        lastHandoffId: null,
+        cycles: 1,
+      },
+      update: { lastEmittedAt: null, lastHandoffId: null, cycles: { increment: 1 } },
+    });
+  }
 }
+
+/**
+ * KHOA CUA HANG DON giu vi tri quet.
+ *
+ * Mot chuoi doc duoc chu khong `Boolean @default(true) @unique`: khi mot ngay nao do co them mot
+ * vong quet thu hai doc mot hop thu khac, bang nay nhan them mot hang co ten, thay vi phai sinh
+ * them mot bang.
+ */
+export const FUEL_HANDOFF_SCAN_ROW = 'fuel-handoff';
 
 /** `P2002` cua Prisma, doc qua `unknown` de khong phai import kieu loi cua client. */
 const isUniqueViolation = (error: unknown): boolean =>

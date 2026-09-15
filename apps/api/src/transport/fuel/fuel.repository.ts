@@ -11,6 +11,7 @@ import type {
   FuelDiscrepancy,
   FuelDiscrepancyResolution,
   FuelEntry,
+  FuelHandoffKeyset,
   FuelMatch,
   FuelMatchOrigin,
   FuelPaymentMethod,
@@ -761,6 +762,23 @@ export abstract class FuelRepository {
    * `limit` la mot CHAN CO Y (`OWNER_DECISION_2026_09_13`: *"bounded batch + deterministic
    * ordering"*). Thu tu la `emittedAt` TANG DAN roi `id` de pha hoa: viec cu nhat luon nhin thay
    * truoc, va hai lan doc tren cung du lieu cho ra cung mot chuoi.
+   *
+   * ===========================================================================
+   * `after` — VA VI SAO THIEU NO LA MOT LOI CHET NGUOI.
+   *
+   * Ban dau ham nay chi nhan `limit`, tuc luon tra ve `limit` hang DAU TIEN. Nguoi doc thi giu con
+   * tro tieu thu o phia minh, nen `TX-04` khong the biet hang nao da doc roi. Hau qua: khi 500 ky
+   * dau deu da co cong no, ky thu 501 KHONG BAO GIO duoc tra ve — mot ban giao hop le ma khoan
+   * phai tra cho cay xang khong bao gio xuat hien.
+   *
+   * `after` chua loi do bang cach cho NGUOI DOC noi minh dang dung o dau: tra ve nhieu nhat `limit`
+   * hang dung SAU vi tri do trong chinh thu tu tren. `null` = doc tu dau bang.
+   *
+   * Chu y: day KHONG phai "loc nhung hang chua tieu thu". `TX-04` van khong biet gi ve con tro
+   * tieu thu cua `TX-05`, va cung khong duoc biet. No chi biet phan trang.
    */
-  abstract listLatestHandoffs(limit: number): Promise<FuelSettlementHandoff[]>;
+  abstract listLatestHandoffs(input: {
+    readonly after: FuelHandoffKeyset | null;
+    readonly limit: number;
+  }): Promise<FuelSettlementHandoff[]>;
 }

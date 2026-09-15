@@ -5,6 +5,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import type { CommissionCalcKind } from './commission-rules.js';
 import { canAdjust, outstandingOf } from './settlement-documents.js';
 import type { SettlementFlow } from './settlement-flows.js';
+import type { FuelHandoffScanPosition } from './settlement.ports.js';
 import {
   SettlementRepository,
   type AllocateCommand,
@@ -52,6 +53,16 @@ export class InMemorySettlementRepository extends SettlementRepository {
   private readonly commissions = new Map<string, CommissionCalculation>();
   /** Con tro tieu thu ban giao cua `TX-04` — xem `TransportSettlementFuelHandoffCursor`. */
   private readonly fuelCursors = new Map<string, { revision: number; handoffId: string }>();
+
+  /**
+   * VI TRI QUET hop thu di — mot gia tri, khong mot bang.
+   *
+   * `position: null` = dau vong. `cycles` chi de chan doan, giong cot cung ten o CSDL.
+   */
+  private fuelScan: { position: FuelHandoffScanPosition | null; cycles: number } = {
+    position: null,
+    cycles: 0,
+  };
 
   private now(): string {
     return new Date().toISOString();
@@ -639,4 +650,35 @@ export class InMemorySettlementRepository extends SettlementRepository {
     });
     return { advanced: true };
   }
+
+  /* --------------------- Vi tri quet hop thu di ---------------------- */
+
+  async fuelHandoffScanPosition(): Promise<FuelHandoffScanPosition | null> {
+    return this.fuelScan.position;
+  }
+
+  /**
+   * CHI TIEN TRONG MOT VONG — cung luat voi ban Prisma.
+   *
+   * Viet ra o day vi day la mot BAT BIEN chu khong mot chi tiet cua CSDL: mot ban in-memory "de
+   * tinh" hon se lam bo bai don vi xanh trong khi ban that o tang tren tu choi chinh lan ghi do.
+   */
+  async advanceFuelHandoffScan(position: FuelHandoffScanPosition): Promise<void> {
+    const current = this.fuelScan.position;
+    if (current !== null && !isAfterScanPosition(position, current)) return;
+    this.fuelScan = { ...this.fuelScan, position };
+  }
+
+  async rewindFuelHandoffScan(): Promise<void> {
+    this.fuelScan = { position: null, cycles: this.fuelScan.cycles + 1 };
+  }
 }
+
+/** `(emittedAt, id)` cua `left` dung SAU `right` — cung phep so sanh bo doi voi ban Prisma. */
+const isAfterScanPosition = (
+  left: FuelHandoffScanPosition,
+  right: FuelHandoffScanPosition,
+): boolean => {
+  const byTime = left.emittedAt.localeCompare(right.emittedAt);
+  return byTime > 0 || (byTime === 0 && left.handoffId.localeCompare(right.handoffId) > 0);
+};
