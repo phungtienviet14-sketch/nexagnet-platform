@@ -16,7 +16,7 @@ import { Roles } from '../../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
 import { FuelReadService } from '../fuel/fuel-read.service.js';
 import { FuelService } from '../fuel/fuel.service.js';
-import type { FuelReceiptEvidence } from '../fuel/fuel.types.js';
+import type { FuelReceiptEvidenceView } from '../fuel/fuel.types.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
@@ -68,7 +68,7 @@ export class FuelEvidenceController {
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
     @UploadedFile() file: UploadedEvidenceFile | undefined,
-  ): Promise<FuelReceiptEvidence> {
+  ): Promise<FuelReceiptEvidenceView> {
     const upload = uploadedBytes(file);
     return this.guard(async () => {
       const stored = await this.evidence.put(upload);

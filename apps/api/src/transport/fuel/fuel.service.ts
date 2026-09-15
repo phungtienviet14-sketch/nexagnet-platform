@@ -9,6 +9,7 @@ import {
   TRANSPORT_CORE_POLICY,
   type TransportCorePolicy,
 } from '../transport-policy.js';
+import { isTransportEvidenceLocator } from '../evidence/evidence-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import {
@@ -43,10 +44,12 @@ import {
   type FuelTripFacts,
 } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
+import { toFuelReceiptEvidenceView } from './fuel.types.js';
 import type {
   FuelEntry,
   FuelPaymentMethod,
   FuelReceiptEvidence,
+  FuelReceiptEvidenceView,
   FuelSupplier,
 } from './fuel.types.js';
 
@@ -241,10 +244,27 @@ export class FuelService {
     entryId: string,
     command: AttachFuelEvidenceCommand,
     actor: string,
-  ): Promise<FuelReceiptEvidence> {
+  ): Promise<FuelReceiptEvidenceView> {
     const entry = await this.requireEntry(entryId);
     if (entry.reconciliationStatus === 'SETTLED') {
       this.denyAmend(entry, 'FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED');
+    }
+
+    /*
+     * DINH VI DUOC KIEM LUC GHI, khong chi luc doc — `#295` Lane V.
+     *
+     * `attachFuelEvidenceSchema` nhan mot chuoi tu 1 den 500 ky tu, va truoc lan sua nay chuoi do
+     * di THANG xuong kho. Cong duy nhat kiem no la `TransportEvidenceService.read()`, tuc luc AI DO
+     * MO anh ra — nen mot dinh vi tro ra ngoai khu bang chung van NAM DUOC trong bang, va chi lo ra
+     * o lan doc dau tien, o mot ngu canh khac han, voi mot nguoi khac han.
+     *
+     * Cung mot luat va cung mot ma voi duong doc: mot cai cua, hai phia, khong hai cach tra loi.
+     */
+    if (!isTransportEvidenceLocator(command.locator)) {
+      throw TransportDomainError.denied(
+        'EVIDENCE_LOCATOR_OUT_OF_SCOPE',
+        'Dinh vi nay khong thuoc khu bang chung van tai',
+      );
     }
 
     const evidence = await this.repository.addEvidence({
@@ -279,7 +299,9 @@ export class FuelService {
       entityId: evidence.id,
       after: evidence,
     });
-    return evidence;
+    // Dau vet o tren giu NGUYEN `locator` — no la thu lan vet duoc mot tam anh ve dung tep. Cai ra
+    // toi trinh duyet thi khong: xem `FuelReceiptEvidenceView`.
+    return toFuelReceiptEvidenceView(evidence);
   }
 
   /**

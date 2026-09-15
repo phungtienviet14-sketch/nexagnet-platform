@@ -108,6 +108,37 @@ export interface FuelReceiptEvidence {
   readonly withdrawnBy: string | null;
 }
 
+/**
+ * MOT BANG CHUNG O DANG RA DUOC TRINH DUYET — `#295` Lane V.
+ *
+ * ===========================================================================
+ * Y HET `FuelReceiptEvidence`, TRU `locator`. Va su vang mat do la ca ly do kieu nay ton tai.
+ *
+ * `locator` la khoa trong kho anh (`media/transport-evidence/<yyyy>/<mm>/<uuid>.<ext>`). Be mat lai
+ * xe da bo no tu `#170` (`DriverFuelEvidenceView`), hop thu doi xe da bo no tu `#222 P1-B` — va
+ * dong chu o do noi ro vi sao: *"mot `...row` o day se lang le day dinh vi kho anh ra trinh
+ * duyet"*.
+ *
+ * Duong CHI TIET PHIEU cua be mat van hanh thi khong bo, va do la mot su khong nhat quan chu khong
+ * phai mot ngoai le co ly do: ba route (`GET entries/:id`, hai route gan bang chung) tra thang
+ * `FuelReceiptEvidence`, nen dinh vi duc di ra trinh duyet o dung nhung cho ma hai be mat kia da
+ * can than che. Bytes van chi lay duoc qua route co xac thuc, nhung mot dinh vi doan duoc la mot
+ * be mat tan cong khong ai can cho khong.
+ *
+ * `Omit` chu khong viet lai danh sach truong: mot truong MOI them vao `FuelReceiptEvidence` phai tu
+ * dong co mat o day, con neu phai chep tay thi lan them sau se quen — va "quen" o huong nay nghia
+ * la mot truong khong bao gio ra toi man hinh, im lang.
+ */
+export type FuelReceiptEvidenceView = Omit<FuelReceiptEvidence, 'locator'>;
+
+/** Mot lan cat, dung MOT cho — xem khoi ghi chu cua `FuelReceiptEvidenceView`. */
+export const toFuelReceiptEvidenceView = (
+  evidence: FuelReceiptEvidence,
+): FuelReceiptEvidenceView => {
+  const { locator: _locator, ...visible } = evidence;
+  return visible;
+};
+
 export const FUEL_STATEMENT_FORMATS = ['CSV', 'XLSX'] as const;
 export type FuelStatementFormat = (typeof FUEL_STATEMENT_FORMATS)[number];
 
@@ -277,7 +308,8 @@ export interface FuelSettlementHandoff {
 /** Mot phieu kem bang chung cua no, cho man hinh chi tiet. */
 export interface FuelEntryDetail {
   readonly entry: FuelEntry;
-  readonly evidence: readonly FuelReceiptEvidence[];
+  /** KHONG mang `locator` — xem `FuelReceiptEvidenceView`. */
+  readonly evidence: readonly FuelReceiptEvidenceView[];
 }
 
 /* ------------------------------------------------------------------ *
