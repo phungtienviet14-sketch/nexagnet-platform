@@ -629,9 +629,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.fleet_status.read": {
       "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
     },
-    "transport.fuel.document.ingest": {
-      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"
-    },
     "transport.fuel.document.read": {
       "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"
     },
@@ -1074,12 +1071,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NOT_OWNED": {
       "functionName": "FuelReadService.getMyFuelSlip",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 279
+      "line": 283
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NO_DRIVER_BINDING": {
       "functionName": "FuelReadService.requireDriverBinding",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 312
+      "line": 316
     },
     "driver.self_fund_scope|SELF_FUND_SCOPE_GRANTED": {
       "functionName": "CostingReadService.selfFundStatement",
@@ -1284,12 +1281,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fuel.cost_posting|*": {
       "functionName": "FuelService.postFuelCost",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 677
+      "line": 699
     },
     "fuel.cost_posting|FUEL_COST_ALREADY_POSTED": {
       "functionName": "FuelService.postFuelCost",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 651
+      "line": 673
     },
     "fuel.match|*": {
       "functionName": "FuelReconciliationService.runMatching",
@@ -1323,12 +1320,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fuel_entry.amend|*": {
       "functionName": "FuelService.denyAmend",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 834
+      "line": 856
     },
     "fuel_entry.amend|FUEL_ENTRY_AMENDED": {
       "functionName": "FuelService.amendFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 508
+      "line": 530
     },
     "fuel_entry.amend|FUEL_ENTRY_AMEND_STATE_RACE": {
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts"
@@ -1336,72 +1333,77 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fuel_entry.evidence_withdraw|*": {
       "functionName": "FuelService.denyEvidenceWithdrawal",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 409
+      "line": 431
     },
     "fuel_entry.evidence_withdraw|FUEL_EVIDENCE_ALREADY_WITHDRAWN": {
       "functionName": "FuelService.withdrawEvidence",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 352
+      "line": 374
     },
     "fuel_entry.evidence_withdraw|FUEL_EVIDENCE_NOT_FOUND": {
       "functionName": "FuelService.withdrawEvidence",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 339
+      "line": 361
     },
     "fuel_entry.evidence_withdraw|FUEL_EVIDENCE_WITHDRAWN": {
       "functionName": "FuelService.withdrawEvidence",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 389
+      "line": 411
     },
     "fuel_entry.review|*": {
       "functionName": "FuelService.denyReview",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 857
+      "line": 879
     },
     "fuel_entry.review|FUEL_ENTRY_REJECTED": {
       "functionName": "FuelService.rejectFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 601
+      "line": 623
     },
     "fuel_entry.review|FUEL_ENTRY_REVIEW_REOPENED": {
       "functionName": "FuelService.resubmitFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 630
+      "line": 652
     },
     "fuel_entry.review|FUEL_ENTRY_VERIFIED": {
       "functionName": "FuelService.verifyFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 571
+      "line": 593
     },
     "fuel_entry.submit|*": {
       "functionName": "FuelService.guardTripAcceptsFuel",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 746
+      "line": 768
     },
     "fuel_entry.submit|FUEL_CORRELATION_KEY_REUSED": {
       "functionName": "FuelService.assertSameEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 881
+      "line": 903
     },
     "fuel_entry.submit|FUEL_ENTRY_DRIVER_NOT_ASSIGNED": {
       "functionName": "FuelService.requireAssignedToTrip",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 772
+      "line": 794
     },
     "fuel_entry.submit|FUEL_ENTRY_IDEMPOTENT_REPLAY": {
       "functionName": "FuelService.submitFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 166
+      "line": 169
     },
     "fuel_entry.submit|FUEL_ENTRY_RECORDED": {
       "functionName": "FuelService.submitFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 209
+      "line": 212
     },
     "fuel_entry.submit|FUEL_ENTRY_VEHICLE_NOT_ASSIGNED": {
       "functionName": "FuelService.requireAssignedToTrip",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 786
+      "line": 808
+    },
+    "fuel_handoff.drain|*": {
+      "functionName": "FuelHandoffDrainService.report",
+      "filePath": "apps/api/src/transport/settlement/fuel-handoff-drain.service.ts",
+      "line": 357
     },
     "fuel_reconciliation.transition|*": {
       "functionName": "FuelReconciliationService.denyFrozen",

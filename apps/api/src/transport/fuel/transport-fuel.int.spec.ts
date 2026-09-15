@@ -306,7 +306,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const entry = await submitOwn({ correlationKey: 'it-t4-p1-phieu' });
       const evidence = await fuel.attachEvidence(
         entry.id,
-        { locator: 'media://it-t4/anh-phieu-1.jpg', contentType: 'image/jpeg', byteSize: 51_200 },
+        {
+          locator: 'media/transport-evidence/2026/08/anh-phieu-1.jpg',
+          contentType: 'image/jpeg',
+          byteSize: 51_200,
+        },
         'it-t4-lai-xe-a',
       );
 
@@ -676,7 +680,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         await expect(
           fuel.attachEvidence(
             ids.exact,
-            { locator: 'media://it-t4/them-sau-khi-dong.jpg' },
+            { locator: 'media/transport-evidence/2026/09/them-sau-khi-dong.jpg' },
             'it-t4-ke-toan',
           ),
         ).rejects.toMatchObject({ reason: 'FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED' });

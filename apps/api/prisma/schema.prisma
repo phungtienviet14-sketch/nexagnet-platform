@@ -909,37 +909,37 @@ model TransportDriver {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
-  vehicleAssignments  TransportVehicleAssignment[]
-  tripAssignments     TransportTripAssignment[]
+  vehicleAssignments   TransportVehicleAssignment[]
+  tripAssignments      TransportTripAssignment[]
   /// `TX-03` — mot lai xe MOT so quy. Chi co mat khi khach bat `transport-costing`.
-  fundAccount         TransportDriverFundAccount?
-  tripExpenses        TransportTripExpense[]
+  fundAccount          TransportDriverFundAccount?
+  tripExpenses         TransportTripExpense[]
   /// `TX-04` — phieu do dau lai xe nay da khai.
-  fuelEntries         TransportFuelEntry[]
+  fuelEntries          TransportFuelEntry[]
   /// `TX-07` — phieu luong cua lai xe nay. Chi co mat khi khach bat `transport-workforce`.
-  payslips            TransportPayslip[]
+  payslips             TransportPayslip[]
   /// `TX-07b` — cac lan lai xe rut tien da duoc ghi nhan. Xem khoi `TransportDriverCashout`.
-  cashouts            TransportDriverCashout[]
+  cashouts             TransportDriverCashout[]
   /// R1-B: lich su cam lai cac vong chay v2.
-  runAssignments      TransportRunAssignment[]
+  runAssignments       TransportRunAssignment[]
   /// R1-C: de nghi chi cua chinh lai xe nay.
-  expenseClaims       TransportExpenseClaim[]
+  expenseClaims        TransportExpenseClaim[]
   /// `transport-proof` — cac phien bam vi tri va cac ma cai dat ung dung cua lai xe nay.
-  trackingSessions    TransportTrackingSession[]
-  deviceInstallations TransportDeviceInstallation[]
-  operationalProofs   TransportOperationalProof[]
+  trackingSessions     TransportTrackingSession[]
+  deviceInstallations  TransportDeviceInstallation[]
+  operationalProofs    TransportOperationalProof[]
   /// F1 (#243): moc van hanh do chinh lai xe nay ghi.
-  runCheckpoints      TransportRunCheckpoint[]
-  proofChallenges     TransportProofChallenge[]
+  runCheckpoints       TransportRunCheckpoint[]
+  proofChallenges      TransportProofChallenge[]
   /// `#267` H3/H4: cac lan chinh lai xe nay xac nhan dia diem A va tao vong chay.
-  siteIntakes         TransportRunSiteIntake[]
+  siteIntakes          TransportRunSiteIntake[]
+  waitingSessions      TransportDeliveryWaitingSession[]
+  waitingAllowances    TransportDriverWaitingAllowance[]
+  operationalDocuments TransportOperationalDocument[]
+  receiptHandovers     TransportPhysicalReceiptHandover[]
 
   @@index([status])
   @@index([licenceExpiry])
-  waitingSessions       TransportDeliveryWaitingSession[]
-  waitingAllowances     TransportDriverWaitingAllowance[]
-  operationalDocuments  TransportOperationalDocument[]
-  receiptHandovers      TransportPhysicalReceiptHandover[]
 }
 
 /// Gan lai xe phu trach mot xe — tang DOI XE. `effectiveTo = NULL` la ban dang hieu luc.
@@ -2962,6 +2962,114 @@ model TransportSettlementPeriod {
   @@index([flow, startDate, endDate])
 }
 
+/// CON TRO TIEU THU ban giao cua `TX-04` — bang cua `TX-05`, va chi `TX-05` ghi vao no.
+///
+/// ===========================================================================
+/// VI SAO PHAI CO MOT BANG THAY VI SUY TU CHUNG TU DA GHI.
+///
+/// Cach re nhat de biet "ban giao nay da tieu thu chua" la hoi bang chung tu: co hang nao mang
+/// `(sourceContext = 'FUEL_SETTLEMENT_HANDOFF', sourceId = handoffId)` khong. Cach do SAI o dung
+/// mot cho, va cho do co that:
+///
+///     dong ky lan 1  -> ban giao r1, 10.000.000d  -> ghi chung tu goc
+///     mo lai, sua mot thu KHONG phai tien, dong lai
+///     dong ky lan 2  -> ban giao r2, 10.000.000d  -> `adjustmentDelta` tra `null`
+///
+/// `settlement-documents.ts` co y tra `null` khi so tien khong doi — mot ban dieu chinh 0 dong la
+/// mot hang vo nghia trong so. Nhung the thi r2 KHONG BAO GIO co chung tu mang `sourceId` cua no,
+/// va mot phep suy "chua co chung tu tuc la chua tieu thu" se lam vong quet doc lai r2 mai mai.
+/// Khong sai ve tien — duong ghi van chong trung — nhung la mot vong lap khong bao gio dung.
+///
+/// Nen trang thai "da tieu thu toi ban nao" duoc GHI RA, khong suy. `consumedRevision` la so ban
+/// sua doi lon nhat da xu ly xong; vong quet chi lam viec khi ky co ban moi hon so do.
+///
+/// ===========================================================================
+/// CHIEU PHU THUOC KHONG DOI.
+///
+/// `TransportFuelSettlementHandoff` thuoc `transport-fuel` va la HOP THU DI. Neu danh dau tieu thu
+/// bang mot cot tren chinh hang ban giao, thi `TX-05` se GHI vao bang cua `TX-04` — dung dieu ma
+/// `NO_CROSS_CONTEXT_REPOSITORY_WRITE` cam. Con tro nam o phia DOC, nen chieu van la
+/// `TX-05 -> TX-04`, mot chieu, va cong `FuelSettlementSource` van khong co mot ham ghi nao.
+///
+/// Vi le do bang nay CO Y khong co khoa ngoai sang `TransportFuelReconciliation`: mot khoa ngoai
+/// se buoc hai mien vao nhau o tang CSDL dung luc tang ma vua tach chung ra.
+///
+/// ===========================================================================
+/// CON TRO KHONG PHAI LA SU THAT VE TIEN.
+///
+/// Mat bang nay di thi khong dong nao bi tra hai lan: `@@unique([sourceContext, sourceId])` tren
+/// `TransportSettlementDocument` moi la thu bao dam dieu do, va no o tang CSDL. Con tro chi tra
+/// loi cau hoi "con viec gi phai lam khong" — mat no thi vong quet lam lai mot lan vo hai roi ghi
+/// lai chinh no. Do la ly do no duoc cap nhat SAU khi ghi chung tu thanh cong, khong truoc: mot
+/// lan ghi hong phai de lai viec, khong duoc de lai mot dau "da xong" gia.
+model TransportSettlementFuelHandoffCursor {
+  /// Khoa chinh la KY DOI SOAT, khong phai ban giao: mot ky chi co mot con tro.
+  reconciliationId  String   @id
+  /// So ban sua doi lon nhat DA tieu thu xong. Dem tu 1, cung goc voi `TransportFuelSettlementHandoff.revision`.
+  consumedRevision  Int
+  /// Ban giao ung voi `consumedRevision` — de lan vet mot chung tu ve dung ban giao sinh ra no.
+  consumedHandoffId String
+  consumedAt        DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([consumedAt])
+}
+
+/// VI TRI QUET hop thu di cua `TX-04` — `#295` Lane V, P0, them sau vong soat doc lap.
+///
+/// ===========================================================================
+/// BANG NAY SINH RA TU MOT LOI THAT, khong tu mot nhu cau thiet ke.
+///
+/// Ban dau vong quet doc `listLatestHandoffs(500)`: 500 hang DAU theo `emittedAt` tang dan. Con tro
+/// tieu thu thi nam o `TX-05`, nen phia `TX-04` khong biet hang nao da doc roi va van tra ve dung
+/// 500 hang do moi nhip. Hau qua: khi 500 ky dau tien deu da co cong no, ky thu 501 KHONG BAO GIO
+/// duoc nhin thay. Mot ban giao hop le, va mot khoan phai tra cho cay xang khong bao gio xuat hien.
+/// Tang `500` len chi doi cho cho cai chet, khong chua no.
+///
+/// ===========================================================================
+/// HAI CON TRO, HAI VIEC KHAC NHAU. Dung gop chung.
+///
+/// `TransportSettlementFuelHandoffCursor` tra loi *"ky NAY con viec khong"* — DUNG (correctness).
+/// Bang nay tra loi *"lan sau mo hop thu tu dau"* — SONG (liveness). Mot cai sai lam tra tien sai;
+/// cai kia lam tien khong bao gio duoc tra. Gop lai se lam ca hai deu mo nghia.
+///
+/// ===========================================================================
+/// KHOA KEYSET `(lastEmittedAt, lastHandoffId)`, va vi sao phai co CA HAI.
+///
+/// `emittedAt` khong duy nhat: hai ky dong trong cung mot mili giay la chuyen binh thuong khi ke
+/// toan dong mot loat. Keyset chi tren thoi diem se hoac bo qua hang thu hai, hoac doc lai no mai
+/// mai. `id` la thu pha hoa, va la ly do thu tu doc luon la `(emittedAt ASC, id ASC)`.
+///
+/// `NULL` o ca hai cot = BAT DAU LAI TU DAU BANG. Do la trang thai binh thuong sau moi vong, khong
+/// phai mot hang chua khoi tao.
+///
+/// ===========================================================================
+/// VI SAO PHAI QUAN VE DAU (`wrap-around`) chu khong chi tien mai.
+///
+/// Vi tri quet di qua MOI hang da nhin toi, ke ca hang GHI HONG. Do la thu cho phep 25 ky hong lien
+/// tiep khong chan duoc nhung ky lanh manh dung sau chung. Nhung no cung co nghia: viec cua mot ky
+/// hong chi duoc lam lai o VONG SAU. Nen vong phai quay lai — het duoi bang thi `lastEmittedAt` ve
+/// `NULL` va `cycles` tang mot.
+///
+/// Quan ve dau con bat mot truong hop nua: mot ban sua doi phat ra voi `emittedAt` LUI VE TRUOC vi
+/// tri quet (dong ho lech, hay mot ban duoc ghi voi thoi diem cu). Mot con tro chi-tien se bo qua
+/// no vinh vien; mot vong quay lai thi khong.
+///
+/// `cycles` khong tham gia quyet dinh nao — no la thu duy nhat trong CSDL phan biet duoc "vong quet
+/// dang chay tron vong" voi "vong quet dung yen mot cho", va cau hoi do se duoc hoi luc co su co.
+model TransportSettlementFuelHandoffScan {
+  /// Hang DON — khoa la hang so `FUEL_HANDOFF_SCAN_ROW`. Mot khoa chuoi doc len la doc duoc ten cua
+  /// cai dang quet, khac voi mot `Boolean @unique` chi noi "co mot hang".
+  id            String    @id
+  /// `emittedAt` cua ban giao CUOI CUNG da nhin toi. `NULL` = vong moi, doc tu dau bang.
+  lastEmittedAt DateTime?
+  /// `id` cua chinh ban giao do — ve phai cua keyset. Luon di cung `lastEmittedAt`.
+  lastHandoffId String?
+  /// So vong da quet tron. Chi de chan doan; khong mot nhanh logic nao doc no.
+  cycles        Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+}
+
 /// DIEU KHOAN THUONG MAI cua mot khach — han thanh toan va han muc tin dung.
 ///
 /// `paymentTermDays` la CAU HINH (15/30/45 theo Issue #87), khong phai hang so trong code: hai
@@ -3653,14 +3761,14 @@ model TransportCounterpartySite {
   updatedAt      DateTime              @updatedAt
 
   /// `#267` H3/H4: cac lan lai xe nhan viec tai dia diem nay.
-  intakes TransportRunSiteIntake[]
+  intakes              TransportRunSiteIntake[]
+  operationalDocuments TransportOperationalDocument[]
 
   /// Hai kho cua CUNG mot cong ty khong duoc trung ten: man hinh lai xe chi hien ten, nen hai
   /// dong chu giong het nhau la hai lua chon khong phan biet duoc.
   @@unique([counterpartyId, name], map: "TransportCounterpartySite_counterparty_name_key")
   @@index([counterpartyId, status])
   @@index([status])
-  operationalDocuments TransportOperationalDocument[]
 }
 
 // ===================================================================
@@ -4041,12 +4149,12 @@ model TransportOrder {
   /// Lane Q: ket qua A xac nhan duy nhat; sua tien qua settlement adjustment/reversal hien co.
   customerReconciliation   TransportCustomerReconciliation?
   reconciliationBatchLines TransportCustomerReconciliationBatchLine[]
+  operationalDocuments     TransportOperationalDocument[]
+  receiptHandovers         TransportPhysicalReceiptHandover[]
 
   @@index([status])
   @@index([businessDate])
   @@index([customerId])
-  operationalDocuments TransportOperationalDocument[]
-  receiptHandovers     TransportPhysicalReceiptHandover[]
 }
 
 /// VONG CHAY VAT LY cua MOT xe.
@@ -4070,26 +4178,26 @@ model TransportVehicleRun {
   cancelledAt        DateTime?
   cancellationReason String?
 
-  legs          TransportRunLeg[]
-  assignments   TransportRunAssignment[]
+  legs                 TransportRunLeg[]
+  assignments          TransportRunAssignment[]
   /// R1-C: de nghi chi gan vao vong chay nay.
-  expenseClaims TransportExpenseClaim[]
+  expenseClaims        TransportExpenseClaim[]
   /// F1 (#243): moc van hanh cua vong chay nay.
-  checkpoints   TransportRunCheckpoint[]
+  checkpoints          TransportRunCheckpoint[]
   /// `#267` H3/H4: lan lai xe xac nhan tai dia diem A da sinh ra vong chay nay. NHIEU NHAT mot.
-  siteIntake    TransportRunSiteIntake?
+  siteIntake           TransportRunSiteIntake?
   /// Lane I (#268), da THAY THE boi `#275`: ho so nghiem thu keo theo VONG CHAY. Khong con duong
   /// ghi nao dat no — chu the hien tai la `TransportOrder`. Giu lai de mot hang cu con doc duoc.
-  acceptance    TransportCommercialAcceptance?
+  acceptance           TransportCommercialAcceptance?
   /// Lane L (#276): cac lan lap ke hoach da dat don vao vong chay nay. NHIEU o che do
   /// `MULTI_ORDER_RUN`, DUNG MOT o che do `ONE_ORDER_PER_RUN` (cuong che bang unique mot phan).
-  runPlans      TransportOrderRunPlan[]
+  runPlans             TransportOrderRunPlan[]
+  waitingSessions      TransportDeliveryWaitingSession[]
+  operationalDocuments TransportOperationalDocument[]
 
   @@index([status])
   @@index([businessDate])
   @@index([vehicleId])
-  waitingSessions          TransportDeliveryWaitingSession[]
-  operationalDocuments     TransportOperationalDocument[]
 }
 
 /// PHAN CONG LAI XE cho mot vong chay — `GD-06`: LICH SU, khong ghi de.
@@ -4161,25 +4269,25 @@ model TransportRunLeg {
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
-  tripLink        TransportTripRunLegLink?
+  tripLink             TransportTripRunLegLink?
   /// #276 L2/L3: lan lap ke hoach da sinh ra chang CO HANG nay. NHIEU NHAT mot.
-  planAsLoadedLeg TransportOrderRunPlan?   @relation("TransportOrderRunPlanLoadedLeg")
+  planAsLoadedLeg      TransportOrderRunPlan?             @relation("TransportOrderRunPlanLoadedLeg")
   /// #276 L3: lan lap ke hoach da sinh ra chang RONG di truoc. NHIEU NHAT mot.
-  planAsEmptyLeg  TransportOrderRunPlan?   @relation("TransportOrderRunPlanEmptyLeg")
+  planAsEmptyLeg       TransportOrderRunPlan?             @relation("TransportOrderRunPlanEmptyLeg")
   /// R1-C: de nghi chi gan vao chang nay.
-  expenseClaims   TransportExpenseClaim[]
+  expenseClaims        TransportExpenseClaim[]
   /// F1 (#243): moc van hanh gan vao chang nay.
-  checkpoints     TransportRunCheckpoint[]
+  checkpoints          TransportRunCheckpoint[]
   /// `#267` H4: chang nay duoc tao boi mot lan nhan viec tai A. NHIEU NHAT mot.
-  siteIntake      TransportRunSiteIntake?
+  siteIntake           TransportRunSiteIntake?
+  waitingSessions      TransportDeliveryWaitingSession[]
+  operationalDocuments TransportOperationalDocument[]
+  receiptHandovers     TransportPhysicalReceiptHandover[]
 
   @@unique([runId, sequence])
   @@index([orderId])
   @@index([kind])
   @@index([businessDate])
-  waitingSessions      TransportDeliveryWaitingSession[]
-  operationalDocuments TransportOperationalDocument[]
-  receiptHandovers     TransportPhysicalReceiptHandover[]
 }
 
 /// BANG TUONG UNG giua mot chuyen v1 va mot chang v2. KHONG phai quan he cha/con.
@@ -4732,37 +4840,37 @@ enum TransportRunCheckpointType {
 /// khai bao, giu de doi chieu: mot chiec dien thoai van nguoc dong ho khong duoc xe dich lich su
 /// (`#243` F7).
 model TransportRunCheckpoint {
-  id            String                        @id @default(cuid())
-  type          TransportRunCheckpointType
-  runId         String
-  run           TransportVehicleRun           @relation(fields: [runId], references: [id], onDelete: Restrict)
+  id                   String                            @id @default(cuid())
+  type                 TransportRunCheckpointType
+  runId                String
+  run                  TransportVehicleRun               @relation(fields: [runId], references: [id], onDelete: Restrict)
   /// NULL o moc muc vong chay (`ASSIGNED`, `DEPARTED`, `COMPLETED`).
-  legId         String?
-  leg           TransportRunLeg?              @relation(fields: [legId], references: [id], onDelete: Restrict)
+  legId                String?
+  leg                  TransportRunLeg?                  @relation(fields: [legId], references: [id], onDelete: Restrict)
   /// Nguoi ghi — `authUserId` tu phien, khong tu than yeu cau.
-  recordedBy    String
-  driverId      String?
-  driver        TransportDriver?              @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  recordedBy           String
+  driverId             String?
+  driver               TransportDriver?                  @relation(fields: [driverId], references: [id], onDelete: Restrict)
   /// Ban dinh vi cua Lane B. MOT ban dinh vi phuc vu NHIEU NHAT mot moc — cung khuon
   /// `TransportOperationalProof.observationId`.
-  observationId String?                       @unique
-  observation   TransportLocationObservation? @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  observationId        String?                           @unique
+  observation          TransportLocationObservation?     @relation(fields: [observationId], references: [id], onDelete: Restrict)
   /// Khoa idempotency do may khach sinh — chan mot lan bam hai lan tao hai moc.
-  clientEventId String
-  capturedAt    DateTime?
-  receivedAt    DateTime                      @default(now())
-  businessDate  String                        @db.VarChar(10)
-  note          String?
-  createdAt     DateTime                      @default(now())
+  clientEventId        String
+  capturedAt           DateTime?
+  receivedAt           DateTime                          @default(now())
+  businessDate         String                            @db.VarChar(10)
+  note                 String?
+  createdAt            DateTime                          @default(now())
+  waitingArrivals      TransportDeliveryWaitingSession[] @relation("WaitingArrival")
+  waitingClosing       TransportDeliveryWaitingSession?  @relation("WaitingClosing")
+  operationalDocuments TransportOperationalDocument[]
 
   @@unique([runId, type, clientEventId], map: "TransportRunCheckpoint_run_type_event_key")
   @@index([runId, receivedAt])
   @@index([legId])
   @@index([driverId, businessDate])
   @@index([type, businessDate])
-  waitingArrivals TransportDeliveryWaitingSession[] @relation("WaitingArrival")
-  waitingClosing TransportDeliveryWaitingSession? @relation("WaitingClosing")
-  operationalDocuments TransportOperationalDocument[]
 }
 
 /// LY DO CHO — su that VAN HANH, khong phai mot muc gia. Xem `waiting.types.ts`.
@@ -4810,14 +4918,14 @@ enum TransportWaitingCloseReason {
 /// ca sau. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong `DROP` truoc khi commit.
 /// `transport-waiting-session-storage.spec.ts` doc chinh tep migration va do neu mot ten bien mat.
 model TransportDeliveryWaitingSession {
-  id                  String                        @id @default(cuid())
+  id                  String                            @id @default(cuid())
   runId               String
-  run                 TransportVehicleRun           @relation(fields: [runId], references: [id], onDelete: Restrict)
+  run                 TransportVehicleRun               @relation(fields: [runId], references: [id], onDelete: Restrict)
   /// BAT BUOC — mot lan cho luon xay ra tai mot diem giao cu the.
   legId               String
-  leg                 TransportRunLeg               @relation(fields: [legId], references: [id], onDelete: Restrict)
+  leg                 TransportRunLeg                   @relation(fields: [legId], references: [id], onDelete: Restrict)
   driverId            String?
-  driver              TransportDriver?              @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  driver              TransportDriver?                  @relation(fields: [driverId], references: [id], onDelete: Restrict)
   /// NEO: moc `DELIVERY_ARRIVAL` da mo duong cho phien nay. Moc do BAT BUOC co ban dinh vi
   /// (`DEFAULT_LOCATION_REQUIRED_TYPES`), nen khong co duong nao mo mot phien cho cho mot noi chua
   /// ai chung minh la da den.
@@ -4828,15 +4936,15 @@ model TransportDeliveryWaitingSession {
   /// mat mot can cu ma ho co quyen co. Bat bien that la "mot chang, mot phien DANG MO", va no nam
   /// o unique MOT PHAN `TransportDeliveryWaitingSession_openLeg_key`.
   arrivalCheckpointId String
-  arrivalCheckpoint   TransportRunCheckpoint        @relation("WaitingArrival", fields: [arrivalCheckpointId], references: [id], onDelete: Restrict)
+  arrivalCheckpoint   TransportRunCheckpoint            @relation("WaitingArrival", fields: [arrivalCheckpointId], references: [id], onDelete: Restrict)
   /// Moc `DELIVERY_ACCEPTED` da dong phien. NULL khi phien con mo hoac khi van phong dong.
-  closingCheckpointId String?                       @unique
-  closingCheckpoint   TransportRunCheckpoint?       @relation("WaitingClosing", fields: [closingCheckpointId], references: [id], onDelete: Restrict)
-  status              TransportWaitingSessionStatus @default(OPEN)
+  closingCheckpointId String?                           @unique
+  closingCheckpoint   TransportRunCheckpoint?           @relation("WaitingClosing", fields: [closingCheckpointId], references: [id], onDelete: Restrict)
+  status              TransportWaitingSessionStatus     @default(OPEN)
   reason              TransportWaitingReason
   closeReason         TransportWaitingCloseReason?
   /// GIO MAY CHU. Khong nhan tu than yeu cau, khong sua duoc.
-  startedAt           DateTime                      @default(now())
+  startedAt           DateTime                          @default(now())
   endedAt             DateTime?
   startedBy           String
   endedBy             String?
@@ -4844,9 +4952,10 @@ model TransportDeliveryWaitingSession {
   startClientEventId  String
   note                String?
   closeNote           String?
-  businessDate        String                        @db.VarChar(10)
-  createdAt           DateTime                      @default(now())
-  updatedAt           DateTime                      @updatedAt
+  businessDate        String                            @db.VarChar(10)
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+  waitingAllowances   TransportDriverWaitingAllowance[]
 
   @@unique([legId, startClientEventId], map: "TransportDeliveryWaitingSession_leg_event_key")
   @@index([arrivalCheckpointId])
@@ -4854,7 +4963,6 @@ model TransportDeliveryWaitingSession {
   @@index([legId, status])
   @@index([driverId, businessDate])
   @@index([status, startedAt])
-  waitingAllowances   TransportDriverWaitingAllowance[]
 }
 
 enum TransportWaitingAllowanceStatus {
@@ -5396,7 +5504,9 @@ model TransportTollTransactionCandidate {
 model TransportTollReviewDecision {
   id                     String                            @id @default(cuid())
   candidateId            String
-  candidate              TransportTollTransactionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// `Restrict`, KHONG `Cascade` — xem migration `20260915130000_transport_toll_append_only`.
+  /// Mot lich su chi-ghi-them ma xoa duoc bang cach xoa hang CHA thi khong con la lich su.
+  candidate              TransportTollTransactionCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
   action                 TransportTollReviewAction
   actor                  String
   at                     DateTime                          @default(now())

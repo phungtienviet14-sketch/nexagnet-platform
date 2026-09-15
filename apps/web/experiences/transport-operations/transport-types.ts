@@ -538,10 +538,18 @@ export interface FuelEntry {
   readonly updatedAt: string;
 }
 
+/**
+ * `locator` KHONG co mat — `#295` Lane V.
+ *
+ * API tung tra no o ba route (chi tiet phieu + hai route gan bang chung) trong khi be mat lai xe va
+ * hop thu doi xe deu da can than che. Tu `#295` ca ba deu cat, va guong nay di theo: mot truong con
+ * trong kieu ma khong bao gio den se lam nguoi doc tuong no dung duoc.
+ *
+ * Byte cua anh van lay duoc — qua route co xac thuc, bang `id`, khong bang khoa kho.
+ */
 export interface FuelReceiptEvidence {
   readonly id: string;
   readonly fuelEntryId: string;
-  readonly locator: string;
   readonly contentType: string | null;
   readonly byteSize: number | null;
   readonly capturedAt: string | null;

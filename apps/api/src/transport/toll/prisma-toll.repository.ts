@@ -462,8 +462,8 @@ export class PrismaTollRepository extends TollRepository {
     } catch (error) {
       if (isUniqueViolationOn(error, TOLL_IMPORT_DIGEST_UNIQUE)) {
         throw TransportDomainError.conflict(
-          'TOLL_IMPORT_FORMAT_UNSUPPORTED',
-          'Nguon nay vua duoc nap boi mot lenh khac',
+          'TOLL_IMPORT_CONCURRENT_WRITE',
+          'Nguon nay vua duoc nap boi mot lenh khac — doc lai ban nap do thay vi nap lai',
         );
       }
       throw error;

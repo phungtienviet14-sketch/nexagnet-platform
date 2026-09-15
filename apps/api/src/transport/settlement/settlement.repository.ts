@@ -6,6 +6,7 @@ import type {
   SettlementDirection,
   SettlementFlow,
 } from './settlement-flows.js';
+import type { FuelHandoffScanPosition } from './settlement.ports.js';
 import type {
   CommissionCalculation,
   CommissionRule,
@@ -287,4 +288,76 @@ export abstract class SettlementRepository {
   }>;
 
   abstract findCommissionByTrip(tripId: string): Promise<CommissionCalculation | null>;
+
+  /* --------------------- Con tro tieu thu ban giao --------------------- */
+
+  /**
+   * DA DOC TOI BAN NAO cua nhung ky duoc hoi. Tra ve mot ban do `reconciliationId -> revision`.
+   *
+   * Hoi CA LO chu khong tung ky: vong quet vua doc mot lo ban giao va can biet lo do con viec gi.
+   * Hoi tung ky se thanh N+1 truy van cho mot cau hoi von la mot.
+   *
+   * Ky VANG MAT khoi ban do = chua tieu thu ban nao. Do la mot trang thai KHAC voi "da tieu thu
+   * ban 0" — khong co ban 0, `revision` dem tu 1 (xem `TransportFuelSettlementHandoff`).
+   */
+  abstract fuelHandoffCursors(reconciliationIds: readonly string[]): Promise<Map<string, number>>;
+
+  /**
+   * DAY con tro len sau khi ban giao da duoc ghi thanh cong.
+   *
+   * ===========================================================================
+   * CHI TIEN, KHONG LUI. Lenh ghi co dieu kien `consumedRevision < revision`: hai vong quet chay
+   * song song, ben cham hon KHONG duoc keo con tro ve so cu cua no. Neu khong co dieu kien do,
+   * mot vong quet cham mot nhip se lam ky do duoc doc lai mai mai.
+   *
+   * Goi SAU khi ghi chung tu, khong truoc. Mot lan ghi hong phai de lai viec cho luot sau, chu
+   * khong de lai mot dau "da xong" gia — do la yeu cau 6 cua `#295` P0.
+   *
+   * `advanced: false` nghia la mot ai do da di truoc toi day roi, va do khong phai loi.
+   */
+  abstract advanceFuelHandoffCursor(input: {
+    readonly reconciliationId: string;
+    readonly revision: number;
+    readonly handoffId: string;
+  }): Promise<{ readonly advanced: boolean }>;
+
+  /* --------------------- Vi tri quet hop thu di ---------------------- */
+
+  /**
+   * NHIP TRUOC DUNG O DAU. `null` = bat dau lai tu dau hop thu.
+   *
+   * ===========================================================================
+   * BA HAM DUOI DAY GIU MOT TINH CHAT KHAC HAN con tro tieu thu o tren. Doc `settlement.ports.ts`
+   * (`FuelHandoffScanPosition`) truoc khi sua bat cu ham nao trong so chung.
+   *
+   * Con tro tieu thu giu cho SO TIEN dung. Vi tri quet giu cho vong quet CHAY. He thong nay da tung
+   * co con tro tieu thu hoan hao va VAN khong bao gio tra tien cho ky thu 501, vi no luon doc lai
+   * dung 500 hang dau tien.
+   */
+  abstract fuelHandoffScanPosition(): Promise<FuelHandoffScanPosition | null>;
+
+  /**
+   * DAY vi tri quet toi hang vua NHIN TOI — ke ca hang vua ghi HONG.
+   *
+   * ===========================================================================
+   * DAY LA CHO DE SAI NHAT TRONG CA CO CHE, nen viet ro:
+   *
+   * Mot phan xa tu nhien la *"ghi hong thi dung day vi tri, de con lam lai"*. Lam the la dung lai
+   * chinh cai bay vua thoat: 25 ky hong lien tiep se an tron chan ghi cua moi nhip, va moi ky lanh
+   * manh dung sau chung khong bao gio duoc nhin toi. Bo cong no cua ca doanh nghiep chet vi 25 hang
+   * hong — dung hinh dang cua loi cu, chi doi cho.
+   *
+   * Viec cua ky hong KHONG mat: `advanceFuelHandoffCursor` chua he duoc goi cho no, nen vong quet
+   * SAU se lam lai. Cai doi la LUC lam lai: vong sau, khong phai nhip sau.
+   */
+  abstract advanceFuelHandoffScan(position: FuelHandoffScanPosition): Promise<void>;
+
+  /**
+   * DA DOC TOI DUOI HOP THU — quay ve dau va dem them mot vong.
+   *
+   * Khong co ham nay thi vi tri quet chi tien mai, va hai thu se bi bo lai vinh vien: viec cua
+   * nhung ky GHI HONG (da bi di qua o tren), va mot ban sua doi phat ra voi `emittedAt` lui ve
+   * truoc vi tri hien tai.
+   */
+  abstract rewindFuelHandoffScan(): Promise<void>;
 }

@@ -147,6 +147,33 @@ export interface FuelHandoffFacts {
   readonly currencyCode: string;
   readonly acceptedLineCount: number;
   readonly acceptedLineIds: readonly string[];
+  /**
+   * LUC BAN GIAO DUOC PHAT, ISO-8601.
+   *
+   * Khong phai de hien thi. Day la ve trai cua khoa doc `(emittedAt, id)`, va la thu vong quet ghi
+   * lai de nhip sau biet minh dung o dau — xem `FuelHandoffScanPosition`.
+   */
+  readonly emittedAt: string;
+}
+
+/**
+ * VONG QUET DANG DUNG O DAU trong hop thu di.
+ *
+ * ===========================================================================
+ * KHAC HAN CON TRO TIEU THU, va gop hai thu nay lai la mot loi.
+ *
+ * Con tro tieu thu (`fuelHandoffCursors`) khoa theo KY DOI SOAT va tra loi *"ky nay con viec
+ * khong"*. No giu cho SO TIEN dung.
+ *
+ * Vi tri quet khoa theo HANG BAN GIAO va tra loi *"lan sau mo hop thu tu dau"*. No giu cho vong
+ * quet CHAY. Mot he thong co con tro tieu thu hoan hao van co the khong bao gio tra tien cho ky thu
+ * 501 — do la dung loi ma kieu nay sinh ra de chua.
+ *
+ * `null` = bat dau lai tu dau hop thu. Do la trang thai binh thuong sau moi vong quet tron.
+ */
+export interface FuelHandoffScanPosition {
+  readonly emittedAt: string;
+  readonly handoffId: string;
 }
 
 export abstract class FuelSettlementSource {
@@ -154,6 +181,31 @@ export abstract class FuelSettlementSource {
   abstract latestHandoff(reconciliationId: string): Promise<FuelHandoffFacts | null>;
   /** CA chuoi ban sua doi, theo thu tu `revision` tang dan. */
   abstract handoffRevisions(reconciliationId: string): Promise<FuelHandoffFacts[]>;
+  /**
+   * MOT TRANG hop thu di: ban giao moi nhat cua moi ky, cu truoc moi sau, bat dau ngay SAU `after`.
+   *
+   * ===========================================================================
+   * Hai ham tren tra loi cau hoi cua mot NGUOI DUNG dang xem mot ky. Ham nay tra loi cau hoi cua
+   * mot VONG QUET khong xem ky nao ca: *"con viec gi chua ai lam khong"*.
+   *
+   * ===========================================================================
+   * `after` LA THU DA THIEU, va thieu no thi cong no BIEN MAT.
+   *
+   * Ban dau ham nay chi nhan `limit` va luon tra ve `limit` hang dau tien. Vi con tro tieu thu nam
+   * ben `TX-05`, `TX-04` khong biet hang nao da doc roi — nen khi 500 ky dau deu da co cong no,
+   * nhip nao cung nhan lai dung 500 hang do va ky thu 501 khong bao gio duoc nhin thay.
+   *
+   * Nguoi doc giu vi tri cua chinh minh (`TransportSettlementFuelHandoffScan`) va noi ra o day.
+   * `null` = doc tu dau hop thu.
+   *
+   * Van khong co ham ghi nao o cong nay. Vong quet doc ban giao, doi chieu voi CON TRO TIEU THU
+   * cua chinh `TX-05`, roi ghi vao bang cua `TX-05`. `transport-fuel` khong bi cham vao, va cung
+   * khong duoc biet vi tri quet ton tai — no chi nhan mot tham so phan trang.
+   */
+  abstract pendingHandoffs(input: {
+    readonly after: FuelHandoffScanPosition | null;
+    readonly limit: number;
+  }): Promise<FuelHandoffFacts[]>;
 }
 
 interface HandoffRow {
@@ -168,6 +220,7 @@ interface HandoffRow {
   readonly currencyCode: string;
   readonly acceptedLineCount: number;
   readonly acceptedLineIds: readonly string[];
+  readonly emittedAt: string;
 }
 
 const toHandoffFacts = (handoff: HandoffRow): FuelHandoffFacts => ({
@@ -182,6 +235,7 @@ const toHandoffFacts = (handoff: HandoffRow): FuelHandoffFacts => ({
   currencyCode: handoff.currencyCode,
   acceptedLineCount: handoff.acceptedLineCount,
   acceptedLineIds: handoff.acceptedLineIds,
+  emittedAt: handoff.emittedAt,
 });
 
 @Injectable()
@@ -198,5 +252,19 @@ export class FuelSettlementSourceAdapter extends FuelSettlementSource {
   async handoffRevisions(reconciliationId: string): Promise<FuelHandoffFacts[]> {
     const revisions = await this.fuel.listHandoffRevisions(reconciliationId);
     return revisions.map(toHandoffFacts);
+  }
+
+  async pendingHandoffs(input: {
+    readonly after: FuelHandoffScanPosition | null;
+    readonly limit: number;
+  }): Promise<FuelHandoffFacts[]> {
+    const latest = await this.fuel.listLatestHandoffs({
+      after:
+        input.after === null
+          ? null
+          : { emittedAt: input.after.emittedAt, handoffId: input.after.handoffId },
+      limit: input.limit,
+    });
+    return latest.map(toHandoffFacts);
   }
 }

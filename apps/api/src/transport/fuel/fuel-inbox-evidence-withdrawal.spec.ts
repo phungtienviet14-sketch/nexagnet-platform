@@ -434,6 +434,59 @@ describe('#222 P1-C — go that, tren duong nghiep vu', () => {
   });
 });
 
+describe('#295 Lane V — dinh vi kho anh: kiem luc GHI, va khong ra toi client', () => {
+  /**
+   * Truoc lan sua nay, `attachFuelEvidenceSchema` nhan mot chuoi 1..500 ky tu va chuoi do di THANG
+   * xuong kho. Cong duy nhat kiem no la `TransportEvidenceService.read()` — tuc luc ai do MO anh
+   * ra. Nen mot dinh vi tro ra ngoai khu bang chung van NAM DUOC trong bang.
+   */
+  it('dinh vi tro ra ngoai khu bang chung bi tu choi NGAY LUC GAN', async () => {
+    const entry = await submitSlip();
+
+    await expect(attach(entry.id, 'media/zalo-inbox/anh-cua-khach.jpg')).rejects.toMatchObject({
+      reason: 'EVIDENCE_LOCATOR_OUT_OF_SCOPE',
+    });
+    /* Va khong hang nao duoc ghi — tu choi, khong phai ghi roi chan luc doc. */
+    expect(await repository.listEvidence(entry.id)).toHaveLength(0);
+  });
+
+  it('duong di len tren bi tu choi du co dung tien to', async () => {
+    const entry = await submitSlip();
+
+    await expect(
+      attach(entry.id, 'media/transport-evidence/../zalo-inbox/anh-cua-khach.jpg'),
+    ).rejects.toMatchObject({ reason: 'EVIDENCE_LOCATOR_OUT_OF_SCOPE' });
+  });
+
+  /**
+   * `locator` la khoa trong kho anh. Be mat lai xe (`#170`) va hop thu doi xe (`#222 P1-B`) deu da
+   * can than che no; duong GAN BANG CHUNG thi khong, va do la su khong nhat quan ma `#295` do ra.
+   */
+  it('ket qua gan bang chung KHONG mang dinh vi ra ngoai', async () => {
+    const entry = await submitSlip();
+
+    const evidence = await attach(entry.id, 'media/transport-evidence/2026/09/hop-le.pdf');
+
+    expect(evidence).not.toHaveProperty('locator');
+    /* Nhung hang trong kho VAN giu dinh vi — do la thu don duoc object khi lan xoa byte hong. */
+    expect((await repository.listEvidence(entry.id))[0]?.locator).toBe(
+      'media/transport-evidence/2026/09/hop-le.pdf',
+    );
+  });
+
+  it('chi tiet phieu o be mat van hanh cung KHONG mang dinh vi ra ngoai', async () => {
+    const entry = await submitSlip();
+    await attach(entry.id, 'media/transport-evidence/2026/09/chi-tiet.pdf');
+
+    const detail = await read.fuelEntryDetail(entry.id);
+
+    expect(detail.evidence).toHaveLength(1);
+    expect(detail.evidence[0]).not.toHaveProperty('locator');
+    /* Nhung nhung gi man hinh THAT SU can thi con nguyen. */
+    expect(detail.evidence[0]?.contentType).toBe('application/pdf');
+  });
+});
+
 describe('#222 P1-C — pham vi CUA CHINH TOI chan tu buoc doc, truoc moi phep tim', () => {
   /**
    * Day la doi ban doi cua acceptance 10: *"Driver A cannot remove/read Driver B evidence"*.
