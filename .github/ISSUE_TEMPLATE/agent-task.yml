@@ -1,0 +1,106 @@
+# Hop dong task cho agent — ban thay the AUTOPILOT_TASK_V0.
+#
+# KENH MAY DOC LA NHAN, KHONG PHAI THAN ISSUE.
+#
+# GitHub Issue Forms chuyen moi trang cau tra loi thanh MARKDOWN roi ghep vao than Issue — khong co
+# metadata co cau truc nao di kem. Nen mot workflow doc than Issue van phai tu parse markdown, tuc
+# van la mot parser tu viet. Do la ly do bieu mau nay KHONG cho gia tri nao dieu khien hanh vi:
+#
+#   - `labels:` ben duoi gan san `agent:task` khi Issue duoc tao;
+#   - muc rui ro do NGUOI gan bang nhan `risk:low|medium|high` sau khi tao;
+#   - workflow pilot chi doc NHAN, va chi nhan `agent:ready` moi kich hoat duoc no.
+#
+# Than Issue la van xuoi cho agent doc. No KHONG duoc coi la lenh: noi dung Issue tren mot repo
+# public la du lieu khong tin cay, va gh-aw tu chen prompt XPIA de agent doi xu voi no dung nhu vay.
+name: Task cho agent
+description: Mot viec ky thuat de agent thuc hien — tao PR, CI, review doc lap, roi nguoi merge
+title: "[TASK] "
+labels: ["agent:task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bieu mau nay thay cho khoi JSON `AUTOPILOT_TASK_V0` cu.
+
+        **Sau khi tao Issue**, gan them nhan de chuyen trang thai:
+
+        | Nhan | Nghia |
+        |---|---|
+        | `risk:low` / `risk:medium` / `risk:high` | Muc rui ro. **Bat buoc** truoc khi gan `agent:ready` |
+        | `agent:ready` | Cho phep agent bat dau. Nhan nay tu dong bi go khi workflow chay |
+        | `needs-human` | Dung lai, cho nguoi xu ly |
+
+        `risk:high` **khong** duoc agent tu dong hoa: workflow tu choi hanh dong va tra ve nguoi.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Muc tieu
+      description: Mot doan. Ket qua mong muon, khong phai cach lam.
+      placeholder: Sau task nay, ... phai ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Pham vi
+      description: Duong dan/goi duoc phep cham. Ghi ca thu KHONG duoc cham.
+      placeholder: |
+        Duoc: apps/api/src/orders/**
+        Khong duoc: deploy/**, tenants/**
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Tieu chi chap nhan
+      description: Dieu gi lam bang chung task da xong. Uu tien thu do duoc bang mot lenh.
+      placeholder: |
+        - [ ] `pnpm test` xanh
+        - [ ] 7 required check xanh tren dung HEAD cua PR
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Muc rui ro de xuat
+      description: >-
+        Chi la de xuat cho nguoi doc. Gia tri co hieu luc la NHAN `risk:*` ban gan sau khi tao Issue
+        — vi tra loi o day chi thanh chu trong than Issue, khong thanh du lieu.
+      options:
+        - "low — mot mien, co test bao, khong cham deploy/secret"
+        - "medium — nhieu mien hoac doi hop dong noi bo"
+        - "high — cham deploy, secret, ruleset, du lieu khach, hoac migration"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: risk-areas
+    attributes:
+      label: Vung cham vao
+      options:
+        - label: Ma nghiep vu (`apps/`, `packages/`)
+        - label: CI / workflow (`.github/`)
+        - label: Deploy / ha tang (`deploy/`)
+        - label: Goi khach (`tenants/`)
+        - label: Schema co so du lieu / migration
+        - label: Secret hoac quyen
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Boi canh
+      description: Link Issue/PR lien quan, HEAD da do, quyet dinh da chot. Khong dan PII cua khach.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: ack
+    attributes:
+      label: Xac nhan
+      options:
+        - label: Task nay khong dung du lieu khach that va khong deploy production
+          required: true

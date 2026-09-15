@@ -55,7 +55,14 @@ Nguồn nghiệp vụ của nó nằm bên khách:
 Ranh giới giữ nguyên như mọi chỗ khác trong `docs/`: **sự kiện của khách ở `khach-hang/`, thiết kế
 của chúng ta ở `kien-truc/`**.
 
-### Giao thức Autopilot V0 (03/09/2026)
+### Autopilot — official-first (15/09/2026)
+
+| File                                                                                                      | Là gì                                                                                                                                                                                  | Không phải gì                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`phat-trien/van-hanh/autopilot-v2-official-first.md`](phat-trien/van-hanh/autopilot-v2-official-first.md) | **Kiểm kê + ma trận thay thế + kiến trúc đích + kế hoạch xoá** — đo lại gh-aw `v0.88.7`, năng lực chính thức của GitHub/Codex/Copilot, ràng buộc credential đo được của chính repo này | Chưa chạy — pilot ở trạng thái **trơ** (staged, chưa biên dịch). Chưa xoá gì khỏi `main`: bước đó nằm sau cổng review độc lập §14 của #309 |
+| [`kien-truc/adr-0001-autopilot-official-first.md`](kien-truc/adr-0001-autopilot-official-first.md)         | **ADR — `DECISION = ADOPT_GITHUB_NATIVE_GH_AW`**: trạng thái nghiệp vụ về GitHub gốc, mặt phẳng thực thi về gh-aw ghim bản                                                            | Chưa được duyệt — trạng thái **ĐỀ XUẤT**                                                                                                   |
+
+### Giao thức Autopilot V0 (03/09/2026) — **SUPERSEDED bởi ADR-0001**
 
 | File                                                                                           | Là gì                                                                                                                                                                                                        | Không phải gì                                                                                                         |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
