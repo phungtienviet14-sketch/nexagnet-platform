@@ -1,0 +1,181 @@
+{
+  "note": "Bang chung DAN DEN QUYET DINH cua bao cao gh-aw. Moi muc o day phai co mot permalink ghim SHA trong `docs/phat-trien/van-hanh/gh-aw-evaluation-v0.md`, va `anchor` phai con nam dung tai `line` trong ban clone gh-aw tai SHA da ghim. Sai mot trong hai dieu do thi phep dan xuat hoac bai kiem se do — bao cao khong the lang le mat bang chung, va bang chung khong the lang le troi khoi upstream.",
+  "claims": [
+    {
+      "id": "AUTH_BINDING_ACCEPTS_ANY_SECRET_NAME",
+      "area": "oauth",
+      "path": "pkg/workflow/engine_definition.go",
+      "line": 292,
+      "anchor": "Secret string `yaml:\"secret\"`",
+      "says": "`EngineDefinition.Auth` nhan mot TEN BI MAT bat ky, khong co danh sach trang."
+    },
+    {
+      "id": "REQUIRED_SECRETS_INCLUDE_AUTH_BINDINGS",
+      "area": "oauth",
+      "path": "pkg/workflow/behavior_defined_engine.go",
+      "line": 113,
+      "anchor": "addSecret(binding.Secret)",
+      "says": "Ten bi mat tu `auth[]` di vao danh sach bi mat bat buoc cua engine."
+    },
+    {
+      "id": "BEHAVIOR_ENGINE_INJECTS_SECRET_ENV",
+      "area": "oauth",
+      "path": "pkg/workflow/behavior_defined_engine.go",
+      "line": 599,
+      "anchor": "env[binding.Secret] = \"${{ secrets.\" + binding.Secret + \" }}\"",
+      "says": "Trinh bien dich tiem thang `<TEN>: ${{ secrets.<TEN> }}` vao env cua buoc chay tac nhan."
+    },
+    {
+      "id": "BEHAVIOR_ENGINE_SECRET_SURVIVES_FILTER",
+      "area": "oauth",
+      "path": "pkg/workflow/behavior_defined_engine.go",
+      "line": 653,
+      "anchor": "filteredEnv := FilterEnvForSecrets(env, e.GetRequiredSecretNames(workflowData))",
+      "says": "Bo loc bi mat giu lai dung nhung ten do `auth[]` khai — nen token OAuth khong bi cat."
+    },
+    {
+      "id": "SHARED_ENGINE_DEFINITION_IS_RECOGNISED",
+      "area": "oauth",
+      "path": "pkg/workflow/engine_validation.go",
+      "line": 166,
+      "anchor": "_, hasBehaviors := obj[\"behaviors\"]",
+      "says": "Mot tep dung chung co khoi `behaviors` duoc nhan la DINH NGHIA ENGINE, khong phai loi cau hinh."
+    },
+    {
+      "id": "FILTER_ENV_FOR_SECRETS",
+      "area": "oauth",
+      "path": "pkg/workflow/engine_helpers.go",
+      "line": 479,
+      "anchor": "func FilterEnvForSecrets(env map[string]string, allowedNamesAndKeys []string) map[string]string {",
+      "says": "Bo loc chan moi tham chieu `${{ secrets.* }}` khong nam trong danh sach cho phep."
+    },
+    {
+      "id": "BUILTIN_ENGINE_ENV_REJECTS_SECRETS",
+      "area": "oauth",
+      "path": "pkg/workflow/strict_mode_env_validation.go",
+      "line": 140,
+      "anchor": "strict mode: secrets detected in 'engine.env' section are excluded from the agent sandbox",
+      "says": "Duong thu hai — tiem bi mat qua `engine.env` cua engine dung san — bi tu choi luc bien dich."
+    },
+    {
+      "id": "BUILTIN_CLAUDE_REQUIRES_PROVIDER_SECRET",
+      "area": "oauth",
+      "path": "pkg/workflow/claude_engine.go",
+      "line": 70,
+      "anchor": "func (e *ClaudeEngine) GetRequiredSecretNames(workflowData *WorkflowData) []string {",
+      "says": "Engine `claude` DUNG SAN lay ten bi mat tu nha cung cap, khong tu cau hinh nguoi dung."
+    },
+    {
+      "id": "ANTHROPIC_PROVIDER_SECRET_NAME",
+      "area": "oauth",
+      "path": "pkg/workflow/llm_provider.go",
+      "line": 91,
+      "anchor": "return []string{\"ANTHROPIC_API_KEY\"}",
+      "says": "Voi nha cung cap Anthropic, ten bi mat duy nhat cua engine dung san la `ANTHROPIC_API_KEY`."
+    },
+    {
+      "id": "DEFAULT_CLAUDE_CODE_VERSION",
+      "area": "oauth",
+      "path": "pkg/constants/version_constants.go",
+      "line": 35,
+      "anchor": "const DefaultClaudeCodeVersion Version = \"2.1.247\"",
+      "says": "gh-aw cai CLI npm `@anthropic-ai/claude-code` ghim phien ban, khong goi action cua Anthropic."
+    },
+    {
+      "id": "SAFE_OUTPUTS_JOB_NEEDS_AGENT",
+      "area": "safe-outputs-coupling",
+      "path": "pkg/workflow/compiler_safe_outputs_job.go",
+      "line": 733,
+      "anchor": "BuildPropertyAccess(fmt.Sprintf(\"needs.%s.result\", constants.AgentJobName))",
+      "says": "Dieu kien chay cua job `safe_outputs` doc ket qua job `agent` — ten job ghim cung trong ma."
+    },
+    {
+      "id": "PERMISSIONS_COMPUTED_AT_COMPILE_TIME",
+      "area": "permission-derivation",
+      "path": "pkg/workflow/compiler_safe_outputs_job.go",
+      "line": 124,
+      "anchor": "permissions := ComputePermissionsForSafeOutputs(data.SafeOutputs)",
+      "says": "Quyen duoc tinh LUC BIEN DICH tu loai safe output, roi nuong vao `.lock.yml`."
+    },
+    {
+      "id": "ADD_COMMENT_GRANTS_BOTH_SCOPES",
+      "area": "permission-derivation",
+      "path": "pkg/workflow/add_comment.go",
+      "line": 129,
+      "anchor": "func buildAddCommentPermissions(config *AddCommentsConfig) *Permissions {",
+      "says": "`add-comment` cap CA `issues: write` lan `pull-requests: write`; `config.Target` khong duoc doc."
+    },
+    {
+      "id": "ACTIVATION_STATUS_COMMENT_ISSUES_ONLY",
+      "area": "permission-derivation",
+      "path": "pkg/workflow/compiler_activation_job.go",
+      "line": 182,
+      "anchor": "Status comments for issue and pull request related events use issue comment endpoints.",
+      "says": "Cung mot SHA, nhanh activation lai chi cap `issues: write` — gh-aw tu mau thuan voi chinh no."
+    },
+    {
+      "id": "ACTIVATION_SCOPE_TEST_ASSERTS_ABSENCE",
+      "area": "permission-derivation",
+      "path": "pkg/workflow/activation_permissions_scope_test.go",
+      "line": 700,
+      "anchor": "assert.NotContains(t, activationJobSection, \"pull-requests: write\"",
+      "says": "Mau thuan tren duoc KHOA bang mot bai kiem assert su VANG MAT cua `pull-requests: write`."
+    },
+    {
+      "id": "VALIDATION_CONFIG_MISSING_IS_EMPTY",
+      "area": "validation-fail-open",
+      "path": "actions/setup/js/safe_output_type_validator.cjs",
+      "line": 251,
+      "anchor": "const configJson = process.env.GH_AW_VALIDATION_CONFIG;",
+      "says": "Luat xac thuc den tu bien moi truong, khong nam trong ma nguon."
+    },
+    {
+      "id": "UNKNOWN_TYPE_IS_VALID",
+      "area": "validation-fail-open",
+      "path": "actions/setup/js/safe_output_type_validator.cjs",
+      "line": 766,
+      "anchor": "return { isValid: true, normalizedItem: item };",
+      "says": "Thieu cau hinh thi moi item thanh 'loai la' va duoc cho qua NGUYEN VEN — fail-open."
+    },
+    {
+      "id": "CREATE_COMMENT_IS_UNCONDITIONAL",
+      "area": "idempotency",
+      "path": "actions/setup/js/add_comment.cjs",
+      "line": 1021,
+      "anchor": "const { data } = await githubClient.rest.issues.createComment({",
+      "says": "Dang comment khong tra cuu truoc, khong khoa idempotency — ngu nghia at-least-once."
+    },
+    {
+      "id": "HANDLER_LOOP_CONTINUES_AFTER_FAILURE",
+      "area": "idempotency",
+      "path": "actions/setup/js/safe_output_handler_manager.cjs",
+      "line": 1226,
+      "anchor": "failed: ${getErrorMessage(error)}",
+      "says": "Mot handler hong thi vong lap ghi log roi CHAY TIEP — khong rollback, khong hoa giai."
+    },
+    {
+      "id": "PRIVILEGED_JOB_KEEPS_PUSH_CREDENTIALS",
+      "area": "privileged-checkout",
+      "path": "pkg/workflow/compiler_safe_outputs_steps.go",
+      "line": 43,
+      "anchor": "checkoutMgr.SetKeepCredentialsForPush(true)",
+      "says": "Job dac quyen checkout va giu lai thong tin xac thuc day duoc len repo."
+    },
+    {
+      "id": "DEFAULT_REF_OVERRIDE_IS_DEAD_CODE",
+      "area": "privileged-checkout",
+      "path": "pkg/workflow/checkout_manager.go",
+      "line": 200,
+      "anchor": "func (cm *CheckoutManager) SetDefaultRefOverride(ref string) {",
+      "says": "Co ham ghim ref tin cay nhung khong noi nao goi — nen checkout dac quyen giai ra ref cua su kien."
+    },
+    {
+      "id": "AGENT_JOB_MUST_BE_READ_ONLY",
+      "area": "agent-read-only",
+      "path": "pkg/workflow/dangerous_permissions_validation.go",
+      "line": 83,
+      "anchor": "The agent job must not have write permissions.",
+      "says": "Ranh gioi khong-tin-cay duoc cuong che bang TU CHOI BIEN DICH — diem gh-aw manh hon Nexagent."
+    }
+  ]
+}

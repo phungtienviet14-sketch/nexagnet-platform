@@ -1,0 +1,11 @@
+{
+  "name": "@netviet/poc-gh-aw-evaluation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PoC danh gia github/gh-aw lam substrate Safe Outputs (Issue #194) — chi bang chung, khong chay production",
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "verify:upstream": "node derive-fixtures.mjs"
+  }
+}

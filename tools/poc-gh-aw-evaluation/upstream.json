@@ -1,0 +1,11 @@
+{
+  "repo": "github/gh-aw",
+  "repoUrl": "https://github.com/github/gh-aw",
+  "auditedSha": "82239c030d6a1ef6ec8b87a80a1346eeef211f8d",
+  "auditedTag": "v0.88.4",
+  "auditedCommitDate": "2026-09-04T06:02:13Z",
+  "license": "MIT",
+  "licenseHolder": "GitHub, Inc.",
+  "permalinkBase": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d",
+  "note": "Moi bang chung trong goi nay duoc DAN XUAT tu dung commit tren. Khong floating main. Chay `node verify-against-upstream.mjs` voi mot ban clone tai dung SHA de chung minh fixtures chua troi."
+}
