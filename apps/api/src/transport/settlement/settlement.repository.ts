@@ -6,7 +6,7 @@ import type {
   SettlementDirection,
   SettlementFlow,
 } from './settlement-flows.js';
-import type { FuelHandoffScanPosition } from './settlement.ports.js';
+import type { FuelHandoffScanPosition, FuelHandoffScanState } from './settlement.ports.js';
 import type {
   CommissionCalculation,
   CommissionRule,
@@ -324,7 +324,7 @@ export abstract class SettlementRepository {
   /* --------------------- Vi tri quet hop thu di ---------------------- */
 
   /**
-   * NHIP TRUOC DUNG O DAU. `null` = bat dau lai tu dau hop thu.
+   * NHIP TRUOC DUNG O DAU, VA O VONG THU MAY. `position: null` = bat dau lai tu dau hop thu.
    *
    * ===========================================================================
    * BA HAM DUOI DAY GIU MOT TINH CHAT KHAC HAN con tro tieu thu o tren. Doc `settlement.ports.ts`
@@ -334,7 +334,7 @@ export abstract class SettlementRepository {
    * co con tro tieu thu hoan hao va VAN khong bao gio tra tien cho ky thu 501, vi no luon doc lai
    * dung 500 hang dau tien.
    */
-  abstract fuelHandoffScanPosition(): Promise<FuelHandoffScanPosition | null>;
+  abstract fuelHandoffScan(): Promise<FuelHandoffScanState>;
 
   /**
    * DAY vi tri quet toi hang vua NHIN TOI — ke ca hang vua ghi HONG.
@@ -353,11 +353,38 @@ export abstract class SettlementRepository {
   abstract advanceFuelHandoffScan(position: FuelHandoffScanPosition): Promise<void>;
 
   /**
-   * DA DOC TOI DUOI HOP THU — quay ve dau va dem them mot vong.
+   * DA DOC TOI DUOI HOP THU — quay ve dau va dem them mot vong, NEU trang thai chua doi.
    *
    * Khong co ham nay thi vi tri quet chi tien mai, va hai thu se bi bo lai vinh vien: viec cua
    * nhung ky GHI HONG (da bi di qua o tren), va mot ban sua doi phat ra voi `emittedAt` lui ve
    * truoc vi tri hien tai.
+   *
+   * ===========================================================================
+   * `expected` LA BAT BUOC, va day la cho de sai thu hai cua ca co che.
+   *
+   * Ham nay tung khong co tham so nao: quay ve dau duoc coi la LUON hop le, vi no chi keo vi tri ve
+   * `null`. Lap luan do sai o dung mot cho — no gia dinh chi co MOT tien trinh quet. Lich quet cua
+   * duong nay (`fuel-handoff-drain.scheduler.ts`) chi chan trung LAP TRONG MOT TIEN TRINH; nhieu
+   * tien trinh API cung quet la mot hinh dang trien khai that.
+   *
+   * Voi hai tien trinh, mot lan ghi tran keo lui duoc tien do THAT:
+   *
+   *     A doc trang thai `S`, cham day hop thu, roi KHUNG lai (GC, mang, lich CPU)
+   *     B cham day hop thu -> quay ve dau
+   *     C quet vong moi    -> tien toi `H`
+   *     A tinh day, quay ve dau VO DIEU KIEN -> `H` bi xoa
+   *
+   * Tien khong sai (`@@unique([sourceContext, sourceId])` van chan cong no thu hai), nhung vong
+   * quet co the bi day lui lai mai — dung cai tinh chat SONG ma vi tri quet sinh ra de giu.
+   *
+   * Nen nguoi goi phai noi ro NO DA THAY GI khi ket luan la het hop thu, va lan ghi chi xay ra neu
+   * trang thai ben VAN la trang thai do. Doc `FuelHandoffScanState` de biet vi sao phep so sanh
+   * phai gom ca `cycles` chu khong rieng `position`.
+   *
+   * `rewound: false` = mot tien trinh khac da di truoc; lan quay ve dau nay la CU va phai khong
+   * lam gi. Do KHONG phai loi, va cung KHONG phai mot lan quay ve dau.
    */
-  abstract rewindFuelHandoffScan(): Promise<void>;
+  abstract rewindFuelHandoffScan(
+    expected: FuelHandoffScanState,
+  ): Promise<{ readonly rewound: boolean }>;
 }

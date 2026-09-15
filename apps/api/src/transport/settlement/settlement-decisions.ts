@@ -207,6 +207,19 @@ export const FUEL_HANDOFF_DRAIN_REASONS = [
    * het hop thu — va do la mot su co, du khong co mot dong loi nao.
    */
   'FUEL_HANDOFF_SCAN_WRAPPED',
+  /**
+   * DA TOI DUOI HOP THU, NHUNG MOT TIEN TRINH KHAC DA DI TRUOC — khong quay ve dau.
+   *
+   * Tach khoi `FUEL_HANDOFF_SCAN_WRAPPED` vi hai ma nay tra loi hai cau hoi van hanh khac han
+   * nhau. Ma tren noi *"vong quet chay deu"*. Ma nay noi *"co bao nhieu tien trinh dang quet cung
+   * mot hop thu"*, va cau tra loi cho no doc duoc ngay tu tan suat: vai lan mot ngay la binh
+   * thuong (hai ban sao API gap nhau); lien tuc o moi nhip la mot dau hieu rang so ban sao, hay
+   * chu ky quet, can duoc xem lai.
+   *
+   * KHONG phai loi, va cung KHONG phai mot lan quay ve dau. Lan quay ve dau THAT se do tien trinh
+   * kia phat, hoac do chinh nhip sau cua tien trinh nay phat sau khi doc lai trang thai moi.
+   */
+  'FUEL_HANDOFF_SCAN_REWIND_STALE',
 ] as const;
 export type FuelHandoffDrainReason = (typeof FUEL_HANDOFF_DRAIN_REASONS)[number];
 
@@ -284,5 +297,7 @@ export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
     FUEL_HANDOFF_INGEST_FAILED: 'Ghi công nợ thất bại — việc vẫn còn, con trỏ giữ nguyên',
     FUEL_HANDOFF_BATCH_SATURATED: 'Lô đọc chạm trần — còn kỳ chưa nhìn tới trong nhịp này',
     FUEL_HANDOFF_SCAN_WRAPPED: 'Đã đọc tới cuối hộp thư — vòng quét quay về đầu',
+    FUEL_HANDOFF_SCAN_REWIND_STALE:
+      'Tiến trình khác đã đi trước — bỏ lượt quay về đầu này, không ghi gì',
   } satisfies Record<TransportSettlementDecisionReason, string>,
 });

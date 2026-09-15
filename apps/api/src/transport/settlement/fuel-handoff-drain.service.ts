@@ -6,6 +6,7 @@ import {
   FuelSettlementSource,
   type FuelHandoffFacts,
   type FuelHandoffScanPosition,
+  type FuelHandoffScanState,
 } from './settlement.ports.js';
 import { SettlementRepository } from './settlement.repository.js';
 import { SettlementService } from './settlement.service.js';
@@ -59,6 +60,34 @@ import { SettlementService } from './settlement.service.js';
  *
  * Gop hai thu do lai se lam ca hai deu mo nghia. Chung co hai vong doi khac nhau: con tro tieu thu
  * song mai theo ky doi soat; vi tri quet bi xoa sach moi vong.
+ *
+ * ============================================================================================
+ * 0bis. MOT VONG SOAT THU HAI: XOA SACH MOI VONG THI AI DUOC PHEP XOA?
+ * ============================================================================================
+ *
+ * Doan nay duoc them sau `INDEPENDENT_CHATGPT_REVIEW_2`, va no ghi lai loi thu hai cua chinh tep
+ * nay — cung ho voi loi tren, chi nho hon.
+ *
+ * Doan 0 noi "vi tri quet bi xoa sach moi vong". Cau do dung, nhung no bo qua mot cau hoi: AI xoa?
+ * Ban dau cau tra loi la *"bat cu ai toi duoi hop thu"*, va lan xoa khong co dieu kien nao. Lap
+ * luan hau thuan nghe rat hop ly: quay ve dau chi keo vi tri ve `null`, nen no luon hop le.
+ *
+ * Lap luan do chi dung voi MOT tien trinh quet. `fuel-handoff-drain.scheduler.ts` chi chan trung
+ * lap TRONG MOT TIEN TRINH (`ticking` la mot bien cuc bo); nhieu ban sao API cung quet mot hop thu
+ * la hinh dang trien khai that. Va voi hai tien trinh:
+ *
+ *     A doc trang thai, cham day hop thu, roi KHUNG lai (GC, mang, lich CPU)
+ *     B cham day hop thu -> quay ve dau
+ *     C quet vong moi    -> tien toi `H`
+ *     A tinh day         -> quay ve dau VO DIEU KIEN, va `H` bien mat
+ *
+ * Tien khong sai — `@@unique([sourceContext, sourceId])` van chan cong no thu hai, dung nhu doan 2
+ * noi. Cai sai la SONG: tien do that bi keo lui, va lap lai du lau thi nhung hang nam sau lai phai
+ * xep hang lai tu dau mai.
+ *
+ * Chua bang mot phep so sanh truoc khi ghi: nguoi goi noi ro NO DA THAY GI, va lan xoa chi xay ra
+ * neu trang thai ben van la thu do. Xem `wrap()` o duoi, va `FuelHandoffScanState` de biet vi sao
+ * phep so sanh phai gom ca SO HIEU VONG chu khong rieng vi tri.
  *
  * ============================================================================================
  * 1. KHONG CO NUT NGUOI DUNG NAO O DAY
@@ -218,7 +247,8 @@ export class FuelHandoffDrainService {
    * thu no can (vi tri quet, con tro tieu thu) deu nam trong PostgreSQL.
    */
   async drain(bounds: FuelHandoffDrainBounds = DEFAULT_BOUNDS): Promise<FuelHandoffDrainSummary> {
-    const from = await this.repository.fuelHandoffScanPosition();
+    const scan = await this.repository.fuelHandoffScan();
+    const from = scan.position;
     const page = await this.readOutbox(from, bounds.scanPage);
     if (page === null) return EMPTY_SUMMARY;
 
@@ -231,7 +261,7 @@ export class FuelHandoffDrainService {
      */
     if (page.length === 0) {
       if (from === null) return EMPTY_SUMMARY;
-      return await this.wrap(from);
+      return await this.wrap(scan, from);
     }
 
     const cursors = await this.repository.fuelHandoffCursors(
@@ -284,21 +314,53 @@ export class FuelHandoffDrainService {
      * cung co the vua het. Nhip sau se biet.
      */
     if (!saturated && page.length < bounds.scanPage) {
-      await this.wrap(position);
-      return { ingested, alreadyCurrent, failed, saturated, wrapped: true };
+      const { wrapped } = await this.wrap(scan, position);
+      return { ingested, alreadyCurrent, failed, saturated, wrapped };
     }
 
     if (position !== null) await this.repository.advanceFuelHandoffScan(position);
     return { ingested, alreadyCurrent, failed, saturated, wrapped: false };
   }
 
-  /** QUAY VE DAU HOP THU. Tach ra vi no duoc goi tu hai cho voi cung mot y nghia. */
-  private async wrap(at: FuelHandoffScanPosition | null): Promise<FuelHandoffDrainSummary> {
-    await this.repository.rewindFuelHandoffScan();
-    this.report('allowed', 'FUEL_HANDOFF_SCAN_WRAPPED', {
+  /**
+   * QUAY VE DAU HOP THU. Tach ra vi no duoc goi tu hai cho voi cung mot y nghia.
+   *
+   * ===========================================================================
+   * HAI THAM SO, VA CHUNG KHONG PHAI MOT. Doan nay duoc viet sau `INDEPENDENT_CHATGPT_REVIEW_2`.
+   *
+   * `expected` la trang thai ben ma nhip nay DOC RA luc bat dau, tuc thu bien minh cho ket luan
+   * "da het hop thu". Lan ghi chi xay ra neu trang thai ben van la no.
+   *
+   * `at` chi la hang cuoi cung nhin toi, va no o day DUY NHAT de ghi log.
+   *
+   * Cam ghep hai thu lam mot. O duong trang-ngan, `at` la hang cuoi cua trang va hang do CHUA TUNG
+   * duoc ghi xuong (duong nay khong goi `advanceFuelHandoffScan`) — lay no lam moc so sanh thi moi
+   * lan quay ve dau se deu truot, va vong quet khong bao gio quan duoc nua. Thu duoc ghi xuong,
+   * va vi the thu so sanh duoc, la `expected`.
+   *
+   * `wrapped: false` = mot tien trinh khac da di truoc trong luc nhip nay dang chay. KHONG ghi gi
+   * them (ke ca `advanceFuelHandoffScan`): anh chup cua nhip nay da cu, va tien do that su gio la
+   * cua ho. Viec khong mat — con tro TIEU THU nam rieng, nen nhip sau doc lai trang thai moi va
+   * lam tiep tu do.
+   */
+  private async wrap(
+    expected: FuelHandoffScanState,
+    at: FuelHandoffScanPosition | null,
+  ): Promise<FuelHandoffDrainSummary> {
+    const { rewound } = await this.repository.rewindFuelHandoffScan(expected);
+    const detail = {
       lastHandoffId: at?.handoffId ?? null,
       lastEmittedAt: at?.emittedAt ?? null,
-    });
+      fromHandoffId: expected.position?.handoffId ?? null,
+      fromCycle: expected.cycles,
+    };
+
+    if (!rewound) {
+      this.report('denied', 'FUEL_HANDOFF_SCAN_REWIND_STALE', detail);
+      return EMPTY_SUMMARY;
+    }
+
+    this.report('allowed', 'FUEL_HANDOFF_SCAN_WRAPPED', detail);
     return { ...EMPTY_SUMMARY, wrapped: true };
   }
 

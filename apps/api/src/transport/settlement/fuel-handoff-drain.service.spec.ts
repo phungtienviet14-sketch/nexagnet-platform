@@ -431,4 +431,48 @@ describe('Vong quet ban giao cay xang — TIEN DO va CONG BANG', () => {
       handoffId: rows[1]!.handoffId,
     });
   });
+
+  it('V-LIVE-5: mot nhip CU khong bao cao la da quan vong, va khong ghi de tien do moi', async () => {
+    /*
+     * ===========================================================================
+     * `ticking` cua lich quet chi chan trung lap TRONG MOT TIEN TRINH. Nhieu ban sao API cung quet
+     * mot hop thu la hinh dang trien khai that, va bai nay dung lai canh do o tang ung dung: mot
+     * nhip doc trang thai quet, bi cham, roi ve toi cho quay-ve-dau MUON.
+     *
+     * `transport-fuel-handoff-drain.int.spec.ts` (`V-P0-17`) chay lai chinh canh nay tren Postgres
+     * that, va cai no chung minh la menh de `WHERE`. Bai o day kiem mot thu khac va nhanh hon:
+     * rang DICH VU chiu doc ket qua tu choi va bao `wrapped: false`, thay vi bao mot vong quan GIA
+     * — lich quet va be mat chan doan deu doc dung truong do de tra loi "vong quet co chay khong".
+     */
+    const rows = handoffRun(2);
+    const repository = new InMemorySettlementRepository();
+    const tienDoMoi = { emittedAt: emittedAt(9), handoffId: 'h-tien-do-moi' };
+
+    /* Dat mot vi tri quet dang co de nhip duoi doc ra mot anh chup KHONG rong. */
+    await repository.advanceFuelHandoffScan({ emittedAt: emittedAt(1), handoffId: 'h001' });
+
+    /*
+     * CHO KHUNG LAI, dat vao mot diem `await` THAT: `drain()` doc trang thai quet truoc khi doc hop
+     * thu, nen viec chen o day roi dung khoang giua "da doc trang thai" va "ket luan het hop thu".
+     */
+    let daChen = false;
+    const chenGiuaNhip = new (class extends FakeOutbox {
+      override async pendingHandoffs(): Promise<FuelHandoffFacts[]> {
+        if (!daChen) {
+          daChen = true;
+          const cuaB = await repository.rewindFuelHandoffScan(await repository.fuelHandoffScan());
+          expect(cuaB.rewound).toBe(true);
+          await repository.advanceFuelHandoffScan(tienDoMoi);
+        }
+        return [];
+      }
+    })(rows);
+
+    const { drain } = build(chenGiuaNhip, repository);
+    const summary = await drain.drain({ scanPage: 10, drainBatch: 10 });
+
+    expect(daChen).toBe(true);
+    expect(summary.wrapped).toBe(false);
+    expect((await repository.fuelHandoffScan()).position).toEqual(tienDoMoi);
+  });
 });

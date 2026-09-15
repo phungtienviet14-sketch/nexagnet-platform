@@ -176,6 +176,37 @@ export interface FuelHandoffScanPosition {
   readonly handoffId: string;
 }
 
+/**
+ * VONG QUET DANG O DAU, VA DANG O VONG THU MAY. Doc ca hai trong MOT lan doc.
+ *
+ * ===========================================================================
+ * VI SAO PHAI CO `cycles` O DAY, va vi sao mot minh `position` thi KHONG DU.
+ *
+ * Doan nay duoc them sau `INDEPENDENT_CHATGPT_REVIEW_2` (15/09/2026), va no ghi lai mot loi that.
+ *
+ * Quay ve dau (`rewindFuelHandoffScan`) tung KHONG co dieu kien nao. Voi nhieu tien trinh API cung
+ * quet — dung hinh dang trien khai ma chinh lich quet nay mo ta — mot tien trinh CHAM co the quay
+ * ve dau SAU khi mot tien trinh khac da tien toi mot vi tri moi, va keo tien do that su do ve `0`.
+ * Khong mat tien (phep chong ghi trung nam o CSDL), nhung mat dung cai tinh chat ma vi tri quet
+ * sinh ra de giu: vong quet CHAY.
+ *
+ * Chua bang mot phep so sanh truoc khi ghi (`CAS`) la dung huong. Nhung so sanh RIENG `position`
+ * van con mot lo: vi tri quet chi nhan mot TAP HUU HAN gia tri (hop thu chi co hang chuc ky, va
+ * moi vong lai di qua dung nhung hang do). Nen canh `A -> B -> A` la THAT chu khong ly thuyet:
+ *
+ *     tien trinh A doc `position = T` o vong 7
+ *     B quay ve dau        -> vong 8
+ *     B tien toi... dung T -> `position = T` o vong 8
+ *     A quay ve dau        -> so sanh `T === T` DUNG, va A vua xoa tien do cua vong 8
+ *
+ * `cycles` la SO HIEU VONG, va no chi tang. Ghep no vao phep so sanh lam canh tren khong con xay
+ * ra duoc: `(T, 7)` khong bang `(T, 8)`.
+ */
+export interface FuelHandoffScanState {
+  readonly position: FuelHandoffScanPosition | null;
+  readonly cycles: number;
+}
+
 export abstract class FuelSettlementSource {
   /** Ban giao GAN NHAT cua mot ky doi soat. `null` khi ky chua dong lan nao. */
   abstract latestHandoff(reconciliationId: string): Promise<FuelHandoffFacts | null>;

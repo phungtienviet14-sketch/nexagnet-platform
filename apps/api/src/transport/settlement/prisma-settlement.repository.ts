@@ -6,7 +6,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import type { CommissionCalcKind } from './commission-rules.js';
 import { canAdjust, outstandingOf } from './settlement-documents.js';
 import type { SettlementFlow } from './settlement-flows.js';
-import type { FuelHandoffScanPosition } from './settlement.ports.js';
+import type { FuelHandoffScanPosition, FuelHandoffScanState } from './settlement.ports.js';
 import {
   SettlementRepository,
   type AllocateCommand,
@@ -1044,22 +1044,34 @@ export class PrismaSettlementRepository extends SettlementRepository {
 
   /* --------------------- Vi tri quet hop thu di ---------------------- */
 
-  async fuelHandoffScanPosition(): Promise<FuelHandoffScanPosition | null> {
-    const row: { lastEmittedAt: Date | null; lastHandoffId: string | null } | null = await model(
-      this.prisma,
-      'transportSettlementFuelHandoffScan',
-    ).findUnique({
-      where: { id: FUEL_HANDOFF_SCAN_ROW },
-      select: { lastEmittedAt: true, lastHandoffId: true },
-    });
+  async fuelHandoffScan(): Promise<FuelHandoffScanState> {
+    const row: { lastEmittedAt: Date | null; lastHandoffId: string | null; cycles: number } | null =
+      await model(this.prisma, 'transportSettlementFuelHandoffScan').findUnique({
+        where: { id: FUEL_HANDOFF_SCAN_ROW },
+        select: { lastEmittedAt: true, lastHandoffId: true, cycles: true },
+      });
+
+    /*
+     * MOT lan doc cho ca hai gia tri, va do khong phai toi uu hoa.
+     *
+     * `position` va `cycles` cung nhau la MOT anh chup; doc rieng hai lan se cho mot anh chup gia
+     * — vong quet co the quay dung giua hai lan doc, va nguoi goi se cam mot cap `(position cu,
+     * cycles moi)` chua bao gio ton tai. Ma cap do lai la thu duoc dung de so sanh truoc khi ghi.
+     */
+    const cycles = row?.cycles ?? 0;
 
     /*
      * Chua co hang, hay hang dang o dau vong — ca hai deu la "doc tu dau hop thu". Rang buoc
      * `_keyset_paired` o CSDL bao dam hai cot khong bao gio le mot nua, nen phep kiem nay khong the
      * nuot mot nua keyset that.
      */
-    if (row === null || row.lastEmittedAt === null || row.lastHandoffId === null) return null;
-    return { emittedAt: row.lastEmittedAt.toISOString(), handoffId: row.lastHandoffId };
+    if (row === null || row.lastEmittedAt === null || row.lastHandoffId === null) {
+      return { position: null, cycles };
+    }
+    return {
+      position: { emittedAt: row.lastEmittedAt.toISOString(), handoffId: row.lastHandoffId },
+      cycles,
+    };
   }
 
   /**
@@ -1101,23 +1113,67 @@ export class PrismaSettlementRepository extends SettlementRepository {
   }
 
   /**
-   * QUAY VE DAU HOP THU va dem them mot vong.
+   * QUAY VE DAU HOP THU va dem them mot vong — CHI KHI trang thai ben van la `expected`.
    *
-   * Khong co dieu kien nao o day, va do la co y: quay ve dau luon hop le. Neu hai tien trinh cung
-   * toi duoi hop thu trong mot cua so, `cycles` co the tang hai — `cycles` chi de chan doan, khong
-   * mot nhanh logic nao doc no, nen mot so dem hoi cao khong lam sai dieu gi.
+   * ===========================================================================
+   * HAM NAY TUNG LA MOT `upsert` TRAN, va do la mot loi.
+   *
+   * Loi cu duoc bien minh bang mot cau nghe rat hop ly: *"quay ve dau luon hop le, vi no chi keo
+   * vi tri ve `null`"*. Cau do chi dung khi co MOT tien trinh quet. Voi hai tien trinh, mot tien
+   * trinh cham co the quay ve dau sau khi mot tien trinh khac da tien toi vi tri moi — va xoa
+   * dung tien do that. Chuoi day du nam o `SettlementRepository.rewindFuelHandoffScan`.
+   *
+   * Phep so sanh o day nam trong menh de `WHERE`, khong o tang ung dung: doc ra roi so bang `if`
+   * se de lai dung cua so ma bai nay dang dong.
+   *
+   * `cycles: expected.cycles` la VE THU HAI cua phep so sanh va no khong thua. Vi tri quet chi
+   * nhan mot tap huu han gia tri, nen `A -> B -> A` tren rieng `position` la mot canh THAT — xem
+   * `FuelHandoffScanState`. So hieu vong thi chi tang, nen ghep vao la du de phan biet.
+   *
+   * `count === 0` co hai nghia, va ca hai deu dan toi cung mot viec:
+   *   · hang da doi (mot tien trinh khac di truoc)  -> KHONG ghi gi;
+   *   · hang chua ton tai                           -> chi tao khi `expected` cung la trang thai
+   *                                                    dau ("chua ai quet gi"), xem duoi.
    */
-  async rewindFuelHandoffScan(): Promise<void> {
-    await model(this.prisma, 'transportSettlementFuelHandoffScan').upsert({
-      where: { id: FUEL_HANDOFF_SCAN_ROW },
-      create: {
+  async rewindFuelHandoffScan(
+    expected: FuelHandoffScanState,
+  ): Promise<{ readonly rewound: boolean }> {
+    const scans = model(this.prisma, 'transportSettlementFuelHandoffScan');
+    const pristine = expected.position === null && expected.cycles === 0;
+
+    const rewound: { count: number } = await scans.updateMany({
+      where: {
         id: FUEL_HANDOFF_SCAN_ROW,
-        lastEmittedAt: null,
-        lastHandoffId: null,
-        cycles: 1,
+        cycles: expected.cycles,
+        lastEmittedAt: expected.position === null ? null : new Date(expected.position.emittedAt),
+        lastHandoffId: expected.position?.handoffId ?? null,
       },
-      update: { lastEmittedAt: null, lastHandoffId: null, cycles: { increment: 1 } },
+      data: { lastEmittedAt: null, lastHandoffId: null, cycles: { increment: 1 } },
     });
+    if (rewound.count > 0) return { rewound: true };
+
+    /*
+     * KHONG co hang. Chi mot `expected` dau vong moi giai thich duoc dieu do — moi trang thai khac
+     * deu duoc doc RA TU mot hang, nen hang phai tung ton tai, nen `count === 0` o tren la "da
+     * doi" chu khong "chua co".
+     */
+    if (!pristine) return { rewound: false };
+
+    try {
+      await scans.create({
+        data: {
+          id: FUEL_HANDOFF_SCAN_ROW,
+          lastEmittedAt: null,
+          lastHandoffId: null,
+          cycles: 1,
+        },
+      });
+      return { rewound: true };
+    } catch (error) {
+      /* `P2002` = mot tien trinh khac vua tao hang. Trang thai cua ho thang; lan nay khong ghi gi. */
+      if (isUniqueViolation(error)) return { rewound: false };
+      throw error;
+    }
   }
 }
 

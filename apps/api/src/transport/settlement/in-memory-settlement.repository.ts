@@ -5,7 +5,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import type { CommissionCalcKind } from './commission-rules.js';
 import { canAdjust, outstandingOf } from './settlement-documents.js';
 import type { SettlementFlow } from './settlement-flows.js';
-import type { FuelHandoffScanPosition } from './settlement.ports.js';
+import type { FuelHandoffScanPosition, FuelHandoffScanState } from './settlement.ports.js';
 import {
   SettlementRepository,
   type AllocateCommand,
@@ -57,9 +57,11 @@ export class InMemorySettlementRepository extends SettlementRepository {
   /**
    * VI TRI QUET hop thu di — mot gia tri, khong mot bang.
    *
-   * `position: null` = dau vong. `cycles` chi de chan doan, giong cot cung ten o CSDL.
+   * `position: null` = dau vong. `cycles` la SO HIEU VONG — giong cot cung ten o CSDL, va giong
+   * o ca cho nay: no khong con la mot so de xem, ma la ve thu hai cua phep so sanh truoc khi
+   * quay ve dau (`rewindFuelHandoffScan`).
    */
-  private fuelScan: { position: FuelHandoffScanPosition | null; cycles: number } = {
+  private fuelScan: FuelHandoffScanState = {
     position: null,
     cycles: 0,
   };
@@ -653,8 +655,8 @@ export class InMemorySettlementRepository extends SettlementRepository {
 
   /* --------------------- Vi tri quet hop thu di ---------------------- */
 
-  async fuelHandoffScanPosition(): Promise<FuelHandoffScanPosition | null> {
-    return this.fuelScan.position;
+  async fuelHandoffScan(): Promise<FuelHandoffScanState> {
+    return { ...this.fuelScan };
   }
 
   /**
@@ -669,10 +671,27 @@ export class InMemorySettlementRepository extends SettlementRepository {
     this.fuelScan = { ...this.fuelScan, position };
   }
 
-  async rewindFuelHandoffScan(): Promise<void> {
+  /**
+   * QUAY VE DAU CO DIEU KIEN — cung luat voi ban Prisma, va cung ly do.
+   *
+   * Mot ban in-memory "de tinh" (quay ve dau vo dieu kien) se lam bo bai don vi xanh trong khi ban
+   * that o tang tren tu choi chinh lan ghi do — tuc bien luoi chong keo-lui thanh mot luoi chi ton
+   * tai trong bo int.
+   */
+  async rewindFuelHandoffScan(
+    expected: FuelHandoffScanState,
+  ): Promise<{ readonly rewound: boolean }> {
+    if (!isSameScanState(expected, this.fuelScan)) return { rewound: false };
     this.fuelScan = { position: null, cycles: this.fuelScan.cycles + 1 };
+    return { rewound: true };
   }
 }
+
+/** HAI ANH CHUP cua vi tri quet la MOT — ca vi tri lan so hieu vong phai trung. */
+const isSameScanState = (left: FuelHandoffScanState, right: FuelHandoffScanState): boolean =>
+  left.cycles === right.cycles &&
+  left.position?.emittedAt === right.position?.emittedAt &&
+  left.position?.handoffId === right.position?.handoffId;
 
 /** `(emittedAt, id)` cua `left` dung SAU `right` — cung phep so sanh bo doi voi ban Prisma. */
 const isAfterScanPosition = (

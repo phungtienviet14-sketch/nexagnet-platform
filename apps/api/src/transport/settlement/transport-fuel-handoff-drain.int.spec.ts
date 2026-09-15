@@ -650,15 +650,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * quet luc nay co the DA o sau ban giao cua bo bai. Ma lenh ghi chi-tien se TU CHOI mot buoc
        * lui, nen khong quay ve dau truoc thi bai duoi do vi chinh cai tinh chat no dang kiem.
        */
-      await settlementRepo.rewindFuelHandoffScan();
+      await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
       await settlementRepo.advanceFuelHandoffScan(day);
 
       /*
        * Mot "tien trinh API" khac: doi tuong kho MOI hoan toan, cung PostgreSQL. Day la noi dung
        * that su cua `restart-safe` — khong phai timer nho duoc, ma khong CAN nho.
        */
-      const sauKhoiDongLai = await new PrismaSettlementRepository(prisma).fuelHandoffScanPosition();
-      expect(sauKhoiDongLai).toEqual(day);
+      const sauKhoiDongLai = await new PrismaSettlementRepository(prisma).fuelHandoffScan();
+      expect(sauKhoiDongLai.position).toEqual(day);
 
       /*
        * Mot vong quet cham nhip hon co gang keo vi tri VE cho cu cua no. Lenh ghi co dieu kien o
@@ -670,7 +670,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         emittedAt: '2020-01-01T00:00:00.000Z',
         handoffId: 'it-lv-cu-hon',
       });
-      expect(await settlementRepo.fuelHandoffScanPosition()).toEqual(day);
+      expect((await settlementRepo.fuelHandoffScan()).position).toEqual(day);
     });
 
     it('V-P0-14 — het hop thu: quay ve dau va dem them mot vong', async () => {
@@ -741,6 +741,126 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * ra 3, thi cai gia cua tinh song vua la mot khoan tra hai lan.
        */
       expect(await supplierDocuments()).toHaveLength(2);
+    });
+
+    /* ================================================================ *
+     * V-P0-17, V-P0-18 — HAI TIEN TRINH cung quet mot hop thu
+     *
+     * Hai bai nay duoc them sau `INDEPENDENT_CHATGPT_REVIEW_2` (15/09/2026). Nam bai tren chung
+     * minh vong quet CHAY khi chi co mot tien trinh; hai bai duoi chung minh no khong bi mot ban
+     * sao CHAM keo lui.
+     *
+     * `V-P0-13` da chung minh `advanceFuelHandoffScan` tu choi mot buoc lui, va `V-P0-14/16` chung
+     * minh mot lan quay ve dau BINH THUONG chay dung. Khong bai nao trong so do cham vao canh o
+     * day: mot lan quay ve dau DEN MUON, sau khi mot tien trinh khac da tien toi vi tri moi.
+     * ================================================================ */
+
+    it('V-P0-17 — nhip CU khong keo lui duoc tien do ma nhip MOI vua tao ra', async () => {
+      /*
+       * Hai moc nam o nam 2099 de khong dung vao bat cu ban giao that nao cua tep nay: bai nay noi
+       * ve TRANH CHAP tren mot hang don, khong ve noi dung hop thu.
+       */
+      const anhChupCu = {
+        emittedAt: '2099-05-01T00:00:00.000Z',
+        handoffId: 'it-lv-anh-chup-cu',
+      };
+      const tienDoMoi = {
+        emittedAt: '2099-06-01T00:00:00.000Z',
+        handoffId: 'it-lv-tien-do-moi',
+      };
+
+      await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
+      await settlementRepo.advanceFuelHandoffScan(anhChupCu);
+
+      /*
+       * CHO KHUNG LAI cua tien trinh A, dat vao mot diem `await` THAT.
+       *
+       * `drain()` doc trang thai quet TRUOC khi doc hop thu. Nen viec chen o day xay ra dung khoang
+       * giua "A da doc trang thai" va "A ket luan la het hop thu" — dung cua so ma `INDEPENDENT_
+       * CHATGPT_REVIEW_2` mo ta, va no duoc dung bang chinh dich vu san xuat chu khong mo phong.
+       */
+      let cyclesSauB = -1;
+      let daChen = false;
+      const chenGiuaNhip = {
+        pendingHandoffs: async (): Promise<FuelHandoffFacts[]> => {
+          if (!daChen) {
+            daChen = true;
+
+            /* B cung cham day hop thu, va B doc dung trang thai hien tai nen B DUOC quay ve dau. */
+            const cuaB = await settlementRepo.rewindFuelHandoffScan(
+              await settlementRepo.fuelHandoffScan(),
+            );
+            expect(cuaB.rewound).toBe(true);
+
+            /* C quet vong moi va tien toi mot vi tri moi. Day la TIEN DO THAT can duoc bao ve. */
+            await settlementRepo.advanceFuelHandoffScan(tienDoMoi);
+            cyclesSauB = (await settlementRepo.fuelHandoffScan()).cycles;
+          }
+
+          /* Voi A, hop thu trong — nen A ket luan "het hop thu" va di quay ve dau. */
+          return [];
+        },
+      } as unknown as FuelSettlementSource;
+
+      const summary = await buildDrain(chenGiuaNhip).drain();
+
+      expect(daChen).toBe(true);
+
+      /*
+       * A KHONG duoc bao la vua quan mot vong. Truong nay khong phai my pham: lich quet va be mat
+       * chan doan doc no de tra loi *"vong quet co chay khong"*, va mot lan quan GIA se lam mot he
+       * thong dang giat nhau trong nhu mot he thong khoe manh.
+       */
+      expect(summary.wrapped).toBe(false);
+
+      const sau = await settlementRepo.fuelHandoffScan();
+      expect(sau.position).toEqual(tienDoMoi);
+      expect(sau.cycles).toBe(cyclesSauB);
+    });
+
+    it('V-P0-18 — CUNG mot vi tri nhung khac VONG: lan quay ve dau cu van bi tu choi', async () => {
+      /*
+       * ===========================================================================
+       * BAI NAY DO NEU PHEP SO SANH CHI NHIN `position`, va do la ly do duy nhat no ton tai.
+       *
+       * Vi tri quet khong nhan gia tri tuy y: hop thu chi co hang chuc ky, va moi vong lai di qua
+       * dung nhung hang do. Nen `A -> B -> A` tren rieng vi tri khong phai mot canh ly thuyet —
+       * no la hinh dang BINH THUONG cua bang nay sau vai vong.
+       *
+       * Mot anh chup cu roi trung vi tri voi trang thai hien tai thi KHONG duoc coi la con moi.
+       */
+      const moc = { emittedAt: '2099-07-01T00:00:00.000Z', handoffId: 'it-lv-aba' };
+
+      await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
+      await settlementRepo.advanceFuelHandoffScan(moc);
+
+      const cu = await settlementRepo.fuelHandoffScan();
+      expect(cu.position).toEqual(moc);
+
+      /* MOT VONG TRON cua mot tien trinh khac: quay ve dau, roi tien lai toi DUNG vi tri cu. */
+      expect((await settlementRepo.rewindFuelHandoffScan(cu)).rewound).toBe(true);
+      await settlementRepo.advanceFuelHandoffScan(moc);
+
+      const bayGio = await settlementRepo.fuelHandoffScan();
+      expect(bayGio.position).toEqual(cu.position);
+      expect(bayGio.cycles).toBe(cu.cycles + 1);
+
+      /* Anh chup `cu` gio da cu mot vong. Lan ghi cua no phai khong xay ra. */
+      expect((await settlementRepo.rewindFuelHandoffScan(cu)).rewound).toBe(false);
+      expect(await settlementRepo.fuelHandoffScan()).toEqual(bayGio);
+    });
+
+    /*
+     * Tra hang don ve dau vong truoc khi sang `V-P0-9..11`: hai bai tren de lai mot vi tri o nam
+     * 2099, va `V-P0-10` co di qua duong quay ve dau. De nguyen thi bai do van xanh, nhung no se
+     * xanh vi mot ly do khong lien quan gi den cai no dang do.
+     */
+    it('V-P0-18bis — tra vi tri quet ve dau vong cho hai bai cuoi', async () => {
+      const { rewound } = await settlementRepo.rewindFuelHandoffScan(
+        await settlementRepo.fuelHandoffScan(),
+      );
+      expect(rewound).toBe(true);
+      expect((await settlementRepo.fuelHandoffScan()).position).toBeNull();
     });
 
     /* ================================================================ *
