@@ -89,8 +89,8 @@ async function run() {
   //   `mutationRole` — RANH GIOI TIN CAY (blocker B4). "Lan chay NAY dang thuc thi ma nguon cua mot
   //                    PR chua duyet, nen no khong duoc cham vao mat phang trang thai."
   //
-  // Ranh gioi that nam o `permissions:` cua workflow — job read-only KHONG duoc cap `issues: write`
-  // nen no khong ghi duoc du ma nguon co bao no ghi. Bien nay chi de no DUNG LAI dung cho, thay vi
+  // Ranh gioi that nam o `permissions:` cua workflow — job read-only KHONG duoc cap MOT QUYEN GHI
+  // nao nen no khong ghi duoc du ma nguon co bao no ghi. Bien nay chi de no DUNG LAI dung cho, thay vi
   // dam vao buc tuong quyen va lam do CI tren moi PR ngay khi `AUTOPILOT_DRY_RUN` duoc tat.
   const mutationRole = mutationRoleFromEnv(env);
   const writesEnabled = mutationRole === MUTATION_ROLES.ALLOWED && !dryRun;
@@ -147,7 +147,11 @@ async function run() {
 
   const pull = await api(token, `/repos/${repoFull}/pulls/${prNumber}`);
   if (!pull.ok) {
-    return abort(ORCHESTRATOR_REASONS.PR_HEAD_UNAVAILABLE, { status: pull.status, pr: prNumber });
+    return abort(ORCHESTRATOR_REASONS.PR_HEAD_UNAVAILABLE, {
+      status: pull.status,
+      error: pull.error,
+      pr: prNumber,
+    });
   }
   // Fork: kiem MOT cho cho ca ba trigger, tren doi tuong PR lay tu API.
   const owned = headRepoIsSelf(pull.body, repoFull);
@@ -199,6 +203,7 @@ async function run() {
     return abort(ORCHESTRATOR_REASONS.TASK_ISSUE_UNAVAILABLE, {
       issue: claimedIssue,
       status: issueResponse.status,
+      error: issueResponse.error,
     });
   }
   const extracted = extractTaskContract(String(issueResponse.body?.body ?? ''));
@@ -220,7 +225,11 @@ async function run() {
   const rulesResponse = await api(token, `/repos/${repoFull}/rules/branches/main`);
   const required = requiredChecksFromBranchRules(rulesResponse.ok ? rulesResponse.body : null);
   if (!required.ok) {
-    return abort(required.reason, { ...required.detail, status: rulesResponse.status });
+    return abort(required.reason, {
+      ...required.detail,
+      status: rulesResponse.status,
+      error: rulesResponse.error,
+    });
   }
 
   // `checks: read`. Khong co quyen nay thi API tra 403 va bang chung CI khong bao gio hinh thanh.
@@ -230,7 +239,11 @@ async function run() {
   );
   const checkRuns = checkRunsFromApi(checksResponse.ok ? checksResponse.body : null);
   if (!checkRuns.ok) {
-    return abort(checkRuns.reason, { ...checkRuns.detail, status: checksResponse.status });
+    return abort(checkRuns.reason, {
+      ...checkRuns.detail,
+      status: checksResponse.status,
+      error: checksResponse.error,
+    });
   }
 
   // `actions: read`. THIEU QUYEN va KHONG CO LAN CHAY NAO la hai chuyen khac han, va chung doi hai
@@ -242,6 +255,7 @@ async function run() {
   if (!runsResponse.ok || !Array.isArray(runsResponse.body?.workflow_runs)) {
     return abort(ORCHESTRATOR_REASONS.ACTIONS_RUNS_UNAVAILABLE, {
       status: runsResponse.status,
+      error: runsResponse.error,
       headSha: head.value,
       grant: 'actions: read',
     });
@@ -318,7 +332,14 @@ async function run() {
       body: JSON.stringify({ body: decision.body }),
     });
     if (!created.ok) {
-      return abort(ORCHESTRATOR_REASONS.COMMENT_POST_FAILED, { status: created.status });
+      // STATUS + CAU CUA GITHUB, khong chi status (Issue #188). Lan chay that 33889198070 dung o
+      // dong nay voi `status=403` va khong mot chu giai thich — nen viec phan biet "thieu quyen"
+      // voi "PR bi khoa" phai lam bang cac phep do rieng ben ngoai. `error` da duoc lam sach o
+      // `api-error.mjs`: log cua Actions la cong khai tren mot repo public.
+      return abort(ORCHESTRATOR_REASONS.COMMENT_POST_FAILED, {
+        status: created.status,
+        error: created.error,
+      });
     }
     log({
       orchestrator: 'posted',
