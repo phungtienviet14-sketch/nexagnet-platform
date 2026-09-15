@@ -508,7 +508,8 @@ docs/phat-trien/van-hanh/autopilot-protocol-v0.md          585 dòng
 
 Kèm dọn: biến repo `AUTOPILOT_DRY_RUN`, `AUTOPILOT_REVIEWER_APP_SLUG` (giá trị
 `chatgpt-codex-connector` không mất — nó thành App duyệt thật, không còn là tham số của giao thức);
-huỷ đăng ký **12 workflow `autopilot-*` mồ côi** sau khi đóng các PR PoC.
+huỷ đăng ký **12 định nghĩa workflow mồ côi** sau khi đóng các PR PoC — 11 cái tên `autopilot-*`
+cộng `claude-max-auth-smoke.yml`; đừng grep mỗi `autopilot-*` rồi tưởng thiếu một cái.
 
 Blast radius đã đo: `git grep autopilot` ngoài hai gói chỉ chạm **`docs/README.md`**,
 **`docs/phat-trien/README.md`**, **`pnpm-lock.yaml`**. Không một tệp nào trong `apps/`, `packages/`,
