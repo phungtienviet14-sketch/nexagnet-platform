@@ -5449,7 +5449,9 @@ model TransportTollTransactionCandidate {
 model TransportTollReviewDecision {
   id                     String                            @id @default(cuid())
   candidateId            String
-  candidate              TransportTollTransactionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// `Restrict`, KHONG `Cascade` — xem migration `20260915130000_transport_toll_append_only`.
+  /// Mot lich su chi-ghi-them ma xoa duoc bang cach xoa hang CHA thi khong con la lich su.
+  candidate              TransportTollTransactionCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
   action                 TransportTollReviewAction
   actor                  String
   at                     DateTime                          @default(now())
