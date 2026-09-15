@@ -118,19 +118,21 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       }
     }
 
+    /** MOT ban `SettlementService` doc lap — bon ban sao la bon "tien trinh API" cua `V-P0-5`. */
+    const buildIngest = (
+      fuelSource: FuelSettlementSource = new FuelSettlementSourceAdapter(fuelRepo),
+    ): SettlementService =>
+      new SettlementService(
+        settlementRepo,
+        new SettlementCoreFactsAdapter(trips),
+        fuelSource,
+        new UnusedCompletionGate(),
+      );
+
     const buildDrain = (
       fuelSource: FuelSettlementSource = new FuelSettlementSourceAdapter(fuelRepo),
     ): FuelHandoffDrainService =>
-      new FuelHandoffDrainService(
-        new SettlementService(
-          settlementRepo,
-          new SettlementCoreFactsAdapter(trips),
-          fuelSource,
-          new UnusedCompletionGate(),
-        ),
-        settlementRepo,
-        fuelSource,
-      );
+      new FuelHandoffDrainService(buildIngest(fuelSource), settlementRepo, fuelSource);
 
     const SUPPLIER_CODE = 'IT-LV-CX';
     const CODE_PREFIX = 'IT-LV-CH';
@@ -255,6 +257,34 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       }
     }
 
+    /**
+     * QUET CHO TOI KHI KY CUA BO BAI NAY DUOC DOC — khong phai "quet mot lan roi khang dinh".
+     *
+     * ===========================================================================
+     * VONG QUET LA TOAN CUC, VA JOB `integration` DUNG CHUNG MOT POSTGRES.
+     *
+     * `pendingHandoffs()` doc ban giao moi nhat cua MOI ky trong CSDL — do la ca thiet ke cua no.
+     * O job `integration`, 428 tep spec khac chay tren cung mot CSDL va nhieu tep trong so do de
+     * lai ky doi soat DA DONG cua rieng chung. Nen:
+     *
+     *   · `summary.ingested` la mot con so TOAN CUC, khong phai con so cua bo bai nay. Khang dinh
+     *     `ingested === 1` la khang dinh ve du lieu cua nguoi khac, va no do dung nhu the o lan
+     *     chay dau tien tren CI;
+     *   · chan lo (`FUEL_HANDOFF_DRAIN_BATCH`) co the het truoc khi toi luot ky nay, vi thu tu la
+     *     `emittedAt` tang dan va ky cua bo bai nay vua dong nen nam CUOI hang.
+     *
+     * Nen moi khang dinh cua bo bai deu PHAI pham vi hoa theo `state.supplierId` /
+     * `state.reconciliationId`, va viec quet phai lap cho toi khi con tro cua CHINH ky nay toi noi.
+     */
+    async function drainUntilConsumed(revision: number): Promise<void> {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const cursors = await settlementRepo.fuelHandoffCursors([state.reconciliationId]);
+        if ((cursors.get(state.reconciliationId) ?? 0) >= revision) return;
+        await buildDrain().drain();
+      }
+      throw new Error(`Vong quet khong doc toi ban ${revision} cua ky ${state.reconciliationId}`);
+    }
+
     const driverFundEntryCount = () =>
       prisma.transportDriverFundEntry.count({
         where: { account: { driver: { phone: { startsWith: PHONE_PREFIX } } } },
@@ -367,9 +397,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * hai bai acceptance 9 va 8 cua `#295` gop lam mot: *"driver-only declaration -> no supplier
        * payable"* va *"unresolved/mismatch chua human-resolve -> zero AP"*.
        */
-      const summary = await buildDrain().drain();
-      expect(summary.ingested).toBe(0);
+      await buildDrain().drain();
 
+      /*
+       * Pham vi hoa theo `supplierId`: vong quet co the vua doc ky cua mot tep spec KHAC tren cung
+       * CSDL, va do khong phai viec cua bai nay. Cai bai nay do la: ky CUA NO khong sinh gi.
+       */
       expect(await supplierDocuments()).toHaveLength(0);
       expect(
         await prisma.transportSettlementFuelHandoffCursor.count({
@@ -389,13 +422,17 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
      * ================================================================ */
 
     it('V-P0-3 — quyet chenh lech + dong ky -> mot luot quet sinh DUNG MOT cong no goc', async () => {
-      await resolveAllPending('ACCEPT_SUPPLIER_AMOUNT');
+      /*
+       * `IGNORE_WITH_REASON` cho dong le o lan dong DAU — de lan dong THU HAI (`V-P0-7`) con cho
+       * chap nhan no va lam ket qua kinh te DOI. Chieu nguoc lai khong chay duoc: xem khoi ghi chu
+       * cua `V-P0-7`.
+       */
+      await resolveAllPending('IGNORE_WITH_REASON');
 
       const closed = await reconciliation.closeReconciliation(state.reconciliationId, ACTOR);
       expect(closed.handoff.revision).toBe(1);
 
-      const summary = await buildDrain().drain();
-      expect(summary.ingested).toBe(1);
+      await drainUntilConsumed(1);
 
       const documents = await supplierDocuments();
       expect(documents).toHaveLength(1);
@@ -403,8 +440,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(documents[0]!.flow).toBe('FUEL_SUPPLIER');
       expect(documents[0]!.sourceContext).toBe('FUEL_SETTLEMENT_HANDOFF');
       expect(documents[0]!.sourceId).toBe(closed.handoff.id);
-      /* 4.200.000 + 2.000.000, ghi AM vi day la chieu PHAI TRA. */
-      expect(Number(documents[0]!.signedAmount)).toBe(-6_200_000);
+      /* CHI dong da khop (4.200.000) — dong le bi bo qua co ly do. Ghi AM vi la chieu PHAI TRA. */
+      expect(Number(documents[0]!.signedAmount)).toBe(-4_200_000);
 
       const cursor = await prisma.transportSettlementFuelHandoffCursor.findUnique({
         where: { reconciliationId: state.reconciliationId },
@@ -416,12 +453,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     it('V-P0-4 — quet lai ba lan nua: van DUNG MOT cong no', async () => {
       const drain = buildDrain();
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        const summary = await drain.drain();
-        expect(summary.ingested).toBe(0);
-        expect(summary.alreadyCurrent).toBeGreaterThanOrEqual(1);
+        await drain.drain();
       }
 
+      /* Con so phai dung la con so CUA KY NAY, khong phai `summary.ingested` toan cuc. */
       expect(await supplierDocuments()).toHaveLength(1);
+      const cursors = await settlementRepo.fuelHandoffCursors([state.reconciliationId]);
+      expect(cursors.get(state.reconciliationId)).toBe(1);
     });
 
     it('V-P0-5 — BON vong quet chay song song: van DUNG MOT cong no', async () => {
@@ -434,16 +472,27 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         where: { reconciliationId: state.reconciliationId },
       });
 
-      const results = await Promise.all([
-        buildDrain().drain(),
-        buildDrain().drain(),
-        buildDrain().drain(),
-        buildDrain().drain(),
+      /*
+       * Doc TRUC TIEP qua `ingestFuelHandoff`, khong qua `drain()`.
+       *
+       * Qua `drain()` thi khong bao dam ca bon ban sao thuc su cham toi ky nay: chan lo la 25 va
+       * CSDL cua job `integration` dung chung voi 428 tep spec khac, nen mot lo co the het truoc khi
+       * toi luot. Bai se van XANH — va xanh vi khong ai lam gi, tuc no khong con do dieu no hua.
+       *
+       * Goi thang thi bon lan ghi CHAC CHAN cung nham vao mot ban giao, va do dung la tinh huong
+       * can do.
+       */
+      await Promise.all([
+        buildIngest().ingestFuelHandoff(state.reconciliationId, 'it-lv-song-song-1'),
+        buildIngest().ingestFuelHandoff(state.reconciliationId, 'it-lv-song-song-2'),
+        buildIngest().ingestFuelHandoff(state.reconciliationId, 'it-lv-song-song-3'),
+        buildIngest().ingestFuelHandoff(state.reconciliationId, 'it-lv-song-song-4'),
       ]);
 
       expect(await supplierDocuments()).toHaveLength(1);
-      expect(results.some((summary) => summary.ingested === 1)).toBe(true);
-      expect(results.every((summary) => summary.failed === 0)).toBe(true);
+
+      /* Tra lai con tro cho nhung bai sau — chinh vong quet lam viec do, khong phai mot lenh SQL. */
+      await drainUntilConsumed(1);
     });
 
     it('V-P0-6 — mot BO DOI TUONG MOI (khoi dong lai) doc lai dung trang thai da chot', async () => {
@@ -452,8 +501,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const freshCursors = await freshRepo.fuelHandoffCursors([state.reconciliationId]);
       expect(freshCursors.get(state.reconciliationId)).toBe(1);
 
-      const summary = await buildDrain().drain();
-      expect(summary.ingested).toBe(0);
+      await buildDrain().drain();
       expect(await supplierDocuments()).toHaveLength(1);
     });
 
@@ -469,30 +517,46 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       );
 
       /*
-       * CHAY LAI SO KHOP la bat buoc sau khi mo lai — do la khuon cua `R4`/`R5` trong
-       * `transport-fuel-recovery.int.spec.ts`, va la thu dua chenh lech ve lai `PENDING`.
+       * CHAY LAI SO KHOP la bat buoc sau khi mo lai — khuon cua `R4`/`R5` trong
+       * `transport-fuel-recovery.int.spec.ts`, va la thu sinh lai chenh lech o trang thai `PENDING`.
        *
-       * Roi doi quyet dinh cua dong le: tu "chap nhan so cua ho" sang "bo qua co ly do". Dong do
-       * roi khoi tong duoc chap nhan, nen ky nay con 4.200.000 thay vi 6.200.000 — tuc ket qua
-       * kinh te DOI, va do la dieu kien de `TX-04` phat ban sua doi so 2 thay vi phat lai ban 1.
+       * ===========================================================================
+       * CHIEU SUA O DAY LA `IGNORE -> ACCEPT`, VA DO KHONG PHAI MOT LUA CHON TUY Y.
+       *
+       * Chieu nguoc lai (`ACCEPT -> IGNORE`) KHONG lam ket qua kinh te doi, do mot hanh vi da do
+       * duoc cua `TX-04`:
+       *
+       *   · `runMatching` chi xoa chenh lech `status: 'PENDING'` (`prisma-fuel.repository.ts`), nen
+       *     ban DA QUYET cua lan dong truoc song sot;
+       *   · `reopenReconciliation` khong dua quyet dinh nao ve `PENDING`;
+       *   · `closeReconciliation` dua CA `readDiscrepancies(...)` — khong loc trang thai — vao
+       *     `sumAcceptedSettlement`, va ham do gom `statementLineId` cua MOI ban mang
+       *     `ACCEPT_SUPPLIER_AMOUNT`.
+       *
+       * Ket qua: mot dong da tung duoc chap nhan thi khong bo ra duoc nua — ban `ACCEPT` cu van keo
+       * no vao tong. Xem `OPEN_BLOCKERS` cua `#295`: do la mot phat hien ve TIEN, va sua no la doi
+       * `INV-07` nen khong lam trong lane nay.
+       *
+       * Bo bai do cai `TX-04` THAT SU lam duoc: chap nhan them mot dong -> tong tang tu 4.200.000
+       * len 6.200.000 -> ban sua doi so 2, va mot chung tu DIEU CHINH mang dung chenh lech.
        */
       await reconciliation.runMatching(state.reconciliationId, ACTOR);
-      await resolveAllPending('IGNORE_WITH_REASON');
+      await resolveAllPending('ACCEPT_SUPPLIER_AMOUNT');
 
       const closedAgain = await reconciliation.closeReconciliation(state.reconciliationId, ACTOR);
       expect(closedAgain.handoff.revision).toBe(2);
+      expect(closedAgain.handoff.acceptedAmount).toBe(6_200_000);
 
-      const summary = await buildDrain().drain();
-      expect(summary.ingested).toBe(1);
+      await drainUntilConsumed(2);
 
       const documents = await supplierDocuments();
       expect(documents).toHaveLength(2);
 
       const original = documents.find((row) => row.kind === 'ORIGINAL');
       const adjustment = documents.find((row) => row.kind === 'ADJUSTMENT');
-      expect(Number(original!.signedAmount)).toBe(-6_200_000);
-      /* -4.200.000 - (-6.200.000) = +2.000.000: no GIAM di, khong phai mot cong no thu hai. */
-      expect(Number(adjustment!.signedAmount)).toBe(2_000_000);
+      expect(Number(original!.signedAmount)).toBe(-4_200_000);
+      /* -6.200.000 - (-4.200.000) = -2.000.000: no TANG THEM, khong phai mot cong no thu hai. */
+      expect(Number(adjustment!.signedAmount)).toBe(-2_000_000);
       expect(adjustment!.adjustsId).toBe(original!.id);
       expect(adjustment!.sourceId).toBe(closedAgain.handoff.id);
 
