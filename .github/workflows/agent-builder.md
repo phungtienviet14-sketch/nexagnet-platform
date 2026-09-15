@@ -1,13 +1,24 @@
 ---
 # gh-aw-pin: v0.88.7
 # gh-aw-sha: bde367913adeb3132f0a171594c88a17f4b7d08c
+# gh-aw-audit: 2026-09-15
 #
-# Hai dong tren la QUY UOC CUA REPO NAY, khong phai mot truong cua gh-aw. Chung khai ban gh-aw duoc
-# phep bien dich tep nay. `tools/autopilot-v2-contract` doc thang hai dong do va do:
+# Ba dong tren la QUY UOC CUA REPO NAY, khong phai truong cua gh-aw. Chung khai ban gh-aw duoc phep
+# bien dich tep nay va ngay cuoi cung ban ghim do duoc do lai. `tools/autopilot-v2-contract` doc
+# thang ba dong do va do:
 #   - tag phai co dang vX.Y.Z
 #   - sha phai dung 40 ky tu hex
-# Muc dich: mot ban preview co minor hang tuan khong duoc tu troi vao repo. Khi nang ban, sua hai
-# dong nay TRUOC, roi moi `gh aw compile`.
+#   - tag + sha phai TRUNG voi ban ghim viet trong ADR va tai lieu bang chung (bat bien 11)
+# Muc dich: mot ban preview co minor hang tuan khong duoc tu troi vao repo, va mot lan nang ban
+# khong duoc rot nua chung. Khi nang ban, sua ba dong nay TRUOC, roi moi `gh aw compile`.
+#
+# RE-AUDIT 15/09/2026 — v0.88.7 VAN LA BAN STABLE MOI NHAT.
+# Do bang hai duong doc lap:
+#   gh api repos/github/gh-aw/releases/latest        -> v0.88.7, prerelease=false
+#   gh api "repos/github/gh-aw/releases?per_page=40" -> moi tag tren v0.88.7 deu prerelease=true
+# Tag moi nhat noi chung la v0.89.15 (14/09), nhung no PRERELEASE — dung hang voi v0.88.4 ma §3.1
+# cua tai lieu bang chung da bac. Khoang cach v0.88.7...v0.89.15 la 180 commit, khong commit nao
+# doi mot bat bien tep nay dua vao. Chi tiet: autopilot-v2-official-first.md §3.1.
 #
 # =====================================================================================
 #  TEP NAY CHUA CHAY DUOC, VA DO LA CO Y.
@@ -76,10 +87,31 @@ safe-outputs:
   threat-detection:
     enabled: true
 
+  # DANH TINH NGUOI DAY COMMIT — thu quyet dinh CI co chay hay khong.
+  #
+  # Da do bang A/B tren chinh repo nay (autopilot-v2-official-first.md §9.3 tinh huong 4):
+  # commit day bang GITHUB_TOKEN sinh ra mot run CO THAT nhung `action_required` + 0 job; commit
+  # day bang installation token cua App `nexagent-autopilot` chay du 7/7 job, khong ai bam duyet.
+  #
+  # Ten hai dau vao duoi day do bang API ngay 15/09/2026, khong doan:
+  #   gh api repos/<o>/<r>/actions/variables  -> NEXAGENT_AUTOPILOT_CLIENT_ID  (BIEN, khong phai secret)
+  #   gh api repos/<o>/<r>/actions/secrets    -> NEXAGENT_AUTOPILOT_PRIVATE_KEY
+  # Luu y chinh ta: `NEXAGENT`, khong phai `NEXAGNET`. Sai mot chu thi token rong (xem duoi).
+  github-app:
+    client-id: ${{ vars.NEXAGENT_AUTOPILOT_CLIENT_ID }}
+    private-key: ${{ secrets.NEXAGENT_AUTOPILOT_PRIVATE_KEY }}
+
   create-pull-request:
     max: 1
     draft: true
     if-no-changes: warn
+    # BAY FAIL-OPEN CUA gh-aw, phai biet truoc khi doc dong nay.
+    # `app` duoc bien dich thanh dung mot bieu thuc:
+    #   GH_AW_CI_TRIGGER_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token || '' }}
+    # Thieu khoi `github-app:` o tren — hoac go sai ten bien/secret — thi bieu thuc do ra CHUOI
+    # RONG va commit rong quay ve dung cai rao dang muon vuot, KHONG mot thong bao loi nao.
+    # Bat bien 10 cua `tools/autopilot-v2-contract` khoa cap doi nay.
+    github-token-for-extra-empty-commit: app
 
   add-comment:
     max: 1

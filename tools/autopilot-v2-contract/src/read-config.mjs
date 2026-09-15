@@ -24,6 +24,8 @@ export const PATHS = {
   ruleset: join(REPO_ROOT, '.github', 'rulesets', 'main-protection.json'),
   issueForm: join(REPO_ROOT, '.github', 'ISSUE_TEMPLATE', 'agent-task.yml'),
   workflowsDir: join(REPO_ROOT, '.github', 'workflows'),
+  adr: join(REPO_ROOT, 'docs', 'kien-truc', 'adr-0001-autopilot-official-first.md'),
+  evidence: join(REPO_ROOT, 'docs', 'phat-trien', 'van-hanh', 'autopilot-v2-official-first.md'),
 };
 
 /**
@@ -103,11 +105,18 @@ export function linesWithKey(frontmatter, key) {
 }
 
 /**
+ * @typedef {object} GhAwPin
+ * @property {string | null} tag    Tag da ghim, dang `vX.Y.Z`.
+ * @property {string | null} sha    Commit SHA 40 ky tu cua tag do.
+ * @property {string | null} audit  Ngay ISO `YYYY-MM-DD` ban ghim duoc do lai lan cuoi.
+ */
+
+/**
  * Ban ghim gh-aw ma repo nay khai trong chu thich frontmatter. Day la QUY UOC CUA REPO NAY, khong
  * phai mot truong cua gh-aw — xem chu thich dau `.github/workflows/agent-builder.md`.
  *
  * @param {Frontmatter} frontmatter
- * @returns {{ tag: string | null, sha: string | null }}
+ * @returns {GhAwPin}
  */
 export function readGhAwPin(frontmatter) {
   /** @param {string} prefix */
@@ -115,7 +124,30 @@ export function readGhAwPin(frontmatter) {
     const hit = frontmatter.commentLines.find((line) => line.startsWith(prefix));
     return hit === undefined ? null : hit.slice(prefix.length).trim();
   };
-  return { tag: pick('gh-aw-pin:'), sha: pick('gh-aw-sha:') };
+  return { tag: pick('gh-aw-pin:'), sha: pick('gh-aw-sha:'), audit: pick('gh-aw-audit:') };
+}
+
+/**
+ * Cung ban ghim do, nhung khai trong mot tep Markdown bang chu thich HTML:
+ *
+ *     <!-- gh-aw-pin: v0.88.7 -->
+ *
+ * VI SAO PHAI CO. Ban ghim gh-aw xuat hien o BA cho: workflow pilot, ADR, va tai lieu bang chung.
+ * Van xuoi thi doc duoc nhung khong do duoc — mot lan nang ban sua workflow roi quen hai tep kia
+ * de lai mot ban ghim ma nguoi review tin nhung may khong con dung. Ba dong chu thich nay la phan
+ * MAY DOC cua cung mot su that, va bat bien 11 bat chung phai trung nhau.
+ *
+ * @param {string} path Duong dan tep Markdown.
+ * @returns {GhAwPin}
+ */
+export function readDocPin(path) {
+  const source = readFileSync(path, 'utf8');
+  /** @param {string} name */
+  const pick = (name) => {
+    const hit = new RegExp(String.raw`<!--\s*${name}:\s*([^\s>]+)\s*-->`, 'u').exec(source);
+    return hit === null ? null : hit[1];
+  };
+  return { tag: pick('gh-aw-pin'), sha: pick('gh-aw-sha'), audit: pick('gh-aw-audit') };
 }
 
 /**

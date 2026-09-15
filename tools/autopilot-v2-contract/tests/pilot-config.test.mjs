@@ -14,6 +14,7 @@ import {
   REPO_ROOT,
   linesWithKey,
   pilotLockExists,
+  readDocPin,
   readGhAwPin,
   readPilotFrontmatter,
   readRuleset,
@@ -89,8 +90,8 @@ test('pilot chua co .lock.yml, nen GitHub Actions khong the chay no', () => {
 // ---------------------------------------------------------------------------------------------
 // 3. Ban gh-aw duoc ghim chinh xac, khong troi theo ban preview hang tuan.
 // ---------------------------------------------------------------------------------------------
-test('pilot ghim gh-aw bang ca tag lan SHA 40 ky tu', () => {
-  const { tag, sha } = readGhAwPin(readPilotFrontmatter());
+test('pilot ghim gh-aw bang ca tag, SHA 40 ky tu, lan ngay re-audit', () => {
+  const { tag, sha, audit } = readGhAwPin(readPilotFrontmatter());
 
   assert.match(
     tag ?? '',
@@ -101,6 +102,11 @@ test('pilot ghim gh-aw bang ca tag lan SHA 40 ky tu', () => {
     sha ?? '',
     /^[0-9a-f]{40}$/u,
     `thieu hoac sai dinh dang \`# gh-aw-sha: <40 hex>\`; doc duoc: ${JSON.stringify(sha)}`,
+  );
+  assert.match(
+    audit ?? '',
+    /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u,
+    `thieu hoac sai dinh dang \`# gh-aw-audit: YYYY-MM-DD\`. Mot ban ghim khong kem ngay do lai thi khong phan biet duoc "van la ban stable moi nhat" voi "khong ai kiem lai tu thang truoc"; doc duoc: ${JSON.stringify(audit)}`,
   );
 });
 
@@ -218,6 +224,90 @@ test('bieu mau Issue khai du bo nhan rui ro va nhan kich hoat', () => {
     false,
     'bieu mau KHONG duoc tu gan `agent:ready`: nhan do la uy quyen chay, phai do nguoi gan sau khi doc',
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// 10. Loi thoat CI-trigger khong duoc fail-open.
+//
+//     `github-token-for-extra-empty-commit: app` duoc gh-aw bien dich thanh DUNG mot bieu thuc:
+//         GH_AW_CI_TRIGGER_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token || '' }}
+//     Buoc mint token do CHI ton tai khi co khoi `safe-outputs.github-app`. Thieu khoi do — hoac
+//     go sai ten bien/secret — thi bieu thuc ra CHUOI RONG, commit rong quay ve GITHUB_TOKEN, va
+//     KHONG co thong bao loi nao. Bai nay khoa cap doi (co token-for-extra-empty-commit) <=> (co
+//     github-app day du), va TU KICH HOAT khi ai do them truong do lan dau.
+// ---------------------------------------------------------------------------------------------
+test('neu pilot dung loi thoat CI-trigger thi khoi github-app phai day du', () => {
+  const frontmatter = readPilotFrontmatter();
+  const ciTrigger = linesWithKey(frontmatter, 'github-token-for-extra-empty-commit');
+
+  if (ciTrigger.length === 0) {
+    // Chua khai loi thoat nay thi khong co gi de khoa — va cung khong co bay fail-open nao.
+    return;
+  }
+
+  assert.equal(
+    ciTrigger.length,
+    1,
+    'chi duoc khai dung mot `github-token-for-extra-empty-commit`',
+  );
+  assert.equal(
+    ciTrigger[0].value,
+    'app',
+    `repo nay dong y dung DANH TINH GitHub App lam loi thoat CI-trigger, khong dung PAT ca nhan. Dang la \`${ciTrigger[0].value}\``,
+  );
+
+  const app = blockUnder(frontmatter, 'github-app');
+  assert.notEqual(
+    app.length,
+    0,
+    'khai `github-token-for-extra-empty-commit: app` ma KHONG co khoi `safe-outputs.github-app`. gh-aw se sinh ra mot token rong va lang le day commit bang GITHUB_TOKEN — dung cai rao dang muon vuot',
+  );
+
+  for (const key of ['client-id', 'private-key']) {
+    const field = app.find((line) => line.key === key);
+    assert.notEqual(field, undefined, `khoi \`github-app\` thieu \`${key}\``);
+    assert.match(
+      field?.value ?? '',
+      /^\$\{\{\s*(vars|secrets)\.[A-Z0-9_]+\s*\}\}$/u,
+      `\`github-app.${key}\` phai la mot bieu thuc \`vars.*\`/\`secrets.*\`, khong phai gia tri viet thang; dang la \`${field?.value}\``,
+    );
+    assert.equal(
+      /NEXAGNET/u.test(field?.value ?? ''),
+      false,
+      `\`github-app.${key}\` tro vao \`NEXAGNET_*\`. Bien va secret that ten \`NEXAGENT_*\` (do bang \`gh api .../actions/variables\` va \`.../actions/secrets\` ngay 15/09/2026). Lech mot chu thi bieu thuc ra chuoi rong va khong ai bao loi`,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 11. Mot lan nang ban gh-aw khong duoc rot nua chung.
+//
+//     Ban ghim xuat hien o ba cho: workflow pilot (chu thich frontmatter), ADR, va tai lieu bang
+//     chung (chu thich HTML). Sua mot cho roi quen hai cho kia de lai mot ban ghim ma nguoi review
+//     TIN nhung khong con dung. Bai nay bat ca ba trung nhau tung ky tu.
+// ---------------------------------------------------------------------------------------------
+test('ban ghim gh-aw trung nhau giua pilot, ADR va tai lieu bang chung', () => {
+  const pilot = readGhAwPin(readPilotFrontmatter());
+  const docs = [
+    ['ADR', readDocPin(PATHS.adr)],
+    ['tai lieu bang chung', readDocPin(PATHS.evidence)],
+  ];
+
+  for (const [name, pin] of docs) {
+    for (const field of ['tag', 'sha', 'audit']) {
+      const marker = field === 'tag' ? 'gh-aw-pin' : `gh-aw-${field}`;
+      assert.notEqual(
+        pin[field],
+        null,
+        `${name} khong khai \`<!-- ${marker}: ... -->\`. Van xuoi doc duoc nhung khong do duoc`,
+      );
+      assert.equal(
+        pin[field],
+        pilot[field],
+        `${name} khai \`${field}\` = \`${pin[field]}\` trong khi pilot ghim \`${pilot[field]}\`. Mot lan nang ban da rot nua chung`,
+      );
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
