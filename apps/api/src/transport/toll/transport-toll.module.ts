@@ -6,10 +6,13 @@ import { FleetRepository } from '../fleet/fleet.repository.js';
 import { TransportModule } from '../transport.module.js';
 import { TRANSPORT_CORE_POLICY, type TransportCorePolicy } from '../transport-policy.js';
 import { InMemoryTollRepository } from './in-memory-toll.repository.js';
+import { PrismaTollSpendReader } from './prisma-toll-spend.reader.js';
 import { PrismaTollRepository } from './prisma-toll.repository.js';
 import { TollApiRegistry } from './toll-api.port.js';
 import { TollAccountService } from './toll-account.service.js';
 import { TRANSPORT_TOLL_POLICY, tenantTransportTollPolicy } from './toll-policy.js';
+import { TollReportService } from './toll-report.service.js';
+import { RepositoryTollSpendReader, TollSpendReader } from './toll-spend.reader.js';
 import { FileTollStatementSource, TollStatementSource } from './toll-statement-source.js';
 import { TransportTollCoreFacts, TransportTollCoreFactsAdapter } from './toll.ports.js';
 import { TollRepository } from './toll.repository.js';
@@ -72,7 +75,27 @@ import { TollService } from './toll.service.js';
     },
     TollService,
     TollAccountService,
+    {
+      /*
+       * CUA DOC CUA BAO CAO (`#314`) di theo CUNG cong tac voi kho.
+       *
+       * Hien thuc bo nho doc qua chinh `TollRepository` nen no thay dung nhung dong kho do giu;
+       * hien thuc Postgres gom bang `groupBy` trong mot cau lenh. Tron hai cai (Postgres + doc qua
+       * `TollRepository`) se keo ca bang ung vien ve Node moi lan mo bao cao.
+       */
+      provide: TollSpendReader,
+      useFactory: (prisma: PrismaService, repository: TollRepository): TollSpendReader =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaTollSpendReader(prisma)
+          : new RepositoryTollSpendReader(repository),
+      inject: [PrismaService, TollRepository],
+    },
+    TollReportService,
   ],
-  exports: [TollService, TollAccountService],
+  /*
+   * `TollReportService` PHAI nam o day: `TollController` duoc dang ky o GOC, nen no chi thay phan
+   * export. Thieu mot ten la API khong len — va chi `app.module.transport-toll.boot.spec.ts` bat.
+   */
+  exports: [TollService, TollAccountService, TollReportService],
 })
 export class TransportTollModule {}

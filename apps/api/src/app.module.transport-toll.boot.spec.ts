@@ -94,11 +94,23 @@ describe('transport-toll process boot contract', () => {
       const imported = await toll.commitImport(command, 'boot');
       const replay = await toll.commitImport(command, 'boot');
 
+      // #314 — be mat doc cua ke toan phai RESOLVE qua Nest that va doc dung cai vua nap.
+      const { TollReportService } = await import('./src/transport/toll/toll-report.service.ts');
+      const reports = context.get(TollReportService, { strict: false });
+      const report = await reports.spendReport({ from: '2026-08-01', to: '2026-08-31', provider: 'VETC' });
+      const history = await accounts.listLinkHistoryForVehicle(vehicle.id);
+      const peers = await reports.duplicatePeers(imported.candidates[0].id);
+
       const proof = {
         controller: has(TollController),
         service: has(TollService),
         accountService: has(TollAccountService),
+        reportService: has(TollReportService),
         costing: has(CostingService),
+        spendVehicles: report.vehicles.map((r) => [r.registrationPlate, r.kind, r.confirmed.amount, r.open.amount]),
+        spendUnattributed: report.unattributed.map((r) => [r.reason, r.kind, r.open.amount]),
+        vehicleHistory: history.links.map((l) => [l.accountId === account.id, l.effectiveFrom, l.effectiveTo]),
+        peers: [peers.fingerprintAvailable, peers.peers.length],
         blocked,
         apiStatus,
         apiReason,
@@ -139,8 +151,17 @@ describe('transport-toll process boot contract', () => {
         controller: true,
         service: true,
         accountService: true,
+        // #314 — neu `TollReportService` vang khoi `exports`, dong `controller` o tren da do truoc.
+        reportService: true,
         // ETC la CONG TY TRA: no khong keo theo so quy lai xe.
         costing: false,
+        // Vua nap xong: dong da khop xe van CHUA co nguoi xac nhan (cot xac nhan = 0).
+        spendVehicles: [['15C-556.33', 'TOLL_PASS', 0, -52000]],
+        // Nap tien khong thuoc ve xe nao — no nam o muc tai khoan, khong bi chia cho xe.
+        spendUnattributed: [['ACCOUNT_LEVEL', 'TOP_UP', 5000000]],
+        vehicleHistory: [[true, '2026-01-01', null]],
+        // Hai dong khac nhau -> dau van khac nhau -> khong co dong doi ung nao.
+        peers: [true, 0],
         blocked: {
           VETC: 'BLOCKED_SAMPLE_REQUIRED',
           EPASS: 'BLOCKED_SAMPLE_REQUIRED',

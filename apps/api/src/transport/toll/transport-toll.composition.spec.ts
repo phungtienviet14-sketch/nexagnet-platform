@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../../app-composition.js';
-import { actionsForRole } from '../transport-actions.js';
+import { actionsForRole, roleCanPerform } from '../transport-actions.js';
 
 const controllerNames = (capabilities: Parameters<typeof buildAppComposition>[0]): string[] =>
   buildAppComposition(capabilities).controllers.map((controller) => controller.name);
@@ -107,6 +107,11 @@ describe('ETC khong bao gio cham so quy lai xe', () => {
       'toll-statement-mapping.ts',
       'toll.ports.ts',
       'toll.types.ts',
+      // `#314` — be mat doc cua ke toan. Bao cao TIEN la noi de nhat cho mot dong ve so quy lot vao.
+      'toll-report.service.ts',
+      'toll-spend-report.ts',
+      'toll-spend.reader.ts',
+      'prisma-toll-spend.reader.ts',
     ].map((name) => ({ name, body: readFileSync(resolve(HERE, name), 'utf8') }));
 
   it('khong tep nao nhap mot module cua so quy / luong / cong no', () => {
@@ -189,5 +194,61 @@ describe('moi ma quyen ETC deu co mot duong HTTP that', () => {
     await import('reflect-metadata');
     const { TollController } = await import('./toll.controller.js');
     expect(Reflect.getMetadata('path', TollController)).toBe('transport/toll');
+  });
+});
+
+/**
+ * ===========================================================================
+ * `#314` — MOI DUONG HTTP CUA ETC DEU CO CONG, VA CONG DO DONG VOI LAI XE.
+ *
+ * Bai o tren doi chieu tu MA QUYEN ve route. Bai nay doi chieu theo CHIEU NGUOC LAI: moi handler
+ * co `path` (tuc mot route that) phai doi mot ma `transport.toll.*`. Mot route moi quen gan
+ * `@RequiresTransportAction` se MO cho moi vai da dang nhap — va `TransportActionGuard` tra `true`
+ * cho handler khong khai ma (`if (!action) return true`), nen khong cong nao khac bat duoc.
+ *
+ * Ba duong doc them boi `#314` (lich su xe, dong doi ung, bao cao chi phi) duoc khoa RIENG ben
+ * duoi voi dung ma cua chung — chung doc du lieu tien va du lieu doi soat.
+ */
+describe('moi duong HTTP cua ETC deu co cong quyen', () => {
+  const routesOf = async (): Promise<
+    readonly { readonly name: string; readonly path: string; readonly action: string | undefined }[]
+  > => {
+    await import('reflect-metadata');
+    const { TollController } = await import('./toll.controller.js');
+    const { TRANSPORT_ACTION_KEY } = await import('../transport-action.guard.js');
+    const prototype = TollController.prototype as unknown as Record<string, unknown>;
+    return Object.getOwnPropertyNames(prototype).flatMap((name) => {
+      const handler = prototype[name];
+      if (name === 'constructor' || typeof handler !== 'function') return [];
+      const path = Reflect.getMetadata('path', handler) as string | undefined;
+      if (path === undefined) return [];
+      const action = Reflect.getMetadata(TRANSPORT_ACTION_KEY, handler) as string | undefined;
+      return [{ name, path, action }];
+    });
+  };
+
+  it('khong route nao thieu ma quyen `transport.toll.*`', async () => {
+    const routes = await routesOf();
+    expect(routes.length).toBeGreaterThan(0);
+    for (const route of routes) {
+      expect(route.action, `${route.name} (${route.path})`).toMatch(/^transport\.toll\./);
+    }
+  });
+
+  it('lai xe (`SALE`) va `MANAGER` KHONG qua duoc route nao; ke toan va quan tri qua duoc tat ca', async () => {
+    for (const route of await routesOf()) {
+      const action = route.action as Parameters<typeof roleCanPerform>[1];
+      expect(roleCanPerform('SALE', action), `SALE ${route.path}`).toBe(false);
+      expect(roleCanPerform('MANAGER', action), `MANAGER ${route.path}`).toBe(false);
+      expect(roleCanPerform('ACCOUNTING', action), `ACCOUNTING ${route.path}`).toBe(true);
+      expect(roleCanPerform('ADMIN', action), `ADMIN ${route.path}`).toBe(true);
+    }
+  });
+
+  it('ba duong doc cua `#314` ton tai voi DUNG ma quyen cua chung', async () => {
+    const byPath = new Map((await routesOf()).map((route) => [route.path, route.action]));
+    expect(byPath.get('vehicles/:vehicleId/links')).toBe('transport.toll.account.read');
+    expect(byPath.get('candidates/:id/duplicate-peers')).toBe('transport.toll.review.read');
+    expect(byPath.get('reports/spend')).toBe('transport.toll.review.read');
   });
 });
