@@ -181,6 +181,47 @@ export function pilotLockExists() {
 }
 
 /**
+ * @typedef {object} LockMetadata
+ * @property {string | null} compilerVersion  Ban gh-aw da sinh ra lock, dang `vX.Y.Z`.
+ * @property {string | null} frontmatterHash  Bam cua frontmatter luc bien dich.
+ * @property {string | null} bodyHash         Bam cua than prompt — chi co khi `stale-check: full`.
+ */
+
+/**
+ * Doc dong `# gh-aw-metadata:` o dau `.lock.yml`.
+ *
+ * VI SAO PHAI CO. Ba dong `# gh-aw-pin/sha/audit` trong workflow la loi KHAI cua repo nay ve ban
+ * gh-aw duoc phep bien dich. `compiler_version` trong lock la ban DA THUC SU bien dich. Hai thu do
+ * lech nhau duoc: cai mot `gh aw` moi hon roi `compile` lai thi lock doi ma ba dong khai o tren van
+ * y nguyen — va nguoi review doc ban ghim se tin mot con so khong con dung. Bat bien 12 bat chung
+ * phai trung.
+ *
+ * @param {string} source Noi dung `.lock.yml`.
+ * @returns {LockMetadata}
+ */
+export function readLockMetadata(source) {
+  const hit = /^#\s*gh-aw-metadata:\s*(\{.*\})\s*$/mu.exec(source.replace(/\r\n/gu, '\n'));
+  if (hit === null) {
+    return { compilerVersion: null, frontmatterHash: null, bodyHash: null };
+  }
+  /** @type {Record<string, unknown>} */
+  let parsed;
+  try {
+    parsed = JSON.parse(hit[1]);
+  } catch {
+    return { compilerVersion: null, frontmatterHash: null, bodyHash: null };
+  }
+  /** @param {string} key */
+  const str = (key) =>
+    typeof parsed[key] === 'string' ? /** @type {string} */ (parsed[key]) : null;
+  return {
+    compilerVersion: str('compiler_version'),
+    frontmatterHash: str('frontmatter_hash'),
+    bodyHash: str('body_hash'),
+  };
+}
+
+/**
  * Moi gia tri `uses:` trong mot tep YAML workflow.
  *
  * @param {string} source
