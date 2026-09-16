@@ -59,6 +59,7 @@ describe('transport-preview process boot contract', () => {
       const { CommercialAcceptanceService } = await import('./src/transport/acceptance/acceptance.service.ts');
       const { PlanningService } = await import('./src/transport/planning/planning.service.ts');
       const { MovementService } = await import('./src/transport/movement/movement.service.ts');
+      const { FuelConsumptionController } = await import('./src/transport/fuel/fuel-consumption.controller.ts');
 
       const capabilities = loadTenantConfig().capabilities;
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
@@ -72,6 +73,9 @@ describe('transport-preview process boot contract', () => {
         movement: has(MovementService),
         planning: has(PlanningService),
         acceptance: has(CommercialAcceptanceService),
+        // Controller dang ky o GOC doc mot service cua \`TransportFuelModule\` — dung kieu hong ma
+        // chi mot lan boot that bat duoc (#313).
+        fuelConsumption: has(FuelConsumptionController),
       };
       await context.close();
       process.stdout.write('<<PREVIEW_BOOT_PROOF>>' + JSON.stringify(proof));
@@ -101,6 +105,7 @@ describe('transport-preview process boot contract', () => {
       expect(parsed.planning).toBe(true);
       // Dong nay la ly do bai test ton tai. Xem khoi chu thich dau tep.
       expect(parsed.acceptance).toBe(true);
+      expect(parsed.fuelConsumption).toBe(true);
       // Goi that co 11 capability; con so chi de bai noi ra rang no dang boot MOT DOI HINH DAY DU,
       // khong phai mot goi rong tinh co xanh.
       expect(parsed.capabilityCount).toBeGreaterThanOrEqual(10);

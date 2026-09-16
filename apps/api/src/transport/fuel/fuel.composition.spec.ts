@@ -21,6 +21,11 @@ const FUEL_ARTEFACTS = [
    */
   'FuelStationController',
   'FuelDocumentController',
+  /**
+   * DRILL-DOWN TIEU HAO (`#313`). Chuoi km cua mot doi xe tren stack cua mot khach ban hang la dung
+   * kieu ro ri capability ma bon bai duoi chan — nen no nam trong CHINH danh sach nay.
+   */
+  'FuelConsumptionController',
   'TransportFuelModule',
 ];
 

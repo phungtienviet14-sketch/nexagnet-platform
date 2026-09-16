@@ -113,6 +113,7 @@ import {
 } from './transport/evidence/evidence.provider.js';
 import { FuelEvidenceController } from './transport/evidence/fuel-evidence.controller.js';
 import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
+import { FuelConsumptionController } from './transport/fuel/fuel-consumption.controller.js';
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
 import { FuelDocumentController } from './transport/fuel/fuel-document.controller.js';
@@ -474,6 +475,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // mat cung no: khong co phieu dau thi khong co anh phieu dau de xem.
   owned('transport-fuel', DriverFuelEvidenceController),
   owned('transport-fuel', FuelEvidenceController),
+  // DRILL-DOWN TIEU HAO theo xe/ky (`#313`) — mot route GET chi doc, cung capability, KHONG mot ma
+  // quyen moi (`transport.fuel.entry.read`).
+  owned('transport-fuel', FuelConsumptionController),
   // ETC — tai khoan giao thong, nap nguon, va hop thu doi soat. MOT controller cho ca ba vi chung
   // dung chung mot tien to route va mot vong doi; ba ma quyen RIENG moi la thu tach chung ra.
   owned('transport-toll', TollController),
