@@ -90,6 +90,29 @@ import { SettlementService } from './settlement.service.js';
  * phep so sanh phai gom ca SO HIEU VONG chu khong rieng vi tri.
  *
  * ============================================================================================
+ * 0ter. VONG SOAT THU BA: LAN TIEN CUNG PHAI BIET MINH THUOC VONG NAO
+ * ============================================================================================
+ *
+ * Doan nay duoc them sau `INDEPENDENT_CHATGPT_REVIEW_3`, va no ghi lai loi thu ba cua chinh tep
+ * nay — o dung lan ghi ma doan 0bis chua cham toi.
+ *
+ * Doan 0bis bat lan QUAY VE DAU so anh chup. Lan TIEN thi van chi so vi tri, voi lap luan *"tien
+ * chi di toi, nen khong keo lui duoc ai"*. Cau do dung TRONG MOT VONG. Qua mot lan quay ve dau thi
+ * khong:
+ *
+ *     A doc (P, vong N), doc trang toi Q, roi KHUNG lai
+ *     B cham day hop thu -> quay ve dau -> vong N+1
+ *     C quet vong N+1 tu dau -> tien toi R, voi R < Q
+ *     A tinh day -> tien toi Q, vi Q nam sau R -> doan (R, Q] cua vong N+1 bi BO QUA
+ *
+ * Tien van khong sai, vi doan 2. Cai sai la dung thu doan 4 va `rewind` sinh ra de giu: hang ghi
+ * hong va ban giao phat lui ngay nam trong (R, Q] phai doi them tron mot vong nua.
+ *
+ * Chua bang CUNG anh chup `scan` ma `drain()` doc luc bat dau: lan tien chi ghi khi so hieu vong ben
+ * VAN la so do. Xem `advance()` o duoi — va `FuelHandoffScanState` de biet vi sao lan tien chi so
+ * SO HIEU VONG con lan quay ve dau so ca vi tri.
+ *
+ * ============================================================================================
  * 1. KHONG CO NUT NGUOI DUNG NAO O DAY
  * ============================================================================================
  *
@@ -318,8 +341,39 @@ export class FuelHandoffDrainService {
       return { ingested, alreadyCurrent, failed, saturated, wrapped };
     }
 
-    if (position !== null) await this.repository.advanceFuelHandoffScan(position);
+    if (position !== null) await this.advance(scan, position);
     return { ingested, alreadyCurrent, failed, saturated, wrapped: false };
+  }
+
+  /**
+   * TIEN VI TRI QUET toi hang cuoi nhip nay nhin toi — NEU vong quet van la vong nhip nay bat dau.
+   *
+   * ===========================================================================
+   * `observed` LA CHINH ANH CHUP `drain()` DOC LUC BAT DAU, va khong duoc doc lai o day. Doan nay
+   * duoc viet sau `INDEPENDENT_CHATGPT_REVIEW_3`.
+   *
+   * Trang nhip nay vua duyet duoc doc TU anh chup do, nen chi anh chup do moi noi duoc lan tien nay
+   * thuoc vong nao. Doc lai ngay truoc khi ghi se luon tra ve so hieu vong MOI NHAT, va phep so sanh
+   * o CSDL se luon dung — tuc dung lai loi vua sua: mot nhip cua vong N khung lai qua mot lan quay
+   * ve dau ghi vi tri cua no vao vong N+1, va doan giua cho vong moi dung va vi tri do bi bo qua.
+   *
+   * `advanced: false` KHONG ghi them gi va KHONG doi ket qua cua nhip: moi ky nhip nay ghi deu da day
+   * con tro TIEU THU cua rieng no, nen khong viec nao mat. Cai duy nhat bi bo la mot vi tri ma tien
+   * trinh khac da vuot qua.
+   */
+  private async advance(
+    observed: FuelHandoffScanState,
+    to: FuelHandoffScanPosition,
+  ): Promise<void> {
+    const { advanced } = await this.repository.advanceFuelHandoffScan(observed, to);
+    if (advanced) return;
+
+    this.report('denied', 'FUEL_HANDOFF_SCAN_ADVANCE_STALE', {
+      toHandoffId: to.handoffId,
+      toEmittedAt: to.emittedAt,
+      fromHandoffId: observed.position?.handoffId ?? null,
+      fromCycle: observed.cycles,
+    });
   }
 
   /**

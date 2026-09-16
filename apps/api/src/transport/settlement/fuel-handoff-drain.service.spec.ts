@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { TelemetryRecord, TelemetrySink } from '../../observability/telemetry-record.js';
+import { TelemetryService } from '../../observability/telemetry.service.js';
 import type { OrderCompletionEligibility } from '../acceptance/acceptance.types.js';
 import { fuelHandoffDrainEnabled } from './fuel-handoff-drain.scheduler.js';
 import {
@@ -159,10 +161,38 @@ class PoisonOutbox extends FakeOutbox {
   }
 }
 
-const build = (outbox: FuelSettlementSource, repository = new InMemorySettlementRepository()) => {
+const build = (
+  outbox: FuelSettlementSource,
+  repository = new InMemorySettlementRepository(),
+  telemetry?: TelemetryService,
+) => {
   const settlement = new SettlementService(repository, new NoTrips(), outbox, new UnusedGate());
-  return { repository, drain: new FuelHandoffDrainService(settlement, repository, outbox) };
+  return {
+    repository,
+    drain: new FuelHandoffDrainService(settlement, repository, outbox, telemetry),
+  };
 };
+
+/** Telemetry ghi lai moi ban ghi — cung khuon `run-closure.service.spec.ts`. */
+const recordingTelemetry = (records: TelemetryRecord[]): TelemetryService => {
+  const sink: TelemetrySink = { record: (record) => records.push(record) };
+  const telemetry = new TelemetryService();
+  telemetry.configure({
+    release: { tenant: 'it', environment: 'test', gitSha: 'unknown', source: 'none' },
+    privacy: 'full',
+    sinks: [sink],
+  });
+  return telemetry;
+};
+
+const reasonsOf = (records: readonly TelemetryRecord[]): string[] =>
+  records.flatMap((record) => (record.type === 'decision' ? [record.reason] : []));
+
+/** Khoa doc cua mot hang hop thu, dung dang ma vi tri quet luu. */
+const keyOf = (row: FuelHandoffFacts): FuelHandoffScanPosition => ({
+  emittedAt: row.emittedAt,
+  handoffId: row.handoffId,
+});
 
 describe('Vong quet ban giao cay xang — luat dieu phoi', () => {
   it('hop thu rong: khong lam gi, va khong bao loi', async () => {
@@ -449,7 +479,10 @@ describe('Vong quet ban giao cay xang — TIEN DO va CONG BANG', () => {
     const tienDoMoi = { emittedAt: emittedAt(9), handoffId: 'h-tien-do-moi' };
 
     /* Dat mot vi tri quet dang co de nhip duoi doc ra mot anh chup KHONG rong. */
-    await repository.advanceFuelHandoffScan({ emittedAt: emittedAt(1), handoffId: 'h001' });
+    await repository.advanceFuelHandoffScan(await repository.fuelHandoffScan(), {
+      emittedAt: emittedAt(1),
+      handoffId: 'h001',
+    });
 
     /*
      * CHO KHUNG LAI, dat vao mot diem `await` THAT: `drain()` doc trang thai quet truoc khi doc hop
@@ -462,7 +495,7 @@ describe('Vong quet ban giao cay xang — TIEN DO va CONG BANG', () => {
           daChen = true;
           const cuaB = await repository.rewindFuelHandoffScan(await repository.fuelHandoffScan());
           expect(cuaB.rewound).toBe(true);
-          await repository.advanceFuelHandoffScan(tienDoMoi);
+          await repository.advanceFuelHandoffScan(await repository.fuelHandoffScan(), tienDoMoi);
         }
         return [];
       }
@@ -474,5 +507,208 @@ describe('Vong quet ban giao cay xang — TIEN DO va CONG BANG', () => {
     expect(daChen).toBe(true);
     expect(summary.wrapped).toBe(false);
     expect((await repository.fuelHandoffScan()).position).toEqual(tienDoMoi);
+  });
+});
+
+/**
+ * ===========================================================================
+ * BA BAI HOI QUY CUA `INDEPENDENT_CHATGPT_REVIEW_3` — 16/09/2026.
+ * ===========================================================================
+ *
+ * `V-LIVE-5` dong lan QUAY VE DAU den muon. Ba bai duoi day dong lan TIEN den muon, va chung dung
+ * mot khuon rieng co chu dich: CA BA tien trinh deu la NHIP THAT cua dich vu san xuat tren cung mot
+ * kho, khong mot lenh ghi nao goi thang vao kho. Nen cac bai nay khong phu thuoc vao chu ky ham cua
+ * kho — va chung DO ca khi mot ban sua ve sau de dich vu doc lai trang thai ngay truoc khi tien, tuc
+ * lai danh mat anh chup ma nhip do da dung de doc trang.
+ *
+ * `V-LIVE-6` DO tren ban truoc cua dich vu. `V-LIVE-7`/`V-LIVE-8` XANH tren ban truoc o phan vi tri
+ * — chung giu dieu kien thu hai cua vong soat: sua loi vuot vong KHONG duoc lam hong tien do cua
+ * nhung nhip CUNG vong.
+ */
+describe('Vong quet ban giao cay xang — lan TIEN den muon', () => {
+  it('V-LIVE-6: nhip CU cua vong N KHONG tien duoc vi tri quet trong vong N+1', async () => {
+    /*
+     * ===========================================================================
+     * DUNG CANH CUA VONG SOAT, bang ba nhip that:
+     *
+     *     A doc (h001, vong 0), doc mot trang DAY toi h008, roi KHUNG lai truoc khi tien
+     *     B doc (h001, vong 0), trang NGAN -> cham day hop thu -> quay ve dau -> vong 1
+     *     C doc (dau, vong 1), trang DAY hai hang -> tien toi h003
+     *     A tinh day, tien toi h008
+     *
+     * Ban truoc chi so VI TRI: h008 nam sau h003 nen lan ghi cua A DI QUA, va vong 1 dung o h008 —
+     * tuc doan (h003, h008] cua vong 1 bi BO QUA. Doan do chinh la noi hang ghi hong va ban giao
+     * phat lui ngay nam cho vong moi lam lai; vong quet quay ve dau chinh la de doc lai no.
+     */
+    const rows = [
+      handoff({ handoffId: 'h001', emittedAt: emittedAt(1) }),
+      handoff({ handoffId: 'h003', emittedAt: emittedAt(3) }),
+      handoff({ handoffId: 'h008', emittedAt: emittedAt(8) }),
+    ];
+    const repository = new InMemorySettlementRepository();
+    const records: TelemetryRecord[] = [];
+
+    /* Vong 0 dung o h001: trang DAY mot hang, nen nhip nay TIEN chu khong quay ve dau. */
+    await build(new FakeOutbox(rows), repository).drain.drain({ scanPage: 1, drainBatch: 10 });
+    expect(await repository.fuelHandoffScan()).toEqual({ position: keyOf(rows[0]!), cycles: 0 });
+
+    /*
+     * CHO KHUNG LAI cua A, dat vao mot diem `await` THAT: `drain()` doc trang thai quet truoc khi
+     * doc hop thu, nen B va C chay dung khoang giua "A da doc trang thai" va "A tien".
+     */
+    let daChen = false;
+    const chenGiuaNhip = new (class extends FakeOutbox {
+      override async pendingHandoffs(input: {
+        readonly after: FuelHandoffScanPosition | null;
+        readonly limit: number;
+      }): Promise<FuelHandoffFacts[]> {
+        if (!daChen) {
+          daChen = true;
+
+          const cuaB = await build(new FakeOutbox(rows), repository).drain.drain({
+            scanPage: 10,
+            drainBatch: 10,
+          });
+          expect(cuaB.wrapped).toBe(true);
+
+          await build(new FakeOutbox(rows), repository).drain.drain({
+            scanPage: 2,
+            drainBatch: 10,
+          });
+          expect(await repository.fuelHandoffScan()).toEqual({
+            position: keyOf(rows[1]!),
+            cycles: 1,
+          });
+        }
+        return super.pendingHandoffs(input);
+      }
+    })(rows);
+
+    const { drain } = build(chenGiuaNhip, repository, recordingTelemetry(records));
+    const summary = await drain.drain({ scanPage: 2, drainBatch: 10 });
+
+    expect(daChen).toBe(true);
+    /* Viec cua A van dung: hai ky A nhin toi deu da duoc B ghi, nen khong ky nao bi ghi hai lan. */
+    expect(summary).toEqual({
+      ingested: 0,
+      alreadyCurrent: 2,
+      failed: 0,
+      saturated: false,
+      wrapped: false,
+    });
+
+    /* Diem mau chot: vong 1 VAN dung o h003 — noi C, tien trinh cua vong 1, de lai. */
+    expect(await repository.fuelHandoffScan()).toEqual({ position: keyOf(rows[1]!), cycles: 1 });
+
+    /* Va lan tien bi tu choi NOI RA, khong im lang — cung ly do voi lan quay ve dau cu. */
+    expect(reasonsOf(records)).toEqual(['FUEL_HANDOFF_SCAN_ADVANCE_STALE']);
+  });
+
+  it('V-LIVE-7: CUNG vong, nhip cham hon da doc XA HON van tien duoc', async () => {
+    /*
+     * ===========================================================================
+     * MAT TRAI CUA `V-LIVE-6`. Cach sua de nhat — bat lan tien so CA vi tri lan so hieu vong, dung
+     * nhu lan quay ve dau — sai o day:
+     *
+     *     A doc (h001, vong 0), doc mot trang DAY toi h008, roi khung lai
+     *     B doc (h001, vong 0), doc mot trang ngan hon, tien toi h003
+     *     A tinh day: vi tri ben da doi (h001 -> h003), nen mot CAS tren vi tri TU CHOI A
+     *
+     * Trong khi A da nhin qua dung (h001, h008] TRONG vong 0, va h008 nam sau h003. Tu choi A khong
+     * sai ve tien, nhung bat nhip sau doc lai (h003, h008] — va voi nhieu ban sao cung quet thi dieu
+     * do xay ra o gan nhu moi nhip. So hieu vong la ve DUY NHAT phai bang; vi tri chi can TIEN.
+     */
+    const rows = [1, 3, 5, 8, 9].map((index) =>
+      handoff({ handoffId: `h${pad(index)}`, emittedAt: emittedAt(index) }),
+    );
+    const repository = new InMemorySettlementRepository();
+    const records: TelemetryRecord[] = [];
+
+    await build(new FakeOutbox(rows), repository).drain.drain({ scanPage: 1, drainBatch: 10 });
+
+    let daChen = false;
+    const chenGiuaNhip = new (class extends FakeOutbox {
+      override async pendingHandoffs(input: {
+        readonly after: FuelHandoffScanPosition | null;
+        readonly limit: number;
+      }): Promise<FuelHandoffFacts[]> {
+        if (!daChen) {
+          daChen = true;
+          await build(new FakeOutbox(rows), repository).drain.drain({
+            scanPage: 1,
+            drainBatch: 10,
+          });
+          expect(await repository.fuelHandoffScan()).toEqual({
+            position: keyOf(rows[1]!),
+            cycles: 0,
+          });
+        }
+        return super.pendingHandoffs(input);
+      }
+    })(rows);
+
+    const { drain } = build(chenGiuaNhip, repository, recordingTelemetry(records));
+    const summary = await drain.drain({ scanPage: 3, drainBatch: 10 });
+
+    expect(daChen).toBe(true);
+    expect(summary).toEqual({
+      ingested: 2,
+      alreadyCurrent: 1,
+      failed: 0,
+      saturated: false,
+      wrapped: false,
+    });
+    expect(await repository.fuelHandoffScan()).toEqual({ position: keyOf(rows[3]!), cycles: 0 });
+    expect(reasonsOf(records)).not.toContain('FUEL_HANDOFF_SCAN_ADVANCE_STALE');
+  });
+
+  it('V-LIVE-8: CUNG vong, nhip cham hon doc NGAN hon KHONG keo lui vi tri', async () => {
+    /*
+     * Dieu kien "chi tien" cua lan tien khong doi sau `REVIEW_3` — bai nay giu no o tang dich vu:
+     * B cung vong di toi h008 trong luc A khung lai; A chi doc toi h003 nen lan ghi cua A la mot BUOC
+     * LUI va phai khong xay ra, va noi ra bang cung ma quyet dinh voi lan tien vuot vong.
+     */
+    const rows = [1, 3, 5, 8].map((index) =>
+      handoff({ handoffId: `h${pad(index)}`, emittedAt: emittedAt(index) }),
+    );
+    const repository = new InMemorySettlementRepository();
+    const records: TelemetryRecord[] = [];
+
+    await build(new FakeOutbox(rows), repository).drain.drain({ scanPage: 1, drainBatch: 10 });
+
+    let daChen = false;
+    const chenGiuaNhip = new (class extends FakeOutbox {
+      override async pendingHandoffs(input: {
+        readonly after: FuelHandoffScanPosition | null;
+        readonly limit: number;
+      }): Promise<FuelHandoffFacts[]> {
+        if (!daChen) {
+          daChen = true;
+          await build(new FakeOutbox(rows), repository).drain.drain({
+            scanPage: 3,
+            drainBatch: 10,
+          });
+          expect(await repository.fuelHandoffScan()).toEqual({
+            position: keyOf(rows[3]!),
+            cycles: 0,
+          });
+        }
+        return super.pendingHandoffs(input);
+      }
+    })(rows);
+
+    const { drain } = build(chenGiuaNhip, repository, recordingTelemetry(records));
+    const summary = await drain.drain({ scanPage: 1, drainBatch: 10 });
+
+    expect(daChen).toBe(true);
+    expect(summary).toEqual({
+      ingested: 0,
+      alreadyCurrent: 1,
+      failed: 0,
+      saturated: false,
+      wrapped: false,
+    });
+    expect(await repository.fuelHandoffScan()).toEqual({ position: keyOf(rows[3]!), cycles: 0 });
+    expect(reasonsOf(records)).toEqual(['FUEL_HANDOFF_SCAN_ADVANCE_STALE']);
   });
 });

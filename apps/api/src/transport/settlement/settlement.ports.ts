@@ -201,6 +201,28 @@ export interface FuelHandoffScanPosition {
  *
  * `cycles` la SO HIEU VONG, va no chi tang. Ghep no vao phep so sanh lam canh tren khong con xay
  * ra duoc: `(T, 7)` khong bang `(T, 8)`.
+ *
+ * ===========================================================================
+ * CUNG ANH CHUP DO LA VE CUA LAN TIEN — them sau `INDEPENDENT_CHATGPT_REVIEW_3` (16/09/2026).
+ *
+ * Ban truoc chi dua anh chup vao lan QUAY VE DAU; lan TIEN chi nhan vi tri moi va chi so vi tri.
+ * Nen mot nhip doc anh chup o vong N, khung lai qua mot lan quay ve dau, van ghi duoc vao vong N+1
+ * mien la vi tri no mang nam XA HON cho vong moi vua toi:
+ *
+ *     A doc (P, vong N), doc trang toi Q, roi khung lai
+ *     B cham day hop thu        -> vong N+1
+ *     C quet vong N+1 tu dau    -> tien toi R, voi R < Q
+ *     A tinh day, tien toi Q    -> (Q, vong N+1), va doan (R, Q] cua vong N+1 bi BO QUA
+ *
+ * Doan bi bo qua dung la noi hang ghi hong va ban giao phat lui ngay nam cho vong moi doc lai.
+ *
+ * Hai lan ghi dung CUNG anh chup nhung so KHAC nhau, va do khong phai bat nhat:
+ *
+ *   · QUAY VE DAU so ca `position` lan `cycles` — no XOA tien do, nen chi duoc xoa dung thu no da
+ *     thay;
+ *   · TIEN chi bat `cycles` phai BANG, con vi tri thi chi can TIEN. So ca vi tri se tu choi mot
+ *     nhip CUNG vong da doc xa hon mot nhip khac vua ghi truoc no — mot buoc lui ve tien do ma voi
+ *     nhieu ban sao cung quet thi xay ra o gan nhu moi nhip.
  */
 export interface FuelHandoffScanState {
   readonly position: FuelHandoffScanPosition | null;

@@ -3065,12 +3065,15 @@ model TransportSettlementFuelHandoffScan {
   lastEmittedAt DateTime?
   /// `id` cua chinh ban giao do — ve phai cua keyset. Luon di cung `lastEmittedAt`.
   lastHandoffId String?
-  /// So vong da quet tron — va VE THU HAI cua phep so sanh truoc khi quay ve dau.
+  /// So vong da quet tron — va la VE cua CA HAI lan ghi co dieu kien tren hang nay.
   ///
   /// Cot nay tung chi de xem. No thanh mot phan cua dieu kien ghi sau
   /// `INDEPENDENT_CHATGPT_REVIEW_2` (15/09/2026): vi tri quet chi nhan mot tap huu han gia tri,
   /// nen so rieng `(lastEmittedAt, lastHandoffId)` khong phan biet duoc hai vong khac nhau dung
   /// o cung mot hang. So hieu vong thi chi tang. Xem `FuelHandoffScanState`.
+  ///
+  /// Sau `INDEPENDENT_CHATGPT_REVIEW_3` (16/09/2026) lan TIEN cung phai co `cycles` bang so hieu vong
+  /// nhip do da doc luc bat dau: mot nhip cua vong cu khong con ghi duoc vi tri vao vong moi.
   cycles        Int       @default(0)
   updatedAt     DateTime  @updatedAt
 }

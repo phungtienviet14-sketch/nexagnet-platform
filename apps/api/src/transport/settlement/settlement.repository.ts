@@ -349,8 +349,34 @@ export abstract class SettlementRepository {
    *
    * Viec cua ky hong KHONG mat: `advanceFuelHandoffCursor` chua he duoc goi cho no, nen vong quet
    * SAU se lam lai. Cai doi la LUC lam lai: vong sau, khong phai nhip sau.
+   *
+   * ===========================================================================
+   * `observed` LA BAT BUOC — cho de sai thu ba, them sau `INDEPENDENT_CHATGPT_REVIEW_3`.
+   *
+   * `observed` la trang thai nhip nay DOC RA luc bat dau (`fuelHandoffScan()`), tuc chinh anh chup
+   * ma trang vua duyet duoc doc tu do. Lan ghi chi xay ra khi CA HAI dieu sau dung, trong MOT lenh
+   * ghi co dieu kien o tang CSDL:
+   *
+   *   1. `cycles` ben VAN BANG `observed.cycles` — chua co lan quay ve dau nao vuot mat nhip nay.
+   *      Thieu dieu kien nay, mot nhip cua vong N ghi duoc vao vong N+1 va bo qua mot doan cua
+   *      chinh vong moi. Chuoi day du nam o `FuelHandoffScanState`;
+   *   2. vi tri ben la `null` hoac nam TRUOC `next` theo `(emittedAt, handoffId)` — chi tien, khong
+   *      lui, ke ca truoc mot nhip CUNG vong cham hon.
+   *
+   * `observed.position` KHONG nam trong phep so sanh, va do la co y: hai nhip cung vong doc tu cung
+   * mot cho roi duyet toi hai cho khac nhau thi cho XA HON phai thang, du no ghi sau.
+   *
+   * KHONG doc lai trang thai ngay truoc khi goi ham nay. Anh chup doc lai luon mang so hieu vong
+   * MOI NHAT, nen dieu kien 1 luon dung — tuc dung lai dung loi vua sua.
+   *
+   * `advanced: false` = mot tien trinh khac da di truoc (sang vong moi, hoac xa hon trong cung
+   * vong). KHONG phai loi, va viec cua nhip nay khong mat: con tro TIEU THU cua moi ky no ghi da
+   * duoc day rieng.
    */
-  abstract advanceFuelHandoffScan(position: FuelHandoffScanPosition): Promise<void>;
+  abstract advanceFuelHandoffScan(
+    observed: FuelHandoffScanState,
+    next: FuelHandoffScanPosition,
+  ): Promise<{ readonly advanced: boolean }>;
 
   /**
    * DA DOC TOI DUOI HOP THU — quay ve dau va dem them mot vong, NEU trang thai chua doi.

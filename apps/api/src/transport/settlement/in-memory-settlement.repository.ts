@@ -58,8 +58,9 @@ export class InMemorySettlementRepository extends SettlementRepository {
    * VI TRI QUET hop thu di — mot gia tri, khong mot bang.
    *
    * `position: null` = dau vong. `cycles` la SO HIEU VONG — giong cot cung ten o CSDL, va giong
-   * o ca cho nay: no khong con la mot so de xem, ma la ve thu hai cua phep so sanh truoc khi
-   * quay ve dau (`rewindFuelHandoffScan`).
+   * o ca cho nay: no khong con la mot so de xem, ma la ve cua CA HAI lan ghi co dieu kien — ve
+   * thu hai truoc khi quay ve dau (`rewindFuelHandoffScan`), va ve phai BANG truoc khi tien
+   * (`advanceFuelHandoffScan`).
    */
   private fuelScan: FuelHandoffScanState = {
     position: null,
@@ -660,15 +661,23 @@ export class InMemorySettlementRepository extends SettlementRepository {
   }
 
   /**
-   * CHI TIEN TRONG MOT VONG — cung luat voi ban Prisma.
+   * CHI TIEN, VA CHI TRONG VONG MA NGUOI GOI DA THAY — cung luat voi ban Prisma.
    *
    * Viet ra o day vi day la mot BAT BIEN chu khong mot chi tiet cua CSDL: mot ban in-memory "de
    * tinh" hon se lam bo bai don vi xanh trong khi ban that o tang tren tu choi chinh lan ghi do.
+   *
+   * Phep so so hieu vong duoc them sau `INDEPENDENT_CHATGPT_REVIEW_3`; `V-LIVE-6` DO tren ban chi
+   * so vi tri. Vi tri cua `observed` co y KHONG duoc so — xem `SettlementRepository`.
    */
-  async advanceFuelHandoffScan(position: FuelHandoffScanPosition): Promise<void> {
+  async advanceFuelHandoffScan(
+    observed: FuelHandoffScanState,
+    next: FuelHandoffScanPosition,
+  ): Promise<{ readonly advanced: boolean }> {
+    if (this.fuelScan.cycles !== observed.cycles) return { advanced: false };
     const current = this.fuelScan.position;
-    if (current !== null && !isAfterScanPosition(position, current)) return;
-    this.fuelScan = { ...this.fuelScan, position };
+    if (current !== null && !isAfterScanPosition(next, current)) return { advanced: false };
+    this.fuelScan = { ...this.fuelScan, position: next };
+    return { advanced: true };
   }
 
   /**

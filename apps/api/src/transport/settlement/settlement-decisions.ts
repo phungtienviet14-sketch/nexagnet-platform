@@ -220,6 +220,22 @@ export const FUEL_HANDOFF_DRAIN_REASONS = [
    * kia phat, hoac do chinh nhip sau cua tien trinh nay phat sau khi doc lai trang thai moi.
    */
   'FUEL_HANDOFF_SCAN_REWIND_STALE',
+  /**
+   * NHIP NAY DA DUYET XONG MOT TRANG, NHUNG KHONG DUOC TIEN — mot tien trinh khac da di truoc.
+   *
+   * Them sau `INDEPENDENT_CHATGPT_REVIEW_3`. Lan tien bi tu choi o TANG CSDL khi:
+   *   · vong quet da sang mot vong KHAC vong ma nhip nay bat dau — mot tien trinh khac cham day hop
+   *     thu va quay ve dau trong luc nhip nay dang chay. Ghi vao se bo qua mot doan cua vong moi;
+   *   · hoac cung vong, nhung vi tri ben da o XA HON hang cuoi nhip nay nhin toi.
+   *
+   * Hai truong hop GOP mot ma, cung cach `FUEL_HANDOFF_SCAN_REWIND_STALE` gop "doi vi tri" voi "doi
+   * vong": ca hai dan toi cung mot viec (khong ghi gi), tra loi cung mot cau hoi van hanh (co bao
+   * nhieu tien trinh dang quet cung mot hop thu), va lenh ghi co dieu kien khong tach duoc chung ma
+   * khong doc them mot lan — mot lan doc chi de dat ten cho mot lan khong ghi.
+   *
+   * KHONG phai loi. Viec cua nhip nay khong mat: moi ky no ghi deu da day con tro TIEU THU rieng.
+   */
+  'FUEL_HANDOFF_SCAN_ADVANCE_STALE',
 ] as const;
 export type FuelHandoffDrainReason = (typeof FUEL_HANDOFF_DRAIN_REASONS)[number];
 
@@ -299,5 +315,7 @@ export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
     FUEL_HANDOFF_SCAN_WRAPPED: 'Đã đọc tới cuối hộp thư — vòng quét quay về đầu',
     FUEL_HANDOFF_SCAN_REWIND_STALE:
       'Tiến trình khác đã đi trước — bỏ lượt quay về đầu này, không ghi gì',
+    FUEL_HANDOFF_SCAN_ADVANCE_STALE:
+      'Tiến trình khác đã đi trước (sang vòng mới hoặc đã xa hơn) — bỏ lượt tiến này, không ghi gì',
   } satisfies Record<TransportSettlementDecisionReason, string>,
 });

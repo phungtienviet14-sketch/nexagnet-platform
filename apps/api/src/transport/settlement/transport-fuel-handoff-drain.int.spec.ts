@@ -705,7 +705,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * lui, nen khong quay ve dau truoc thi bai duoi do vi chinh cai tinh chat no dang kiem.
        */
       await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
-      await settlementRepo.advanceFuelHandoffScan(day);
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), day);
 
       /*
        * Mot "tien trinh API" khac: doi tuong kho MOI hoan toan, cung PostgreSQL. Day la noi dung
@@ -720,16 +720,17 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * toi duoi hop thu, tuc khong bao gio quay ve dau, tuc viec cua nhung ky ghi hong khong bao
        * gio duoc lam lai.
        */
-      await settlementRepo.advanceFuelHandoffScan({
-        emittedAt: '2020-01-01T00:00:00.000Z',
-        handoffId: 'it-lv-cu-hon',
-      });
+      const buocLui = await settlementRepo.advanceFuelHandoffScan(
+        await settlementRepo.fuelHandoffScan(),
+        { emittedAt: '2020-01-01T00:00:00.000Z', handoffId: 'it-lv-cu-hon' },
+      );
+      expect(buocLui.advanced).toBe(false);
       expect((await settlementRepo.fuelHandoffScan()).position).toEqual(day);
     });
 
     it('V-P0-14 — het hop thu: quay ve dau va dem them mot vong', async () => {
       /* Do vi tri quet o mot thoi diem sau MOI ban giao co the co trong CSDL dung chung. */
-      await settlementRepo.advanceFuelHandoffScan({
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), {
         emittedAt: '2099-01-01T00:00:00.000Z',
         handoffId: 'it-lv-cuoi-hop-thu',
       });
@@ -745,7 +746,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
 
     it('V-P0-15 — CSDL tu choi mot NUA keyset', async () => {
-      await settlementRepo.advanceFuelHandoffScan({
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), {
         emittedAt: '2026-09-20T00:00:00.000Z',
         handoffId: 'it-lv-nua-keyset',
       });
@@ -777,7 +778,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportSettlementFuelHandoffCursor.delete({
         where: { reconciliationId: state.reconciliationId },
       });
-      await settlementRepo.advanceFuelHandoffScan({
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), {
         emittedAt: '2099-01-01T00:00:00.000Z',
         handoffId: 'it-lv-qua-xa',
       });
@@ -824,7 +825,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       };
 
       await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
-      await settlementRepo.advanceFuelHandoffScan(anhChupCu);
+      await settlementRepo.advanceFuelHandoffScan(
+        await settlementRepo.fuelHandoffScan(),
+        anhChupCu,
+      );
 
       /*
        * CHO KHUNG LAI cua tien trinh A, dat vao mot diem `await` THAT.
@@ -847,7 +851,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
             expect(cuaB.rewound).toBe(true);
 
             /* C quet vong moi va tien toi mot vi tri moi. Day la TIEN DO THAT can duoc bao ve. */
-            await settlementRepo.advanceFuelHandoffScan(tienDoMoi);
+            await settlementRepo.advanceFuelHandoffScan(
+              await settlementRepo.fuelHandoffScan(),
+              tienDoMoi,
+            );
             cyclesSauB = (await settlementRepo.fuelHandoffScan()).cycles;
           }
 
@@ -886,14 +893,14 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const moc = { emittedAt: '2099-07-01T00:00:00.000Z', handoffId: 'it-lv-aba' };
 
       await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
-      await settlementRepo.advanceFuelHandoffScan(moc);
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), moc);
 
       const cu = await settlementRepo.fuelHandoffScan();
       expect(cu.position).toEqual(moc);
 
       /* MOT VONG TRON cua mot tien trinh khac: quay ve dau, roi tien lai toi DUNG vi tri cu. */
       expect((await settlementRepo.rewindFuelHandoffScan(cu)).rewound).toBe(true);
-      await settlementRepo.advanceFuelHandoffScan(moc);
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), moc);
 
       const bayGio = await settlementRepo.fuelHandoffScan();
       expect(bayGio.position).toEqual(cu.position);
@@ -902,6 +909,235 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       /* Anh chup `cu` gio da cu mot vong. Lan ghi cua no phai khong xay ra. */
       expect((await settlementRepo.rewindFuelHandoffScan(cu)).rewound).toBe(false);
       expect(await settlementRepo.fuelHandoffScan()).toEqual(bayGio);
+    });
+
+    /* ================================================================ *
+     * V-P0-19..23 — lan TIEN den muon, va lan tien CUNG vong
+     *
+     * Nam bai nay duoc them sau `INDEPENDENT_CHATGPT_REVIEW_3` (16/09/2026). `V-P0-17/18` chung
+     * minh lan QUAY VE DAU cu khong xoa duoc tien do moi. Lan TIEN cu thi chua bai nao kiem, va do
+     * la lo con lai: ban truoc chi so VI TRI, nen mot nhip cua vong N ghi duoc vao vong N+1.
+     *
+     *   · `V-P0-19` — dung chuoi cua vong soat, tren kho that: CSDL phai o lai R trong vong N+1;
+     *   · `V-P0-20` — vong moi di toi DUNG vi tri nhip cu da thay: so vi tri thi khong phan biet
+     *     duoc, chi so hieu vong moi phan biet duoc;
+     *   · `V-P0-21` — cung canh do qua DICH VU san xuat, de khoa viec dich vu dua vao anh chup LUC
+     *     BAT DAU nhip chu khong phai mot anh chup doc lai;
+     *   · `V-P0-22`, `V-P0-23` — dieu kien thu hai cua vong soat: lan tien CUNG vong chay song song
+     *     van chi tien va dung o cho XA NHAT, ke ca khi hang vi tri quet chua ton tai.
+     *
+     * Moi moc vi tri o day la gia (nam 2000 hoac 2099) va khong trung ban giao nao: cac bai noi ve
+     * TRANH CHAP tren hang don, khong ve noi dung hop thu — tru `V-P0-21`, co y dung ban giao that.
+     * ================================================================ */
+
+    it('V-P0-19 — lan tien CU cua vong N khong ghi duoc vao vong N+1: CSDL van o R', async () => {
+      const P = { emittedAt: '2099-08-01T00:00:00.000Z', handoffId: 'it-lv-vong-n-p' };
+      const R = { emittedAt: '2099-08-05T00:00:00.000Z', handoffId: 'it-lv-vong-moi-r' };
+      const Q = { emittedAt: '2099-08-09T00:00:00.000Z', handoffId: 'it-lv-vong-cu-q' };
+
+      await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), P);
+
+      /* A doc anh chup cua vong N, duyet trang toi Q, roi KHUNG lai truoc khi tien. */
+      const cuaA = await settlementRepo.fuelHandoffScan();
+      expect(cuaA.position).toEqual(P);
+
+      /* B cham day hop thu -> vong N+1. */
+      const cuaB = await settlementRepo.rewindFuelHandoffScan(
+        await settlementRepo.fuelHandoffScan(),
+      );
+      expect(cuaB.rewound).toBe(true);
+
+      /* C quet vong N+1 TU DAU va tien toi R — thap hon Q. */
+      const cuaC = await settlementRepo.fuelHandoffScan();
+      expect(cuaC).toEqual({ position: null, cycles: cuaA.cycles + 1 });
+      expect((await settlementRepo.advanceFuelHandoffScan(cuaC, R)).advanced).toBe(true);
+
+      /* A tinh day. Q nam SAU R, nen ban chi-so-vi-tri cho lan ghi nay di qua. */
+      expect((await settlementRepo.advanceFuelHandoffScan(cuaA, Q)).advanced).toBe(false);
+
+      expect(await settlementRepo.fuelHandoffScan()).toEqual({
+        position: R,
+        cycles: cuaA.cycles + 1,
+      });
+      /* Doc thang hang CSDL, khong qua kho: dung cot, dung gia tri. */
+      expect(await scanRow()).toMatchObject({
+        lastEmittedAt: new Date(R.emittedAt),
+        lastHandoffId: R.handoffId,
+        cycles: cuaA.cycles + 1,
+      });
+    });
+
+    it('V-P0-20 — vong N+1 di toi DUNG vi tri nhip cu da thay: lan tien cu VAN bi tu choi', async () => {
+      /*
+       * BAI NAY DO NEU LAN TIEN CHI SO VI TRI — ke ca mot phep so vi tri CHINH XAC kieu "ben van la
+       * P thi moi tien". Vi tri quet chi nhan mot tap huu han gia tri va moi vong lai di qua dung
+       * nhung hang do, nen canh vong moi dung dung cho vong cu tung dung la hinh dang binh thuong
+       * cua bang nay — cung ly do voi `V-P0-18`, o lan ghi con lai.
+       */
+      const P = { emittedAt: '2099-08-11T00:00:00.000Z', handoffId: 'it-lv-aba-tien-p' };
+      const Q = { emittedAt: '2099-08-19T00:00:00.000Z', handoffId: 'it-lv-aba-tien-q' };
+
+      await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), P);
+      const cuaA = await settlementRepo.fuelHandoffScan();
+
+      const cuaB = await settlementRepo.rewindFuelHandoffScan(
+        await settlementRepo.fuelHandoffScan(),
+      );
+      expect(cuaB.rewound).toBe(true);
+      const cuaC = await settlementRepo.advanceFuelHandoffScan(
+        await settlementRepo.fuelHandoffScan(),
+        P,
+      );
+      expect(cuaC.advanced).toBe(true);
+
+      const vongMoi = await settlementRepo.fuelHandoffScan();
+      expect(vongMoi).toEqual({ position: cuaA.position, cycles: cuaA.cycles + 1 });
+
+      expect((await settlementRepo.advanceFuelHandoffScan(cuaA, Q)).advanced).toBe(false);
+      expect(await settlementRepo.fuelHandoffScan()).toEqual(vongMoi);
+    });
+
+    it('V-P0-21 — qua DICH VU that: nhip cua vong N khung lai qua mot lan quay ve dau khong tien duoc', async () => {
+      /*
+       * ===========================================================================
+       * `V-P0-19` chung minh menh de `WHERE`. Bai nay chung minh DICH VU dua dung anh chup vao do —
+       * anh chup doc LUC BAT DAU nhip. Mot ban sua "doc lai trang thai ngay truoc khi tien" van xanh
+       * `V-P0-19`, va do o day: anh chup doc lai luon mang so hieu vong moi nhat.
+       *
+       * Trang cua A la ban giao THAT cua bo bai, da tieu thu toi ban moi nhat (`V-P0-16`), nen A
+       * khong ghi mot dong cong no nao: lan ghi duy nhat A con lam la lan tien dang duoc kiem. Trang
+       * dai MOT hang voi `scanPage: 1` la trang DAY, nen A khong ket luan het hop thu ma di toi lan
+       * tien.
+       */
+      const P = { emittedAt: '2000-01-01T00:00:00.000Z', handoffId: 'it-lv-dich-vu-p' };
+      const R = { emittedAt: '2000-06-01T00:00:00.000Z', handoffId: 'it-lv-dich-vu-r' };
+
+      const that = await new FuelSettlementSourceAdapter(fuelRepo).latestHandoff(
+        state.reconciliationId,
+      );
+      expect(that).not.toBeNull();
+      const tieuThu = await settlementRepo.fuelHandoffCursors([state.reconciliationId]);
+      expect(tieuThu.get(state.reconciliationId)).toBe(that!.revision);
+
+      await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
+      await settlementRepo.advanceFuelHandoffScan(await settlementRepo.fuelHandoffScan(), P);
+      const truoc = await settlementRepo.fuelHandoffScan();
+
+      /* CHO KHUNG LAI cua A: `drain()` da doc `truoc`, chua tien. */
+      let daChen = false;
+      const chenGiuaNhip = {
+        pendingHandoffs: async (): Promise<FuelHandoffFacts[]> => {
+          if (!daChen) {
+            daChen = true;
+
+            const cuaB = await settlementRepo.rewindFuelHandoffScan(
+              await settlementRepo.fuelHandoffScan(),
+            );
+            expect(cuaB.rewound).toBe(true);
+
+            const cuaC = await settlementRepo.advanceFuelHandoffScan(
+              await settlementRepo.fuelHandoffScan(),
+              R,
+            );
+            expect(cuaC.advanced).toBe(true);
+          }
+          return [that!];
+        },
+      } as unknown as FuelSettlementSource;
+
+      const summary = await buildDrain(chenGiuaNhip).drain({ scanPage: 1, drainBatch: 25 });
+
+      expect(daChen).toBe(true);
+      expect(summary).toEqual({
+        ingested: 0,
+        alreadyCurrent: 1,
+        failed: 0,
+        saturated: false,
+        wrapped: false,
+      });
+
+      /* Ban giao that nam SAU R (nam 2000), nen ban truoc da ghi no vao vong N+1. */
+      expect(await settlementRepo.fuelHandoffScan()).toEqual({
+        position: R,
+        cycles: truoc.cycles + 1,
+      });
+    });
+
+    it('V-P0-22 — CUNG vong, chin lan tien SONG SONG: vi tri chi tien va dung o cho xa nhat', async () => {
+      /*
+       * ===========================================================================
+       * DIEU KIEN THU HAI CUA VONG SOAT: dua so hieu vong vao phep so sanh KHONG duoc bien lan tien
+       * thanh mot CAS tren vi tri.
+       *
+       * Chin lenh ghi cung mang MOT anh chup (dau vong N) va chay SONG SONG that tren pool ket noi
+       * cua Prisma, tranh nhau mot hang. Postgres bat lenh sau doi lenh truoc roi DANH GIA LAI
+       * `WHERE` tren ban hang moi nhat, nen cho dung phai la cho XA NHAT, bat ke thu tu toi.
+       */
+      await settlementRepo.rewindFuelHandoffScan(await settlementRepo.fuelHandoffScan());
+      const dauVong = await settlementRepo.fuelHandoffScan();
+      expect(dauVong.position).toBeNull();
+
+      const moc = (ngay: number): FuelHandoffScanPosition => ({
+        emittedAt: `2099-10-${String(ngay).padStart(2, '0')}T00:00:00.000Z`,
+        handoffId: `it-lv-cung-vong-${ngay}`,
+      });
+      const dich = [13, 17, 11, 19, 15, 12, 18, 14, 16];
+
+      const ketQua = await Promise.all(
+        dich.map((ngay) => settlementRepo.advanceFuelHandoffScan(dauVong, moc(ngay))),
+      );
+
+      expect(await settlementRepo.fuelHandoffScan()).toEqual({
+        position: moc(19),
+        cycles: dauVong.cycles,
+      });
+      /* Lenh toi 19 khong the thua ai: khong lenh nao khac mang mot vi tri xa hon. */
+      expect(ketQua[dich.indexOf(19)]?.advanced).toBe(true);
+
+      /* Buoc lui, va dung cho cu, trong cung vong: khong ghi. */
+      expect((await settlementRepo.advanceFuelHandoffScan(dauVong, moc(15))).advanced).toBe(false);
+      expect((await settlementRepo.advanceFuelHandoffScan(dauVong, moc(19))).advanced).toBe(false);
+
+      /*
+       * `dauVong` van mang vi tri CU (`null`) trong khi ben da o 19. Mot CAS tren vi tri se tu choi
+       * lan ghi duoi day; so hieu vong thi van bang, va 25 nam sau 19, nen no PHAI tien.
+       */
+      expect((await settlementRepo.advanceFuelHandoffScan(dauVong, moc(25))).advanced).toBe(true);
+      expect(await settlementRepo.fuelHandoffScan()).toEqual({
+        position: moc(25),
+        cycles: dauVong.cycles,
+      });
+    });
+
+    it('V-P0-23 — hang vi tri quet CHUA ton tai, chin lan tien dau tien SONG SONG: van o cho xa nhat', async () => {
+      /*
+       * DUONG `CREATE` cua lan tien. Khi chua ai tung quet, `UPDATE` khong cham hang nao, nen moi
+       * lenh deu di tao hang: mot lenh thang, cac lenh kia nhan `P2002`. Ban truoc dung lai o
+       * `P2002`, nen cho dung cuoi cung la cua lenh TAO THANG — ngau nhien — chu khong phai cho xa
+       * nhat.
+       *
+       * Xoa hang o day an toan vi cung ly do `cleanup()` xoa duoc: chi tep nay chay vong quet tren
+       * Postgres dung chung.
+       */
+      await prisma.transportSettlementFuelHandoffScan.deleteMany({
+        where: { id: FUEL_HANDOFF_SCAN_ROW },
+      });
+      const tinhKhoi = await settlementRepo.fuelHandoffScan();
+      expect(tinhKhoi).toEqual({ position: null, cycles: 0 });
+
+      const moc = (ngay: number): FuelHandoffScanPosition => ({
+        emittedAt: `2099-11-${String(ngay).padStart(2, '0')}T00:00:00.000Z`,
+        handoffId: `it-lv-dau-tien-${ngay}`,
+      });
+      const dich = [21, 27, 23, 29, 25, 22, 28, 24, 26];
+
+      await Promise.all(
+        dich.map((ngay) => settlementRepo.advanceFuelHandoffScan(tinhKhoi, moc(ngay))),
+      );
+
+      expect(await settlementRepo.fuelHandoffScan()).toEqual({ position: moc(29), cycles: 0 });
     });
 
     /* ================================================================ *
