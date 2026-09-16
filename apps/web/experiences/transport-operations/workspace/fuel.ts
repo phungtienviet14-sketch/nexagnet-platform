@@ -16,11 +16,13 @@ import {
   formatOdometer,
   fuelReconciliationStateTone,
   fuelReconciliationStatusTone,
+  fuelReviewReasonLabel,
   fuelVerificationTone,
   rejectReasonLabel,
   type StatusTone,
 } from '../customer-view';
 import { canPerform } from '../transport-actions';
+import type { DeclaredFuelFacts } from './fuel-extraction';
 import type {
   FuelDiscrepancy,
   FuelDiscrepancyKind,
@@ -124,7 +126,8 @@ export const toFuelEntryRow = (
     verificationTone: fuelVerificationTone(entry.verificationStatus),
     reconciliationLabel: FUEL_RECONCILIATION_STATUS_LABEL[entry.reconciliationStatus],
     reconciliationTone: fuelReconciliationStatusTone(entry.reconciliationStatus),
-    reviewReasons: [...entry.reviewReasons],
+    // `#313` — cau cho nguoi doc, khong phai ma may (`ODOMETER_NOT_ADVANCED`).
+    reviewReasons: entry.reviewReasons.map(fuelReviewReasonLabel),
     invoiceNo: entry.invoiceNo,
     // `verify` goi lai duoc nhieu lan theo thiet ke, nhung chi co nghia khi con `DECLARED`.
     canVerify: mayVerify && entry.verificationStatus === 'DECLARED',
@@ -155,6 +158,14 @@ export const toFuelEntryRows = (
 
 export interface FuelInboxRowModel {
   readonly id: string;
+  /** `#313` — khoa de mo drill-down tieu hao cua DUNG xe, DUNG thang cua phieu. */
+  readonly vehicleId: string;
+  readonly businessDate: string;
+  /**
+   * Nhung gi to khai da ghi, o dang SO — de dat canh ung vien may doc. Hop thu khong tra odo, nen
+   * `odometerKm` o day la `null`; khoi chi tiet bo sung tu `GET entries/:id` khi da doc xong.
+   */
+  readonly declared: DeclaredFuelFacts;
   readonly tripCode: string;
   readonly driverLabel: string;
   readonly vehicleLabel: string;
@@ -196,6 +207,16 @@ export const toFuelInboxRow = (
   const mayVerify = canPerform(role, 'transport.fuel.entry.verify');
   return {
     id: row.id,
+    vehicleId: row.vehicleId,
+    businessDate: row.businessDate,
+    declared: {
+      litersUnits: row.litersUnits,
+      amount: row.amount,
+      invoiceNo: row.invoiceNo,
+      businessDate: row.businessDate,
+      odometerKm: null,
+      vehiclePlate: row.vehiclePlate,
+    },
     tripCode: row.tripCode,
     // May chu tra `null` khi ho so da bi xoa/doi ten. Noi that thay vi de mot o trong.
     driverLabel: row.driverName ?? 'Lái xe chưa đọc được tên',
@@ -211,7 +232,7 @@ export const toFuelInboxRow = (
     verificationTone: fuelVerificationTone(row.verificationStatus),
     reconciliationLabel: FUEL_RECONCILIATION_STATUS_LABEL[row.reconciliationStatus],
     reconciliationTone: fuelReconciliationStatusTone(row.reconciliationStatus),
-    reviewReasons: [...row.reviewReasons],
+    reviewReasons: row.reviewReasons.map(fuelReviewReasonLabel),
     rejectedNote:
       row.verificationStatus === 'REJECTED'
         ? (row.reviewNote ?? 'Phiếu bị từ chối. Lái xe sửa lại theo ghi chú rồi nộp lại.')

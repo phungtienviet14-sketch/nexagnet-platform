@@ -26,7 +26,8 @@ export class UploadTooLargeError extends Error {
   }
 }
 
-export const readFileAsBase64 = (file: File): Promise<string> =>
+/** `Blob` chu khong `File`: anh chung tu DA LUU doc ve tu may chu la mot `Blob`, khong co ten tep. */
+export const readFileAsBase64 = (file: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Không đọc được tệp đã chọn.'));

@@ -227,7 +227,12 @@ function FuelEntryDetailPanel({
           <dd>{row.amountLabel}</dd>
         </div>
         <div>
-          <dt>Định mức</dt>
+          {/*
+            `#313`: con so nay la TIEU HAO THUC TE may chu chup luc khai (`consumptionUnits`), khong
+            phai dinh muc cua hang xe. Goi no la "Dinh muc" lam nguoi doc so sanh mot con so voi
+            chinh no.
+          */}
+          <dt>Tiêu hao lúc khai</dt>
           <dd>{row.consumptionLabel}</dd>
         </div>
         <div>

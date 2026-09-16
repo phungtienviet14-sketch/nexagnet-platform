@@ -1,6 +1,8 @@
 import {
+  FUEL_PAYMENT_METHOD_LABEL,
   FUEL_RECONCILIATION_STATUS_LABEL,
   FUEL_VERIFICATION_LABEL,
+  fuelReviewReasonLabel,
   TRIP_KIND_LABEL,
   TRIP_STATUS_LABEL,
   formatBusinessDate,
@@ -145,6 +147,11 @@ export interface DriverFuelSlipRow {
   readonly amountLabel: string;
   readonly odometerLabel: string;
   readonly consumptionLabel: string;
+  /** `#313` — lai xe thay lai DUNG nhung gi minh da khai: so hoa don va cach tra tien. */
+  readonly invoiceNo: string | null;
+  readonly paymentLabel: string;
+  /** Ly do may chu gan de ke toan soat — noi bang cau, khong bang ma, va khong buoc toi ai. */
+  readonly reviewReasonLabels: readonly string[];
   readonly verificationLabel: string;
   readonly tone: StatusTone;
   readonly reconciliationLabel: string;
@@ -239,6 +246,9 @@ export const toDriverFuelSlipRows = (
     amountLabel: formatMoney(slip.amount),
     odometerLabel: formatOdometer(slip.odometerKm),
     consumptionLabel: formatConsumption(slip.consumptionUnits),
+    invoiceNo: slip.invoiceNo,
+    paymentLabel: FUEL_PAYMENT_METHOD_LABEL[slip.paymentMethod],
+    reviewReasonLabels: slip.reviewReasons.map(fuelReviewReasonLabel),
     verificationLabel: FUEL_VERIFICATION_LABEL[slip.verificationStatus],
     tone: fuelVerificationTone(slip.verificationStatus),
     reconciliationLabel: FUEL_RECONCILIATION_STATUS_LABEL[slip.reconciliationStatus],
