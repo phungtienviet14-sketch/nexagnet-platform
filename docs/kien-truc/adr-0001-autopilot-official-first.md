@@ -1,18 +1,20 @@
 <!-- gh-aw-pin: v0.88.7 -->
 <!-- gh-aw-sha: bde367913adeb3132f0a171594c88a17f4b7d08c -->
-<!-- gh-aw-audit: 2026-09-15 -->
+<!-- gh-aw-audit: 2026-09-16 -->
 
 # ADR-0001 — Mặt phẳng điều khiển Autopilot: official-first
 
 | | |
 |---|---|
-| **Trạng thái** | ĐỀ XUẤT — chờ review độc lập theo cổng §14 của [#309](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/309) |
-| **Ngày** | 15/09/2026 |
+| **Trạng thái** | **ĐÃ CHẤP NHẬN** — PR [#310](https://github.com/phungtienviet14-sketch/nexagnet-platform/pull/310) qua review độc lập và merge vào `main` thành `86d106e527043dbd0df3d4b93789fa202e77d608`. Cổng §14 của [#309](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/309) **đã qua** |
+| **Ngày** | 15/09/2026 · cập nhật 16/09/2026 (Issue [#311](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/311) Phase A) |
 | **`main` lúc quyết định** | `de30a0825572684ce2c524058f94a4bd79e07668` |
+| **`main` lúc chấp nhận** | `86d106e527043dbd0df3d4b93789fa202e77d608` |
 | **Bằng chứng đầy đủ** | [autopilot-v2-official-first.md](../phat-trien/van-hanh/autopilot-v2-official-first.md) |
 | **Thay thế** | `KEEP_CUSTOM` của #194 / PR #199 (05/09/2026) |
-| **Bản ghim gh-aw** | `v0.88.7` / `bde367913adeb3132f0a171594c88a17f4b7d08c` — **re-audit 15/09/2026**, vẫn là bản stable mới nhất |
+| **Bản ghim gh-aw** | `v0.88.7` / `bde367913adeb3132f0a171594c88a17f4b7d08c` — **re-audit 16/09/2026**, vẫn là bản stable mới nhất |
 | **Sửa sau review độc lập lần 1** | 4 mục: repin re-audit · Codex reviewer hạ xuống NOT PROVEN · mô tả `GITHUB_TOKEN` + CI · tách cổng merge khỏi cổng deploy |
+| **Sửa ở Phase A của #311** | 3 mục: đo lại toàn bộ trạng thái live · `risk:high` chuyển từ cổng prompt sang **cổng tất định** · sửa lại mức Codex reviewer sau khi đo đúng trường danh tính |
 
 ---
 
@@ -31,11 +33,91 @@ DECISION = ADOPT_GITHUB_NATIVE_GH_AW
 - **Reviewer** = Codex qua App `chatgpt-codex-connector` (**đã cài sẵn trong repo này**), giữ tính
   chất Builder ≠ Reviewer mà không cần cầu nối trình duyệt. **Ở mức đọc độc lập, không phải mức
   review chính thức của GitHub** — xem "Codex reviewer: chưa chứng minh" bên dưới.
-- **Cổng người cho rủi ro cao** = nhãn `risk:high`, và ở mức GitHub là **hai cổng KHÁC NHAU, không
-  được gộp**: cổng **merge** (ruleset) và cổng **deploy** (Environment). Xem "Hai cổng người" bên
-  dưới. `required_approving_review_count` vẫn là `0` và ADR này **không** đề xuất nâng nó.
+- **Cổng rủi ro cao** = nhãn `risk:high`, cưỡng chế bằng **điều kiện tất định của GitHub Actions**
+  (`on.steps` + `if:`) — xem mục "`risk:high` — từ cổng prompt sang cổng tất định" bên dưới. Ở mức
+  *người*, GitHub vẫn có **hai cổng KHÁC NHAU, không được gộp**: cổng **merge** (ruleset) và cổng
+  **deploy** (Environment). Xem "Hai cổng người" bên dưới. `required_approving_review_count` vẫn là
+  `0` và ADR này **không** đề xuất nâng nó.
 
 Quyết định này **không** phải `BLOCKED_MANDATORY_GAP`: không có năng lực bắt buộc nào bị thiếu.
+
+## Đo lại 16/09/2026 — bốn thứ đổi, một thứ không
+
+Issue #311 cấm dùng snapshot của #310. Đo lại toàn bộ, và ghi cả cái **không** đổi:
+
+| Đã đo | 15/09 (#310) | 16/09 (#311 A1) |
+|---|---|---|
+| gh-aw stable mới nhất | `v0.88.7` | **`v0.88.7` — không đổi.** Không bản stable nào ra giữa hai ngày; `v0.89.15` (14/09) vẫn là tag cao nhất và vẫn `prerelease: true` |
+| SHA của tag | `bde3679…` | **trùng** — đo lại bằng `git/ref/tags/v0.88.7` |
+| Advisory mới | 10 cái, mới nhất 29/08 | **không có cái nào mới.** Mọi dải ảnh hưởng vẫn kết thúc dưới `v0.88.7` |
+| 7 required check + `strict` + `bypass_actors` | 7 / `true` / `[]` | **trùng từng mục** — đo bằng `/rules/branches/main`, không bằng `enforcement` của đối tượng ruleset |
+| Credential engine | không có | **vẫn không có.** Hai secret, năm biến, ba Environment đều rỗng; `suggestedActors` vẫn chỉ trả về chủ repo |
+| Codex phát review event | 0/13 PR | **0/30 PR** — và xem mục ngay dưới, vì lần này đo ra một thứ khác hẳn |
+
+Cái **không** đổi là quan trọng nhất: bản ghim vẫn đúng, nên ADR này **không repin**. Chỉ ngày
+`gh-aw-audit` tiến lên `2026-09-16`, vì đó là ngày *đo lại*, không phải ngày ghim.
+
+## Codex: không chỉ "chưa duyệt" — mà còn không phải một danh tính riêng
+
+#310 kết luận đúng chiều (**NOT PROVEN**) nhưng **đếm sai bằng chứng**, và lần đo 16/09 cho thấy
+lý do. Quét bằng `user.login` khớp chuỗi `codex` trên 482 comment gần nhất ra **0** — nghe như App
+đã ngừng chạy. Nhưng đó là **rỗng giả**: đo bằng đúng trường thì
+
+```text
+performed_via_github_app.slug == "chatgpt-codex-connector"  -> 198 comment
+  moi nhat: 2026-09-16T02:00:23Z  (comment tren chinh Issue #311)
+  user.login cua MOI comment do: phungtienviet14-sketch  [User]
+```
+
+Nên sự thật đo được là: **App Codex đăng comment dưới danh tính user của chủ repo, không phải một
+bot account riêng.** Hai hệ quả, cả hai đều siết chặt hơn kết luận cũ:
+
+1. Con số "40 comment" của #310 là một lát cắt hẹp; con số thật trong cùng khoảng là **198**. App
+   vẫn đang chạy — không hề ngừng.
+2. Quan trọng hơn: kể cả khi Codex phát được một review event, event đó sẽ mang **danh tính của
+   chính chủ repo**. GitHub cấm tự duyệt PR của mình, nên nó **không thể** tính vào
+   required-approvals. Tức con đường "người duyệt thứ hai qua Codex" không chỉ *chưa* chứng minh
+   được — nó **bị chặn bởi một tính chất của GitHub**, không phải bởi một nút chưa bật.
+
+Điều này **không** cứu PR #206 (cầu nối trình duyệt) — nó càng dìm: một extension cũng chỉ đánh
+thức được cùng một danh tính đó. Và nó làm **ghế Copilot** trở thành đường duy nhất còn lại cho
+tình huống 5 của #309 §9, vì §4.2 của tài liệu bằng chứng là chỗ duy nhất GitHub tài liệu hoá việc
+một approval không-phải-người được tính.
+
+## `risk:high` — từ cổng prompt sang cổng tất định (#311 A4)
+
+Bản trước ghi thẳng rằng `risk:high` chỉ dừng ở **hành vi của agent** — prompt bắt dừng. Đó là một
+cổng phụ thuộc vào việc mô hình chịu nghe. #311 A4 yêu cầu thay bằng một điều kiện tất định, và
+gh-aw `v0.88.7` **có** thứ đó: `on.steps` (Pre-Activation Steps) cộng `if:` ở gốc frontmatter.
+
+```yaml
+on:
+  steps:
+    - id: risk_gate
+      env: { LABELS: "${{ toJSON(github.event.issue.labels.*.name) }}" }
+      run: <tu choi neu co risk:high, hoac neu thieu ca risk:low/medium>
+
+if: needs.pre_activation.outputs.risk_gate_result == 'success'
+```
+
+Biên dịch ra: job `activation` mang `if: … && risk_gate_result == 'success' && …`, và job `agent`
+`needs: activation`. Nên một Issue `risk:high` **không có đường nào tới job agent** — không prompt,
+không engine, không safe output, không PR.
+
+Ba phương án khác đã cân và bị loại, ghi ra để lần sau không phải cân lại:
+
+| Phương án | Vì sao không |
+|---|---|
+| `skip-if-match:` | Chạy một câu **tìm kiếm** GitHub. Không có qualifier theo số hiệu Issue nên không pin được vào đúng Issue đang kích hoạt; và chỉ mục tìm kiếm có độ trễ — nhãn vừa gắn có thể chưa index, truy vấn trả 0, cổng **fail-open**. Sai chiều |
+| `manual-approval: <env>` | Là cổng Environment thật, nhưng **không điều kiện**: chặn mọi lần chạy kể cả `risk:low`. Và Environment không gác merge (xem "Hai cổng người" bên dưới) |
+| `safe-outputs.*.required-labels` | Có thật, nhưng schema của bản ghim **không** có nó cho `create-pull-request` — tức đúng đường ghi cần gác thì lại không có |
+
+Cổng này **fail-closed hai chiều**: có `risk:high` thì từ chối, mà **thiếu** phân loại rủi ro cũng
+từ chối. Và nó từ chối *ồn ào* — job `pre_activation` hỏng, run hiện ❌ — chứ không im lặng bỏ qua.
+Prompt trong thân pilot được giữ nguyên làm **lớp thứ hai**, không phải lớp thứ nhất.
+
+Cái vẫn **chưa** chứng minh: cổng này chưa chạy thật lần nào, vì chưa có credential engine. Nó là
+`CONFIG_ONLY` cho tới tình huống 7 của Phase B.
 
 ## Về bản ghim — re-audit 15/09/2026
 
@@ -108,9 +190,16 @@ một cái giá đã đo: chú thích đầu `.github/workflows/deploy-tenant.ym
 một run đang **chờ duyệt** chiếm làn concurrency và chặn 26 phút một lần deploy hợp lệ. ADR này
 **không** đề xuất làm vậy.
 
-Nên trong pilot, `risk:high` dừng ở **hành vi của agent** (prompt bắt dừng, gắn `needs-human`) —
-một cổng ở tầng prompt, không phải một cổng GitHub cưỡng chế. Cổng merge cưỡng chế được cho repo
-một chủ vẫn là **NOT PROVEN**, và vẫn phụ thuộc ghế Copilot (§4.2 của tài liệu bằng chứng).
+Nên hai câu phải tách bạch, và bản #311 sửa đúng chỗ #310 nói thiếu:
+
+- **Cổng chặn agent** — nay là **tất định**, không còn ở tầng prompt: `on.steps` + `if:` khiến job
+  agent không chạy với `risk:high`. Xem mục riêng ở trên.
+- **Cổng người ở bước merge** — vẫn **NOT PROVEN**, và vẫn phụ thuộc ghế Copilot (§4.2 của tài liệu
+  bằng chứng). Đo 16/09 còn siết thêm: Codex đăng dưới danh tính chủ repo, nên nó không thể là
+  người duyệt thứ hai dù có bật gì đi nữa.
+
+Hai thứ đó khác nhau: cái thứ nhất chặn **máy tự làm**, cái thứ hai chặn **merge vào `main`**.
+Có cái thứ nhất không có nghĩa là đã có cái thứ hai.
 
 ## Bối cảnh
 
@@ -177,7 +266,21 @@ Vật liệu để đo đã có sẵn và **tên đã được kiểm lại bằ
 `NEXAGENT`, **không** phải `NEXAGNET` — bản trước của tài liệu này viết sai một chữ, và sai một chữ
 thì `secrets.*` ra chuỗi rỗng mà không có thông báo lỗi nào).
 
-## Cổng chặn trước khi thực hiện
+## Cổng chặn trước khi thực hiện — cập nhật 16/09/2026
 
-Theo #309 §14, **dừng ở đây** cho review độc lập. Chưa được: xoá mã Autopilot đã trên `main`, biên
-dịch `.lock.yml`, bỏ `staged: true`, hay bật bất kỳ workflow tự trị nào.
+Cổng §14 của #309 (*review độc lập trước khi biên dịch*) **đã qua**: PR #310 được review và merge
+thành `86d106e`. Nên hai việc trước đây bị cấm nay đã làm, trong Phase A của #311:
+
+- ✅ **biên dịch `.lock.yml`** — bằng đúng `gh aw v0.88.7`, đã commit, mọi `uses:` ghim SHA 40 ký
+  tự và mọi image ghim digest. Bất biến 12 khoá việc lock phải do đúng bản ghim sinh ra.
+- ✅ **cổng rủi ro tất định** — thay cổng prompt.
+
+Còn lại, và **vẫn bị chặn**:
+
+- ❌ **bỏ `staged: true`** — việc của Phase B, và chỉ có nghĩa sau khi có credential engine.
+- ❌ **xoá mã Autopilot đã trên `main`** — việc của Phase C, và chỉ khi đủ 7/7 tình huống PROVEN.
+- ⛔ **Cổng hành động của chủ repo.** Không credential nào gh-aw chấp nhận tồn tại trong repo hôm
+  nay, nên pilot **không chạy được đến nơi** dù đã biên dịch. Đây là một khoản chi, không phải một
+  khoảng trống kỹ thuật — xem §5 của tài liệu bằng chứng. Khuyến nghị vẫn là **một ghế Copilot
+  Pro**, vì sau phép đo Codex ở trên, nó là đường duy nhất còn lại mở được *cả* engine Builder
+  *lẫn* cổng người-duyệt-thứ-hai.

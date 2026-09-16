@@ -16,6 +16,7 @@ import {
   pilotLockExists,
   readDocPin,
   readGhAwPin,
+  readLockMetadata,
   readPilotFrontmatter,
   readRuleset,
   usesRefs,
@@ -77,13 +78,22 @@ test('pilot khai safe-outputs.staged: true', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// 2. Pilot chua duoc bien dich — day la thu CUONG CHE cong §14, khong phai mot lo hong.
+// 2. Pilot DA duoc bien dich — lat chieu sau khi cong §14 cua #309 da qua.
+//
+//    Ban truoc cua bai nay khoa dieu nguoc lai: `.lock.yml` KHONG duoc ton tai, vi PR #310 con
+//    dang cho review doc lap va mot lock la thu bien pilot thanh workflow that. Cong do da qua:
+//    #310 duoc review va merge thanh 86d106e527043dbd0df3d4b93789fa202e77d608, va Issue #311 la
+//    hop dong thuc thi cho buoc activation. Ban than bai test cu da ghi san rang khi lock duoc
+//    commit thi phai cap nhat no cung mot luc — day la lan do.
+//
+//    Chieu moi van la mot rang buoc that, khong phai mot o tick: thieu lock thi GitHub Actions
+//    khong doc duoc gi, va ca bat bien 6 (ghim SHA) lan 12 (dung ban bien dich) mat doi tuong do.
 // ---------------------------------------------------------------------------------------------
-test('pilot chua co .lock.yml, nen GitHub Actions khong the chay no', () => {
+test('pilot da co .lock.yml, nen GitHub Actions doc duoc no', () => {
   assert.equal(
     pilotLockExists(),
-    false,
-    'Da xuat hien `agent-builder.lock.yml`. GitHub Actions CHI chay `.lock.yml`, nen tep do bien pilot thanh mot workflow tu tri that. Viec do phai qua review doc lap theo §14 cua #309 truoc, va khi do hay cap nhat bai test nay cung mot luc',
+    true,
+    'Khong tim thay `agent-builder.lock.yml`. GitHub Actions CHI chay `.lock.yml`; thieu tep do thi `agent-builder.md` chi la van ban, va bat bien 6/12 khong con gi de do',
   );
 });
 
@@ -326,4 +336,87 @@ test('giao thuc AUTOPILOT_TASK_V0 khong con dau vet sau khi xoa', (t) => {
     readFileSync(join(PATHS.workflowsDir, name), 'utf8').includes('AUTOPILOT_TASK_V0'),
   );
   assert.deepEqual(stale, [], `workflow con nhac giao thuc da xoa: ${stale.join(', ')}`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// 12. Lock phai duoc sinh ra boi DUNG ban gh-aw ma repo nay khai ghim.
+//
+//     Bat bien 11 bat ba noi KHAI ban ghim trung nhau. Bai nay bat loi khai do khop voi ban DA
+//     THUC SU bien dich. Hai thu lech nhau rat de: cai mot `gh aw` moi hon (`gh extension upgrade`
+//     chay ngam cung duoc) roi `compile` lai — lock doi, ba dong `# gh-aw-pin/sha/audit` o tren
+//     van y nguyen, va nguoi review doc ban ghim se tin mot con so khong con dung.
+// ---------------------------------------------------------------------------------------------
+test('lock duoc bien dich bang dung ban gh-aw da ghim', () => {
+  const { tag } = readGhAwPin(readPilotFrontmatter());
+  const { compilerVersion } = readLockMetadata(readFileSync(PATHS.pilotLock, 'utf8'));
+
+  assert.notEqual(
+    compilerVersion,
+    null,
+    'khong doc duoc `compiler_version` tu dong `# gh-aw-metadata:` o dau lock',
+  );
+  assert.equal(
+    compilerVersion,
+    tag,
+    `lock duoc bien dich bang gh-aw \`${compilerVersion}\` trong khi pilot ghim \`${tag}\`. Bien dich lai bang dung ban ghim, hoac sua ban ghim TRUOC roi moi bien dich`,
+  );
+});
+
+// ---------------------------------------------------------------------------------------------
+// 13. Cong rui ro tat dinh phai duoc khai DU CA HAI NUA trong pilot.
+//
+//     `on.steps` sinh ra quyet dinh; `if:` o goc frontmatter cuong che no. Thieu nua thu hai thi
+//     buoc kia chi con la mot dong log: no van chay, van in "TU CHOI", va job agent van di tiep.
+//     Do dung la kieu hong im lang ma #310 da gap o ba dot bien cua bat bien 10.
+// ---------------------------------------------------------------------------------------------
+test('pilot khai cong rui ro tat dinh, va noi no vao dieu kien gac job', () => {
+  const frontmatter = readPilotFrontmatter();
+
+  const gateStep = linesWithKey(frontmatter, 'id').find((line) => line.value === 'risk_gate');
+  assert.notEqual(
+    gateStep,
+    undefined,
+    'khong tim thay buoc `id: risk_gate` trong `on.steps`. Cong rui ro o tang prompt khong du: #311 A4 doi mot dieu kien tat dinh',
+  );
+
+  assert.ok(
+    frontmatter.raw.includes('risk:high'),
+    'buoc `risk_gate` khong nhac `risk:high` — cong dang gac nham thu gi do',
+  );
+
+  const guards = frontmatter.lines.filter((line) => line.key === 'if' && line.indent === 0);
+  assert.equal(
+    guards.length,
+    1,
+    `pilot phai khai dung mot \`if:\` o goc frontmatter; dem duoc ${guards.length}`,
+  );
+  assert.ok(
+    guards[0].value.includes('risk_gate_result'),
+    `\`if:\` o goc khong tham chieu \`risk_gate_result\`, nen buoc \`risk_gate\` khong gac gi ca. Dang la \`${guards[0].value}\``,
+  );
+});
+
+// ---------------------------------------------------------------------------------------------
+// 14. Va cong do phai THUC SU co trong lock, dung o vi tri chan duong toi job agent.
+//
+//     Bai 13 doc loi khai; bai nay doc thu GitHub Actions se chay. Chung khac nhau: mot lan sua
+//     `agent-builder.md` ma quen `gh aw compile` de lai dung tinh huong nay — loi khai dep, hanh
+//     vi cu. (`stale-check: full` cua pilot cung bat duoc, nhung chi luc chay; bai nay bat o CI.)
+// ---------------------------------------------------------------------------------------------
+test('lock noi cong rui ro vao job gac, va job agent nam sau job do', () => {
+  const lock = readFileSync(PATHS.pilotLock, 'utf8').replace(/\r\n/gu, '\n');
+
+  assert.ok(
+    lock.includes('risk_gate_result: ${{ steps.risk_gate.outcome }}'),
+    'lock khong lo output `risk_gate_result` tu job pre_activation',
+  );
+  assert.ok(
+    lock.includes("needs.pre_activation.outputs.risk_gate_result == 'success'"),
+    'lock khong co dieu kien `risk_gate_result == \'success\'`, nen cong chi la mot buoc chay roi bi bo qua',
+  );
+  assert.match(
+    lock,
+    /^ {2}agent:\n {4}needs: activation$/mu,
+    'job `agent` khong con `needs: activation`. Cong rui ro gac job `activation`; agent phai nam SAU no thi moi bi chan lay',
+  );
 });

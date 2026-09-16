@@ -1,11 +1,12 @@
 <!-- gh-aw-pin: v0.88.7 -->
 <!-- gh-aw-sha: bde367913adeb3132f0a171594c88a17f4b7d08c -->
-<!-- gh-aw-audit: 2026-09-15 -->
+<!-- gh-aw-audit: 2026-09-16 -->
 
 # Autopilot V2 — official-first: kiểm kê, đo lại nguồn chính thức, kiến trúc đích, kế hoạch xoá
 
-> Ngày đo: **15/09/2026** · `main` lúc đo: `de30a0825572684ce2c524058f94a4bd79e07668`
-> Hợp đồng task: [#309](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/309)
+> Ngày đo lần đầu: **15/09/2026** · `main` lúc đo: `de30a0825572684ce2c524058f94a4bd79e07668`
+> **Đo lại: 16/09/2026** · `main` lúc đo lại: `86d106e527043dbd0df3d4b93789fa202e77d608` — xem §0
+> Hợp đồng task: [#309](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/309) → activation: [#311](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/311)
 > Quyết định cuối: [adr-0001-autopilot-official-first.md](../../kien-truc/adr-0001-autopilot-official-first.md)
 > Thay thế (superseded): `docs/phat-trien/van-hanh/autopilot-protocol-v0.md` · quyết định `KEEP_CUSTOM` của #194/PR #199
 
@@ -20,9 +21,45 @@ chuyển sang **trạng thái GitHub gốc** (Issue · nhãn · PR · check · r
 Mặt phẳng thực thi chuyển sang **GitHub Agentic Workflows** (`github/gh-aw`) ghim bản ổn định.
 
 Nhưng kết luận đó **chưa chạy được hôm nay**, và §5 nói rõ vì sao: repo này không có một credential
-nào mà gh-aw chấp nhận. Đó là một quyết định **mua**, không phải một khoảng trống năng lực. Vì vậy
-PR này giao **cấu hình pilot ở trạng thái trơ (staged + chưa biên dịch)**, không bật gì cả, và dừng
-đúng ở cổng §14 của hợp đồng.
+nào mà gh-aw chấp nhận. Đó là một quyết định **mua**, không phải một khoảng trống năng lực.
+
+---
+
+## 0. Đo lại 16/09/2026 — Phase A của #311
+
+Cổng §14 của #309 **đã qua**: PR #310 được review độc lập và merge vào `main` thành
+`86d106e527043dbd0df3d4b93789fa202e77d608`. #311 là hợp đồng thực thi cho bước activation, và nó
+**cấm dùng lại snapshot của #310** — mọi con số dưới đây được đo lại từ đầu.
+
+### 0.1 Cái không đổi (đo lại, không giả định)
+
+| Đã đo | 15/09 | 16/09 | Đo bằng |
+|---|---|---|---|
+| gh-aw stable mới nhất | `v0.88.7` | **`v0.88.7`** | `releases/latest` **và** quét 100 release lọc `prerelease=false` — hai đường, cùng đáp án |
+| Tag cao nhất nói chung | `v0.89.15` (prerelease) | **`v0.89.15`** (vẫn prerelease, vẫn 14/09) | như trên |
+| SHA của tag ghim | `bde3679…` | **`bde3679…`** | `git/ref/tags/v0.88.7` |
+| Delta tới tag cao nhất | 180 commit | **180 commit** | `compare/v0.88.7...v0.89.15` |
+| Advisory mới hơn bản ghim | không | **không** — 10 cái, mới nhất 29/08, mọi dải ảnh hưởng kết thúc dưới `v0.88.7` | `security-advisories`, có đối chứng âm trên repo khác |
+| 7 required check · `strict` · `bypass_actors` | 7 · `true` · `[]` | **7 · `true` · `[]`** | `/rules/branches/main` (cưỡng chế thật), không phải `enforcement` của đối tượng ruleset |
+| Credential engine | không có | **vẫn không có** | `actions/secrets` · `actions/variables` · `environments/*/secrets` · `suggestedActors` |
+
+Vì bản ghim không đổi nên **không repin**. Chỉ `gh-aw-audit` tiến lên `2026-09-16` — đó là ngày
+*đo lại*, không phải ngày ghim.
+
+### 0.2 Cái đổi
+
+| | |
+|---|---|
+| **Trạng thái pilot** | TRƠ → **ĐÃ BIÊN DỊCH + STAGED**. `.lock.yml` đã commit; xem §9.1 |
+| **Cổng `risk:high`** | tầng prompt → **điều kiện tất định của GitHub Actions**; xem §7.5 |
+| **Bằng chứng Codex** | "40 comment, không review event" → **198 comment, không review event, và mọi comment mang danh tính chủ repo**; xem §4.3 |
+| **Bất biến hợp đồng** | 11 → **14**; xem §9.2 |
+
+### 0.3 Điều kiện chặn còn lại
+
+Không credential nào gh-aw chấp nhận tồn tại trong repo. Pilot đã biên dịch nhưng **không chạy đến
+nơi**: job `agent` sẽ dừng ở lỗi xác thực engine. Đây là **cổng hành động của chủ repo** theo #311
+A2 — một khoản chi, không phải một khoảng trống kỹ thuật. Xem §5 và §12.
 
 ---
 
@@ -306,6 +343,43 @@ hạ tình huống đó xuống **NOT PROVEN**, và §12 ghi đúng một phép 
 tức cũng dừng ở mức "người đọc". Khoảng cách giữa "đọc" và "duyệt" là một tính chất của GitHub, không
 phải thứ mua được bằng thêm mã.
 
+#### Đo lại 16/09/2026 — kết luận giữ nguyên chiều, nhưng lý do sâu hơn hẳn
+
+Lần đo này bắt đầu bằng một **kết quả rỗng giả** đáng ghi lại, vì nó sẽ lặp lại với bất kỳ ai quét
+lịch sử comment của repo:
+
+```text
+# SAI — loc theo user.login
+[.[] | select(.user.login | test("codex";"i"))] | length     -> 0   tren 482 comment gan nhat
+# => de ket luan nham "App Codex da ngung chay"
+
+# DUNG — loc theo performed_via_github_app
+[.[] | select(.performed_via_github_app.slug == "chatgpt-codex-connector")] | length -> 198
+     moi nhat: 2026-09-16T02:00:23Z
+     user.login cua MOI comment do: phungtienviet14-sketch  [User]
+```
+
+Đối chứng: `issues/155/timeline` trả về **3** sự kiện `performed_via_github_app.slug =
+chatgpt-codex-connector`, trong khi `issues/155/comments` chỉ thấy 7 comment mang `user.login` của
+chủ repo. Cùng ba comment, hai cách đọc.
+
+Ba điều rút ra, và điều thứ ba mới là điều quan trọng:
+
+1. **App vẫn đang chạy.** Không hề ngừng. Con số thật trong cùng khoảng là **198**, không phải 40 —
+   #310 đếm một lát cắt hẹp hơn.
+2. **Vẫn 0 review event.** Quét 30 PR gần nhất: không PR nào có review event của Codex hay Copilot
+   (`performed_via_github_app` của mọi review event đều `null`). Đối chứng âm vẫn tốt — review
+   `COMMENTED` của người hiện bình thường ở #310, #305, #302, #290, #206.
+3. **Codex không phải một danh tính riêng trong repo này.** Nó đăng **dưới tài khoản của chủ repo**.
+   Nên kể cả khi bật được Code review và nó phát ra một review event, event đó sẽ do chủ repo đứng
+   tên — và GitHub **cấm tự duyệt PR của mình**. Tức con đường này không chỉ *chưa* chứng minh
+   được; nó **bị chặn bởi một tính chất của GitHub**.
+
+Hệ quả cho #309 §9 tình huống 5: phép đo ghi ở cuối §9.3 (bật Code review rồi `@codex review`) vẫn
+đáng chạy để biết Codex có phát review event hay không — nhưng **dù nó phát, tình huống 5 vẫn không
+đạt**, vì yêu cầu là một người duyệt *độc lập*. Đường còn lại duy nhất là **ghế Copilot** (§4.2),
+vì đó là chỗ duy nhất GitHub tài liệu hoá việc một approval không-phải-người được tính.
+
 ### 4.4 Cổng gốc của GitHub
 
 | Cổng | Trạng thái đo được ở repo này |
@@ -327,14 +401,21 @@ một repo một chủ**, và **nhãn — không phải thân Issue — là kên
 
 Đây là mục mà một bản audit chỉ đọc tài liệu upstream sẽ bỏ sót.
 
-| Điều kiện | Đo được 15/09/2026 | Cách đo |
+| Điều kiện | Đo lại 16/09/2026 | Cách đo |
 |---|---|---|
-| Secret của repo | Đúng hai: **`CLAUDE_CODE_OAUTH_TOKEN`** và **`NEXAGENT_AUTOPILOT_PRIVATE_KEY`** | `actions/secrets` |
+| Secret của repo | Đúng hai: **`CLAUDE_CODE_OAUTH_TOKEN`** (02/09) và **`NEXAGENT_AUTOPILOT_PRIVATE_KEY`** (03/09) | `actions/secrets` |
 | Biến của repo | `AUTOPILOT_DRY_RUN` · `AUTOPILOT_REVIEWER_APP_SLUG` · `GCP_DEPLOY_SERVICE_ACCOUNT` · `GCP_WORKLOAD_IDENTITY_PROVIDER` · **`NEXAGENT_AUTOPILOT_CLIENT_ID`** | `actions/variables` |
+| Secret cấp **Environment** | **rỗng cả ba** — `dev`, `gd1-test`, `production` | `environments/<e>/secrets` |
+| Secret Dependabot | **rỗng** | `dependabot/secrets` |
 | `ANTHROPIC_API_KEY` | **không có** | như trên |
 | `OPENAI_API_KEY` / `CODEX_API_KEY` | **không có** | như trên |
-| Ghế Copilot | **không có** — `Copilot` **không xuất hiện** trong `suggestedActors(CAN_BE_ASSIGNED)`, chỉ có chủ repo | GraphQL |
+| `COPILOT_GITHUB_TOKEN` / `GEMINI_API_KEY` | **không có** | như trên |
+| Ghế Copilot | **không có** — `suggestedActors(CAN_BE_ASSIGNED)` chỉ trả về chủ repo; `user/copilot/billing` trả `404` | GraphQL + REST |
 | Repo | **public**, chủ sở hữu là **user**, một người | REST |
+
+> Lần đo 16/09 **mở rộng** phạm vi so với 15/09: thêm secret cấp Environment và secret Dependabot —
+> hai chỗ một credential có thể nằm mà bảng cũ không nhìn tới. Cả hai đều rỗng, nên kết luận không
+> đổi, nhưng giờ nó được đo chứ không phải được giả định.
 
 Đối chiếu với bảng auth của gh-aw v0.88.7:
 
@@ -344,6 +425,23 @@ một repo một chủ**, và **nhãn — không phải thân Issue — là kên
 | `claude` | `ANTHROPIC_API_KEY` hoặc Anthropic WIF. **`CLAUDE_CODE_OAUTH_TOKEN` bị bỏ qua có chủ đích** — xác nhận ở 3 nơi trong tài liệu ghim SHA | **KHÔNG** |
 | `codex` | `CODEX_API_KEY` → `OPENAI_API_KEY`; không nhận auth kiểu subscription ChatGPT | **KHÔNG** |
 | `gemini` | `GEMINI_API_KEY` hoặc Google WIF | **KHÔNG** |
+
+#311 A2 yêu cầu **kiểm lại** rằng gh-aw vẫn cố tình bỏ qua `CLAUDE_CODE_OAUTH_TOKEN` chứ không tin
+lời #310. Đọc thẳng mã nguồn ở bản ghim `bde3679`:
+
+```text
+docs/src/content/docs/engines/claude.md:22
+  "Claude subscription OAuth tokens such as CLAUDE_CODE_OAUTH_TOKEN are not supported."
+docs/src/content/docs/setup/cli.md:240
+  "... is not supported; it is SILENTLY IGNORED, so the run instead fails with an authentication
+   error from the Claude CLI that never mentions the token, which is the signal to switch
+   credentials."
+docs/src/content/docs/reference/faq.md:494
+  "Can I use CLAUDE_CODE_OAUTH_TOKEN with the Claude engine?"  -> "No."
+```
+
+Câu ở `cli.md` đáng nhớ vì nó mô tả **triệu chứng**: không có thông báo "token sai loại", chỉ có
+một lỗi xác thực chung chung không nhắc gì tới token. Ai chưa đọc câu đó sẽ đi gỡ nhầm chỗ.
 
 **Kết luận thẳng: gh-aw không chạy được ở repo này hôm nay mà không mua thêm đúng một credential.**
 
@@ -495,6 +593,66 @@ cưỡng chế. Nói nó là "cổng GitHub" sẽ là tô hồng đúng chỗ #3
 *credential đã có*, và đó là điều kiện tạm). Nếu dùng: ghim `@v1` **không ghim SHA** (§5), không bao
 giờ checkout ref của PR vào thư mục gốc, giữ `allowed_bots` rỗng, không dùng `allowed_non_write_users`.
 
+### 7.5 Cổng `risk:high` — từ tầng prompt sang điều kiện tất định (#311 A4)
+
+§7.3 ở trên ghi đúng trạng thái của #310: `risk:high` khi đó chỉ được chặn bằng **prompt**, tức phụ
+thuộc việc mô hình chịu nghe. #311 A4 yêu cầu thay bằng một điều kiện tất định, và gh-aw `v0.88.7`
+**có** thứ đó.
+
+#### Primitive được chọn
+
+`on.steps` (*Pre-Activation Steps*, `reference/triggers.md` §753) cho phép chèn bước tất định vào
+job `pre_activation`. Mỗi bước có `id` được gh-aw tự nối ra output `<id>_result` =
+`steps.<id>.outcome`; `if:` ở gốc frontmatter dùng output đó để gác. Ví dụ chuẩn trong chính tài
+liệu gh-aw là **lọc nhãn từ event payload** — đúng bài toán này.
+
+```yaml
+on:
+  steps:
+    - id: risk_gate
+      env: { LABELS: "${{ toJSON(github.event.issue.labels.*.name) }}" }
+      run: |
+        # co risk:high            -> exit 1
+        # co risk:low|risk:medium -> exit 0
+        # khong co nhan risk:* nao -> exit 1
+
+if: needs.pre_activation.outputs.risk_gate_result == 'success'
+```
+
+Biên dịch ra (đọc từ `.lock.yml` đã commit, không suy đoán):
+
+```text
+pre_activation.outputs.risk_gate_result: ${{ steps.risk_gate.outcome }}
+activation.if: needs.pre_activation.outputs.activated == 'true'
+               && ((needs.pre_activation.outputs.risk_gate_result == 'success') && ...)
+agent.needs:  activation
+```
+
+Nên một Issue `risk:high` **không có đường nào tới job `agent`** — không prompt, không engine, không
+safe output, không PR. Thực tế có **hai** cơ chế chặn độc lập: bước `risk_gate` không có
+`continue-on-error`, nên `exit 1` làm hỏng luôn job `pre_activation` và mọi job phía sau bị skip;
+và nếu bằng cách nào đó `pre_activation` vẫn xanh thì `if:` của `activation` vẫn chặn.
+
+Từ chối là **ồn ào**, không im lặng: run hiện ❌ ở `pre_activation` kèm dòng log nói rõ lý do. Đó là
+lựa chọn có chủ đích — một lần từ chối phải nhìn thấy được, không được lẫn với "không có gì xảy ra".
+
+#### Ba phương án khác đã cân và bị loại
+
+| Phương án | Vì sao không |
+|---|---|
+| `skip-if-match:` | Chạy một câu **tìm kiếm** GitHub. (a) Tìm kiếm Issue **không có qualifier theo số hiệu**, nên không pin được vào đúng Issue đang kích hoạt — truy vấn theo nhãn sẽ khớp *bất kỳ* Issue mở nào trong repo. (b) Chỉ mục tìm kiếm **có độ trễ**: nhãn vừa gắn có thể chưa được index, truy vấn trả 0, và cổng **fail-open**. Một cổng an toàn không được phép hỏng theo chiều mở |
+| `manual-approval: <env>` | Là cổng Environment thật và tất định, nhưng **không điều kiện** — nó gác `environment:` lên job activation cho **mọi** lần chạy, kể cả `risk:low`. Và Environment không gác merge (§7.3) |
+| `safe-outputs.*.required-labels` | Có thật cho `close-issue`, `add-comment`, `submit-pull-request-review`, … nhưng schema của bản ghim **không** có nó cho `create-pull-request` — tức đúng đường ghi cần gác thì lại không có |
+
+#### Khoảng trống còn lại, nói thẳng
+
+- Cổng này gác **job agent**, không gác **merge**. Hai thứ khác nhau; §7.3 vẫn đúng nguyên.
+- Nó **chưa chạy thật lần nào** — chưa có credential engine. Mức đúng của nó hôm nay là
+  `CONFIG_ONLY`, và tình huống 7 của §9.3 chỉ lên `PROVEN` sau một lần chạy thật ở Phase B.
+- Nó đọc `github.event.issue.labels`, nên chỉ đúng cho trigger loại `issues`. Vì vậy
+  `label_command.events` được thu hẹp còn `[issues]`: payload khác loại sẽ cho `LABELS` rỗng và
+  cổng từ chối — fail-closed, nhưng tốt hơn là không để tình huống đó xảy ra.
+
 ---
 
 ## 8. Quyết định engine — cấu hình, không phải khoá kiến trúc
@@ -520,30 +678,53 @@ Chốt chặn chi phí đã có sẵn trong gh-aw, dùng luôn: `max-ai-credits`
 
 ## 9. Pilot tối thiểu
 
-### 9.1 Trạng thái giao trong PR này: **TRƠ**
+### 9.1 Trạng thái sau Phase A của #311: **ĐÃ BIÊN DỊCH + STAGED**
 
-Workflow pilot ở [`.github/workflows/agent-builder.md`](../../../.github/workflows/agent-builder.md)
-được giao **không kèm `.lock.yml`**. GitHub Actions chỉ chạy `.lock.yml`; một tệp `.md` trong
-`.github/workflows/` **không phải** workflow và không chạy được. Cộng thêm `safe-outputs.staged: true`
-trong frontmatter, nên kể cả sau khi ai đó biên dịch, nó vẫn **không ghi gì**.
+> Trạng thái trước (bản #310): **TRƠ** — pilot được giao *không kèm* `.lock.yml`, vì cổng §14 của
+> #309 cấm bật một workflow tự trị trước review độc lập. Cổng đó đã qua (#310 merge thành
+> `86d106e`), nên Phase A thực hiện đúng bước tiếp theo.
 
-Hai lớp đó là cách PR này tuân thủ cổng §14: *"STOP trước khi bật một workflow tự trị chạy thật"*.
-Bật thật cần đúng ba bước, và cả ba đều là hành động tường minh của người:
+Ba bước để bật thật, và trạng thái từng bước:
 
-1. thêm credential của engine đã chọn;
-2. `gh aw compile` rồi commit `.lock.yml` (bước này nạp SHA-pin cho action và digest-pin cho image);
-3. bỏ `staged: true`.
+| # | Bước | Trạng thái |
+|---|---|---|
+| 1 | thêm credential của engine đã chọn | ⛔ **CHƯA** — không credential nào gh-aw chấp nhận tồn tại (§5). Đây là cổng hành động của chủ repo |
+| 2 | `gh aw compile` rồi commit `.lock.yml` | ✅ **XONG** — bằng đúng `gh aw v0.88.7` |
+| 3 | bỏ `staged: true` | ⛔ **CHƯA** — việc của Phase B, và chỉ có nghĩa sau bước 1 |
+
+Bước 2 nạp SHA-pin cho action và digest-pin cho image. Đo trên lock đã commit:
+
+```text
+9 action, MOI cai ghim SHA 40 ky tu:
+  actions/cache/restore@55cc8345…  actions/cache/save@55cc8345…  actions/checkout@3d3c42e5…
+  actions/create-github-app-token@bcd2ba49…  actions/download-artifact@3e5f45b2…
+  actions/github-script@3a2844b7…  actions/setup-node@82076278…  actions/upload-artifact@043fb46d…
+  github/gh-aw-actions/setup@5e508589…
+
+6 container, MOI cai ghim digest @sha256:
+  gh-aw-firewall/{agent,api-proxy,squid}:0.28.14 · gh-aw-mcpg:v0.4.18 · gh-aw-node · github-mcp-server:v1.11.0
+
+compiler_version trong `# gh-aw-metadata:` = v0.88.7   <-- trung ban ghim (bat bien 12)
+```
+
+Lock **không chứa một giá trị bí mật nào** — chỉ sáu biểu thức `${{ secrets.* }}`. Trình biên dịch
+ở chế độ *safe update* đòi phê duyệt tường minh cho secret mới `NEXAGENT_AUTOPILOT_PRIVATE_KEY`;
+ghi chú review bảo mật cho nó nằm ở §9.4.
+
+Lớp chặn còn lại là `safe-outputs.staged: true`: kể cả khi có credential, mọi lời gọi ghi vẫn bị bỏ
+qua và chỉ hiện một bản xem trước ở step summary. **Gỡ pilot vẫn chỉ là xoá hai tệp** — không
+workflow CI/deploy nào phụ thuộc nó.
 
 ### 9.2 Bài kiểm — chỉ khoá cấu hình CỦA TA
 
 Gói [`tools/autopilot-v2-contract/`](../../../tools/autopilot-v2-contract/) chạy trong `pnpm -r test`,
 tức trong required check `verify`. Nó **không** kiểm cài đặt của GitHub/Anthropic/OpenAI. Nó khoá
-**mười một** bất biến của chính repo này:
+**mười bốn** bất biến của chính repo này:
 
 | # | Bất biến được khoá | Hỏng thì sao |
 |---|---|---|
 | 1 | Pilot khai `safe-outputs.staged: true` | Một lần sửa vô ý biến pilot thành thứ ghi thật |
-| 2 | Pilot **chưa** có `.lock.yml` đi kèm | Bật workflow tự trị mà không qua cổng §14 |
+| 2 | Pilot **đã** có `.lock.yml` đi kèm *(lật chiều ở Phase A của #311 — trước đó là "chưa có")* | Thiếu lock thì GitHub Actions không đọc được gì, và bất biến 6/12 mất đối tượng đo |
 | 3 | Pilot ghim **tag + SHA 40 ký tự + ngày re-audit** qua `# gh-aw-pin:` / `# gh-aw-sha:` / `# gh-aw-audit:` — quy ước của repo này, không phải trường của gh-aw | Trôi theo bản preview, hoặc ghim mà không ai biết lần cuối đo là bao giờ |
 | 4 | Job agent **không** khai `contents/issues/pull-requests: write` | Trao quyền ghi cho đúng chỗ #309 §4A cấm |
 | 5 | Trigger là `label_command`, và `on.roles` không chứa `write` | Repo public: người lạ có quyền write kích hoạt được |
@@ -553,35 +734,49 @@ tức trong required check `verify`. Nó **không** kiểm cài đặt của Git
 | 9 | *(tự bật sau khi xoá)* không workflow nào còn nhắc `AUTOPILOT_TASK_V0` | Giao thức cũ sống lại lặng lẽ |
 | 10 | Có `github-token-for-extra-empty-commit` ⇒ giá trị là `app` **và** có khối `safe-outputs.github-app` đủ `client-id`/`private-key`, trỏ đúng `NEXAGENT_*` | gh-aw sinh token **rỗng** rồi lặng lẽ đẩy commit bằng `GITHUB_TOKEN` — đúng cái rào đang muốn vượt |
 | 11 | Bản ghim gh-aw (tag + SHA + ngày audit) **trùng nhau** ở pilot, ADR và tệp này | Một lần nâng bản rớt nửa chừng: người review tin một bản ghim không còn đúng |
+| 12 | `compiler_version` trong `# gh-aw-metadata:` của lock **trùng** tag đã ghim | Cài một `gh aw` mới hơn rồi compile lại: lock đổi, ba dòng khai ở trên y nguyên, và bản ghim thành lời nói dối |
+| 13 | Pilot khai **đủ cả hai nửa** của cổng rủi ro: bước `id: risk_gate` trong `on.steps` **và** đúng một `if:` ở gốc tham chiếu `risk_gate_result` | Thiếu nửa `if:` thì bước kia vẫn chạy, vẫn in "TU CHOI", và job agent vẫn đi tiếp — một lỗi im lặng |
+| 14 | Lock **thật sự** lộ `risk_gate_result`, có điều kiện `== 'success'`, và job `agent` vẫn `needs: activation` | Sửa `agent-builder.md` mà quên `gh aw compile`: lời khai đẹp, hành vi cũ |
 
-Bất biến 6, 9 và 10 ở dạng **tự kích hoạt theo điều kiện** — 6 khi `.lock.yml` được commit, 9 khi
-`tools/autopilot-protocol/` biến mất, 10 khi ai đó khai trường CI-trigger lần đầu (nay đã khai, nên
-10 **đang chạy thật**). Không ai phải nhớ bật chúng, nên một lần skip không thể trôi thành một lần
-đạt.
+Bất biến 6, 9 và 10 ở dạng **tự kích hoạt theo điều kiện** — 6 khi `.lock.yml` được commit (nay đã
+commit, nên 6 **đang chạy thật**), 9 khi `tools/autopilot-protocol/` biến mất, 10 khi ai đó khai
+trường CI-trigger lần đầu (đã khai, đang chạy thật). Không ai phải nhớ bật chúng, nên một lần skip
+không thể trôi thành một lần đạt.
 
-Đã kiểm bằng **mutation**, không chỉ bằng "xanh". **Bảy** đột biến chạy trên HEAD này, mỗi cái đỏ
-đúng bài của nó, và cả bảy đã hoàn nguyên (đối chứng sau đó xanh): `staged: true`→`false` (bài 1)
-· `issues: read`→`write` (bài 4) · đổi tên khối `github-app` (bài 10) · `app`→PAT ở
-`github-token-for-extra-empty-commit` (bài 10) · `NEXAGENT_*`→`NEXAGNET_*` (bài 10) · lệch ngày
-audit ở ADR (bài 11) · ADR ghim `v0.89.12` còn pilot ghim `v0.88.7` (bài 11).
+Đã kiểm bằng **mutation**, không chỉ bằng "xanh". Bảy đột biến ở vòng #310, mỗi cái đỏ đúng bài của
+nó, và cả bảy đã hoàn nguyên: `staged: true`→`false` (bài 1) · `issues: read`→`write` (bài 4) · đổi
+tên khối `github-app` (bài 10) · `app`→PAT ở `github-token-for-extra-empty-commit` (bài 10) ·
+`NEXAGENT_*`→`NEXAGNET_*` (bài 10) · lệch ngày audit ở ADR (bài 11) · ADR ghim `v0.89.12` còn pilot
+ghim `v0.88.7` (bài 11).
 
 Ba đột biến giữa đáng chú ý vì cả ba là **lỗi im lặng**: gh-aw vẫn biên dịch và vẫn chạy, chỉ là
 commit rỗng đi bằng `GITHUB_TOKEN` và CI lại đứng ở `action_required` — đúng triệu chứng của việc
 chưa từng cấu hình gì.
 
-### 9.3 Bảy tình huống phải chứng minh — trạng thái hôm nay
+Vòng #311 thêm bốn đột biến cho bốn bài mới/đổi chiều, chi tiết ở §9.5.
 
-Theo #309 §9. Không tô hồng:
+### 9.3 Bảy tình huống phải chứng minh — trạng thái 16/09/2026
 
-| # | Tình huống | Hôm nay | Chứng bằng gì |
+Theo #309 §9, chấm theo ba mức của #311: `PROVEN` (đã chạy thật, có run/SHA) · `CONFIG_ONLY` (cấu
+hình đã biên dịch và đọc được, chưa chạy) · `NOT_PROVEN`. Không tô hồng:
+
+| # | Tình huống | Mức | Bằng chứng / vì sao chưa lên được |
 |---|---|---|---|
-| 1 | Trigger tin cậy khởi động **đúng một** lần chạy | ⬜ chờ credential | `concurrency` của gh-aw + `label_command` tự gỡ nhãn |
-| 2 | Trigger không tin cậy **không** tạo được lần chạy có quyền ghi | 🟡 chứng bằng cấu hình | fork bị chặn mặc định + `on.roles` + bất biến 4/5 |
-| 3 | Agent sửa mã, Safe Output tạo **một** PR | ⬜ chờ credential | `create-pull-request`, `max: 1`, `draft` |
-| 4 | **CI hiện có chạy trên PR đó** | 🟡 **cơ chế đã đo, dây đã nối, chưa chạy end-to-end** | A/B run `33676122047` vs `33717371535` — xem dưới |
-| 5 | Người **duyệt** chính thức độc lập duyệt PR | 🔴 **NOT PROVEN** | 13 PR, **0** review event của Codex — xem dưới |
-| 6 | Một phát hiện quay lại agent để lặp một vòng | ⬜ chờ credential | `push-to-pull-request-branch` |
-| 7 | Nhãn/đường rủi ro cao **dừng ở cổng người** | 🟡 ở tầng **prompt**, không phải cổng GitHub | prompt pilot bắt dừng + gắn `needs-human`; §7.3 |
+| 1 | Trigger tin cậy khởi động **đúng một** lần chạy | `CONFIG_ONLY` | `label_command` tự gỡ nhãn sau khi bắn + `concurrency.job-discriminator: ${{ github.event.issue.number \|\| github.run_id }}` (thêm ở Phase A — trước đó trình biên dịch cảnh báo mọi lần chạy dùng chung một khe). Chưa có lần chạy thật |
+| 2 | Trigger không tin cậy **không** tạo được lần chạy có quyền ghi | `CONFIG_ONLY` | Fork bị chặn mặc định · `on.roles: [admin, maintainer]` khớp chính xác · trình biên dịch **từ chối** job agent xin quyền ghi · bất biến 4/5. Chưa chạy phép thử âm thật |
+| 3 | Agent sửa mã, Safe Output tạo **một** PR | `NOT_PROVEN` | `create-pull-request` `max: 1` `draft: true` đã biên dịch, nhưng **không có credential engine** nên job agent chưa từng chạy |
+| 4 | **CI hiện có chạy trên PR đó** | `CONFIG_ONLY` | Cơ chế danh tính đã đo trên chính repo này (A/B run `33676122047` vs `33717371535` — xem dưới) và dây đã nối, đã biên dịch. Chưa đo được **gh-aw có nối đúng cơ chế đó không** |
+| 5 | Người **duyệt** chính thức độc lập duyệt PR | `NOT_PROVEN` | 30 PR, **0** review event của Codex/Copilot. Và đo 16/09 còn cho thấy Codex đăng **dưới danh tính chủ repo** ⇒ kể cả khi phát được review event, nó vẫn không thể là người duyệt độc lập (§4.3) |
+| 6 | Một phát hiện quay lại agent để lặp một vòng | `NOT_PROVEN` | Phụ thuộc cả tình huống 3 lẫn 5 |
+| 7 | Nhãn/đường rủi ro cao **dừng ở cổng người** | `CONFIG_ONLY` | **Nâng mức ở Phase A**: từ cổng prompt lên điều kiện tất định `on.steps` + `if:`, đã biên dịch vào lock và đọc được ở `activation.if` (§7.5). Chưa chạy thật |
+
+```text
+PILOT = KHONG DAT  (3/7 CONFIG_ONLY, 0/7 PROVEN, 4/7 NOT_PROVEN)
+```
+
+Bốn tình huống chưa đạt đều quy về **cùng một nguyên nhân gốc**: không có credential engine, nên
+không có một lần chạy gh-aw nào để đo. Tình huống 5 có thêm một nguyên nhân **thứ hai, độc lập** —
+danh tính của Codex — và nguyên nhân đó không được gỡ bằng credential engine, chỉ bằng ghế Copilot.
 
 #### Tình huống 4 — mô tả đúng cái rào, và cái đã đo được
 
@@ -644,6 +839,39 @@ GH_AW_CI_TRIGGER_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token || '' }}
 > `NEXAGNET_AUTOPILOT_PRIVATE_KEY`. Tên thật — đo bằng `gh api .../actions/secrets` — là
 > **`NEXAGENT_AUTOPILOT_PRIVATE_KEY`**. Lệch một chữ, `secrets.*` ra chuỗi rỗng, im lặng.
 
+##### Đo lại 16/09: biểu thức đó ĐÚNG, nhưng KHÔNG có trong lock đã commit
+
+Đoạn trên được viết khi chưa có lock để đối chiếu — nó đọc từ mã nguồn gh-aw. Nay đã có lock thật,
+và phải nói rõ một điều dễ gây hiểu lầm: **`GH_AW_CI_TRIGGER_TOKEN` không xuất hiện trong
+`agent-builder.lock.yml` đã commit.**
+
+Không phải dây đứt. Đo bằng cách biên dịch một bản sao của chính pilot này ở một thư mục **tách rời**
+(không đụng repo), chỉ khác đúng một chữ `staged`:
+
+```text
+staged: true   (ban da commit)  -> KHONG co GH_AW_CI_TRIGGER_TOKEN
+staged: false  (ban probe)      -> CO, dung nguyen van bieu thuc noi tren:
+                                   GH_AW_CI_TRIGGER_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token || '' }}
+
+Nam buoc CHI xuat hien khi bo staged (diff theo ten step giua hai lock):
+  Download patch artifact · Generate GitHub App token · Checkout repository
+  Configure Git credentials · Upload Safe Outputs Items
+```
+
+Ba điều rút ra:
+
+1. **Mô tả của #310 là đúng**, và nay được xác nhận trên đầu ra biên dịch thật chứ không chỉ bằng
+   đọc mã nguồn — kể cả cái đuôi `|| ''` tạo ra bẫy fail-open.
+2. `staged: true` giữ lại **nguyên cả đường ghi**, không chỉ chặn lời gọi cuối. Đó là lý do lock đã
+   commit nhẹ hơn ~2 KB và thiếu năm bước trên.
+3. **Cạm bẫy đọc tài liệu:** ai mở lock đã commit rồi tìm `GH_AW_CI_TRIGGER_TOKEN` sẽ không thấy, và
+   rất dễ kết luận nhầm rằng `github-token-for-extra-empty-commit: app` chưa được nối. Ghi ở đây để
+   lần sau không mất một buổi gỡ nhầm chỗ.
+
+Bất biến **10** vì vậy vẫn là lớp bảo vệ đúng chỗ: nó khoá **cấu hình** (`app` ⇔ có khối
+`github-app` đủ trường, trỏ đúng `NEXAGENT_*`), chứ không khoá sự có mặt của biến môi trường trong
+lock — biến đó phụ thuộc `staged`, và `staged` là công tắc của Phase B.
+
 **Còn lại chưa đo:** toàn bộ đường gh-aw end-to-end (agent → safe output → PR → commit rỗng → CI)
 chưa chạy một lần nào, vì chưa có credential engine (§5). Cái đã chứng minh là **cơ chế danh tính**
 trên chính repo này; cái chưa chứng minh là **gh-aw nối đúng cơ chế đó**. Vì vậy tình huống 4 là
@@ -664,14 +892,67 @@ Phép đo sẽ lật tình huống này, ghi sẵn để lần sau không phải
 ```text
 1. Bat Code review cho repo nay tai chatgpt.com/codex/settings/code-review  (viec cua chu repo)
 2. Comment "@codex review" tren mot PR dang mo
-3. gh api "repos/<o>/<r>/pulls/<n>/reviews" --jq '.[] | .user.login + " " + .state'
-   -> co mot dong cua chatgpt-codex-connector  => PROVEN
-   -> van rong                                  => NOT PROVEN, va ly do phai ghi ra
+3. gh api "repos/<o>/<r>/pulls/<n>/reviews" \
+     --jq '.[] | .user.login + " " + .state + " via=" + ((.performed_via_github_app.slug)//"null")'
+   -> co mot dong via=chatgpt-codex-connector  => Codex CO phat review event
+   -> van rong                                 => khong phat
 ```
+
+> **Đo lại 16/09 làm phép đo trên mất tác dụng quyết định.** Dù bước 3 ra kết quả nào, tình huống 5
+> vẫn **không đạt**: mọi hoạt động của App đó mang `user.login` của chủ repo (§4.3), nên một review
+> event từ nó là **tự duyệt PR của mình** — GitHub không tính. Giữ phép đo này để biết *Codex có
+> phát review event hay không*, đừng dùng nó để chấm tình huống 5.
+
+### 9.4 Ghi chú review bảo mật cho lock đã biên dịch
+
+`gh aw compile` ở chế độ *safe update* (mặc định) dừng lại và đòi phê duyệt tường minh khi lock
+tham chiếu một secret chưa từng nằm trong manifest. Ở lần biên dịch này nó báo đúng một mục, và
+đây là phần rà soát bắt buộc đi kèm:
+
+| Mục | Rà soát |
+|---|---|
+| **Secret mới: `NEXAGENT_AUTOPILOT_PRIVATE_KEY`** | **An toàn, đã có sẵn.** Đây là khoá riêng của GitHub App `nexagent-autopilot` — App repo này đã dùng từ 03/09/2026, không phải thứ mới cấp. Trong lock nó xuất hiện **đúng một chỗ**: `safe-outputs.github-app.private-key`, để mint một installation token ngắn hạn cho **commit rỗng** trên PR do Safe Output tạo. Nó **không** được truyền vào job `agent` (job đó chỉ có `contents/issues/pull-requests: read`), không vào bước engine, không vào MCP |
+| `COPILOT_GITHUB_TOKEN` | Auth của engine. **Không tồn tại trong repo** ⇒ hiện là chuỗi rỗng. Đây chính là lý do pilot chưa chạy được |
+| `GH_AW_DEFAULT_OTLP_HEADERS` + `vars.GH_AW_DEFAULT_OTLP_ENDPOINT` | Xuất telemetry OTel. **Cả hai đều không tồn tại trong repo**, và lock khai `GH_AW_OTLP_IF_MISSING: ignore` ⇒ **không có egress telemetry nào**. Đáng ghi vì đây là con đường dữ liệu ra ngoài duy nhất mà một người đọc lướt có thể bỏ sót |
+| `GH_AW_GITHUB_TOKEN` · `GH_AW_GITHUB_MCP_SERVER_TOKEN` · `GITHUB_TOKEN` | Token dựng sẵn của GitHub Actions, phạm vi do khối `permissions` từng job quyết định |
+| 9 action | **Mọi cái ghim SHA 40 ký tự.** Nguồn: `actions/*` (GitHub) và `github/gh-aw-actions/setup` (GitHub) — không có nguồn bên thứ ba |
+| 6 container image | **Mọi cái ghim digest `@sha256:`.** Toàn bộ từ `ghcr.io/github/*` |
+| Bộ công cụ MCP `github` | 27 tool, **toàn bộ là đọc** (`get_*`, `list_*`, `search_*`, `*_read`) — khớp `tools.github.read-only: true`. Không tool ghi nào |
+| Egress mạng | `network.allowed: [defaults, github, node]` — qua firewall/squid của gh-aw |
+
+**Không mục nào không xác minh được.** Nếu một lần biên dịch sau báo thêm secret hoặc action mới,
+mục đó phải được rà soát lại ở đây trước khi dùng `--approve`.
+
+### 9.5 Kiểm bằng mutation — vòng #311
+
+Bốn bài mới/đổi chiều được kiểm bằng đột biến, không chỉ bằng "xanh". **4/4 đột biến bị bắt đúng
+bài**, và sau mỗi lần hoàn nguyên bộ test được chạy lại làm đối chứng — **cả bốn lần đều xanh**,
+nên không có đột biến nào còn sót lại trong cây:
+
+| Đột biến | Bài đỏ thực tế |
+|---|---|
+| Đổi tên `agent-builder.lock.yml` đi chỗ khác | **2, 12, 14** — xem ghi chú dưới |
+| Sửa `compiler_version` trong lock thành `v0.89.15` | **12** (lock phải do đúng bản ghim sinh ra) |
+| Xoá dòng `if:` ở gốc frontmatter, giữ nguyên bước `risk_gate` | **13** (cổng thiếu nửa cưỡng chế) |
+| Đổi `agent.needs: activation` trong lock thành `pre_activation` | **14** (agent thoát khỏi job bị gác) |
+
+Ghi chú về đột biến thứ nhất, vì nó nói một điều về thiết kế bộ bài: mất lock làm đỏ **ba** bài chứ
+không phải một, do 12 và 14 đều đọc lock. Đó là chồng lấn có ích — nhưng nó cũng có nghĩa là bài 2
+không phải bài *duy nhất* giữ lock, nên đừng đọc "3 bài đỏ" thành "3 lỗi khác nhau".
+
+Đột biến thứ ba là cái đáng giá nhất: nó mô phỏng đúng kiểu hỏng im lặng mà cổng này sinh ra được —
+bước `risk_gate` vẫn chạy, vẫn in `TU CHOI`, và job agent vẫn đi tiếp. Không bài nào khác bắt được
+nó, vì lock lúc đó vẫn là lock cũ và vẫn có đủ mọi thứ bài 14 đi tìm.
 
 ---
 
-## 10. Kế hoạch xoá — thực hiện SAU cổng §14, không phải trong PR này
+## 10. Kế hoạch xoá — thực hiện ở Phase C của #311, **chỉ khi** `PILOT = PASS`
+
+> **Điều kiện chặn, cập nhật 16/09/2026.** Cổng §14 của #309 đã qua, nhưng kế hoạch xoá dưới đây
+> **vẫn chưa được chạy**, và điều kiện nay chặt hơn: #311 Phase C chỉ mở khi **cả bảy** tình huống
+> của §9.3 đạt `PROVEN`. Hôm nay là **0/7 PROVEN** (3 `CONFIG_ONLY`, 4 `NOT_PROVEN`). Không được
+> xoá một dòng nào của mặt phẳng điều khiển cũ trước mốc đó — mã đó vẫn là đường lui duy nhất nếu
+> đường chính thức không bật được.
 
 ### 10.1 Đóng, không merge
 
@@ -739,8 +1020,14 @@ xoá một tệp `.md`.
 
 ## 12. NOT PROVEN — nói thẳng
 
+> Cập nhật 16/09/2026. Phase A của #311 **không lật được mục nào** trong danh sách này sang PROVEN,
+> và đó là kết quả đúng: Phase A là *chuẩn bị kích hoạt*, không phải *chạy thật*. Cái Phase A làm
+> được là nâng ba mục từ "chỉ có lời văn" lên `CONFIG_ONLY` đọc được bằng máy, và **thêm một mục
+> mới (số 8)** mà lần đo trước không nhìn thấy.
+
 1. **Chưa có một lần chạy gh-aw nào trong repo này.** Không có credential engine nào (§5). Mọi khẳng
    định về gh-aw ở tài liệu này đến từ tài liệu + mã nguồn ghim SHA `bde3679`, không từ một run thật.
+   **Phase A không đổi được điều này** — biên dịch xong không phải chạy xong.
 2. **Tình huống 4 chưa chạy end-to-end.** Cái *đã* đo là **cơ chế danh tính** trên chính repo này:
    commit đẩy bằng `GITHUB_TOKEN` cho run `action_required` + 0 job (run `33676122047`), commit
    đẩy bằng installation token của App cho run 7/7 job `success` (run `33717371535`). Cái **chưa**
@@ -758,7 +1045,25 @@ xoá một tệp `.md`.
 7. **`require_extra_approval_for_unattributed_changes: true`** đang bật trên ruleset và có thể tương
    tác với PR do agent tạo. Chưa đo. Liên quan trực tiếp tới mục 2: commit do App đẩy **có** danh
    tính (`author=nexagent-autopilot[bot]`), nên nhiều khả năng không rơi vào diện "unattributed" —
-   nhưng "nhiều khả năng" không phải một phép đo.
+   nhưng "nhiều khả năng" không phải một phép đo. *(Đo lại 16/09 xác nhận cờ này vẫn bật trên
+   `/rules/branches/main`.)*
+
+8. **Cổng rủi ro tất định chưa chạy thật — MỤC MỚI, 16/09/2026.** §7.5 chứng minh cổng đã được biên
+   dịch đúng chỗ: `activation.if` chứa `risk_gate_result == 'success'`, và `agent` `needs:
+   activation`. Nhưng đó là đọc YAML, không phải chạy. Ba thứ chỉ một lần chạy thật mới trả lời
+   được:
+   - `toJSON(github.event.issue.labels.*.name)` có thật sự chứa nhãn **vừa được gắn** trong payload
+     của event `issues.labeled` hay không (lý thuyết là có; chưa đo);
+   - job `pre_activation` hỏng có làm `activation`/`agent` **skip** hay lại chạy vì một `always()`
+     ẩn nào đó trong lock;
+   - và cổng có từ chối **đúng** khi nhãn rủi ro vắng mặt hoàn toàn.
+
+   Tình huống 7 của §9.3 vì vậy là `CONFIG_ONLY`, không phải `PROVEN`.
+
+9. **Codex không thể là người duyệt độc lập — MỤC MỚI, 16/09/2026.** Không phải "chưa bật" mà là
+   **không thể**: App đăng dưới `user.login` của chủ repo (§4.3), nên mọi review event nó phát ra
+   đều là tự duyệt PR của mình. Khác với mục 4, mục này **không** được gỡ bằng cách thêm
+   credential engine; đường duy nhất còn lại là ghế Copilot (§4.2).
 
 ---
 
