@@ -839,6 +839,39 @@ GH_AW_CI_TRIGGER_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token || '' }}
 > `NEXAGNET_AUTOPILOT_PRIVATE_KEY`. Tên thật — đo bằng `gh api .../actions/secrets` — là
 > **`NEXAGENT_AUTOPILOT_PRIVATE_KEY`**. Lệch một chữ, `secrets.*` ra chuỗi rỗng, im lặng.
 
+##### Đo lại 16/09: biểu thức đó ĐÚNG, nhưng KHÔNG có trong lock đã commit
+
+Đoạn trên được viết khi chưa có lock để đối chiếu — nó đọc từ mã nguồn gh-aw. Nay đã có lock thật,
+và phải nói rõ một điều dễ gây hiểu lầm: **`GH_AW_CI_TRIGGER_TOKEN` không xuất hiện trong
+`agent-builder.lock.yml` đã commit.**
+
+Không phải dây đứt. Đo bằng cách biên dịch một bản sao của chính pilot này ở một thư mục **tách rời**
+(không đụng repo), chỉ khác đúng một chữ `staged`:
+
+```text
+staged: true   (ban da commit)  -> KHONG co GH_AW_CI_TRIGGER_TOKEN
+staged: false  (ban probe)      -> CO, dung nguyen van bieu thuc noi tren:
+                                   GH_AW_CI_TRIGGER_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token || '' }}
+
+Nam buoc CHI xuat hien khi bo staged (diff theo ten step giua hai lock):
+  Download patch artifact · Generate GitHub App token · Checkout repository
+  Configure Git credentials · Upload Safe Outputs Items
+```
+
+Ba điều rút ra:
+
+1. **Mô tả của #310 là đúng**, và nay được xác nhận trên đầu ra biên dịch thật chứ không chỉ bằng
+   đọc mã nguồn — kể cả cái đuôi `|| ''` tạo ra bẫy fail-open.
+2. `staged: true` giữ lại **nguyên cả đường ghi**, không chỉ chặn lời gọi cuối. Đó là lý do lock đã
+   commit nhẹ hơn ~2 KB và thiếu năm bước trên.
+3. **Cạm bẫy đọc tài liệu:** ai mở lock đã commit rồi tìm `GH_AW_CI_TRIGGER_TOKEN` sẽ không thấy, và
+   rất dễ kết luận nhầm rằng `github-token-for-extra-empty-commit: app` chưa được nối. Ghi ở đây để
+   lần sau không mất một buổi gỡ nhầm chỗ.
+
+Bất biến **10** vì vậy vẫn là lớp bảo vệ đúng chỗ: nó khoá **cấu hình** (`app` ⇔ có khối
+`github-app` đủ trường, trỏ đúng `NEXAGENT_*`), chứ không khoá sự có mặt của biến môi trường trong
+lock — biến đó phụ thuộc `staged`, và `staged` là công tắc của Phase B.
+
 **Còn lại chưa đo:** toàn bộ đường gh-aw end-to-end (agent → safe output → PR → commit rỗng → CI)
 chưa chạy một lần nào, vì chưa có credential engine (§5). Cái đã chứng minh là **cơ chế danh tính**
 trên chính repo này; cái chưa chứng minh là **gh-aw nối đúng cơ chế đó**. Vì vậy tình huống 4 là
