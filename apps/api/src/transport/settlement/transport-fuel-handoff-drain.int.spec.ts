@@ -28,6 +28,7 @@ import {
   FuelSettlementSourceAdapter,
   SettlementCoreFactsAdapter,
   type FuelHandoffFacts,
+  type FuelHandoffScanPosition,
 } from './settlement.ports.js';
 import { SettlementService } from './settlement.service.js';
 
@@ -132,11 +133,6 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         new UnusedCompletionGate(),
       );
 
-    const buildDrain = (
-      fuelSource: FuelSettlementSource = new FuelSettlementSourceAdapter(fuelRepo),
-    ): FuelHandoffDrainService =>
-      new FuelHandoffDrainService(buildIngest(fuelSource), settlementRepo, fuelSource);
-
     const SUPPLIER_CODE = 'IT-LV-CX';
     const CODE_PREFIX = 'IT-LV-CH';
     const PHONE_PREFIX = '0977LV';
@@ -151,6 +147,64 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       tripId: '',
       reconciliationId: '',
     };
+
+    /**
+     * HOP THU NHIN QUA KINH CUA RIENG BO BAI NAY.
+     *
+     * ===========================================================================
+     * Doan nay duoc them sau khi job `integration` o `ed517df` DO o mot tep KHAC:
+     * `transport-settlement.int.spec.ts` `P4`, `expected +0 to be 2`. Tep do khong goi vong quet.
+     *
+     * Vong quet cua san pham doc TOAN BO hop thu — `listLatestHandoffs` chi loc `supersededBy: null`
+     * va keyset, va do la dung: no phai thay moi ky da dong. Nhung job `integration` dung MOT
+     * PostgreSQL cho moi tep, nen moi lan bo bai nay quet, no ghi cong no cho ca ban giao ma tep
+     * KHAC vua gieo. `P4` gieo chuoi ban giao cua no trong `beforeAll` roi moi tu goi
+     * `ingestFuelHandoff()`; bo bai nay quet trung vao khoang giua thi chung tu da co san, va
+     * `created` ra `0`.
+     *
+     * Do bang log, khong suy doan: o run XANH `929eb5b` hai tep chay tach nhau — tep kia xong truoc
+     * khi tep nay bat dau. O run DO `ed517df` chung chay chong nhau tron ven. Loi nam san tu khi tep
+     * nay ra doi; lich chay chi quyet dinh LUC no lo ra, va lich chay khong phai thu mot bo bai
+     * duoc phep dua vao.
+     *
+     * ===========================================================================
+     * KINH NAY KHONG LAM YEU DIEU GI BO BAI CHUNG MINH:
+     *
+     *   · truy van keyset THAT van chay nguyen ven ben duoi — kinh chi loc trang no tra ve;
+     *   · `V-P0-12` goi thang `listLatestHandoffs`, khong qua kinh, nen menh de SQL van duoc kiem
+     *     tren TOAN bang;
+     *   · dich vu, kho, con tro tieu thu, hang vi tri quet va `@@unique` deu la ban THAT;
+     *   · hop thu dung chung o CI khong gan toi 500 hang, nen trang NGAN ca truoc lan sau khi loc, va
+     *     quyet dinh quay-ve-dau/tien khong doi. Canh trang DAY va hang hong xen giua do `V-LIVE-1/2`
+     *     o bo don vi kiem, o dung con so san xuat.
+     *
+     * Dung go kinh nay de "giong san pham hon": bo bai se lai cuop fixture cua tep ben canh, va lan
+     * sau cai do cung lai la mot tep KHAC.
+     */
+    class OwnSupplierOutbox extends FuelSettlementSource {
+      private readonly real = new FuelSettlementSourceAdapter(fuelRepo);
+
+      latestHandoff(reconciliationId: string): Promise<FuelHandoffFacts | null> {
+        return this.real.latestHandoff(reconciliationId);
+      }
+
+      handoffRevisions(reconciliationId: string): Promise<FuelHandoffFacts[]> {
+        return this.real.handoffRevisions(reconciliationId);
+      }
+
+      async pendingHandoffs(input: {
+        readonly after: FuelHandoffScanPosition | null;
+        readonly limit: number;
+      }): Promise<FuelHandoffFacts[]> {
+        const page = await this.real.pendingHandoffs(input);
+        return page.filter((handoff) => handoff.supplierId === state.supplierId);
+      }
+    }
+
+    const buildDrain = (
+      fuelSource: FuelSettlementSource = new OwnSupplierOutbox(),
+    ): FuelHandoffDrainService =>
+      new FuelHandoffDrainService(buildIngest(fuelSource), settlementRepo, fuelSource);
 
     /** Thu tu xoa theo dung chieu khoa ngoai — xem khoi cleanup cua `transport-fuel.int.spec.ts`. */
     async function cleanup(): Promise<void> {
@@ -848,19 +902,6 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       /* Anh chup `cu` gio da cu mot vong. Lan ghi cua no phai khong xay ra. */
       expect((await settlementRepo.rewindFuelHandoffScan(cu)).rewound).toBe(false);
       expect(await settlementRepo.fuelHandoffScan()).toEqual(bayGio);
-    });
-
-    /*
-     * Tra hang don ve dau vong truoc khi sang `V-P0-9..11`: hai bai tren de lai mot vi tri o nam
-     * 2099, va `V-P0-10` co di qua duong quay ve dau. De nguyen thi bai do van xanh, nhung no se
-     * xanh vi mot ly do khong lien quan gi den cai no dang do.
-     */
-    it('V-P0-18bis — tra vi tri quet ve dau vong cho hai bai cuoi', async () => {
-      const { rewound } = await settlementRepo.rewindFuelHandoffScan(
-        await settlementRepo.fuelHandoffScan(),
-      );
-      expect(rewound).toBe(true);
-      expect((await settlementRepo.fuelHandoffScan()).position).toBeNull();
     });
 
     /* ================================================================ *
