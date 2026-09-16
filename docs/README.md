@@ -55,7 +55,14 @@ Nguồn nghiệp vụ của nó nằm bên khách:
 Ranh giới giữ nguyên như mọi chỗ khác trong `docs/`: **sự kiện của khách ở `khach-hang/`, thiết kế
 của chúng ta ở `kien-truc/`**.
 
-### Giao thức Autopilot V0 (03/09/2026)
+### Autopilot — official-first (15/09/2026)
+
+| File                                                                                                      | Là gì                                                                                                                                                                                  | Không phải gì                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`phat-trien/van-hanh/autopilot-v2-official-first.md`](phat-trien/van-hanh/autopilot-v2-official-first.md) | **Kiểm kê + ma trận thay thế + kiến trúc đích + kế hoạch xoá** — đo lại gh-aw `v0.88.7` (re-audit 16/09/2026), năng lực chính thức của GitHub/Codex/Copilot, ràng buộc credential đo được của chính repo này | Chưa chạy — pilot **đã biên dịch nhưng vẫn `staged`**, và **chưa có credential engine** nên chưa từng chạy tới nơi. Chưa xoá gì khỏi `main`: Phase C của #311 chỉ mở khi đủ 7/7 tình huống `PROVEN` (hôm nay 0/7) |
+| [`kien-truc/adr-0001-autopilot-official-first.md`](kien-truc/adr-0001-autopilot-official-first.md)         | **ADR — `DECISION = ADOPT_GITHUB_NATIVE_GH_AW`**: trạng thái nghiệp vụ về GitHub gốc, mặt phẳng thực thi về gh-aw ghim bản                                                            | Không còn là đề xuất — **ĐÃ CHẤP NHẬN** qua PR #310 (merge `86d106e`). Nhưng "đã chấp nhận" ≠ "đã chạy" |
+
+### Giao thức Autopilot V0 (03/09/2026) — **SUPERSEDED bởi ADR-0001**
 
 | File                                                                                           | Là gì                                                                                                                                                                                                        | Không phải gì                                                                                                         |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
