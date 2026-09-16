@@ -1,4 +1,5 @@
 import { formatVnd } from '../../lib/format';
+import type { TollDuplicateSpendState, TollUnattributedReason } from './toll-report-types';
 import type {
   AgingBucket,
   BusinessDate,
@@ -341,6 +342,26 @@ export const TOLL_LINK_PROVENANCE_LABEL = {
   MANUAL: 'Người khai',
   STATEMENT_DECLARED: 'Đọc từ tệp sao kê',
 } as const satisfies Record<TollLinkProvenance, string>;
+
+/**
+ * `#314` — VI SAO mot dong khong nam trong bang chi phi theo xe.
+ *
+ * Ba ly do dau la viec CON CHO NGUOI; `ACCOUNT_LEVEL` thi khong: nap tien va phi tai khoan xay ra o
+ * muc tai khoan va khong co chiec xe nao trong do. Viet ca bon thanh "loi" se lam ke toan di "sua"
+ * mot khoan nap tien cho toi khi no gan vao mot chiec xe — tuc dung cai sai ma bao cao nay tranh.
+ */
+export const TOLL_UNATTRIBUTED_REASON_LABEL = {
+  ACCOUNT_UNRESOLVED: 'Chưa nhận ra tài khoản',
+  VEHICLE_UNRESOLVED: 'Chưa nhận ra xe',
+  AMBIGUOUS: 'Nhiều xe cùng khớp — chờ người chọn',
+  ACCOUNT_LEVEL: 'Cấp tài khoản (nạp tiền, phí) — không thuộc xe nào',
+} as const satisfies Record<TollUnattributedReason, string>;
+
+/** `#314` — dong trung KHONG vao tong chi phi nao, ca khi con cho nguoi quyet. */
+export const TOLL_DUPLICATE_SPEND_STATE_LABEL = {
+  SUSPECTED: 'Nghi trùng — chờ người quyết',
+  DECLARED: 'Đã ghi là trùng — không tính',
+} as const satisfies Record<TollDuplicateSpendState, string>;
 
 /**
  * TRANG THAI DUONG API — cau chu o day la mot LOI HUA KHONG DUOC PHEP SAI.

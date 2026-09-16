@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useAuth } from '../../../components/auth/AuthGate';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import type { NavigationInput } from '../navigation';
+import type { TollSpendReportQuery } from '../toll-report-types';
 import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import type {
@@ -638,6 +639,51 @@ export function useTollCandidates(input: NavigationInput, query: TollCandidateQu
   return useQuery({
     queryKey: ['transport', 'toll', 'candidates', query],
     queryFn: () => transportApi.toll.candidates(query),
+    enabled: allowed(input, 'transport-toll', 'transport.toll.review.read'),
+  });
+}
+
+/*
+ * `#314` — bon phep DOC moi. Moi khoa deu nam duoi `['transport', 'toll']`, nen MOI lan quyet / nap /
+ * sua tai khoan (deu lam moi ca nhanh do) cung lam moi bao cao va dong doi ung — khong co mot o nho
+ * nao con noi ve trang thai truoc lan quyet.
+ */
+
+/** Lich su nhan chi tra cua MOT xe qua moi tai khoan. `null` = chua chon xe, khong hoi. */
+export function useTollVehicleLinks(input: NavigationInput, vehicleId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'toll', 'vehicles', vehicleId, 'links'],
+    queryFn: () => transportApi.toll.vehicleLinks(vehicleId ?? ''),
+    enabled: vehicleId !== null && allowed(input, 'transport-toll', 'transport.toll.account.read'),
+  });
+}
+
+/** Mot dong kem LICH SU quyet dinh cua no — de nguoi doi soat thay ai da lam gi truoc khi quyet. */
+export function useTollCandidateDetail(input: NavigationInput, candidateId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'toll', 'candidate-detail', candidateId],
+    queryFn: () => transportApi.toll.candidate(candidateId ?? ''),
+    enabled: candidateId !== null && allowed(input, 'transport-toll', 'transport.toll.review.read'),
+  });
+}
+
+/** Dong doi ung (cung dau van) cua mot dong nghi trung. */
+export function useTollDuplicatePeers(input: NavigationInput, candidateId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'toll', 'duplicate-peers', candidateId],
+    queryFn: () => transportApi.toll.duplicatePeers(candidateId ?? ''),
+    enabled: candidateId !== null && allowed(input, 'transport-toll', 'transport.toll.review.read'),
+  });
+}
+
+/**
+ * Chi phi ETC theo xe / ky. Gac bang `transport.toll.review.read` — cung ma voi route cua may chu.
+ * `queryKey` mang CA ky + nha cung cap: hai ky la hai cau hoi, khong dung chung mot o nho.
+ */
+export function useTollSpendReport(input: NavigationInput, query: TollSpendReportQuery) {
+  return useQuery({
+    queryKey: ['transport', 'toll', 'spend-report', query],
+    queryFn: () => transportApi.toll.spendReport(query),
     enabled: allowed(input, 'transport-toll', 'transport.toll.review.read'),
   });
 }
