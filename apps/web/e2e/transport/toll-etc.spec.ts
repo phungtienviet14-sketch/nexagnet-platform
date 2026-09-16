@@ -651,10 +651,17 @@ test.describe('ETC — tai khoan giao thong va so xe nhan chi tra (#314 G7)', ()
     await expect(dialog).toContainText('vẫn giữ nguyên');
     await dialog.getByRole('button', { name: 'Ngừng dùng' }).click();
 
-    expect(lastRequest(mock, 'PATCH', '/accounts/acc-1')?.body).toEqual({ active: false });
+    /*
+     * Doi KET QUA tren man hinh truoc, roi moi doc than yeu cau da ghi. Doc ngay sau cu bam la mot
+     * cuoc dua voi duong mang: tren may CI cham hon, lenh `PATCH` chua kip toi bo mock.
+     */
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Đã ngừng dùng tài khoản VETC TK-001' }),
+    ).toBeVisible();
     await expect(
       page.getByText('Tài khoản đã ngừng dùng — dùng lại tài khoản trước khi nối xe.'),
     ).toBeVisible();
+    expect(lastRequest(mock, 'PATCH', '/accounts/acc-1')?.body).toEqual({ active: false });
     await expect(page.getByRole('form', { name: 'Nối xe vào tài khoản' })).toHaveCount(0);
   });
 
