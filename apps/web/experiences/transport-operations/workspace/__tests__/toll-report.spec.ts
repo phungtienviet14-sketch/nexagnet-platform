@@ -332,7 +332,8 @@ describe('xuat CSV', () => {
     );
 
     expect(file.filename).toBe('chi-phi-etc-theo-xe-2026-09-01_2026-09-16.csv');
-    const lines = file.content.replace(/^﻿/, '').trimEnd().split('\r\n');
+    expect(file.content.charCodeAt(0)).toBe(0xfeff);
+    const lines = file.content.slice(1).trimEnd().split('\r\n');
     expect(lines).toHaveLength(4);
     expect(lines[1]).toBe('Theo xe;15C-556.33;;2026-08;Lượt qua trạm;VND;-104000;2;0;0;;');
     expect(lines[2]).toBe(
