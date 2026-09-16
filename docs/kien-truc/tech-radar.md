@@ -148,6 +148,7 @@ Nguồn: [Seer GA changelog](https://sentry.io/changelog/seer-sentrys-ai-debugge
 | **Nền tảng IAM** | Keycloak/OIDC là hạ tầng đã chín. Tự viết xác thực là tự tạo lỗ hổng |
 | **Bộ máy tính tiền** | OpenMeter và tương đương đã có. Sai một dòng ở đây là sai tiền của khách |
 | **Runtime cho coding agent** | Đã có nhiều lựa chọn. Khác biệt của Nexagnet nằm ở **bằng chứng nghiệp vụ**, không ở vòng lặp agent |
+| **Mặt phẳng điều khiển Autopilot** (giao thức · orchestrator · dispatcher · cầu nối trình duyệt) | Dòng trên đã nói điều này từ 27/08/2026, và repo vẫn viết **30.733 dòng** — rồi đo được **395 lần chạy / 0 lần ghi thành công**. Thay bằng trạng thái GitHub gốc + gh-aw: [ADR-0001](adr-0001-autopilot-official-first.md) |
 | **UI quản lý Docker tổng quát** | Portainer đã làm. Fleet View của Nexagnet chỉ nên sở hữu phần **Portainer không biết**: tenant, release, capability, deploy signal, kill switch, độ sẵn sàng nghiệp vụ |
 
 ---
@@ -166,5 +167,6 @@ Nguồn: [Seer GA changelog](https://sentry.io/changelog/seer-sentrys-ai-debugge
 
 - [reference-platform-stack.md](reference-platform-stack.md) — hợp đồng stack tham chiếu, parity levels
 - [agentic-ops.md](agentic-ops.md) — bốn mức tự động hoá vận hành
+- [adr-0001-autopilot-official-first.md](adr-0001-autopilot-official-first.md) — nghiên cứu gốc dẫn tới AVOID BUILDING mặt phẳng điều khiển Autopilot
 - [workflow-engine-evaluation.md](workflow-engine-evaluation.md) — nghiên cứu gốc dẫn tới ADOPT Hatchet
 - [observability-review.md](observability-review.md) — nghiên cứu gốc dẫn tới ADOPT OTel
