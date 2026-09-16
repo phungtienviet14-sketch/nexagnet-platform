@@ -966,6 +966,38 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         lastHandoffId: R.handoffId,
         cycles: cuaA.cycles + 1,
       });
+
+      /*
+       * ===========================================================================
+       * DOI CHUNG AM: menh de `WHERE` CU, chay tren CHINH trang thai nay.
+       *
+       * Vong soat yeu cau "mutation ban cu phai do". Bo don vi da chay DUNG ma cu cua dich vu va kho
+       * in-memory (`V-LIVE-6` do tren ban cu). O day, tren Postgres that, lenh duoi la NGUYEN VAN
+       * lenh ghi cua `advanceFuelHandoffScan` truoc `REVIEW_3` — chi so vi tri. No phai cham DUNG
+       * mot hang, tuc lan tien cu cua A lot duoc vao vong N+1.
+       *
+       * Neu mot ngay lenh nay ra `0`, canh dung o tren da thoi tai hien duoc loi, va bai kiem se
+       * xanh ma khong chung minh gi. Khang dinh chinh cua bai da nam o TREN; dong nay chi giu cho
+       * canh dung con co nghia.
+       */
+      const atQ = new Date(Q.emittedAt);
+      const menhDeCu = await prisma.transportSettlementFuelHandoffScan.updateMany({
+        where: {
+          id: FUEL_HANDOFF_SCAN_ROW,
+          OR: [
+            { lastEmittedAt: null },
+            { lastEmittedAt: { lt: atQ } },
+            { lastEmittedAt: atQ, lastHandoffId: { lt: Q.handoffId } },
+          ],
+        },
+        data: { lastEmittedAt: atQ, lastHandoffId: Q.handoffId },
+      });
+      expect(menhDeCu.count).toBe(1);
+      /* Dung hinh dang loi cua vong soat: vong N+1 bi day toi Q, bo qua (R, Q]. */
+      expect(await settlementRepo.fuelHandoffScan()).toEqual({
+        position: Q,
+        cycles: cuaA.cycles + 1,
+      });
     });
 
     it('V-P0-20 — vong N+1 di toi DUNG vi tri nhip cu da thay: lan tien cu VAN bi tu choi', async () => {

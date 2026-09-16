@@ -3055,8 +3055,10 @@ model TransportSettlementFuelHandoffCursor {
 /// tri quet (dong ho lech, hay mot ban duoc ghi voi thoi diem cu). Mot con tro chi-tien se bo qua
 /// no vinh vien; mot vong quay lai thi khong.
 ///
-/// `cycles` khong tham gia quyet dinh nao — no la thu duy nhat trong CSDL phan biet duoc "vong quet
-/// dang chay tron vong" voi "vong quet dung yen mot cho", va cau hoi do se duoc hoi luc co su co.
+/// `cycles` la thu duy nhat trong CSDL phan biet duoc "vong quet dang chay tron vong" voi "vong quet
+/// dung yen mot cho", va cau hoi do se duoc hoi luc co su co. No KHONG con chi de xem: no la ve cua
+/// CA HAI lan ghi co dieu kien tren hang nay — quay ve dau (tu `INDEPENDENT_CHATGPT_REVIEW_2`) va
+/// tien (tu `INDEPENDENT_CHATGPT_REVIEW_3`). Xem cot `cycles` ben duoi.
 model TransportSettlementFuelHandoffScan {
   /// Hang DON — khoa la hang so `FUEL_HANDOFF_SCAN_ROW`. Mot khoa chuoi doc len la doc duoc ten cua
   /// cai dang quet, khac voi mot `Boolean @unique` chi noi "co mot hang".
