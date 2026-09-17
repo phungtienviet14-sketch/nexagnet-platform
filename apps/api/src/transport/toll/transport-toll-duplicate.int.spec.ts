@@ -356,7 +356,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
 
   /**
    * MOT NGUOI GHI KHAC da qua phep kiem, DANG GIU khoa do thi trung va vua ghi `sourceId -> targetId`
-   * nhung CHUA commit. Tra ve ham `release` de commit.
+   * nhung CHUA commit. `commit()` tha khoa.
+   *
+   * Moi bai goi `commit()` TRUOC moi khang dinh, de mot khang dinh do khong bao gio de lai mot giao
+   * dich treo giu khoa chung — khoa do chan ca lenh ghi trung cua tep toll khac tren cung CSDL.
    */
   const holdGraphLockWhileWriting = async (sourceId: string, targetId: string) => {
     let release!: () => void;
@@ -383,7 +386,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
       },
       { maxWait: 10_000, timeout: 30_000 },
     );
-    await held;
+    // Giao dich giu khoa hong truoc khi toi `markHeld` thi bai do NGAY, khong treo cho `held`.
+    await Promise.race([held, holder]);
     return {
       commit: async () => {
         release();
@@ -421,7 +425,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     expect(
       report.duplicates.map((entry) => [entry.state, entry.total.rowCount, entry.total.amount]),
     ).toEqual([['SUSPECTED', 2, -104_000]]);
-  });
+  }, 60_000);
 
   it('V318-INT-2 — giai trung roi moi xac nhan; lich su chi-ghi-them doc lai qua client Prisma MOI', async () => {
     const [first, second] = await importRows('resolve', [row('02'), row('02')]);
@@ -482,7 +486,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     } finally {
       await restarted.$disconnect();
     }
-  });
+  }, 60_000);
 
   /* =============================== Chong vong =============================== */
 
@@ -509,7 +513,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     expect(await rowOf(a)).toMatchObject({ duplicateOfCandidateId: null, reviewState: 'PENDING' });
     expect(await decisionCount([a])).toBe(0);
     expect((await rowOf(c)).duplicateOfCandidateId).toBe(b);
-  });
+  }, 60_000);
 
   /**
    * WRITE SKEW, TAT DINH: mot nguoi ghi khac DANG GIU khoa va vua ghi `B -> A` (chua commit). Lenh
@@ -520,16 +524,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     const a = idOf(first);
     const b = idOf(second);
 
+    const plan = await flagInput(a, b);
     const other = await holdGraphLockWhileWriting(b, a);
-    const write = repository.applyReview(await flagInput(a, b));
-    expect(await settlesWithin(write, 750)).toBe('blocked');
+    const write = repository.applyReview(plan);
+    const whileHeld = await settlesWithin(write, 750);
     await other.commit();
 
+    expect(whileHeld).toBe('blocked');
     await expect(write).rejects.toMatchObject({ reason: 'TOLL_REVIEW_DUPLICATE_CYCLE' });
     expect((await rowOf(a)).duplicateOfCandidateId).toBeNull();
     expect((await rowOf(b)).duplicateOfCandidateId).toBe(a);
     expect(await decisionCount([a])).toBe(0);
-  });
+  }, 60_000);
 
   it('V318-INT-5 — hai lenh ghi trung SONG SONG A->B va B->A tu hai ke hoach da lap: dung mot ben thang', async () => {
     for (const round of ['1', '2']) {
@@ -559,7 +565,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
       expect(pointers.filter((pointer) => pointer !== null)).toHaveLength(1);
       expect(await decisionCount([a, b])).toBe(1);
     }
-  });
+  }, 60_000);
 
   /* ====================== CAS + doi chung am tren anh chup cu ====================== */
 
@@ -599,7 +605,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
       duplicateOfCandidateId: null,
     });
     expect(countedRows((await dayReport('06')).vehicles)).toBe(2);
-  });
+  }, 60_000);
 
   /* ======================= Doi chung am cho vong + duong ra ======================= */
 
@@ -613,12 +619,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     const q = idOf(second);
     const r = idOf(third);
 
-    /* Dung CUNG canh V318-INT-4, nhung qua lenh ghi cu. */
+    /*
+     * Dung CUNG canh V318-INT-4, nhung qua lenh ghi cu. Cho toi 10 giay: lenh ghi cu KHONG xin khoa,
+     * nen no xong ngay ca khi may CI cham; neu no doi khoa thi 10 giay hay mai mai cung nhu nhau.
+     */
+    const plan = await flagInput(p, q);
     const other = await holdGraphLockWhileWriting(q, p);
-    const legacyWrite = legacyApplyReview(await flagInput(p, q));
-    expect(await settlesWithin(legacyWrite, 750)).toBe('settled');
-    await legacyWrite;
+    const legacyWrite = legacyApplyReview(plan);
+    const whileHeld = await settlesWithin(legacyWrite, 10_000);
     await other.commit();
+
+    expect(whileHeld).toBe('settled');
+    await legacyWrite;
 
     expect((await rowOf(p)).duplicateOfCandidateId).toBe(q);
     expect((await rowOf(q)).duplicateOfCandidateId).toBe(p);
@@ -640,5 +652,5 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     await review(p, 'REOPEN');
     await review(p, 'CLEAR_DUPLICATE');
     expect(countedRows((await dayReport('07')).vehicles)).toBe(1);
-  });
+  }, 60_000);
 });

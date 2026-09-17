@@ -39,6 +39,13 @@ import type {
  */
 export const TOLL_DUPLICATE_GRAPH_LOCK = 'transport-toll:duplicate-graph';
 
+/**
+ * Gioi han cua MOT lan quyet. Mot lenh ghi trung co the DOI khoa do thi cua mot lenh ghi trung
+ * khac; 5 giay mac dinh cua Prisma thuong du, nhung het han o do la mot loi 500 khong ma — nen cho
+ * rong hon mot chut thay vi de mot lan doi binh thuong duoi tai thanh mot loi khong ai doc duoc.
+ */
+const TOLL_REVIEW_TRANSACTION = { maxWait: 5_000, timeout: 15_000 } as const;
+
 /* Kieu tho tu Prisma — chi lay nhung cot ma mien nay doc. */
 interface AccountRow {
   id: string;
@@ -638,7 +645,7 @@ export class PrismaTollRepository extends TollRepository {
         where: { id: input.candidateId },
       });
       return toCandidate(updated);
-    });
+    }, TOLL_REVIEW_TRANSACTION);
   }
 
   async listDecisions(candidateId: string): Promise<readonly TollReviewDecisionRecord[]> {
