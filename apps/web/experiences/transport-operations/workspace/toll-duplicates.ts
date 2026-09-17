@@ -22,18 +22,20 @@ import type {
  * QUYET TRUNG va VIEC TREN TUNG DONG cua hang cho ETC — `#314` G8. Phan QUYET DINH, tach khoi phan ve.
  *
  * ============================================================================================
- * HAI LO MA MAY CHU KHONG CHAN, VA TEP NAY DONG O TANG KHUNG NHIN
+ * HAI LUAT CUA MAY CHU (`#318`), VA TEP NAY PHAN ANH CHUNG O TANG KHUNG NHIN
  * ============================================================================================
  *
- *   1. VONG TRUNG. `planReview(FLAG_DUPLICATE)` chi kiem "dong dich khac chinh no" va "cung nha cung
- *      cap". A ghi "trung B" roi B ghi "trung A" la hop le voi may chu — va ca hai dong roi khoi moi
- *      tong chi phi. Nen o day, mot dong DA bi ghi trung khong bao gio duoc de xuat lam dong goc.
- *   2. CUA SAU CUA CAU HOI TRUNG. `CONFIRM` tren dong nghi trung khong noi no la hay khong la trung;
- *      `RESOLVE_VEHICLE` tren dong nghi trung lang le doi no thanh `MATCHED`. Nen dong nghi trung chi
- *      co MOT cua: quyet trung (`FLAG_DUPLICATE` voi dong goc, hoac `CLEAR_DUPLICATE`).
+ *   1. KHONG VONG TRUNG. May chu tu choi mot lan ghi trung khep vong, ke ca A->B->C->A
+ *      (`TOLL_REVIEW_DUPLICATE_CYCLE`). Man hinh con chat hon mot buoc: mot dong DA bi ghi trung khong
+ *      bao gio duoc de xuat lam dong goc, nen nguoi doi soat chon dong goc o cuoi chuoi ngay tu dau.
+ *   2. CAU HOI TRUNG TRUOC. May chu tu choi `CONFIRM` va `RESOLVE_VEHICLE` tren dong nghi trung hoac
+ *      da ghi trung (`TOLL_REVIEW_DUPLICATE_UNRESOLVED` / `TOLL_REVIEW_DUPLICATE_DECLARED`). Nen dong
+ *      nghi trung chi co MOT cua o day: quyet trung (`FLAG_DUPLICATE` voi dong goc, hoac
+ *      `CLEAR_DUPLICATE`).
  *
- * Cong THAT van la may chu. Nhung lo tren khong phai "nut bam se 4xx" — may chu CHAP NHAN chung, va
- * sua ngu nghia review la viec cua chu mien toll (bao lai o #314), khong phai cua mot man hinh.
+ * Cong THAT la may chu — an nut o day chi de khong moi nguoi bam vao mot loi da biet truoc. Khi man
+ * hinh dang cam mot ban cu (nguoi khac vua quyet), may chu van tu choi; man hinh hien NGUYEN VAN cau
+ * cua may chu va tai lai hang cho de hien dung trang thai moi.
  */
 
 /* ------------------------------------------------------------------ *

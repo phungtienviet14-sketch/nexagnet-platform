@@ -76,7 +76,12 @@ export function TollDuplicateReview({
       );
       void queryClient.invalidateQueries({ queryKey: ['transport', 'toll'] });
     },
-    onError: () => setPending(null),
+    // May chu tu choi (vd vong trung, hoac dong vua duoc nguoi khac quyet): cau cua may chu hien
+    // nguyen van ben duoi, va dong + dong doi ung tai lai theo trang thai MOI cua may chu (`#318`).
+    onError: () => {
+      setPending(null);
+      void queryClient.invalidateQueries({ queryKey: ['transport', 'toll'] });
+    },
   });
 
   const model = toTollDuplicateReviewModel({

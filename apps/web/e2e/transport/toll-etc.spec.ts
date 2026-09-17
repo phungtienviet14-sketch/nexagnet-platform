@@ -270,6 +270,65 @@ const buildReport = (rows: readonly MockCandidate[], search: URLSearchParams) =>
   };
 };
 
+/**
+ * LUAT CUA MAY CHU cho mot lan quyet — `#318` (`toll-duplicate-guard.ts`, `toll-review-plan.ts`).
+ *
+ * Bo mock tu choi DUNG nhu may chu va voi CUNG cau chu, de bai kiem chung minh man hinh hien NGUYEN
+ * VAN cau tu choi cua may chu thay vi tu viet lai loi. `null` = may chu chap nhan.
+ */
+const reviewRejection = (
+  candidates: readonly MockCandidate[],
+  row: MockCandidate,
+  input: { readonly action: string; readonly duplicateOfCandidateId: string | null },
+): { readonly status: number; readonly message: string } | null => {
+  const rowLabel = `Dong ${String(row.rowNumber)}`;
+  const declared = row.duplicateOfCandidateId !== null;
+  const suspected = !declared && row.matchState === 'DUPLICATE_CANDIDATE';
+  if (input.action === 'CONFIRM' || input.action === 'RESOLVE_VEHICLE') {
+    const doing = input.action === 'CONFIRM' ? 'xac nhan' : 'chi dinh xe';
+    if (suspected) {
+      return {
+        status: 409,
+        message: `${rowLabel} con NGHI TRUNG chua giai: ghi no trung voi dong goc hoac bo nghi trung truoc khi ${doing}`,
+      };
+    }
+    if (declared) {
+      return {
+        status: 409,
+        message: `${rowLabel} da duoc ghi la TRUNG voi mot dong khac: mo lai dong roi quyet lai truoc khi ${doing}`,
+      };
+    }
+  }
+  if (input.action === 'CLEAR_DUPLICATE' && !suspected && !declared) {
+    return {
+      status: 409,
+      message: `${rowLabel} khong nam trong dien nghi trung — khong co nghi trung nao de bo`,
+    };
+  }
+  if (input.action === 'FLAG_DUPLICATE' && input.duplicateOfCandidateId !== null) {
+    if (input.duplicateOfCandidateId === row.id) {
+      return { status: 400, message: 'Mot dong khong the trung voi chinh no' };
+    }
+    const target = candidates.find((entry) => entry.id === input.duplicateOfCandidateId);
+    const seen = new Set<string>([row.id]);
+    let current: string | null = input.duplicateOfCandidateId;
+    while (current !== null) {
+      if (seen.has(current)) {
+        return {
+          status: 409,
+          message:
+            `${rowLabel} khong ghi trung vao dong ${String(target?.rowNumber)} duoc: chuoi dong goc cua dong do ` +
+            'khong ket thuc o mot dong goc that (co vong trung). Chon dong goc o cuoi chuoi.',
+        };
+      }
+      seen.add(current);
+      const step: string = current;
+      current = candidates.find((entry) => entry.id === step)?.duplicateOfCandidateId ?? null;
+    }
+  }
+  return null;
+};
+
 async function mockToll(
   page: Page,
   role: Role,
@@ -513,6 +572,8 @@ async function mockToll(
         duplicateOfCandidateId: string | null;
         note: string | null;
       };
+      const rejection = reviewRejection(candidates, row, input);
+      if (rejection !== null) return json(route, { message: rejection.message }, rejection.status);
       const before = { vehicleId: row.vehicleId, matchState: row.matchState };
       if (input.action === 'RESOLVE_VEHICLE') {
         Object.assign(row, {
@@ -768,6 +829,40 @@ test.describe('ETC — hang cho: khong chon xe giup, quyet trung co kiem toan (#
       action: 'CLEAR_DUPLICATE',
       duplicateOfCandidateId: null,
     });
+  });
+
+  /**
+   * `#318` — MAY CHU LA CONG THAT. Man hinh an nut xac nhan tren dong trung, nhung mot trang dang cam
+   * ban CU van bam duoc: nguoi khac vua ghi dong 1 la trung tren may chu. May chu tu choi; man hinh
+   * phai noi NGUYEN VAN cau do, khong bao "da ghi", va tai lai de dong 1 hien dung viec con lam duoc.
+   */
+  test('hang cho CU: may chu vua ghi dong nay la trung — xac nhan bi tu choi NGUYEN VAN, dong tai lai theo may chu (#318)', async ({
+    page,
+  }) => {
+    const mock = await mockToll(page, 'ACCOUNTING');
+    await openToll(page);
+
+    const confirm = page.getByRole('button', { name: /Xác nhận dòng 1/ });
+    await expect(confirm).toBeVisible();
+
+    const stale = mock.candidates.find((entry) => entry.id === 'cand-1');
+    expect(stale).toBeDefined();
+    Object.assign(stale ?? {}, {
+      matchState: 'DUPLICATE_CANDIDATE',
+      reviewState: 'CONFIRMED',
+      duplicateOfCandidateId: 'cand-4',
+    });
+
+    await confirm.click();
+
+    await expect(page.getByRole('alert').filter({ hasText: 'da duoc ghi la TRUNG' })).toContainText(
+      'Dong 1 da duoc ghi la TRUNG voi mot dong khac: mo lai dong roi quyet lai truoc khi xac nhan',
+    );
+    await expect(page.getByRole('button', { name: /Mở lại dòng 1/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Xác nhận dòng 1/ })).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'Đã ghi' })).toHaveCount(0);
+    expect(stale?.reviewState).toBe('CONFIRMED');
+    expect(stale?.duplicateOfCandidateId).toBe('cand-4');
   });
 });
 

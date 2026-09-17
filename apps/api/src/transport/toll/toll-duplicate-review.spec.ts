@@ -198,9 +198,9 @@ describe('#318 — CONFIRM khong vuot qua cau hoi trung', () => {
 
     const report = await harness.reports.spendReport(AUGUST);
     expect(report.vehicles).toEqual([]);
-    expect(report.duplicates.map((row) => [row.state, row.total.rowCount, row.total.amount])).toEqual(
-      [['SUSPECTED', 2, -104_000]],
-    );
+    expect(
+      report.duplicates.map((row) => [row.state, row.total.rowCount, row.total.amount]),
+    ).toEqual([['SUSPECTED', 2, -104_000]]);
   });
 
   /**
@@ -366,7 +366,10 @@ describe('#318 — khong co vong trung', () => {
     ).rejects.toMatchObject({ kind: 'CONFLICT', reason: 'TOLL_REVIEW_DUPLICATE_CYCLE' });
 
     const detail = await detailOf(harness, a ?? '');
-    expect(detail.candidate).toMatchObject({ duplicateOfCandidateId: null, reviewState: 'PENDING' });
+    expect(detail.candidate).toMatchObject({
+      duplicateOfCandidateId: null,
+      reviewState: 'PENDING',
+    });
     expect(detail.decisions).toEqual([]);
     expect(deniedReasons(harness)).toEqual(['TOLL_REVIEW_DUPLICATE_CYCLE']);
   });

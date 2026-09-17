@@ -245,6 +245,34 @@ và khi `providerRef` rỗng — trường hợp thường — hai lượt qua t
 #269 J6 nói thẳng, và bằng chứng ủng hộ: `TOP_UP` và `ACCOUNT_FEE` là việc của **tài khoản**,
 không của một chuyến. Chỉ `TOLL_PASS` mới có thể có ứng viên chuyến — và cũng chỉ là **ứng viên**.
 
+### 5.4. Câu hỏi trùng được trả lời TRƯỚC khi xác nhận, và đồ thị trùng không có vòng (#318)
+
+`OWNER_DECISIONS_2026_09_17` chốt: `DUPLICATE_CANDIDATE` là **trạng thái tài chính chưa giải**, và
+máy chủ — không chỉ màn hình — phải cưỡng chế. Máy chủ phân ba trạng thái trùng của một dòng
+(`toll-duplicate-guard.ts`):
+
+| Trạng thái  | Nhận ra bằng                                        | `CONFIRM` / `RESOLVE_VEHICLE`                           | `CLEAR_DUPLICATE`                             | Vào tổng chi phí     |
+| ----------- | --------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------- | -------------------- |
+| `NONE`      | không con trỏ, `matchState` ≠ `DUPLICATE_CANDIDATE` | được                                                    | từ chối `TOLL_REVIEW_DUPLICATE_NOT_SUSPECTED` | theo trạng thái khớp |
+| `SUSPECTED` | `DUPLICATE_CANDIDATE`, chưa có dòng gốc             | từ chối `TOLL_REVIEW_DUPLICATE_UNRESOLVED`              | được                                          | **không**            |
+| `DECLARED`  | có `duplicateOfCandidateId`                         | từ chối `TOLL_REVIEW_DUPLICATE_DECLARED` (mở lại trước) | được                                          | **không**            |
+
+`RESOLVE_VEHICLE` bị chặn cùng `CONFIRM` vì nó từng là cửa sau: đổi dòng nghi trùng thành `MATCHED`
+rồi `CONFIRM` qua được mà không ai trả lời câu hỏi trùng.
+
+Mỗi dòng có **một** con trỏ dòng gốc, nên tự trỏ, `A→B→A` và `A→B→C→A` đều biểu diễn được. Một
+**chuỗi** không vòng an toàn về tiền (mọi dòng đã ghi trùng bị loại, dòng gốc cuối chuỗi đứng cho
+sự kiện thật); một **vòng** thì không — cả vòng rơi khỏi mọi tổng. Nên `FLAG_DUPLICATE` bị từ chối
+khi chuỗi dòng gốc của dòng đích quay về chính nó hoặc đã có vòng sẵn
+(`TOLL_REVIEW_DUPLICATE_CYCLE`, fail-closed), tự trỏ (`TOLL_REVIEW_DUPLICATE_SELF`), hoặc chuỗi dài
+quá 64 bước (`TOLL_REVIEW_DUPLICATE_CHAIN_TOO_DEEP`).
+
+Hai lệnh ghi song song không được cùng lọt: kho Postgres ghi **CAS** trên đúng ảnh chụp đã quyết
+(`updateMany` với 4 cột trong `WHERE`; lệch là `TOLL_REVIEW_CONCURRENT_WRITE`) và mọi lệnh ghi cạnh
+trùng giữ `pg_advisory_xact_lock('transport-toll:duplicate-graph')` rồi lần lại chuỗi **trong** giao
+dịch — chặn được write skew `A→B` / `B→A`. Bằng chứng trên Postgres thật, kèm đối chứng âm chạy
+nguyên văn lệnh ghi cũ: `transport-toll-duplicate.int.spec.ts`.
+
 ---
 
 ## 6. Hình dạng đã dựng

@@ -126,6 +126,15 @@ export function TollCandidateQueue({
       // Mot lan quyet doi CA dong do, so dem, bao cao va dong doi ung — lam moi ca nhanh `toll`.
       void queryClient.invalidateQueries({ queryKey: ['transport', 'toll'] });
     },
+    /*
+     * MAY CHU TU CHOI thi hang cho dang hien mot ban CU (`#318`): vd nguoi khac vua ghi dong nay la
+     * trung, nen `CONFIRM` bi tu choi. Cau cua may chu hien nguyen van o tren, va hang cho tai lai de
+     * dong do hien DUNG viec con lam duoc — thay vi giu mot nut ma may chu se lai tu choi.
+     */
+    onError: () => {
+      setStatus(null);
+      void queryClient.invalidateQueries({ queryKey: ['transport', 'toll'] });
+    },
   });
 
   const vehicleLabelOf = tollVehicleLabelOf(vehicles);

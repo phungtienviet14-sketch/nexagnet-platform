@@ -239,7 +239,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
   const rowOf = (id: string) =>
     prisma.transportTollTransactionCandidate.findUniqueOrThrow({
       where: { id },
-      select: { matchState: true, reviewState: true, duplicateOfCandidateId: true, vehicleId: true },
+      select: {
+        matchState: true,
+        reviewState: true,
+        duplicateOfCandidateId: true,
+        vehicleId: true,
+      },
     });
 
   const decisionCount = (ids: readonly string[]) =>
@@ -252,7 +257,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     entry.vehicleId === state.vehicleA || entry.vehicleId === state.vehicleB;
 
   const countedRows = (entries: readonly TollVehicleSpendRow[]): number =>
-    entries.filter(mine).reduce((sum, entry) => sum + entry.confirmed.rowCount + entry.open.rowCount, 0);
+    entries
+      .filter(mine)
+      .reduce((sum, entry) => sum + entry.confirmed.rowCount + entry.open.rowCount, 0);
 
   const snapshotOf = async (id: string): Promise<ApplyTollReviewInput['expected']> => {
     const current = await repository.findCandidate(id);
@@ -545,7 +552,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
         (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
       );
       expect(lost?.reason).toMatchObject({ reason: 'TOLL_REVIEW_DUPLICATE_CYCLE' });
-      const pointers = [(await rowOf(a)).duplicateOfCandidateId, (await rowOf(b)).duplicateOfCandidateId];
+      const pointers = [
+        (await rowOf(a)).duplicateOfCandidateId,
+        (await rowOf(b)).duplicateOfCandidateId,
+      ];
       expect(pointers.filter((pointer) => pointer !== null)).toHaveLength(1);
       expect(await decisionCount([a, b])).toBe(1);
     }
@@ -621,9 +631,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     ]);
 
     /* May chu moi: noi them vao mot chuoi DA CO VONG bi tu choi (fail-closed)... */
-    await expect(review(r, 'FLAG_DUPLICATE', { duplicateOfCandidateId: p })).rejects.toMatchObject(
-      { reason: 'TOLL_REVIEW_DUPLICATE_CYCLE' },
-    );
+    await expect(review(r, 'FLAG_DUPLICATE', { duplicateOfCandidateId: p })).rejects.toMatchObject({
+      reason: 'TOLL_REVIEW_DUPLICATE_CYCLE',
+    });
     expect((await rowOf(r)).duplicateOfCandidateId).toBeNull();
 
     /* ...va vong go duoc bang duong ra co san: mo lai mot dong trong vong roi quyet lai. */

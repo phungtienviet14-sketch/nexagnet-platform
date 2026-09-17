@@ -168,11 +168,11 @@ export const TRANSPORT_TOLL_DECISIONS = defineDecisionVocabulary({
     TOLL_REVIEW_VEHICLE_NOT_APPLICABLE: 'Dong nay khong gan xe (nap tien / phi tai khoan)',
     TOLL_REVIEW_DUPLICATE_UNRESOLVED:
       'Dong con nghi trung chua giai — phai ghi trung hoac bo nghi trung truoc',
-    TOLL_REVIEW_DUPLICATE_DECLARED:
-      'Dong da duoc ghi la trung — phai mo lai roi quyet lai truoc',
+    TOLL_REVIEW_DUPLICATE_DECLARED: 'Dong da duoc ghi la trung — phai mo lai roi quyet lai truoc',
     TOLL_REVIEW_DUPLICATE_NOT_SUSPECTED: 'Dong nay khong nam trong dien nghi trung',
     TOLL_REVIEW_DUPLICATE_SELF: 'Mot dong khong the trung voi chinh no',
-    TOLL_REVIEW_DUPLICATE_CYCLE: 'Ghi trung se tao mot vong trung — ca vong roi khoi moi tong chi phi',
+    TOLL_REVIEW_DUPLICATE_CYCLE:
+      'Ghi trung se tao mot vong trung — ca vong roi khoi moi tong chi phi',
     TOLL_REVIEW_DUPLICATE_CHAIN_TOO_DEEP:
       'Chuoi dong goc qua dai de chung minh khong co vong — tu choi',
   } satisfies Record<TransportTollDecisionReason, string>,

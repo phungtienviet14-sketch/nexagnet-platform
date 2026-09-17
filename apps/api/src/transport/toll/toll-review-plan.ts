@@ -190,7 +190,10 @@ async function planFlagDuplicate(
 
   const target = await ports.findCandidate(targetId);
   if (!target) {
-    throw TransportDomainError.notFound('TOLL_CANDIDATE_NOT_FOUND', `Khong tim thay dong ${targetId}`);
+    throw TransportDomainError.notFound(
+      'TOLL_CANDIDATE_NOT_FOUND',
+      `Khong tim thay dong ${targetId}`,
+    );
   }
   if (target.provider !== candidate.provider) {
     throw TransportDomainError.invalid(

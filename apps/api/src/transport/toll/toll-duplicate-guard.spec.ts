@@ -26,7 +26,10 @@ describe('trang thai trung cua mot dong', () => {
       'NONE',
     );
     expect(
-      tollDuplicateResolutionOf({ matchState: 'DUPLICATE_CANDIDATE', duplicateOfCandidateId: null }),
+      tollDuplicateResolutionOf({
+        matchState: 'DUPLICATE_CANDIDATE',
+        duplicateOfCandidateId: null,
+      }),
     ).toBe('SUSPECTED');
     expect(
       tollDuplicateResolutionOf({ matchState: 'DUPLICATE_CANDIDATE', duplicateOfCandidateId: 'b' }),
@@ -98,7 +101,11 @@ describe('lan chuoi dong goc', () => {
 
   it('HAI nut: b da tro ve a -> CYCLE a,b,a', async () => {
     expect(
-      await traceTollDuplicateChain({ sourceId: 'a', targetId: 'b', duplicateOf: graph({ b: 'a' }) }),
+      await traceTollDuplicateChain({
+        sourceId: 'a',
+        targetId: 'b',
+        duplicateOf: graph({ b: 'a' }),
+      }),
     ).toEqual({ kind: 'CYCLE', path: ['a', 'b', 'a'] });
   });
 
