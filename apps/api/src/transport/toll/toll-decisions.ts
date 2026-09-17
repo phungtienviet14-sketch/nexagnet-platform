@@ -87,6 +87,36 @@ export const TOLL_REVIEW_REASONS = [
   'TOLL_REVIEW_REOPENED',
   'TOLL_REVIEW_CANDIDATE_REJECTED',
   'TOLL_REVIEW_VEHICLE_NOT_APPLICABLE',
+  /**
+   * `#318` — dong con `DUPLICATE_CANDIDATE` ma chua ai ghi dong goc: MOT TRANG THAI TAI CHINH CHUA
+   * GIAI (`OWNER_DECISIONS_2026_09_17`). `CONFIRM` va `RESOLVE_VEHICLE` deu dong cho toi khi co
+   * `FLAG_DUPLICATE` hoac `CLEAR_DUPLICATE` — `RESOLVE_VEHICLE` cung vi no tung la CUA SAU: doi dong
+   * thanh `MATCHED` roi `CONFIRM` qua duoc ma khong ai tra loi cau hoi trung.
+   */
+  'TOLL_REVIEW_DUPLICATE_UNRESOLVED',
+  /**
+   * Dong DA duoc ghi trung vao mot dong goc. `CONFIRM`/`RESOLVE_VEHICLE` tren no tung XOA con tro
+   * dong goc (va `RESOLVE_VEHICLE` dua no quay lai chi phi xe). Duong dung: `REOPEN` roi quyet lai.
+   */
+  'TOLL_REVIEW_DUPLICATE_DECLARED',
+  /**
+   * `CLEAR_DUPLICATE` tren dong KHONG thuoc dien trung. Truoc `#318` lenh do van doi `matchState`
+   * — vd mot dong nap tien `ACCOUNT_UNRESOLVED` thanh `MATCHED`, tuc mot tai khoan chua khai bong
+   * nhien "khop".
+   */
+  'TOLL_REVIEW_DUPLICATE_NOT_SUSPECTED',
+  'TOLL_REVIEW_DUPLICATE_SELF',
+  /**
+   * Ghi trung se khep mot VONG (A->B->A, A->B->C->A), hoac chuoi dong goc cua dong dich DA CO SAN
+   * mot vong. Moi dong trong vong roi khoi moi tong chi phi, nen khong con dong nao dung cho su
+   * kien that — tien bien mat khoi bao cao ma khong ai quyet dieu do.
+   */
+  'TOLL_REVIEW_DUPLICATE_CYCLE',
+  /**
+   * Chuoi dong goc dai qua `TOLL_DUPLICATE_CHAIN_MAX_HOPS` buoc — khong chung minh duoc la khong co
+   * vong trong gioi han do, nen tu choi (fail-closed) thay vi doan.
+   */
+  'TOLL_REVIEW_DUPLICATE_CHAIN_TOO_DEEP',
 ] as const;
 export type TollReviewReason = (typeof TOLL_REVIEW_REASONS)[number];
 
@@ -136,5 +166,14 @@ export const TRANSPORT_TOLL_DECISIONS = defineDecisionVocabulary({
     TOLL_REVIEW_REOPENED: 'Mo lai mot dong da xac nhan',
     TOLL_REVIEW_CANDIDATE_REJECTED: 'Dong bi tu choi luc doc thi khong doi soat duoc',
     TOLL_REVIEW_VEHICLE_NOT_APPLICABLE: 'Dong nay khong gan xe (nap tien / phi tai khoan)',
+    TOLL_REVIEW_DUPLICATE_UNRESOLVED:
+      'Dong con nghi trung chua giai — phai ghi trung hoac bo nghi trung truoc',
+    TOLL_REVIEW_DUPLICATE_DECLARED: 'Dong da duoc ghi la trung — phai mo lai roi quyet lai truoc',
+    TOLL_REVIEW_DUPLICATE_NOT_SUSPECTED: 'Dong nay khong nam trong dien nghi trung',
+    TOLL_REVIEW_DUPLICATE_SELF: 'Mot dong khong the trung voi chinh no',
+    TOLL_REVIEW_DUPLICATE_CYCLE:
+      'Ghi trung se tao mot vong trung — ca vong roi khoi moi tong chi phi',
+    TOLL_REVIEW_DUPLICATE_CHAIN_TOO_DEEP:
+      'Chuoi dong goc qua dai de chung minh khong co vong — tu choi',
   } satisfies Record<TransportTollDecisionReason, string>,
 });

@@ -470,6 +470,8 @@ describe('quyet dinh cua nguoi doi soat', () => {
       'ke-toan',
     );
     expect(updated.matchState).toBe('MATCHED');
+    // Go nhan trung KHONG dong nghia voi da doi soat xong: van cho mot lan `CONFIRM` rieng (#318).
+    expect(updated.reviewState).toBe('PENDING');
     const detail = await harness.toll.candidateDetail(id);
     expect(detail.decisions[0]?.reason).toBe('TOLL_REVIEW_DUPLICATE_CLEARED');
     expect(detail.decisions[0]?.previousMatchState).toBe('DUPLICATE_CANDIDATE');

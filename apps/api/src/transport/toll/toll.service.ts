@@ -18,6 +18,7 @@ import {
   type TollImportRowReason,
 } from './toll-decisions.js';
 import { normalizeAccountNo, tollSourceDigest } from './toll-identity.js';
+import { planTollReview, type TollReviewCommand, type TollReviewPlan } from './toll-review-plan.js';
 import {
   TRANSPORT_TOLL_POLICY,
   tollMappingConfigurationError,
@@ -555,7 +556,7 @@ export class TollService {
   }
 
   /**
-   * MOT LAN QUYET cua nguoi doi soat.
+   * MOT LAN QUYET cua nguoi doi soat. Luat cua tung viec nam o `planTollReview`.
    *
    * ===========================================================================
    * KHONG mot nhanh nao o day noi ve TIEN DA TRA.
@@ -564,16 +565,7 @@ export class TollService {
    * thay doi la: dong nay noi ve xe nao, va da co nguoi nhin no chua. Viec no co sinh ra mot nghia
    * vu thanh toan hay khong la mot cau hoi CHUA AI TRA LOI, va no khong duoc tra loi o day.
    */
-  async review(
-    input: {
-      candidateId: string;
-      action: 'RESOLVE_VEHICLE' | 'CONFIRM' | 'FLAG_DUPLICATE' | 'CLEAR_DUPLICATE' | 'REOPEN';
-      vehicleId: string | null;
-      duplicateOfCandidateId: string | null;
-      note: string | null;
-    },
-    actor: string,
-  ): Promise<TollTransactionCandidateRecord> {
+  async review(input: TollReviewCommand, actor: string): Promise<TollTransactionCandidateRecord> {
     const candidate = await this.repository.findCandidate(input.candidateId);
     if (!candidate) {
       throw TransportDomainError.notFound(
@@ -592,19 +584,12 @@ export class TollService {
       );
     }
 
-    const plan = await this.planReview(candidate, input);
-    const updated = await this.repository.applyReview({
-      candidateId: candidate.id,
-      action: input.action,
-      actor,
-      at: this.now(),
-      reason: plan.reason,
-      note: input.note,
-      nextVehicleId: plan.nextVehicleId,
-      nextMatchState: plan.nextMatchState,
-      nextReviewState: plan.nextReviewState,
-      duplicateOfCandidateId: plan.duplicateOfCandidateId,
+    const plan = await planTollReview(candidate, input, {
+      findCandidate: (id) => this.repository.findCandidate(id),
+      vehicleExists: async (vehicleId) => (await this.core.findVehicle(vehicleId)) !== null,
+      deny: (reason, detail) => this.decide('toll_review.resolve', 'denied', reason, detail),
     });
+    const updated = await this.writeReview(candidate, input, plan, actor);
 
     this.decide('toll_review.resolve', 'allowed', plan.reason, {
       candidateId: candidate.id,
@@ -629,120 +614,53 @@ export class TollService {
     return updated;
   }
 
-  private async planReview(
+  /**
+   * GHI mot ke hoach da qua cong — tren DUNG anh chup da dung de quyet (`#318`).
+   *
+   * Kho lan lai chuoi dong goc va so anh chup TRONG lan ghi. Mot vong trung lot qua `planTollReview`
+   * (hai nguoi ghi cung luc) bi chan o day voi CUNG ma, nen no cung de lai dung mot dong trace.
+   * `TOLL_REVIEW_CONCURRENT_WRITE` khong phai mot quyet dinh nghiep vu — xem `toll-errors.ts`.
+   */
+  private async writeReview(
     candidate: TollTransactionCandidateRecord,
-    input: {
-      action: 'RESOLVE_VEHICLE' | 'CONFIRM' | 'FLAG_DUPLICATE' | 'CLEAR_DUPLICATE' | 'REOPEN';
-      vehicleId: string | null;
-      duplicateOfCandidateId: string | null;
-    },
-  ): Promise<{
-    reason:
-      | 'TOLL_REVIEW_VEHICLE_RESOLVED'
-      | 'TOLL_REVIEW_CONFIRMED'
-      | 'TOLL_REVIEW_DUPLICATE_FLAGGED'
-      | 'TOLL_REVIEW_DUPLICATE_CLEARED'
-      | 'TOLL_REVIEW_REOPENED';
-    nextVehicleId: string | null;
-    nextMatchState: TollTransactionCandidateRecord['matchState'];
-    nextReviewState: 'PENDING' | 'CONFIRMED' | 'REOPENED';
-    duplicateOfCandidateId: string | null;
-  }> {
-    if (input.action === 'RESOLVE_VEHICLE') {
-      // Nap tien / phi tai khoan khong gan xe — gan mot chiec xe vao do la tao ra mot lien he khong
-      // co that, va no se di tiep vao moi bao cao theo xe.
-      if (candidate.kind !== 'TOLL_PASS') {
-        this.decide('toll_review.resolve', 'denied', 'TOLL_REVIEW_VEHICLE_NOT_APPLICABLE', {
+    input: TollReviewCommand,
+    plan: TollReviewPlan,
+    actor: string,
+  ): Promise<TollTransactionCandidateRecord> {
+    try {
+      return await this.repository.applyReview({
+        candidateId: candidate.id,
+        action: input.action,
+        actor,
+        at: this.now(),
+        reason: plan.reason,
+        note: input.note,
+        nextVehicleId: plan.nextVehicleId,
+        nextMatchState: plan.nextMatchState,
+        nextReviewState: plan.nextReviewState,
+        duplicateOfCandidateId: plan.duplicateOfCandidateId,
+        expected: {
+          vehicleId: candidate.vehicleId,
+          matchState: candidate.matchState,
+          reviewState: candidate.reviewState,
+          duplicateOfCandidateId: candidate.duplicateOfCandidateId,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof TransportDomainError &&
+        (error.reason === 'TOLL_REVIEW_DUPLICATE_CYCLE' ||
+          error.reason === 'TOLL_REVIEW_DUPLICATE_CHAIN_TOO_DEEP' ||
+          error.reason === 'TOLL_REVIEW_DUPLICATE_SELF')
+      ) {
+        this.decide('toll_review.resolve', 'denied', error.reason, {
           candidateId: candidate.id,
-          kind: candidate.kind,
+          action: input.action,
+          atWrite: true,
         });
-        throw TransportDomainError.invalid(
-          'TOLL_CANDIDATE_VEHICLE_NOT_APPLICABLE',
-          `Dong loai ${String(candidate.kind)} khong gan vao mot chiec xe nao`,
-        );
       }
-      if (input.vehicleId === null || (await this.core.findVehicle(input.vehicleId)) === null) {
-        throw TransportDomainError.notFound(
-          'TOLL_VEHICLE_NOT_FOUND',
-          `Khong tim thay xe ${String(input.vehicleId)}`,
-        );
-      }
-      return {
-        reason: 'TOLL_REVIEW_VEHICLE_RESOLVED',
-        nextVehicleId: input.vehicleId,
-        nextMatchState: 'MATCHED',
-        // Chon duoc chiec xe KHONG dong nghia voi da doi soat xong: van con `PENDING` cho toi khi
-        // co mot lan `CONFIRM` rieng.
-        nextReviewState: 'PENDING',
-        duplicateOfCandidateId: null,
-      };
+      throw error;
     }
-
-    if (input.action === 'FLAG_DUPLICATE') {
-      const target = input.duplicateOfCandidateId;
-      if (target === null || target === candidate.id) {
-        throw TransportDomainError.invalid(
-          'TOLL_DUPLICATE_TARGET_INVALID',
-          'Phai chi ra mot dong KHAC ma dong nay trung',
-        );
-      }
-      const other = await this.repository.findCandidate(target);
-      if (!other) {
-        throw TransportDomainError.notFound(
-          'TOLL_CANDIDATE_NOT_FOUND',
-          `Khong tim thay dong ${target}`,
-        );
-      }
-      if (other.provider !== candidate.provider) {
-        throw TransportDomainError.invalid(
-          'TOLL_CANDIDATE_PROVIDER_MISMATCH',
-          'Hai dong cua hai nha cung cap khac nhau khong trung nhau duoc',
-        );
-      }
-      return {
-        reason: 'TOLL_REVIEW_DUPLICATE_FLAGGED',
-        nextVehicleId: null,
-        nextMatchState: 'DUPLICATE_CANDIDATE',
-        nextReviewState: 'CONFIRMED',
-        duplicateOfCandidateId: target,
-      };
-    }
-
-    if (input.action === 'CLEAR_DUPLICATE') {
-      /*
-       * "Hai dong giong nhau nay la HAI su kien that."
-       *
-       * Day chinh la tinh huong VETC tu cong bo: loi doc cheo lan sinh ra hai giao dich cho mot
-       * luot xe. Nguoi doi soat phai noi duoc dieu do ra, va he thong phai GHI LAI — neu khong,
-       * moi lan nhin lai dong nay se lai thay cai nhan cu.
-       */
-      const resolved = candidate.vehicleId !== null || candidate.kind !== 'TOLL_PASS';
-      return {
-        reason: 'TOLL_REVIEW_DUPLICATE_CLEARED',
-        nextVehicleId: candidate.vehicleId,
-        nextMatchState: resolved ? 'MATCHED' : 'VEHICLE_UNRESOLVED',
-        nextReviewState: 'CONFIRMED',
-        duplicateOfCandidateId: null,
-      };
-    }
-
-    if (input.action === 'REOPEN') {
-      return {
-        reason: 'TOLL_REVIEW_REOPENED',
-        nextVehicleId: candidate.vehicleId,
-        nextMatchState: candidate.matchState,
-        nextReviewState: 'REOPENED',
-        duplicateOfCandidateId: null,
-      };
-    }
-
-    return {
-      reason: 'TOLL_REVIEW_CONFIRMED',
-      nextVehicleId: candidate.vehicleId,
-      nextMatchState: candidate.matchState,
-      nextReviewState: 'CONFIRMED',
-      duplicateOfCandidateId: null,
-    };
   }
 
   /* ------------------------------- Noi bo ------------------------------- */

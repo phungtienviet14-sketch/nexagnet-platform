@@ -246,12 +246,28 @@ describe('dong trung trong bao cao di theo QUYET DINH cua nguoi', () => {
     );
 
     const decided = await harness.reports.spendReport(AUGUST);
+    // `#318`: bo nghi trung KHONG xac nhan — dong quay lai bang theo xe o cot CHUA doi soat xong.
     expect(
       decided.vehicles.map((row) => [row.vehicleId, row.confirmed.amount, row.open.amount]),
-    ).toEqual([['veh-1', -52_000, 0]]);
+    ).toEqual([['veh-1', 0, -52_000]]);
     expect(
       decided.duplicates.map((row) => [row.state, row.total.rowCount, row.total.amount]),
     ).toEqual([['DECLARED', 1, -52_000]]);
+
+    await harness.toll.review(
+      {
+        candidateId: first?.id ?? '',
+        action: 'CONFIRM',
+        vehicleId: null,
+        duplicateOfCandidateId: null,
+        note: null,
+      },
+      'ke-toan',
+    );
+    const confirmed = await harness.reports.spendReport(AUGUST);
+    expect(
+      confirmed.vehicles.map((row) => [row.vehicleId, row.confirmed.amount, row.open.amount]),
+    ).toEqual([['veh-1', -52_000, 0]]);
   });
 });
 

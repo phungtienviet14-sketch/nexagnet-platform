@@ -72,11 +72,16 @@ export function TollDuplicateReview({
       onDecided(
         input.action === 'FLAG_DUPLICATE'
           ? `Đã ghi dòng ${rowNumber} là trùng. Số tiền của dòng này không còn được tính vào chi phí nào.`
-          : `Đã bỏ nghi trùng cho dòng ${rowNumber}.`,
+          : `Đã bỏ nghi trùng cho dòng ${rowNumber}. Dòng này vẫn chờ một lần «Xác nhận» riêng.`,
       );
       void queryClient.invalidateQueries({ queryKey: ['transport', 'toll'] });
     },
-    onError: () => setPending(null),
+    // May chu tu choi (vd vong trung, hoac dong vua duoc nguoi khac quyet): cau cua may chu hien
+    // nguyen van ben duoi, va dong + dong doi ung tai lai theo trang thai MOI cua may chu (`#318`).
+    onError: () => {
+      setPending(null);
+      void queryClient.invalidateQueries({ queryKey: ['transport', 'toll'] });
+    },
   });
 
   const model = toTollDuplicateReviewModel({

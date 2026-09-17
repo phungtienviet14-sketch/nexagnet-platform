@@ -22,18 +22,21 @@ import type {
  * QUYET TRUNG va VIEC TREN TUNG DONG cua hang cho ETC — `#314` G8. Phan QUYET DINH, tach khoi phan ve.
  *
  * ============================================================================================
- * HAI LO MA MAY CHU KHONG CHAN, VA TEP NAY DONG O TANG KHUNG NHIN
+ * HAI LUAT CUA MAY CHU (`#318`), VA TEP NAY PHAN ANH CHUNG O TANG KHUNG NHIN
  * ============================================================================================
  *
- *   1. VONG TRUNG. `planReview(FLAG_DUPLICATE)` chi kiem "dong dich khac chinh no" va "cung nha cung
- *      cap". A ghi "trung B" roi B ghi "trung A" la hop le voi may chu — va ca hai dong roi khoi moi
- *      tong chi phi. Nen o day, mot dong DA bi ghi trung khong bao gio duoc de xuat lam dong goc.
- *   2. CUA SAU CUA CAU HOI TRUNG. `CONFIRM` tren dong nghi trung khong noi no la hay khong la trung;
- *      `RESOLVE_VEHICLE` tren dong nghi trung lang le doi no thanh `MATCHED`. Nen dong nghi trung chi
- *      co MOT cua: quyet trung (`FLAG_DUPLICATE` voi dong goc, hoac `CLEAR_DUPLICATE`).
+ *   1. KHONG VONG TRUNG. May chu tu choi mot lan ghi trung khep vong, ke ca A->B->C->A
+ *      (`TOLL_REVIEW_DUPLICATE_CYCLE`). Man hinh con chat hon mot buoc: mot dong DA bi ghi trung khong
+ *      bao gio duoc de xuat lam dong goc, nen nguoi doi soat chon dong goc o cuoi chuoi ngay tu dau.
+ *   2. CAU HOI TRUNG TRUOC. May chu tu choi `CONFIRM` va `RESOLVE_VEHICLE` tren dong nghi trung hoac
+ *      da ghi trung (`TOLL_REVIEW_DUPLICATE_UNRESOLVED` / `TOLL_REVIEW_DUPLICATE_DECLARED`). Nen dong
+ *      nghi trung chi co MOT cua o day: quyet trung (`FLAG_DUPLICATE` voi dong goc, hoac
+ *      `CLEAR_DUPLICATE`). Va bo nghi trung KHONG xac nhan ho: dong ve `PENDING`, nen hang cho lai
+ *      hien nut «Xác nhận» cho mot lan xac nhan rieng.
  *
- * Cong THAT van la may chu. Nhung lo tren khong phai "nut bam se 4xx" — may chu CHAP NHAN chung, va
- * sua ngu nghia review la viec cua chu mien toll (bao lai o #314), khong phai cua mot man hinh.
+ * Cong THAT la may chu — an nut o day chi de khong moi nguoi bam vao mot loi da biet truoc. Khi man
+ * hinh dang cam mot ban cu (nguoi khac vua quyet), may chu van tu choi; man hinh hien NGUYEN VAN cau
+ * cua may chu va tai lai hang cho de hien dung trang thai moi.
  */
 
 /* ------------------------------------------------------------------ *
@@ -211,21 +214,24 @@ export const flagDuplicateConsequence = (
 
 /**
  * Phan anh `planReview(CLEAR_DUPLICATE)`: co xe -> `MATCHED` va tinh cho xe; khong co xe ma la luot
- * qua tram -> `VEHICLE_UNRESOLVED`; khong co xe va khong phai luot qua tram -> cap tai khoan. Neu luat
- * may chu doi, day la cho phai sua theo.
+ * qua tram -> `VEHICLE_UNRESOLVED`; khong co xe va khong phai luot qua tram -> cap tai khoan. Va o
+ * CA BA nhanh dong ve `PENDING`: bo nghi trung khong xac nhan ho (`#318`), nen cau hau qua noi ro
+ * con mot lan «Xác nhận» rieng. Neu luat may chu doi, day la cho phai sua theo.
  */
 export const clearDuplicateConsequence = (
   candidate: Pick<TollCandidate, 'rowNumber' | 'kind' | 'vehicleId'>,
   vehicleLabel: string | null,
 ): string => {
   const head = `Dòng ${String(candidate.rowNumber)} sẽ được ghi là một sự kiện thật, không trùng.`;
+  const stillPending =
+    'Bỏ nghi trùng chưa phải là xác nhận: dòng về «Chờ người đối soát» và vẫn cần một lần «Xác nhận» riêng.';
   if (candidate.vehicleId !== null) {
-    return `${head} Nó sẽ được tính vào chi phí của xe ${vehicleLabel ?? 'đã khớp'}. ${APPEND_ONLY_TAIL}`;
+    return `${head} Nó sẽ được tính vào chi phí của xe ${vehicleLabel ?? 'đã khớp'}, ở cột «Chưa đối soát xong». ${stillPending} ${APPEND_ONLY_TAIL}`;
   }
   if (candidate.kind === 'TOLL_PASS') {
-    return `${head} Dòng này chưa gắn xe, nên nó sẽ nằm ở mục «Chưa nhận ra xe» cho tới khi có người chỉ định xe. ${APPEND_ONLY_TAIL}`;
+    return `${head} Dòng này chưa gắn xe, nên nó sẽ nằm ở mục «Chưa nhận ra xe» cho tới khi có người chỉ định xe. ${stillPending} ${APPEND_ONLY_TAIL}`;
   }
-  return `${head} Nó sẽ được tính ở mục cấp tài khoản, không thuộc xe nào. ${APPEND_ONLY_TAIL}`;
+  return `${head} Nó sẽ được tính ở mục cấp tài khoản, không thuộc xe nào. ${stillPending} ${APPEND_ONLY_TAIL}`;
 };
 
 /* ------------------------------------------------------------------ *

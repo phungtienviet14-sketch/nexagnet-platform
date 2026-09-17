@@ -74,5 +74,17 @@ export const TOLL_ERROR_REASONS = [
   /** Chi mot dong CO bien so moi gan duoc xe. Nap tien / phi tai khoan thi khong. */
   'TOLL_CANDIDATE_VEHICLE_NOT_APPLICABLE',
   'TOLL_DUPLICATE_TARGET_INVALID',
+  /**
+   * HAI LAN QUYET CUNG MOT DONG, CUNG LUC — `#318`.
+   *
+   * Lan quyet nay da doc dong o mot trang thai, va trong luc no chuan bi ghi thi mot lan quyet khac
+   * da doi trang thai do (vd mot `FLAG_DUPLICATE` vua ghi dong goc trong khi mot `CONFIRM` dang
+   * quyet tren anh chup "da khop xe"). Ghi de theo `id` se xoa khai trung va dua dong quay lai tong
+   * chi phi, nen kho ghi CO DIEU KIEN tren dung anh chup da doc va ben thua nhan ma nay.
+   *
+   * Khong phai mot quyet dinh nghiep vu va khong phai dau vao sai: nguoi dung chi can TAI LAI roi
+   * quyet tren trang thai moi.
+   */
+  'TOLL_REVIEW_CONCURRENT_WRITE',
 ] as const;
 export type TollErrorReason = (typeof TOLL_ERROR_REASONS)[number];

@@ -4,6 +4,10 @@ import type { BusinessDate } from '../business-date.js';
 import { fromStoredAmount, toStoredAmount } from '../money.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
+import {
+  assertTollDuplicateChainAcyclic,
+  traceTollDuplicateChain,
+} from './toll-duplicate-guard.js';
 import type { TollProvider } from './toll-provider.port.js';
 import {
   ACTIVE_TOLL_VEHICLE_LINK,
@@ -26,6 +30,21 @@ import type {
   TollReviewDecisionRecord,
   TollTransactionCandidateRecord,
 } from './toll.types.js';
+
+/**
+ * KHOA TU VAN cua DO THI TRUNG ETC — `#318`. MOT khoa chung cho moi lenh ghi canh trung.
+ *
+ * Mot khoa theo tung nha cung cap cung du (ghi trung doi cung nha cung cap), nhung mot khoa chung
+ * don gian hon de doc, va ghi trung la viec TAY: vai lan mot ngay, khong co gi dang tranh chap.
+ */
+export const TOLL_DUPLICATE_GRAPH_LOCK = 'transport-toll:duplicate-graph';
+
+/**
+ * Gioi han cua MOT lan quyet. Mot lenh ghi trung co the DOI khoa do thi cua mot lenh ghi trung
+ * khac; 5 giay mac dinh cua Prisma thuong du, nhung het han o do la mot loi 500 khong ma — nen cho
+ * rong hon mot chut thay vi de mot lan doi binh thuong duoi tai thanh mot loi khong ai doc duoc.
+ */
+const TOLL_REVIEW_TRANSACTION = { maxWait: 5_000, timeout: 15_000 } as const;
 
 /* Kieu tho tu Prisma — chi lay nhung cot ma mien nay doc. */
 interface AccountRow {
@@ -530,34 +549,82 @@ export class PrismaTollRepository extends TollRepository {
    *
    * Tach lam hai lan goi se de lai mot dong da doi trang thai ma KHONG co ai ky ten — dung cai ma
    * #269 J7 doi phai tranh (*"Manual resolution must retain actor / time / reason"*).
+   *
+   * ===========================================================================
+   * HAI CONG CHAY TRONG GIAO DICH NAY — `#318`
+   * ===========================================================================
+   *
+   *   1. GHI TRUNG khong khep vong. Hai lenh `A->B` va `B->A` song song deu doc thay dong kia "chua
+   *      trung ai" truoc khi ben nao ghi — mot write skew ma khoa HANG tren dong nguon khong chan
+   *      duoc, vi hai lenh ghi HAI hang khac nhau. Nen moi lenh ghi mot canh trung giu CUNG MOT khoa
+   *      tu van (`pg_advisory_xact_lock`) roi lan chuoi dong goc SAU khi co khoa: o `READ COMMITTED`
+   *      moi cau lenh sau do thay canh ma ben truoc vua commit.
+   *
+   *      Chi lenh ghi CANH TRUNG can khoa: moi viec khac dat `duplicateOfCandidateId = null`, tuc chi
+   *      GO canh — va go canh khong tao duoc vong nao.
+   *
+   *   2. CAS tren anh chup da doc. `updateMany` voi bon cot cua anh chup trong `WHERE` la MOT lenh
+   *      `UPDATE` (xem `prisma-updatemany-la-mot-lenh-update`): ben thua doi khoa hang, danh gia lai
+   *      `WHERE` tren ban hang moi va nhan `count = 0`. Ghi theo `id` nhu truoc day se lang le xoa
+   *      mot khai trung vua commit.
    */
   async applyReview(input: ApplyTollReviewInput): Promise<TollTransactionCandidateRecord> {
     return this.prisma.$transaction(async (tx) => {
-      const before: CandidateRow | null = await model(
-        tx as unknown as PrismaService,
-        'transportTollTransactionCandidate',
-      ).findUnique({ where: { id: input.candidateId } });
-      if (before === null) {
-        throw TransportDomainError.notFound(
-          'TOLL_CANDIDATE_NOT_FOUND',
-          `Khong tim thay dong ${input.candidateId}`,
+      const scoped = tx as unknown as PrismaService;
+      const candidates = model(scoped, 'transportTollTransactionCandidate');
+
+      if (input.duplicateOfCandidateId !== null) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${TOLL_DUPLICATE_GRAPH_LOCK}, 0))`;
+        assertTollDuplicateChainAcyclic(
+          await traceTollDuplicateChain({
+            sourceId: input.candidateId,
+            targetId: input.duplicateOfCandidateId,
+            duplicateOf: async (id) => {
+              const row: { duplicateOfCandidateId: string | null } | null =
+                await candidates.findUnique({
+                  where: { id },
+                  select: { duplicateOfCandidateId: true },
+                });
+              return row?.duplicateOfCandidateId ?? null;
+            },
+          }),
         );
       }
 
-      const updated: CandidateRow = await model(
-        tx as unknown as PrismaService,
-        'transportTollTransactionCandidate',
-      ).update({
-        where: { id: input.candidateId },
+      const { expected } = input;
+      const written: { count: number } = await candidates.updateMany({
+        where: {
+          id: input.candidateId,
+          vehicleId: expected.vehicleId,
+          matchState: expected.matchState,
+          reviewState: expected.reviewState,
+          duplicateOfCandidateId: expected.duplicateOfCandidateId,
+        },
         data: {
-          vehicleId: input.nextVehicleId ?? before.vehicleId,
-          matchState: input.nextMatchState ?? before.matchState,
+          vehicleId: input.nextVehicleId ?? expected.vehicleId,
+          matchState: input.nextMatchState ?? expected.matchState,
           reviewState: input.nextReviewState,
           duplicateOfCandidateId: input.duplicateOfCandidateId,
         },
       });
+      if (written.count !== 1) {
+        const exists: { id: string } | null = await candidates.findUnique({
+          where: { id: input.candidateId },
+          select: { id: true },
+        });
+        if (exists === null) {
+          throw TransportDomainError.notFound(
+            'TOLL_CANDIDATE_NOT_FOUND',
+            `Khong tim thay dong ${input.candidateId}`,
+          );
+        }
+        throw TransportDomainError.conflict(
+          'TOLL_REVIEW_CONCURRENT_WRITE',
+          `Dong ${input.candidateId} vua duoc mot lan quyet khac thay doi — tai lai roi quyet lai`,
+        );
+      }
 
-      await model(tx as unknown as PrismaService, 'transportTollReviewDecision').create({
+      await model(scoped, 'transportTollReviewDecision').create({
         data: {
           candidateId: input.candidateId,
           action: input.action,
@@ -565,16 +632,20 @@ export class PrismaTollRepository extends TollRepository {
           at: input.at,
           reason: input.reason,
           note: input.note,
-          previousVehicleId: before.vehicleId,
+          // CAS vua thang: hang TRUOC lan ghi dung la anh chup nay.
+          previousVehicleId: expected.vehicleId,
           nextVehicleId: input.nextVehicleId,
-          previousMatchState: before.matchState,
+          previousMatchState: expected.matchState,
           nextMatchState: input.nextMatchState,
           duplicateOfCandidateId: input.duplicateOfCandidateId,
         },
       });
 
+      const updated: CandidateRow = await candidates.findUniqueOrThrow({
+        where: { id: input.candidateId },
+      });
       return toCandidate(updated);
-    });
+    }, TOLL_REVIEW_TRANSACTION);
   }
 
   async listDecisions(candidateId: string): Promise<readonly TollReviewDecisionRecord[]> {

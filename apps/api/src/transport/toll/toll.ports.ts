@@ -1,6 +1,10 @@
 import type { BusinessDate } from '../business-date.js';
 import type { FleetRepository } from '../fleet/fleet.repository.js';
-import type { TollMatchState, TollReviewAction } from './toll.types.js';
+import type {
+  TollMatchState,
+  TollReviewAction,
+  TollTransactionCandidateRecord,
+} from './toll.types.js';
 import type { TollProvider, TollSourceKind, TollTransactionKind } from './toll-provider.port.js';
 
 /**
@@ -96,7 +100,20 @@ export interface ApplyTollReviewInput {
   readonly nextMatchState: TollMatchState | null;
   readonly nextReviewState: 'PENDING' | 'CONFIRMED' | 'REOPENED';
   readonly duplicateOfCandidateId: string | null;
+  /**
+   * ANH CHUP ma lan quyet nay DA DOC va DA QUYET TREN — `#318`.
+   *
+   * Kho chi ghi khi dong VAN o dung anh chup nay (CAS); lech la `TOLL_REVIEW_CONCURRENT_WRITE`. Moi
+   * cong cua `planTollReview` la mot ham cua bon truong nay, nen giu bon truong nay khong doi tu luc
+   * doc toi luc ghi la giu cho ket luan cua cong con dung LUC GHI — khong chi luc doc.
+   */
+  readonly expected: TollReviewExpectedState;
 }
+
+export type TollReviewExpectedState = Pick<
+  TollTransactionCandidateRecord,
+  'vehicleId' | 'matchState' | 'reviewState' | 'duplicateOfCandidateId'
+>;
 
 export interface TollCandidateFilter {
   readonly provider?: TollProvider;
