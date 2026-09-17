@@ -375,9 +375,15 @@ test.describe('ke toan — anh da luu, may doc, soat ung vien', () => {
     expect(leaksLocator(seen)).toBe(false);
     await expect(page.locator('body')).not.toContainText('media/transport-evidence');
 
-    // AI chi la ung vien: khong mot lenh ghi nao toi phieu, phieu van cho nguoi xac thuc.
+    // AI chi la ung vien: ngoai CHINH lenh doc anh o tren (tao chung tu, khong cham phieu), khong
+    // mot lenh ghi nao toi phieu — phieu van cho nguoi xac thuc.
     expect(
-      seen.filter((row) => row.method !== 'GET' && row.url.includes('/transport/fuel/entries')),
+      seen.filter(
+        (row) =>
+          row.method !== 'GET' &&
+          row.url.includes('/transport/fuel/entries') &&
+          !row.url.endsWith('/evidence/ev-1/extract'),
+      ),
     ).toEqual([]);
     expect(state.fuelEntries.get('fuel-1')?.verificationStatus).toBe('DECLARED');
   });
