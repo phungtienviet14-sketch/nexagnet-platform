@@ -2,8 +2,17 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import { MetricCard, StatusBadge } from '../components/primitives';
-import { expenseCategoryLabel, formatMoney } from '../customer-view';
+import { expenseCategoryLabel, FUEL_PAYMENT_METHOD_LABEL, formatMoney } from '../customer-view';
+import { FUEL_PAYMENT_METHODS, type FuelPaymentMethod } from '../transport-types';
+import {
+  DEFAULT_DRIVER_PAYMENT_METHOD,
+  occurredAtProblem,
+  toDateTimeLocalValue,
+  toDriverFuelSubmission,
+  type DriverFuelForm,
+} from '../workspace/fuel-declaration';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
@@ -230,6 +239,17 @@ function DriverTrip() {
  * Chuyen chua duoc phan cong xe thi bieu mau KHONG hien. Bay mot o nhap roi de nguoi ta go het so
  * lit, so tien, so km — roi bam gui va nhan 400 — la te hon nhieu so voi noi truoc.
  */
+/** Form trong — thoi diem do mac dinh la LUC MO FORM, va lai xe sua duoc (`#313`). */
+const emptyDriverFuelForm = (): DriverFuelForm => ({
+  supplierId: '',
+  liters: '',
+  amount: '',
+  odometerKm: '',
+  invoiceNo: '',
+  occurredAtLocal: toDateTimeLocalValue(new Date()),
+  paymentMethod: DEFAULT_DRIVER_PAYMENT_METHOD,
+});
+
 function DriverFuel() {
   const navigation = useNavigationInput();
   const queryClient = useQueryClient();
@@ -244,15 +264,17 @@ function DriverFuel() {
    */
   const suppliers = toSectionQuery(useDriverFuelSuppliers(navigation));
 
+  const tenant = useTenantRuntime();
   const [failure, setFailure] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    supplierId: '',
-    liters: '',
-    amount: '',
-    odometerKm: '',
-    invoiceNo: '',
-  });
+  /*
+   * `occurredAtLocal` NAM TRONG FORM, dat mot lan khi form mo (`#313`). Than yeu cau la ham thuan
+   * cua form + khoa, nen bam lai sau mot lan mat mang gui DUNG than cu va may chu phat lai phieu
+   * da ghi — thay vi `409 FUEL_CORRELATION_KEY_REUSED` nhu khi thoi diem sinh luc bam.
+   */
+  const [form, setForm] = useState<DriverFuelForm>(emptyDriverFuelForm);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [correlationKey, setCorrelationKey] = useState(() => newCorrelationKey());
   const [pendingRemoval, setPendingRemoval] = useState<{
     readonly slipId: string;
@@ -267,29 +289,48 @@ function DriverFuel() {
   };
 
   const submit = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (trip === null || trip.vehicleId === null) {
         throw new Error('Chuyến hiện tại chưa được phân công xe.');
       }
-      return transportApi.me.submitFuelSlip({
-        tripId: trip.id,
-        vehicleId: trip.vehicleId,
-        supplierId: form.supplierId,
-        liters: form.liters,
-        amount: Number(form.amount),
-        odometerKm: Number(form.odometerKm),
-        occurredAt: new Date().toISOString(),
-        paymentMethod: 'DRIVER_CASH',
-        invoiceNo: form.invoiceNo.trim() === '' ? null : form.invoiceNo.trim(),
-        // MOT khoa cho MOT lan bam, giu qua cac lan thu lai — mang loi roi bam lai khong duoc tao
-        // ra hai phieu.
-        correlationKey,
-      });
+      const problem = occurredAtProblem(form.occurredAtLocal, new Date());
+      if (problem !== null) throw new Error(problem);
+      const slip = await transportApi.me.submitFuelSlip(
+        // MOT khoa cho MOT lan bam, giu qua cac lan thu lai — va CUNG form -> CUNG than yeu cau.
+        toDriverFuelSubmission({
+          form,
+          trip: { id: trip.id, vehicleId: trip.vehicleId },
+          correlationKey,
+          timeZone: tenant.transport?.timeZone,
+        }),
+      );
+      if (photo === null) return { photoError: null, hasPhoto: false };
+      // Phieu DA GHI roi moi dinh anh. Anh hong KHONG duoc lam mat phieu, va cung khong duoc lam lai
+      // xe bam gui lai (se ra mot phieu khac): noi that, roi de duong dinh lai o danh sach duoi.
+      try {
+        await transportApi.me.uploadFuelEvidence(slip.id, photo);
+        return { photoError: null, hasPhoto: true };
+      } catch (error) {
+        return {
+          photoError: error instanceof Error ? error.message : 'Không đính được ảnh.',
+          hasPhoto: true,
+        };
+      }
     },
-    onSuccess: () => {
-      setFailure(null);
-      setSuccess('Đã gửi phiếu đổ dầu. Kế toán sẽ xác thực khi đối soát.');
-      setForm({ supplierId: '', liters: '', amount: '', odometerKm: '', invoiceNo: '' });
+    onSuccess: ({ photoError, hasPhoto }) => {
+      setFailure(
+        photoError === null
+          ? null
+          : `Phiếu đã gửi nhưng chưa đính được ảnh: ${photoError} Hãy đính lại ở phiếu bên dưới.`,
+      );
+      setSuccess(
+        hasPhoto && photoError === null
+          ? 'Đã gửi phiếu đổ dầu kèm ảnh. Kế toán sẽ xác thực khi đối soát.'
+          : 'Đã gửi phiếu đổ dầu. Kế toán sẽ xác thực khi đối soát.',
+      );
+      setForm(emptyDriverFuelForm());
+      setPhoto(null);
+      setPhotoInputKey((key) => key + 1);
       setCorrelationKey(newCorrelationKey());
       invalidate();
     },
@@ -356,7 +397,8 @@ function DriverFuel() {
     form.supplierId !== '' &&
     form.liters.trim() !== '' &&
     form.amount.trim() !== '' &&
-    form.odometerKm.trim() !== '';
+    form.odometerKm.trim() !== '' &&
+    form.occurredAtLocal !== '';
 
   return (
     <>
@@ -454,6 +496,51 @@ function DriverFuel() {
                 }
               />
             </label>
+            <label className="tx-field">
+              <span>Thời điểm đổ</span>
+              <input
+                type="datetime-local"
+                value={form.occurredAtLocal}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, occurredAtLocal: event.target.value }))
+                }
+                required
+              />
+            </label>
+            <label className="tx-field">
+              <span>Thanh toán</span>
+              <select
+                aria-label="Thanh toán"
+                value={form.paymentMethod}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    paymentMethod: event.target.value as FuelPaymentMethod,
+                  }))
+                }
+              >
+                {FUEL_PAYMENT_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {FUEL_PAYMENT_METHOD_LABEL[method]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {/*
+              TRAM/DIEM DO chua co o nhap: to khai (`TransportFuelEntry`) chua co cot tram — `G1`,
+              dang cho PR #308. Khong nhet ten tram vao ghi chu cho co: mot o tu do la mot du kien
+              khong ai doi soat duoc.
+            */}
+            <label className="tx-field tx-field--file">
+              <span>Ảnh phiếu (nếu có)</span>
+              <input
+                key={photoInputKey}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            {photo === null ? null : <span className="tx-note">{EVIDENCE_UPLOAD_HINT}</span>}
             <button
               type="submit"
               className="tx-btn tx-btn--go tx-btn--wide"
@@ -485,7 +572,16 @@ function DriverFuel() {
                   <span>
                     {row.businessDateLabel} · {row.odometerLabel}
                   </span>
+                  <span>
+                    {row.occurredAtLabel} · {row.paymentLabel}
+                    {row.invoiceNo === null ? null : ` · Hoá đơn ${row.invoiceNo}`}
+                  </span>
                   <span>{row.evidenceCountLabel} ảnh</span>
+                  {row.reviewReasonLabels.length === 0 ? null : (
+                    <span className="tx-note">
+                      Kế toán sẽ soát: {row.reviewReasonLabels.join('; ')}.
+                    </span>
+                  )}
                   {row.rejectedNote === null ? null : (
                     <span className="tx-note tx-note--warn">{row.rejectedNote}</span>
                   )}

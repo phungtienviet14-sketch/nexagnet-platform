@@ -1,6 +1,14 @@
 import { publicApiBase } from '../../lib/api-base';
 import { authFetch } from '../../lib/auth';
 import type {
+  FuelDocument,
+  FuelDocumentDetail,
+  FuelDocumentListQuery,
+  FuelDocumentReview,
+  FuelVehicleConsumption,
+  IngestFuelReceiptImageInput,
+} from './fuel-review-types';
+import type {
   ApByCounterpartyRow,
   ArAgingReport,
   BusinessDate,
@@ -853,6 +861,48 @@ export const transportApi = {
     /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`), be mat VAN HANH. */
     resubmitEntry: (id: string): Promise<FuelEntry> =>
       send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/resubmit`),
+
+    /*
+     * CHUNG TU MAY DOC + UNG VIEN (`#313`). Moi duong duoi day da co tren may chu tu Lane C;
+     * truoc `#313` khong man hinh nao goi toi chung. Ung vien la thu MAY doc ra — khong duong nao o
+     * day sua mot phieu hay tao mot dong tien.
+     *
+     * `GET documents` tra MANG TRAN (khong phong bi) — dung hinh dang cua controller.
+     */
+    documents: (query: FuelDocumentListQuery = {}): Promise<readonly FuelDocument[]> =>
+      get(
+        `/transport/fuel/documents${toQuery({
+          status: query.status,
+          supplierId: query.supplierId,
+          limit: query.limit,
+          offset: query.offset,
+        })}`,
+      ),
+    documentReview: (id: string): Promise<FuelDocumentReview> =>
+      get(`/transport/fuel/documents/${encodeURIComponent(id)}/review`),
+    /** Cung byte gui lai = phat lai chung tu cu theo dau van tay, KHONG goi bo doc lan hai. */
+    ingestReceiptImage: (input: IngestFuelReceiptImageInput): Promise<FuelDocumentDetail> =>
+      send('POST', '/transport/fuel/documents/image', input),
+    /**
+     * BYTE cua mot anh chung tu DA LUU — lay bang `evidenceId` qua route co xac thuc, khong bao gio
+     * bang dinh vi kho. Loi thi di qua `readBody` de mang dung `TransportApiError` co `status`.
+     */
+    evidenceBytes: async (entryId: string, evidenceId: string): Promise<Blob> => {
+      const response = await authFetch(evidenceUrls.fuelEntry(entryId, evidenceId));
+      if (!response.ok) return readBody<never>(response);
+      return response.blob();
+    },
+    /** Drill-down tieu hao theo xe/ky (`#313`) — chi doc. */
+    vehicleConsumption: (
+      vehicleId: string,
+      range: { readonly from: BusinessDate; readonly to: BusinessDate },
+    ): Promise<FuelVehicleConsumption> =>
+      get(
+        `/transport/fuel/vehicles/${encodeURIComponent(vehicleId)}/consumption${toQuery({
+          from: range.from,
+          to: range.to,
+        })}`,
+      ),
 
     /** Xem truoc KHONG ghi gi — an de chay truoc khi nhap that. */
     previewStatement: (input: ImportStatementInput): Promise<StatementImportPreview> =>

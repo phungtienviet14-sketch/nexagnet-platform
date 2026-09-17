@@ -4,10 +4,23 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { DataTable, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
-import { FUEL_RECONCILIATION_STATUS_LABEL, FUEL_VERIFICATION_LABEL } from '../customer-view';
-import { toSectionQuery, useFuelInbox, useNavigationInput } from '../hooks/useTransportWorkspace';
+import {
+  FUEL_RECONCILIATION_STATUS_LABEL,
+  FUEL_VERIFICATION_LABEL,
+  formatConsumption,
+  formatOdometer,
+} from '../customer-view';
+import {
+  toSectionQuery,
+  useFuelEntryDetail,
+  useFuelInbox,
+  useNavigationInput,
+} from '../hooks/useTransportWorkspace';
 import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
-import { evidenceUrls, transportApi } from '../transport-api';
+import { transportApi } from '../transport-api';
+import { monthRangeOf } from '../workspace/fuel-consumption';
+import type { ConsumptionFocus } from './FuelConsumptionDrilldown';
+import { FuelEvidenceExtraction } from './FuelEvidenceExtraction';
 import {
   FUEL_RECONCILIATION_STATUSES,
   FUEL_VERIFICATION_STATUSES,
@@ -41,7 +54,12 @@ import { toFuelInboxModel, type FuelInboxRowModel } from '../workspace/fuel';
  * bao nhieu dau"* (o trong chuyen) va *"con phieu nao cho toi"* (o day). Mot cai thay the cai kia
  * se lam mat mot trong hai.
  */
-export function FuelInbox() {
+export function FuelInbox({
+  onOpenConsumption,
+}: {
+  /** `#313` — mo drill-down tieu hao cua xe cua phieu dang xem. */
+  readonly onOpenConsumption?: (focus: ConsumptionFocus) => void;
+} = {}) {
   const navigation = useNavigationInput();
   const queryClient = useQueryClient();
 
@@ -311,6 +329,7 @@ export function FuelInbox() {
       {openId === null || model === null ? null : (
         <FuelInboxDetail
           row={model.rows.find((row) => row.id === openId) ?? null}
+          onOpenConsumption={onOpenConsumption}
           onAct={(action) => {
             setReason('');
             setFailure(null);
@@ -369,14 +388,24 @@ const CONFIRM_LABEL: Record<FuelInboxAction['id'], string> = {
 function FuelInboxDetail({
   row,
   onAct,
+  onOpenConsumption,
 }: {
   readonly row: FuelInboxRowModel | null;
   readonly onAct: (action: FuelInboxAction) => void;
+  readonly onOpenConsumption?: (focus: ConsumptionFocus) => void;
 }) {
   // Truoc lan return som: hook phai chay o MOI lan ve, khong duoc nam sau mot nhanh dieu kien.
   const reveal = useRevealOnOpen<HTMLElement>(row?.id ?? null);
+  const navigation = useNavigationInput();
+  // Hop thu KHONG mang odo; chi tiet phieu thi co. Chi doc cac TRUONG SO — `evidence` cua duong nay
+  // (con mang `locator` tren `main`) khong duoc dung o dau ca.
+  const detail = toSectionQuery(useFuelEntryDetail(navigation, row?.id ?? null));
 
   if (row === null) return null;
+
+  const entry = detail.data?.entry ?? null;
+  const declared = { ...row.declared, odometerKm: entry?.odometerKm ?? null };
+  const pending = detail.isLoading ? 'Đang đọc…' : '—';
 
   return (
     <section
@@ -413,6 +442,23 @@ function FuelInboxDetail({
           <dt>Số hoá đơn</dt>
           <dd>{row.invoiceNo ?? 'Không có'}</dd>
         </div>
+        <div>
+          <dt>Số km trên đồng hồ</dt>
+          <dd>{entry === null ? pending : formatOdometer(entry.odometerKm)}</dd>
+        </div>
+        <div>
+          <dt>Mốc km lúc khai</dt>
+          <dd>{entry === null ? pending : formatOdometer(entry.previousOdometerKm)}</dd>
+        </div>
+        <div>
+          <dt>Tiêu hao lúc khai</dt>
+          <dd>{entry === null ? pending : formatConsumption(entry.consumptionUnits)}</dd>
+        </div>
+        <div>
+          {/* G1 (`#313`): to khai chua co cot tram — chi hien nha cung cap, khong bia mot tram. */}
+          <dt>Trạm/điểm đổ</dt>
+          <dd>Tờ khai chưa ghi trạm — xem cây xăng máy đọc được trên hoá đơn</dd>
+        </div>
       </dl>
 
       {row.rejectedNote === null ? null : (
@@ -427,27 +473,34 @@ function FuelInboxDetail({
         </ul>
       )}
 
-      <div className="tx-evidence">
-        <h5>Ảnh chứng từ</h5>
-        {row.evidence.length === 0 ? (
-          <p className="tx-note">Phiếu này chưa có ảnh chứng từ.</p>
-        ) : (
-          row.evidence.map((file) => {
-            const href = evidenceUrls.fuelEntry(row.id, file.id);
-            return file.contentType?.startsWith('image/') === true ? (
-              <a key={file.id} href={href} target="_blank" rel="noreferrer">
-                <img src={href} alt={`Ảnh chứng từ phiếu ${row.tripCode}`} />
-              </a>
-            ) : (
-              <a key={file.id} href={href} target="_blank" rel="noreferrer">
-                Mở chứng từ
-              </a>
-            );
-          })
-        )}
-      </div>
+      {/*
+        ANH CHUNG TU + MAY DOC — `#313`. Anh goc van mo duoc bang mot lan bam; ben canh la ket qua
+        may doc (chi de xuat). `row.evidence` cua hop thu chi co `{ id, contentType }` — khong co
+        dinh vi kho nao de lo ra.
+      */}
+      <FuelEvidenceExtraction
+        entryId={row.id}
+        evidence={row.evidence}
+        declared={declared}
+        role={navigation.role}
+      />
 
       <div className="tx-detail__actions">
+        {onOpenConsumption === undefined ? null : (
+          <button
+            type="button"
+            className="tx-btn"
+            onClick={() =>
+              onOpenConsumption({
+                vehicleId: row.vehicleId,
+                ...monthRangeOf(row.businessDate),
+                entryId: row.id,
+              })
+            }
+          >
+            Xem chuỗi km của xe
+          </button>
+        )}
         {row.canVerify ? (
           <button
             type="button"
