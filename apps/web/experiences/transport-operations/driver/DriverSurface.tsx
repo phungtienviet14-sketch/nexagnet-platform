@@ -22,6 +22,7 @@ import {
   useDriverPayslips,
   useDriverSettlement,
   useDriverTrips,
+  useDriverFuelStations,
   useDriverFuelSuppliers,
   useNavigationInput,
 } from '../hooks/useTransportWorkspace';
@@ -242,6 +243,7 @@ function DriverTrip() {
 /** Form trong — thoi diem do mac dinh la LUC MO FORM, va lai xe sua duoc (`#313`). */
 const emptyDriverFuelForm = (): DriverFuelForm => ({
   supplierId: '',
+  stationId: '',
   liters: '',
   amount: '',
   odometerKm: '',
@@ -273,6 +275,8 @@ function DriverFuel() {
    * da ghi — thay vi `409 FUEL_CORRELATION_KEY_REUSED` nhu khi thoi diem sinh luc bam.
    */
   const [form, setForm] = useState<DriverFuelForm>(emptyDriverFuelForm);
+  // `#317` G1 — tram CUA cay xang dang chon; doi cay xang thi o tram ve trong (xem `onChange` ben duoi).
+  const stations = toSectionQuery(useDriverFuelStations(navigation, form.supplierId));
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoInputKey, setPhotoInputKey] = useState(0);
   const [correlationKey, setCorrelationKey] = useState(() => newCorrelationKey());
@@ -436,7 +440,8 @@ function DriverFuel() {
                 aria-label="Cây xăng"
                 value={form.supplierId}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, supplierId: event.target.value }))
+                  // Tram thuoc MOT nha cung cap: doi cay xang thi bo tram cu, khong gui mot cap lech.
+                  setForm((prev) => ({ ...prev, supplierId: event.target.value, stationId: '' }))
                 }
                 required
               >
@@ -448,6 +453,29 @@ function DriverFuel() {
                 ))}
               </select>
             </label>
+            {form.supplierId === '' ? null : (
+              <label className="tx-field">
+                <span>Trạm đổ</span>
+                <select
+                  aria-label="Trạm đổ"
+                  value={form.stationId}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, stationId: event.target.value }))
+                  }
+                >
+                  <option value="">
+                    {(stations.data ?? []).length === 0
+                      ? 'Cây xăng này chưa có danh mục trạm'
+                      : 'Chọn trạm đổ'}
+                  </option>
+                  {(stations.data ?? []).map((station) => (
+                    <option key={station.id} value={station.id}>
+                      {station.address === null ? station.name : `${station.name} — ${station.address}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="tx-field">
               <span>Số lít</span>
               <input
@@ -526,11 +554,6 @@ function DriverFuel() {
                 ))}
               </select>
             </label>
-            {/*
-              TRAM/DIEM DO chua co o nhap: to khai (`TransportFuelEntry`) chua co cot tram — `G1`,
-              dang cho PR #308. Khong nhet ten tram vao ghi chu cho co: mot o tu do la mot du kien
-              khong ai doi soat duoc.
-            */}
             <label className="tx-field tx-field--file">
               <span>Ảnh phiếu (nếu có)</span>
               <input
@@ -576,6 +599,7 @@ function DriverFuel() {
                     {row.occurredAtLabel} · {row.paymentLabel}
                     {row.invoiceNo === null ? null : ` · Hoá đơn ${row.invoiceNo}`}
                   </span>
+                  {row.stationLabel === null ? null : <span>Trạm: {row.stationLabel}</span>}
                   <span>{row.evidenceCountLabel} ảnh</span>
                   {row.reviewReasonLabels.length === 0 ? null : (
                     <span className="tx-note">

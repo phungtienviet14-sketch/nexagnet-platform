@@ -738,6 +738,20 @@ export function useDriverFuelSuppliers(input: NavigationInput) {
   });
 }
 
+/**
+ * `#317` G1 — tram/diem do cua MOT cay xang, cho o chon cua lai xe. Chi chay khi da chon cay xang:
+ * tram luon thuoc mot nha cung cap, va may chu tu choi tram cua nha cung cap khac.
+ */
+export function useDriverFuelStations(input: NavigationInput, supplierId: string) {
+  return useQuery({
+    queryKey: ['transport', 'me', 'fuel', 'stations', supplierId],
+    queryFn: () => transportApi.me.fuelStations(supplierId),
+    enabled:
+      supplierId !== '' &&
+      allowed(input, 'transport-fuel', 'transport.driver.self.fuel.submit'),
+  });
+}
+
 export function useDriverPayslips(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.driverPayslips,

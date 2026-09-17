@@ -14,6 +14,7 @@ import {
   FUEL_REVIEW_REASONS,
   FUEL_STATION_MATCHES,
 } from '../fuel-review-types';
+import { FUEL_DISCREPANCY_KINDS, REVISABLE_FUEL_RESOLUTIONS } from '../transport-types';
 
 /**
  * BAN SAO KIEU soat chung tu + drill-down (`#313`) khong duoc lech voi may chu.
@@ -70,6 +71,20 @@ describe('ban sao tu vung soat chung tu + tieu hao khop voi may chu — #313', (
 
   it.each(VOCABULARIES)('%s %s khop tung ma va dung thu tu', (file, name, web) => {
     expect([...web]).toEqual(literalsOf(file, name));
+  });
+
+  /**
+   * `#317` — loai chenh lech `INVOICE_CONFLICT` (G4) va danh sach quyet dinh DOI Y duoc (G0) la hai
+   * tu vung ma man doi soat re nhanh theo. Lech mot ma = mot chenh lech khong co nhan, hoac mot nut
+   * doi y ma may chu tu choi 400.
+   */
+  it('#317 — loai chenh lech va quyet dinh doi y duoc khop may chu', () => {
+    expect([...FUEL_DISCREPANCY_KINDS]).toEqual(literalsOf('fuel-matching.ts', 'FUEL_DISCREPANCY_KINDS'));
+    expect(literalsOf('fuel-matching.ts', 'FUEL_DISCREPANCY_KINDS')).toContain('INVOICE_CONFLICT');
+    expect([...REVISABLE_FUEL_RESOLUTIONS]).toEqual(
+      literalsOf('fuel-decision-revision.ts', 'REVISABLE_FUEL_RESOLUTIONS'),
+    );
+    expect(REVISABLE_FUEL_RESOLUTIONS).not.toContain('MATCH_CONFIRMED');
   });
 
   it('thang muc tin khop voi bo doc anh', () => {

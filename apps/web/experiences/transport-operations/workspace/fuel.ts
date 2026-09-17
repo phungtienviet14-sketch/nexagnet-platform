@@ -23,6 +23,10 @@ import {
 } from '../customer-view';
 import { canPerform } from '../transport-actions';
 import type { DeclaredFuelFacts } from './fuel-extraction';
+import {
+  REVISABLE_FUEL_RESOLUTIONS,
+  type RevisableFuelResolution,
+} from '../transport-types';
 import type {
   FuelDiscrepancy,
   FuelDiscrepancyKind,
@@ -170,6 +174,8 @@ export interface FuelInboxRowModel {
   readonly driverLabel: string;
   readonly vehicleLabel: string;
   readonly supplierLabel: string;
+  /** `#317` G1 — tram lai xe khai; `null` = phieu khong khai tram. */
+  readonly stationLabel: string | null;
   readonly businessDateLabel: string;
   readonly occurredAtLabel: string;
   readonly litersLabel: string;
@@ -222,6 +228,8 @@ export const toFuelInboxRow = (
     driverLabel: row.driverName ?? 'Lái xe chưa đọc được tên',
     vehicleLabel: row.vehiclePlate ?? 'Xe chưa đọc được biển',
     supplierLabel: row.supplierName ?? 'Cây xăng chưa đọc được tên',
+    stationLabel:
+      row.stationId === null ? null : (row.stationName ?? 'Trạm đã khai nhưng chưa đọc được tên'),
     businessDateLabel: formatBusinessDate(row.businessDate),
     occurredAtLabel: formatInstant(row.occurredAt),
     litersLabel: formatLiters(row.litersUnits),
@@ -372,7 +380,23 @@ const RESOLUTIONS_BY_KIND: Readonly<
   FUEL_ENTRY_ONLY: ['ENTRY_CORRECTION_REQUIRED', 'IGNORE_WITH_REASON'],
   OUT_OF_TOLERANCE: ['ACCEPT_SUPPLIER_AMOUNT', 'ENTRY_CORRECTION_REQUIRED', 'IGNORE_WITH_REASON'],
   SELF_SOURCED_BLOCKED: ['IGNORE_WITH_REASON', 'REJECT_SUPPLIER_LINE'],
+  /**
+   * `#317` G4 — so hoa don hai ben trai nhau. NGUOI xac nhan duoc cap (vd lai xe go nham so), hoac
+   * chap nhan so cay xang, hoac bat sua phieu — may khong duoc tu chon.
+   */
+  INVOICE_CONFLICT: [
+    'MATCH_CONFIRMED',
+    'ACCEPT_SUPPLIER_AMOUNT',
+    'ENTRY_CORRECTION_REQUIRED',
+    'IGNORE_WITH_REASON',
+  ],
 };
+
+/** Hai loai chenh lech co danh sach UNG VIEN de nguoi chon cap khi xac nhan khop. */
+const KINDS_WITH_CANDIDATE_PAIRS: readonly FuelDiscrepancyKind[] = [
+  'AMBIGUOUS_CANDIDATES',
+  'INVOICE_CONFLICT',
+];
 
 export const discrepancyResolutionOptions = (
   kind: FuelDiscrepancyKind,
@@ -380,14 +404,25 @@ export const discrepancyResolutionOptions = (
   RESOLUTIONS_BY_KIND[kind].map((resolution) => ({
     resolution,
     label: FUEL_DISCREPANCY_RESOLUTION_LABEL[resolution],
-    requiresTargets: kind === 'AMBIGUOUS_CANDIDATES' && resolution === 'MATCH_CONFIRMED',
+    requiresTargets: KINDS_WITH_CANDIDATE_PAIRS.includes(kind) && resolution === 'MATCH_CONFIRMED',
   }));
+
+/** Mot lua chon DOI Y (`#317` G0) — khong bao gio la `MATCH_CONFIRMED`. */
+export interface DecisionRevisionOption {
+  readonly resolution: RevisableFuelResolution;
+  readonly label: string;
+}
 
 export interface DiscrepancyRow {
   readonly id: string;
   readonly kind: FuelDiscrepancyKind;
   readonly kindLabel: string;
   readonly isPending: boolean;
+  /**
+   * `#317` G0 — quyet dinh DA GHI nhung da co quyet dinh moi hon cho cung dong bang ke. Van hien de
+   * nguoi soat doc lich su; KHONG con duoc tinh tien va KHONG sua duoc nua.
+   */
+  readonly isSuperseded: boolean;
   readonly statementLineId: string | null;
   readonly fuelEntryId: string | null;
   readonly candidateEntryIds: readonly string[];
@@ -397,31 +432,65 @@ export interface DiscrepancyRow {
   readonly resolvedAtLabel: string | null;
   readonly options: readonly DiscrepancyResolutionOption[];
   readonly canResolve: boolean;
+  /**
+   * `#317` G0 — doi y ve quyet dinh DANG HIEU LUC khi ky CHUA dong. Dieu kien y het may chu
+   * (`evaluateDecisionRevision`): da quyet, gan dong bang ke, chua bi thay the, khong phai xac nhan
+   * khop tay. Ky da dong thi phai mo lai truoc.
+   */
+  readonly canRevise: boolean;
+  readonly reviseOptions: readonly DecisionRevisionOption[];
 }
 
 export const toDiscrepancyRows = (
   discrepancies: readonly FuelDiscrepancy[],
   role: AuthRole | null,
   isFrozen: boolean,
+  supersededIds: readonly string[],
 ): readonly DiscrepancyRow[] => {
   const mayResolve = canPerform(role, 'transport.fuel.reconciliation.resolve');
-  return discrepancies.map((row) => ({
-    id: row.id,
-    kind: row.kind,
-    kindLabel: FUEL_DISCREPANCY_KIND_LABEL[row.kind],
-    isPending: row.status === 'PENDING',
-    statementLineId: row.statementLineId,
-    fuelEntryId: row.fuelEntryId,
-    candidateEntryIds: [...row.candidateEntryIds],
-    candidateLineIds: [...row.candidateLineIds],
-    resolutionLabel:
-      row.resolution === null ? null : FUEL_DISCREPANCY_RESOLUTION_LABEL[row.resolution],
-    resolutionNote: row.resolutionNote,
-    resolvedAtLabel: row.resolvedAt === null ? null : formatInstant(row.resolvedAt),
-    options: discrepancyResolutionOptions(row.kind),
-    canResolve: mayResolve && row.status === 'PENDING' && !isFrozen,
-  }));
+  const superseded = new Set(supersededIds);
+  return discrepancies.map((row) => {
+    const isSuperseded = superseded.has(row.id);
+    const reviseOptions = RESOLUTIONS_BY_KIND[row.kind]
+      .filter((resolution): resolution is RevisableFuelResolution =>
+        (REVISABLE_FUEL_RESOLUTIONS as readonly string[]).includes(resolution),
+      )
+      .filter((resolution) => resolution !== row.resolution)
+      .map((resolution) => ({ resolution, label: FUEL_DISCREPANCY_RESOLUTION_LABEL[resolution] }));
+    return {
+      id: row.id,
+      kind: row.kind,
+      kindLabel: FUEL_DISCREPANCY_KIND_LABEL[row.kind],
+      isPending: row.status === 'PENDING',
+      isSuperseded,
+      statementLineId: row.statementLineId,
+      fuelEntryId: row.fuelEntryId,
+      candidateEntryIds: [...row.candidateEntryIds],
+      candidateLineIds: [...row.candidateLineIds],
+      resolutionLabel:
+        row.resolution === null ? null : FUEL_DISCREPANCY_RESOLUTION_LABEL[row.resolution],
+      resolutionNote: row.resolutionNote,
+      resolvedAtLabel: row.resolvedAt === null ? null : formatInstant(row.resolvedAt),
+      options: discrepancyResolutionOptions(row.kind),
+      canResolve: mayResolve && row.status === 'PENDING' && !isFrozen,
+      canRevise:
+        mayResolve &&
+        !isFrozen &&
+        row.status === 'RESOLVED' &&
+        !isSuperseded &&
+        row.statementLineId !== null &&
+        row.resolution !== 'MATCH_CONFIRMED' &&
+        reviseOptions.length > 0,
+      reviseOptions,
+    };
+  });
 };
+
+/**
+ * Cau noi dung hau qua cua mot lan doi y — dat canh nut xac nhan, khop voi hanh vi THAT cua may chu.
+ */
+export const DECISION_REVISION_NOTICE =
+  'Quyết định cũ vẫn giữ trong lịch sử. Tổng công nợ cây xăng chỉ đổi khi đóng kỳ lại; nếu công nợ kỳ trước đã ghi nhận, hệ thống ghi một chứng từ điều chỉnh chứ không sửa chứng từ cũ.';
 
 /* ------------------------------------------------------------------ *
  * Ban lam viec doi soat
@@ -469,7 +538,12 @@ export const toReconciliationWorkspace = (
     ),
     statementFilename: workspace.statement.filename,
     lineRows: toStatementLineRows(workspace.lines),
-    discrepancyRows: toDiscrepancyRows(workspace.discrepancies, role, isFrozen),
+    discrepancyRows: toDiscrepancyRows(
+      workspace.discrepancies,
+      role,
+      isFrozen,
+      workspace.supersededDiscrepancyIds,
+    ),
     matchedCountLabel: formatCount(workspace.matches.length),
     pendingCountLabel: formatCount(pending),
     isFrozen,

@@ -478,6 +478,8 @@ export const FUEL_DISCREPANCY_KINDS = [
   'FUEL_ENTRY_ONLY',
   'OUT_OF_TOLERANCE',
   'SELF_SOURCED_BLOCKED',
+  /** `#317` G4 — ung vien dung xe/ngay/tien nhung so hoa don hai ben khac nhau; may khong tu khop. */
+  'INVOICE_CONFLICT',
 ] as const;
 export type FuelDiscrepancyKind = (typeof FUEL_DISCREPANCY_KINDS)[number];
 
@@ -492,6 +494,20 @@ export const FUEL_DISCREPANCY_RESOLUTIONS = [
   'ENTRY_CORRECTION_REQUIRED',
 ] as const;
 export type FuelDiscrepancyResolution = (typeof FUEL_DISCREPANCY_RESOLUTIONS)[number];
+
+/**
+ * `#317` G0 — nhung quyet dinh DOI Y duoc sang/tu. Guong cua `REVISABLE_FUEL_RESOLUTIONS` o may chu.
+ *
+ * `MATCH_CONFIRMED` vang mat: doi y ve no se phai xoa mot cap khop tay. Duong dung la mo lai ky va
+ * chay lai so khop.
+ */
+export const REVISABLE_FUEL_RESOLUTIONS = [
+  'ACCEPT_SUPPLIER_AMOUNT',
+  'REJECT_SUPPLIER_LINE',
+  'IGNORE_WITH_REASON',
+  'ENTRY_CORRECTION_REQUIRED',
+] as const;
+export type RevisableFuelResolution = (typeof REVISABLE_FUEL_RESOLUTIONS)[number];
 
 export const FUEL_MATCH_ORIGINS = ['AUTO', 'MANUAL'] as const;
 export type FuelMatchOrigin = (typeof FUEL_MATCH_ORIGINS)[number];
@@ -511,6 +527,8 @@ export interface FuelEntry {
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
+  /** `#317` G1 — tram/diem do lai xe khai. `null` = khong khai. */
+  readonly stationId: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: string;
   readonly litersUnits: number;
@@ -589,6 +607,9 @@ export interface FuelEntryInboxRow {
   readonly vehiclePlate: string | null;
   readonly supplierId: string;
   readonly supplierName: string | null;
+  /** `#317` G1 — tram lai xe khai va ten do MAY CHU doi. */
+  readonly stationId: string | null;
+  readonly stationName: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: string;
   readonly litersUnits: number;
@@ -643,11 +664,28 @@ export interface DriverFuelSupplier {
   readonly name: string;
 }
 
+/**
+ * TRAM/DIEM DO tren BE MAT LAI XE — `#317` G1, guong cua `DriverFuelStationView`.
+ *
+ * Chi tram DANG hop tac; khong toa do, khong ghi chu noi bo — lai xe nhan ra cua hang bang ten, ma
+ * cua hang va dia chi.
+ */
+export interface DriverFuelStation {
+  readonly id: string;
+  readonly supplierId: string;
+  readonly name: string;
+  readonly code: string | null;
+  readonly address: string | null;
+}
+
 export interface DriverFuelSlipView {
   readonly id: string;
   readonly tripId: string;
   readonly vehicleId: string;
   readonly supplierId: string;
+  /** `#317` G1 — tram lai xe da khai, kem ten tren bien hieu. */
+  readonly stationId: string | null;
+  readonly stationName: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: string;
   readonly litersUnits: number;
@@ -775,6 +813,8 @@ export interface FuelDiscrepancy {
   readonly resolutionNote: string | null;
   readonly resolvedAt: string | null;
   readonly resolvedBy: string | null;
+  /** `#317` G0 — quyet dinh ma hang nay thay the (cung dong bang ke). */
+  readonly supersedesId: string | null;
   readonly createdAt: string;
 }
 
@@ -796,6 +836,11 @@ export interface FuelReconciliationWorkspace {
   readonly matches: readonly FuelMatch[];
   readonly discrepancies: readonly FuelDiscrepancy[];
   readonly pendingDiscrepancyCount: number;
+  /**
+   * `#317` G0 — quyet dinh DA GHI nhung da bi thay the. May chu tinh bang chinh phep chieu dung cho
+   * tong tien; man hinh KHONG tu viet lai luat "ban nao dang hieu luc".
+   */
+  readonly supersededDiscrepancyIds: readonly string[];
   readonly handoff: FuelSettlementHandoff | null;
 }
 

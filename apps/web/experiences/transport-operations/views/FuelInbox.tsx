@@ -423,6 +423,10 @@ function FuelInboxDetail({
           <dd>{row.supplierLabel}</dd>
         </div>
         <div>
+          <dt>Trạm đổ</dt>
+          <dd>{row.stationLabel ?? 'Lái xe không khai trạm'}</dd>
+        </div>
+        <div>
           <dt>Thời điểm</dt>
           <dd>{row.occurredAtLabel}</dd>
         </div>

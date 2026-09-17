@@ -211,6 +211,105 @@ describe('ban lam viec doi soat', () => {
 });
 
 /* ================================================================== *
+ * `#317` G0 — doi y ve mot quyet dinh DA GHI; G4 — xung dot so hoa don
+ * ================================================================== */
+
+describe('#317 G0 — doi y la THEM quyet dinh, man hinh noi ro ban nao dang hieu luc', () => {
+  const accepted = discrepancy({
+    id: 'dc-cu',
+    kind: 'STATEMENT_LINE_ONLY',
+    status: 'RESOLVED',
+    resolution: 'ACCEPT_SUPPLIER_AMOUNT',
+    resolvedAt: '2026-10-01T03:00:00.000Z',
+    resolvedBy: 'ke-toan',
+  });
+  const ignored = discrepancy({
+    id: 'dc-moi',
+    kind: 'STATEMENT_LINE_ONLY',
+    status: 'RESOLVED',
+    resolution: 'IGNORE_WITH_REASON',
+    resolutionNote: 'cay xang ghi nham',
+    resolvedAt: '2026-10-03T03:00:00.000Z',
+    resolvedBy: 'ke-toan',
+    supersedesId: 'dc-cu',
+  });
+  const reopened = (over: Parameters<typeof workspace>[0] = {}) =>
+    workspace({
+      reconciliation: reconciliation({ state: 'REOPENED' }),
+      discrepancies: [accepted, ignored],
+      pendingDiscrepancyCount: 0,
+      supersededDiscrepancyIds: ['dc-cu'],
+      ...over,
+    });
+
+  it('quyet dinh DA BI THAY THE: hien trong lich su, khong sua duoc; ban moi nhat sua duoc', () => {
+    const rows = toReconciliationWorkspace(reopened(), 'ACCOUNTING').discrepancyRows;
+    const old = rows.find((row) => row.id === 'dc-cu')!;
+    const current = rows.find((row) => row.id === 'dc-moi')!;
+
+    expect(old).toMatchObject({ isSuperseded: true, canRevise: false, canResolve: false });
+    expect(current).toMatchObject({ isSuperseded: false, canRevise: true });
+    // Lua chon doi y: KHONG gom chinh quyet dinh dang co, KHONG bao gio `MATCH_CONFIRMED`.
+    expect(current.reviseOptions.map((option) => option.resolution)).toEqual([
+      'ACCEPT_SUPPLIER_AMOUNT',
+      'REJECT_SUPPLIER_LINE',
+    ]);
+  });
+
+  it('ky DA DONG: khong doi y duoc — phai mo lai ky truoc (quyen rieng)', () => {
+    const rows = toReconciliationWorkspace(
+      reopened({ reconciliation: reconciliation({ state: 'CLOSED' }) }),
+      'ADMIN',
+    ).discrepancyRows;
+    expect(rows.every((row) => !row.canRevise)).toBe(true);
+  });
+
+  it('quyet dinh xac nhan khop tay va quyet dinh phieu le (khong dong bang ke) khong doi y duoc', () => {
+    const rows = toReconciliationWorkspace(
+      reopened({
+        discrepancies: [
+          discrepancy({
+            id: 'dc-khop',
+            kind: 'AMBIGUOUS_CANDIDATES',
+            status: 'RESOLVED',
+            resolution: 'MATCH_CONFIRMED',
+          }),
+          discrepancy({
+            id: 'dc-phieu-le',
+            kind: 'FUEL_ENTRY_ONLY',
+            statementLineId: null,
+            status: 'RESOLVED',
+            resolution: 'IGNORE_WITH_REASON',
+          }),
+        ],
+        supersededDiscrepancyIds: [],
+      }),
+      'ADMIN',
+    ).discrepancyRows;
+    expect(rows.map((row) => row.canRevise)).toEqual([false, false]);
+  });
+
+  it('vai khong co quyen quyet chenh lech thi khong doi y duoc', () => {
+    const rows = toReconciliationWorkspace(reopened(), 'SALE').discrepancyRows;
+    expect(rows.every((row) => !row.canRevise)).toBe(true);
+  });
+});
+
+describe('#317 G4 — chenh lech xung dot so hoa don', () => {
+  it('co nhan rieng va cho NGUOI xac nhan cap (phai chi ro cap)', () => {
+    const options = discrepancyResolutionOptions('INVOICE_CONFLICT');
+    expect(options.find((option) => option.resolution === 'MATCH_CONFIRMED')?.requiresTargets).toBe(
+      true,
+    );
+    const [row] = toReconciliationWorkspace(
+      workspace({ discrepancies: [discrepancy({ kind: 'INVOICE_CONFLICT' })] }),
+      'ADMIN',
+    ).discrepancyRows;
+    expect(row?.kindLabel).toBe('Số hoá đơn hai bên khác nhau');
+  });
+});
+
+/* ================================================================== *
  * HOP THU PHIEU NHIEN LIEU — #222 P1-B
  * ================================================================== */
 
@@ -224,6 +323,8 @@ const inboxRow = (overrides: Partial<FuelEntryInboxRow> = {}): FuelEntryInboxRow
   vehiclePlate: '15C-556.33',
   supplierId: 'sup-1',
   supplierName: 'Cây xăng Petrolimex 12',
+  stationId: null,
+  stationName: null,
   businessDate: '2026-09-05',
   occurredAt: '2026-09-05T06:30:00+07:00',
   litersUnits: 62_500,
@@ -347,5 +448,16 @@ describe('#222 P1-B — hop thu bay du thu ke toan can de quyet', () => {
     const model = toFuelInboxModel(inboxPage([]), 'ADMIN');
     expect(model.rangeLabel).toBe('0 / 0');
     expect(model.hasNext).toBe(false);
+  });
+
+  it('#317 G1 — tram lai xe khai hien TEN do may chu doi; khong khai thi noi ro la khong khai', () => {
+    const model = toFuelInboxModel(
+      inboxPage([
+        inboxRow({ id: 'co-tram', stationId: 'tram-5', stationName: 'CHXD số 5' }),
+        inboxRow({ id: 'khong-tram' }),
+      ]),
+      'ADMIN',
+    );
+    expect(model.rows.map((row) => row.stationLabel)).toEqual(['CHXD số 5', null]);
   });
 });
