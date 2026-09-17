@@ -13,6 +13,18 @@ export const TOLL_ERROR_REASONS = [
   'TOLL_IMPORT_FORMAT_UNSUPPORTED',
   'TOLL_IMPORT_NOT_FOUND',
   /**
+   * HAI LENH NAP CUNG MOT NGUON, CUNG LUC — `#295` Lane V.
+   *
+   * Khoa `@@unique([provider, sourceDigest])` cho dung mot ben thang; ben thua truoc day nhan
+   * `TOLL_IMPORT_FORMAT_UNSUPPORTED`, tuc he thong bao ke toan di SUA TEP trong khi tep khong co
+   * gi sai. Ho se doi dinh dang, nap lai, va gap dung loi do lan nua chung nao nguoi kia con chua
+   * xong.
+   *
+   * Duong xu ly cung khac han: "sai dinh dang" doi mot tep khac, con dong nay chi doi doi mot
+   * nhip roi doc lai — ban nap cua nguoi kia se co san o do.
+   */
+  'TOLL_IMPORT_CONCURRENT_WRITE',
+  /**
    * Goi khach CHUA khai bo cot cua nha cung cap nay.
    *
    * Day la ma mang nghia `BLOCKED_SAMPLE_REQUIRED` cua #269, va no CO Y la mot ma rieng chu khong

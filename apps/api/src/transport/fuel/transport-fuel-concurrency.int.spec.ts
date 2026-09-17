@@ -702,7 +702,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         const attaching = gatedFuel
           .attachEvidence(
             period.entry.id,
-            { locator: 'media://it-t4rc/anh-chen-giua.jpg' },
+            { locator: 'media/transport-evidence/2026/09/anh-chen-giua.jpg' },
             'it-t4rc-ke-toan',
           )
           .then(() => 'DA GAN' as const)

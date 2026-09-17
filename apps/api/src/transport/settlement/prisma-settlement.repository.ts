@@ -6,6 +6,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import type { CommissionCalcKind } from './commission-rules.js';
 import { canAdjust, outstandingOf } from './settlement-documents.js';
 import type { SettlementFlow } from './settlement-flows.js';
+import type { FuelHandoffScanPosition, FuelHandoffScanState } from './settlement.ports.js';
 import {
   SettlementRepository,
   type AllocateCommand,
@@ -188,7 +189,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
     flow: SettlementFlow,
     businessDate: BusinessDate,
   ): Promise<void> {
-    await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${flow}`}, 0))`;
+    await (tx as any)
+      .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${flow}`}, 0))`;
     const period = await model(tx, 'transportSettlementPeriod').findFirst({
       where: { flow, startDate: { lte: businessDate }, endDate: { gte: businessDate } },
     });
@@ -205,7 +207,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
 
   async recogniseDocument(command: RecogniseDocumentCommand): Promise<SettlementRecognition> {
     return this.prisma.$transaction(async (tx) => {
-      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
+      await (tx as any)
+        .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
       const existing = await model(tx, 'transportSettlementDocument').findUnique({
         where: {
           sourceContext_sourceId: {
@@ -258,7 +261,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
     command: CorrectDocumentCommand,
   ): Promise<{ readonly document: SettlementDocument; readonly replayed: boolean }> {
     return this.prisma.$transaction(async (tx) => {
-      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
+      await (tx as any)
+        .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
       /*
        * CHONG GHI TRUNG cho ca duong SUA, khong chi duong ghi nhan.
        *
@@ -449,7 +453,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
         allocations.map((alloc: any) => ({ amount: amount(alloc.amount) })),
       );
       const customerAllocated = customerAllocations.reduce(
-        (total: number, row: any) => total + (row.kind === 'APPLY' ? amount(row.amount) : -amount(row.amount)),
+        (total: number, row: any) =>
+          total + (row.kind === 'APPLY' ? amount(row.amount) : -amount(row.amount)),
         0,
       );
       const outstanding = legacyOutstanding - customerAllocated;
@@ -627,7 +632,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
   }): Promise<SettlementPeriod> {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
-        await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${input.flow}`}, 0))`;
+        await (tx as any)
+          .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${input.flow}`}, 0))`;
         return model(tx, 'transportSettlementPeriod').create({
           data: { flow: input.flow, startDate: input.startDate, endDate: input.endDate },
         });
@@ -674,7 +680,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
           `Khong thay ky ${input.periodId}`,
         );
       }
-      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${candidate.flow}`}, 0))`;
+      await (tx as any)
+        .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${candidate.flow}`}, 0))`;
       await (tx as any)
         .$executeRaw`SELECT "id" FROM "TransportSettlementPeriod" WHERE "id" = ${input.periodId} FOR UPDATE`;
 
@@ -970,4 +977,261 @@ export class PrismaSettlementRepository extends SettlementRepository {
     });
     return row ? toCommission(row) : null;
   }
+
+  /* --------------------- Con tro tieu thu ban giao --------------------- */
+
+  async fuelHandoffCursors(reconciliationIds: readonly string[]): Promise<Map<string, number>> {
+    if (reconciliationIds.length === 0) return new Map();
+    const rows: { reconciliationId: string; consumedRevision: number }[] = await model(
+      this.prisma,
+      'transportSettlementFuelHandoffCursor',
+    ).findMany({
+      where: { reconciliationId: { in: [...reconciliationIds] } },
+      select: { reconciliationId: true, consumedRevision: true },
+    });
+    return new Map(rows.map((row) => [row.reconciliationId, row.consumedRevision]));
+  }
+
+  /**
+   * MOT LENH GHI CO DIEU KIEN, khong phai "doc roi quyet dinh roi ghi".
+   *
+   * ===========================================================================
+   * `upsert` cua Prisma khong nhan dieu kien tren nhanh `update`, nen mot `upsert` tran se keo con
+   * tro LUI khi hai vong quet chay lech nhip. Nen day la hai lenh, va thu tu cua chung quan trong:
+   *
+   *   1. `updateMany` CO DIEU KIEN `consumedRevision < revision` — hang da co thi CHI TIEN;
+   *   2. chi khi khong hang nao doi moi thu `create`, va mot lan dua vi khoa chinh trung nghia la
+   *      mot vong quet khac vua tao hang do — khong phai loi.
+   *
+   * Ca hai deu la lenh ghi co dieu kien cua CSDL chu khong phai mot phep kiem o tang ung dung:
+   * giua mot lan doc va mot lan ghi cua tang ung dung luon co cho cho lenh ghi khac chen vao.
+   */
+  async advanceFuelHandoffCursor(input: {
+    readonly reconciliationId: string;
+    readonly revision: number;
+    readonly handoffId: string;
+  }): Promise<{ readonly advanced: boolean }> {
+    const cursors = model(this.prisma, 'transportSettlementFuelHandoffCursor');
+
+    const moved: { count: number } = await cursors.updateMany({
+      where: {
+        reconciliationId: input.reconciliationId,
+        consumedRevision: { lt: input.revision },
+      },
+      data: { consumedRevision: input.revision, consumedHandoffId: input.handoffId },
+    });
+    if (moved.count > 0) return { advanced: true };
+
+    try {
+      await cursors.create({
+        data: {
+          reconciliationId: input.reconciliationId,
+          consumedRevision: input.revision,
+          consumedHandoffId: input.handoffId,
+        },
+      });
+      return { advanced: true };
+    } catch (error) {
+      /*
+       * `P2002` = khoa chinh trung: hang DA ton tai o mot ban bang hoac moi hon — mot vong quet
+       * khac da lam xong viec nay. Nuot DUNG ma do va khong nuot ma khac: mot loi CSDL that su
+       * (mat ket noi, vi pham `CHECK`) phai noi len de luot quet ghi log va thu lai.
+       */
+      if (isUniqueViolation(error)) return { advanced: false };
+      throw error;
+    }
+  }
+
+  /* --------------------- Vi tri quet hop thu di ---------------------- */
+
+  async fuelHandoffScan(): Promise<FuelHandoffScanState> {
+    const row: { lastEmittedAt: Date | null; lastHandoffId: string | null; cycles: number } | null =
+      await model(this.prisma, 'transportSettlementFuelHandoffScan').findUnique({
+        where: { id: FUEL_HANDOFF_SCAN_ROW },
+        select: { lastEmittedAt: true, lastHandoffId: true, cycles: true },
+      });
+
+    /*
+     * MOT lan doc cho ca hai gia tri, va do khong phai toi uu hoa.
+     *
+     * `position` va `cycles` cung nhau la MOT anh chup; doc rieng hai lan se cho mot anh chup gia
+     * — vong quet co the quay dung giua hai lan doc, va nguoi goi se cam mot cap `(position cu,
+     * cycles moi)` chua bao gio ton tai. Ma cap do lai la thu duoc dung de so sanh truoc khi ghi.
+     */
+    const cycles = row?.cycles ?? 0;
+
+    /*
+     * Chua co hang, hay hang dang o dau vong — ca hai deu la "doc tu dau hop thu". Rang buoc
+     * `_keyset_paired` o CSDL bao dam hai cot khong bao gio le mot nua, nen phep kiem nay khong the
+     * nuot mot nua keyset that.
+     */
+    if (row === null || row.lastEmittedAt === null || row.lastHandoffId === null) {
+      return { position: null, cycles };
+    }
+    return {
+      position: { emittedAt: row.lastEmittedAt.toISOString(), handoffId: row.lastHandoffId },
+      cycles,
+    };
+  }
+
+  /**
+   * CHI TIEN, VA CHI TRONG VONG MA NGUOI GOI DA THAY — cung khuon voi `advanceFuelHandoffCursor`.
+   *
+   * Hai tien trinh API cung quet la mot hinh dang trien khai that. Mot lenh `upsert` tran se de ben
+   * cham hon keo vi tri LUI ve cho cu cua no; lam vay lien tuc thi vong quet co the khong bao gio
+   * toi duoi hop thu, tuc khong bao gio quan ve dau, tuc viec cua nhung ky ghi hong khong bao gio
+   * duoc lam lai. Nen phep so sanh nam trong chinh menh de `WHERE` chu khong o tang ung dung.
+   *
+   * `lastEmittedAt: null` la mot ve HOP LE cua "tien": dau vong thi moi vi tri deu o phia truoc.
+   *
+   * ===========================================================================
+   * `cycles: observed.cycles` — them sau `INDEPENDENT_CHATGPT_REVIEW_3`.
+   *
+   * Ban truoc chi so vi tri, nen mot nhip cua vong N khung lai qua mot lan quay ve dau van ghi duoc
+   * vao vong N+1 (chuoi day du o `FuelHandoffScanState`). So hieu vong nam CUNG menh de `WHERE` voi
+   * phep so vi tri: `updateMany` voi bo loc tren cot thuong cua Prisma 6 dich ra dung MOT lenh
+   * `UPDATE ... WHERE`, va khi hai lenh ghi tranh mot hang thi Postgres bat lenh sau doi roi DANH GIA
+   * LAI `WHERE` tren ban hang moi nhat. Khong co khe nao giua "so" va "ghi".
+   *
+   * `count === 0` co hai nghia:
+   *   · khac vong, hoac cung vong nhung ben da o xa hon  -> `advanced: false`, khong ghi gi;
+   *   · hang CHUA ton tai                               -> chi tao khi `observed` la trang thai
+   *                                                        dau, cung ly do voi `rewindFuelHandoffScan`.
+   */
+  async advanceFuelHandoffScan(
+    observed: FuelHandoffScanState,
+    next: FuelHandoffScanPosition,
+  ): Promise<{ readonly advanced: boolean }> {
+    const at = new Date(next.emittedAt);
+    const scans = model(this.prisma, 'transportSettlementFuelHandoffScan');
+
+    const forward = async (): Promise<boolean> => {
+      const moved: { count: number } = await scans.updateMany({
+        where: {
+          id: FUEL_HANDOFF_SCAN_ROW,
+          cycles: observed.cycles,
+          OR: [
+            { lastEmittedAt: null },
+            { lastEmittedAt: { lt: at } },
+            { lastEmittedAt: at, lastHandoffId: { lt: next.handoffId } },
+          ],
+        },
+        data: { lastEmittedAt: at, lastHandoffId: next.handoffId },
+      });
+      return moved.count > 0;
+    };
+
+    if (await forward()) return { advanced: true };
+    if (!isPristineScan(observed)) return { advanced: false };
+
+    try {
+      await scans.create({
+        data: {
+          id: FUEL_HANDOFF_SCAN_ROW,
+          lastEmittedAt: at,
+          lastHandoffId: next.handoffId,
+          cycles: observed.cycles,
+        },
+      });
+      return { advanced: true };
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+
+    /*
+     * `P2002` = mot tien trinh khac vua tao hang, giua lenh `UPDATE` va lenh `CREATE` cua nhip nay.
+     *
+     * Ban truoc dung lai o day, va lan tien cua nhip nay mat — ke ca khi no di XA HON ben vua tao.
+     * Gio hang DA ton tai, nen chinh lenh ghi co dieu kien o tren tra loi dut khoat: xa hon va cung
+     * vong thi tien; ben kia vua quay ve dau (khac vong) hay dang o xa hon thi khong ghi gi.
+     */
+    return { advanced: await forward() };
+  }
+
+  /**
+   * QUAY VE DAU HOP THU va dem them mot vong — CHI KHI trang thai ben van la `expected`.
+   *
+   * ===========================================================================
+   * HAM NAY TUNG LA MOT `upsert` TRAN, va do la mot loi.
+   *
+   * Loi cu duoc bien minh bang mot cau nghe rat hop ly: *"quay ve dau luon hop le, vi no chi keo
+   * vi tri ve `null`"*. Cau do chi dung khi co MOT tien trinh quet. Voi hai tien trinh, mot tien
+   * trinh cham co the quay ve dau sau khi mot tien trinh khac da tien toi vi tri moi — va xoa
+   * dung tien do that. Chuoi day du nam o `SettlementRepository.rewindFuelHandoffScan`.
+   *
+   * Phep so sanh o day nam trong menh de `WHERE`, khong o tang ung dung: doc ra roi so bang `if`
+   * se de lai dung cua so ma bai nay dang dong.
+   *
+   * `cycles: expected.cycles` la VE THU HAI cua phep so sanh va no khong thua. Vi tri quet chi
+   * nhan mot tap huu han gia tri, nen `A -> B -> A` tren rieng `position` la mot canh THAT — xem
+   * `FuelHandoffScanState`. So hieu vong thi chi tang, nen ghep vao la du de phan biet.
+   *
+   * `count === 0` co hai nghia, va ca hai deu dan toi cung mot viec:
+   *   · hang da doi (mot tien trinh khac di truoc)  -> KHONG ghi gi;
+   *   · hang chua ton tai                           -> chi tao khi `expected` cung la trang thai
+   *                                                    dau ("chua ai quet gi"), xem duoi.
+   */
+  async rewindFuelHandoffScan(
+    expected: FuelHandoffScanState,
+  ): Promise<{ readonly rewound: boolean }> {
+    const scans = model(this.prisma, 'transportSettlementFuelHandoffScan');
+    const pristine = isPristineScan(expected);
+
+    const rewound: { count: number } = await scans.updateMany({
+      where: {
+        id: FUEL_HANDOFF_SCAN_ROW,
+        cycles: expected.cycles,
+        lastEmittedAt: expected.position === null ? null : new Date(expected.position.emittedAt),
+        lastHandoffId: expected.position?.handoffId ?? null,
+      },
+      data: { lastEmittedAt: null, lastHandoffId: null, cycles: { increment: 1 } },
+    });
+    if (rewound.count > 0) return { rewound: true };
+
+    /*
+     * KHONG co hang. Chi mot `expected` dau vong moi giai thich duoc dieu do — moi trang thai khac
+     * deu duoc doc RA TU mot hang, nen hang phai tung ton tai, nen `count === 0` o tren la "da
+     * doi" chu khong "chua co".
+     */
+    if (!pristine) return { rewound: false };
+
+    try {
+      await scans.create({
+        data: {
+          id: FUEL_HANDOFF_SCAN_ROW,
+          lastEmittedAt: null,
+          lastHandoffId: null,
+          cycles: 1,
+        },
+      });
+      return { rewound: true };
+    } catch (error) {
+      /* `P2002` = mot tien trinh khac vua tao hang. Trang thai cua ho thang; lan nay khong ghi gi. */
+      if (isUniqueViolation(error)) return { rewound: false };
+      throw error;
+    }
+  }
 }
+
+/**
+ * KHOA CUA HANG DON giu vi tri quet.
+ *
+ * Mot chuoi doc duoc chu khong `Boolean @default(true) @unique`: khi mot ngay nao do co them mot
+ * vong quet thu hai doc mot hop thu khac, bang nay nhan them mot hang co ten, thay vi phai sinh
+ * them mot bang.
+ */
+export const FUEL_HANDOFF_SCAN_ROW = 'fuel-handoff';
+
+/**
+ * TRANG THAI DAU cua vi tri quet: chua mot vong nao, chua mot vi tri nao.
+ *
+ * Chi trang thai nay giai thich duoc mot hang VANG MAT. Moi trang thai khac deu duoc doc ra TU mot
+ * hang, nen neu nguoi goi mang mot trang thai khac ma lenh ghi co dieu kien khong cham hang nao thi
+ * nghia la "da doi", khong phai "chua co" — va khi do KHONG duoc tao hang.
+ */
+const isPristineScan = (state: FuelHandoffScanState): boolean =>
+  state.position === null && state.cycles === 0;
+
+/** `P2002` cua Prisma, doc qua `unknown` de khong phai import kieu loi cua client. */
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';

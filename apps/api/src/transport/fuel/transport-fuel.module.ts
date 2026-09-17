@@ -4,6 +4,7 @@ import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
 import { TransportCostingModule } from '../costing/transport-costing.module.js';
 import { TransportModule } from '../transport.module.js';
+import { FuelConsumptionReadService } from './fuel-consumption.service.js';
 import { FuelReadService } from './fuel-read.service.js';
 import { FuelReconciliationService } from './fuel-reconciliation.service.js';
 import { TRANSPORT_FUEL_POLICY, tenantTransportFuelPolicy } from './fuel-policy.js';
@@ -131,6 +132,9 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
     FuelReadService,
     FuelStationService,
     FuelDocumentService,
+    // DRILL-DOWN TIEU HAO theo xe/ky (`#313`) — chi doc. EXPORT vi controller cua no dang ky o
+    // `app-composition.ts` ngoai module nay, va mot provider khong export la mot lan crash khi boot.
+    FuelConsumptionReadService,
   ],
   exports: [
     FuelService,
@@ -139,6 +143,7 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
     FuelReadService,
     FuelStationService,
     FuelDocumentService,
+    FuelConsumptionReadService,
     FuelRepository,
     FuelStationRepository,
     FuelDocumentRepository,

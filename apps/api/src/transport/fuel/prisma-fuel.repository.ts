@@ -50,6 +50,7 @@ import {
 import type {
   FuelDiscrepancy,
   FuelEntry,
+  FuelHandoffKeyset,
   FuelMatch,
   FuelReceiptEvidence,
   FuelReconciliation,
@@ -1204,6 +1205,67 @@ export class PrismaFuelRepository extends FuelRepository {
     const rows = await model(this.prisma, 'transportFuelSettlementHandoff').findMany({
       where: { reconciliationId },
       orderBy: { revision: 'asc' },
+    });
+    return rows.map(toHandoff);
+  }
+
+  /**
+   * "MOI NHAT" DOC TU CHINH CHUOI, khong tu mot phep `MAX(revision)` theo nhom.
+   *
+   * ===========================================================================
+   * `supersedesId` la UNIQUE (xem `schema.prisma`), nen moi ban giao bi THAY THE nhieu nhat mot
+   * lan. Suy ra ban moi nhat cua mot ky chinh la ban ma KHONG BAN NAO thay the — `supersededBy`
+   * rong. Do la mot dieu kien tren MOT hang, nen `LIMIT` chay duoc o CSDL.
+   *
+   * Cach kia — gom nhom roi lay `revision` lon nhat — phai doc het moi ban sua doi cua moi ky roi
+   * moi bot, tuc `limit` khong con la mot chan that su. Va no viet lai luat "ban nao la moi nhat"
+   * lan thu hai ben canh rang buoc da co trong schema; hai ban sao cua mot luat thi som muon lech.
+   */
+  /**
+   * MOT TRANG cua hop thu di, theo keyset `(emittedAt, id)`.
+   *
+   * ===========================================================================
+   * VI SAO KHONG DUNG `skip` (OFFSET).
+   *
+   * `skip: n` phai dem qua n hang moi lan, va — quan trong hon — n hang do co the DOI giua hai
+   * nhip: mot ban sua doi moi phat ra se day cac hang sau no lui mot bac, lam mot hang bi nhay qua
+   * ma khong ai biet. Keyset khong co tinh chat do: no hoi *"hang nao dung SAU gia tri nay"*, va
+   * cau tra loi khong phu thuoc vao so hang dung truoc.
+   *
+   * ===========================================================================
+   * HAI VE CUA `OR` LA MOT PHEP SO SANH BO DOI, viet tay.
+   *
+   * Y muon la `(emittedAt, id) > (after.emittedAt, after.handoffId)`. Prisma khong dich duoc bo
+   * doi do, nen no duoc trai ra:
+   *
+   *   1. `emittedAt` LON HON  -> chac chan dung sau, `id` khong con y nghia;
+   *   2. `emittedAt` BANG y het, va `id` lon hon -> cung mili giay, pha hoa bang `id`.
+   *
+   * Bo ve thu hai la bo mat nhung ban giao cung `emittedAt` — chuyen thuong gap khi ke toan dong
+   * mot loat ky cuoi thang. Doi `>` o ve thu nhat thanh `>=` roi bo ve hai thi nguoc lai: hang cuoi
+   * cua trang truoc se duoc doc lai mai mai.
+   */
+  async listLatestHandoffs(input: {
+    readonly after: FuelHandoffKeyset | null;
+    readonly limit: number;
+  }): Promise<FuelSettlementHandoff[]> {
+    const after = input.after;
+    const boundary = after === null ? null : new Date(after.emittedAt);
+
+    const rows = await model(this.prisma, 'transportFuelSettlementHandoff').findMany({
+      where: {
+        supersededBy: { is: null },
+        ...(after === null || boundary === null
+          ? {}
+          : {
+              OR: [
+                { emittedAt: { gt: boundary } },
+                { emittedAt: boundary, id: { gt: after.handoffId } },
+              ],
+            }),
+      },
+      orderBy: [{ emittedAt: 'asc' }, { id: 'asc' }],
+      take: input.limit,
     });
     return rows.map(toHandoff);
   }

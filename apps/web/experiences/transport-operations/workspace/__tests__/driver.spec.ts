@@ -246,3 +246,32 @@ describe('trang chu lai xe', () => {
     expect(home.openTripCount).toBe(2);
   });
 });
+
+/**
+ * `#313` — to khai hien lai DUNG nhung gi lai xe da ghi, va ly do soat noi bang cau.
+ *
+ * Truoc day ly do soat chi hien o be mat ke toan va o dang MA THO. Lai xe can biet phieu cua minh
+ * dang bi hoi dieu gi — noi bang mot cau trung tinh, khong phai mot ma, khong phai mot loi buoc toi.
+ */
+describe('phieu dau cua chinh minh hien du truong da khai', () => {
+  it('so hoa don, cach tra tien va ly do soat bang chu', () => {
+    const [row] = toDriverFuelSlipRows([
+      driverFuelSlip({
+        paymentMethod: 'SUPPLIER_ACCOUNT',
+        reviewReasons: ['ODOMETER_NOT_ADVANCED'],
+      }),
+    ]);
+
+    expect(row).toMatchObject({
+      invoiceNo: 'HD-001',
+      paymentLabel: 'Ghi nợ cây xăng',
+      reviewReasonLabels: ['Số km chưa tăng so với lần đổ trước'],
+    });
+  });
+
+  it('ma ly do chua co nhan van hien nguyen van thay vi bien mat', () => {
+    const [row] = toDriverFuelSlipRows([driverFuelSlip({ reviewReasons: ['MA_MOI_CUA_MAY_CHU'] })]);
+
+    expect(row?.reviewReasonLabels).toEqual(['MA_MOI_CUA_MAY_CHU']);
+  });
+});

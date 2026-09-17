@@ -1590,6 +1590,134 @@
   color: var(--tx-ink-soft);
 }
 
+/* ==================================================================
+ * MAY DOC ANH CHUNG TU + CHUOI TIEU HAO — #313
+ *
+ * Hai khoi nay TRINH BAY de xuat va insight, khong phai so lieu da tin. Nen dau moi khoi la mot
+ * dai ghi chu co vach trai — doc TRUOC bang so, khong nam lan duoi cuoi trang.
+ * ================================================================== */
+
+.tx-extract {
+  margin-top: var(--tx-space-block);
+}
+
+.tx-extract h5 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.tx-extract__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-space-tight);
+}
+
+.tx-extract__item {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.tx-extract__thumb img {
+  max-width: min(9rem, 40vw);
+  max-height: 9rem;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+  border-radius: var(--tx-radius-sm);
+  border: 1px solid var(--tx-line);
+}
+
+.tx-extract__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.tx-review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Dai "chi la de xuat" — vach mau nhan, nen nhat: noi dieu quan trong ma khong la bao dong. */
+.tx-review__notice {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--tx-accent);
+  background: var(--tx-done-wash);
+  color: var(--tx-ink);
+  font-size: 0.8125rem;
+  border-radius: 0 var(--tx-radius-sm) var(--tx-radius-sm) 0;
+}
+
+.tx-review__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.tx-review__card {
+  padding: 0.75rem;
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius);
+  background: var(--tx-paper);
+  min-width: 0;
+}
+
+.tx-review__card h6 {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+}
+
+.tx-review__findings {
+  margin: 0.5rem 0;
+  padding-left: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--tx-wait);
+}
+
+.tx-consumption__notes {
+  margin: 0.5rem 0 var(--tx-space-tight);
+  padding-left: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8125rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-consumption__state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.tx-consumption__insight {
+  font-size: 0.75rem;
+  color: var(--tx-wait);
+}
+
+@media (max-width: 40rem) {
+  .tx-extract__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * BANG DIEU HANH — bay cot cuon ngang (Lane G, #244)
  *

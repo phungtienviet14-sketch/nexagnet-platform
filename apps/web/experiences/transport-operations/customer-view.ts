@@ -49,6 +49,15 @@ import type {
   TripStatus,
   VehicleStatus,
 } from './transport-types';
+import type {
+  FuelCandidateFinding,
+  FuelConsumptionInsight,
+  FuelConsumptionLinkState,
+  FuelDocumentRejectReason,
+  FuelDocumentStatus,
+  FuelStationMatch,
+  KnownFuelReviewReason,
+} from './fuel-review-types';
 
 /**
  * TRINH BAY, khong co tham quyen nghiep vu.
@@ -286,6 +295,103 @@ export const rejectReasonLabel = (reason: string | null): string => {
   const labels: Readonly<Record<string, string>> = FUEL_STATEMENT_REJECT_REASON_LABEL;
   return labels[reason] ?? reason;
 };
+
+/* --- Soat chung tu may doc + chuoi tieu hao (#313) --- */
+
+/**
+ * Ly do soat cua mot phieu. Truoc `#313` man hinh in THANG ma (`ODOMETER_NOT_ADVANCED`) cho ke
+ * toan doc. Cau o day noi SU THAT, khong buoc toi: mot odo khong tang co the la go nham.
+ */
+export const FUEL_REVIEW_REASON_LABEL = {
+  ODOMETER_NOT_ADVANCED: 'Số km chưa tăng so với lần đổ trước',
+  NO_PREVIOUS_ODOMETER: 'Chưa có lần đổ trước để tính tiêu hao',
+  CONSUMPTION_ABOVE_NORM: 'Tiêu hao vượt định mức — chỉ để soát xét',
+} as const satisfies Record<KnownFuelReviewReason, string>;
+
+export const fuelReviewReasonLabel = (reason: string): string => {
+  const labels: Readonly<Record<string, string>> = FUEL_REVIEW_REASON_LABEL;
+  return labels[reason] ?? reason;
+};
+
+export const FUEL_DOCUMENT_STATUS_LABEL = {
+  PARSED: 'Máy đã đọc',
+  REJECTED: 'Không đọc được',
+  DUPLICATE: 'Hoá đơn đã nhập trước đó',
+} as const satisfies Record<FuelDocumentStatus, string>;
+
+export const fuelDocumentStatusTone = (status: FuelDocumentStatus): StatusTone => {
+  switch (status) {
+    case 'PARSED':
+      return 'wait';
+    case 'REJECTED':
+      return 'stop';
+    case 'DUPLICATE':
+      return 'flat';
+  }
+};
+
+export const FUEL_DOCUMENT_REJECT_REASON_LABEL = {
+  EMPTY: 'Tệp rỗng',
+  TOO_LARGE: 'Ảnh quá lớn',
+  MALFORMED_XML: 'Tệp hoá đơn điện tử bị hỏng',
+  EXTERNAL_ENTITY_REJECTED: 'Tệp hoá đơn chứa tham chiếu ngoài bị chặn',
+  NOT_AN_INVOICE: 'Tệp không phải hoá đơn',
+  MISSING_INVOICE_IDENTITY: 'Hoá đơn thiếu ký hiệu hoặc số',
+  NO_LINE_ITEMS: 'Hoá đơn không có dòng hàng',
+  UNSUPPORTED_MEDIA_TYPE: 'Định dạng ảnh không đọc được',
+  EXTRACTION_UNAVAILABLE: 'Bộ đọc ảnh đang không dùng được — thử lại sau',
+  EXTRACTION_MALFORMED_OUTPUT: 'Bộ đọc ảnh trả kết quả không hợp lệ',
+} as const satisfies Record<FuelDocumentRejectReason, string>;
+
+export const FUEL_STATION_MATCH_LABEL = {
+  RESOLVED: 'Đã nhận ra cây xăng',
+  AMBIGUOUS: 'Nhiều cây xăng có thể khớp — người soát chọn',
+  SUPPLIER_MISMATCH: 'Cây xăng không thuộc nhà cung cấp trên hoá đơn',
+  NO_MATCH: 'Không khớp cây xăng nào đã khai',
+  NO_INPUT: 'Hoá đơn không ghi cây xăng',
+} as const satisfies Record<FuelStationMatch, string>;
+
+export const FUEL_CANDIDATE_FINDING_LABEL = {
+  ARITHMETIC_MISMATCH: 'Số lít × đơn giá không ra thành tiền',
+  QUANTITY_UNREADABLE: 'Không đọc được số lít',
+  UNIT_PRICE_UNREADABLE: 'Không đọc được đơn giá',
+  AMOUNT_UNREADABLE: 'Không đọc được thành tiền',
+  ISSUED_DATE_UNREADABLE: 'Không đọc được ngày lập hoá đơn',
+  ISSUED_DATE_IN_FUTURE: 'Ngày lập hoá đơn ở tương lai',
+  UNIT_NOT_LITRES: 'Đơn vị tính không phải lít',
+  STATION_UNRESOLVED: 'Chưa nhận ra cây xăng',
+  SUPPLIER_UNLINKED: 'Chưa nối được với nhà cung cấp theo mã số thuế',
+  PLATE_HINT_ABSENT: 'Hoá đơn không ghi biển số — người soát tự gắn xe',
+  PLATE_HINT_UNKNOWN_VEHICLE: 'Biển số trên hoá đơn không khớp xe nào',
+  FIELD_CONFIDENCE_BELOW_FLOOR: 'Máy đọc không chắc ở một số ô',
+} as const satisfies Record<FuelCandidateFinding, string>;
+
+export const FUEL_CONSUMPTION_LINK_STATE_LABEL = {
+  COMPUTED: 'Đã tính',
+  NO_PREVIOUS_ODOMETER: 'Chưa có mốc km trước — không tính',
+  ODOMETER_NOT_ADVANCED: 'Số km không tăng — không tính, cần soát',
+  PREVIOUS_FILL_UNANCHORED: 'Lần đổ xen giữa thiếu mốc km hợp lệ — không tính',
+  EXCLUDED_REJECTED: 'Phiếu bị từ chối — không làm mốc km',
+} as const satisfies Record<FuelConsumptionLinkState, string>;
+
+export const fuelConsumptionLinkTone = (state: FuelConsumptionLinkState): StatusTone => {
+  switch (state) {
+    case 'COMPUTED':
+      return 'done';
+    case 'NO_PREVIOUS_ODOMETER':
+      return 'flat';
+    case 'ODOMETER_NOT_ADVANCED':
+    case 'PREVIOUS_FILL_UNANCHORED':
+      return 'wait';
+    case 'EXCLUDED_REJECTED':
+      return 'flat';
+  }
+};
+
+export const FUEL_CONSUMPTION_INSIGHT_LABEL = {
+  CONSUMPTION_ABOVE_NORM: 'Vượt định mức — chỉ để soát xét, không trừ tiền lái xe',
+  RECORDED_SNAPSHOT_DIFFERS: 'Số ghi lúc khai khác chuỗi km hiện tại',
+} as const satisfies Record<FuelConsumptionInsight, string>;
 
 /* --- `TX-08` phi duong bo / ETC (#295) --- */
 

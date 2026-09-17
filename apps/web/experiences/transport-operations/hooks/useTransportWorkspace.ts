@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import { useMemo } from 'react';
 import { useAuth } from '../../../components/auth/AuthGate';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
+import type { FuelDocumentListQuery } from '../fuel-review-types';
 import type { NavigationInput } from '../navigation';
 import type { TollSpendReportQuery } from '../toll-report-types';
 import { canPerform, type TransportAction } from '../transport-actions';
@@ -522,6 +523,43 @@ export function useReconciliations(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.reconciliations,
     queryFn: () => transportApi.fuel.reconciliations(),
     enabled: allowed(input, 'transport-fuel', 'transport.fuel.reconciliation.read'),
+  });
+}
+
+/**
+ * HANG SOAT CHUNG TU MAY DOC (`#313`) — `transport.fuel.document.read`.
+ *
+ * Nam duoi `['transport','fuel']` nhu moi truy van nhien lieu khac: mot lan doc anh xong
+ * (`invalidateQueries(['transport','fuel','documents'])`) thi hang soat tu lam moi.
+ */
+export function useFuelDocuments(input: NavigationInput, query: FuelDocumentListQuery) {
+  return useQuery({
+    queryKey: ['transport', 'fuel', 'documents', query],
+    queryFn: () => transportApi.fuel.documents(query),
+    enabled: allowed(input, 'transport-fuel', 'transport.fuel.document.read'),
+  });
+}
+
+export function useFuelDocumentReview(input: NavigationInput, id: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'fuel', 'documents', id, 'review'],
+    queryFn: () => transportApi.fuel.documentReview(id as string),
+    enabled: id !== null && allowed(input, 'transport-fuel', 'transport.fuel.document.read'),
+  });
+}
+
+/** Drill-down tieu hao theo xe/ky (`#313`) — cung quyen doc voi hop thu phieu. */
+export function useVehicleFuelConsumption(
+  input: NavigationInput,
+  request: { readonly vehicleId: string; readonly from: string; readonly to: string } | null,
+) {
+  return useQuery({
+    queryKey: ['transport', 'fuel', 'consumption', request],
+    queryFn: () => {
+      if (request === null) throw new Error('Chưa chọn xe và kỳ.');
+      return transportApi.fuel.vehicleConsumption(request.vehicleId, request);
+    },
+    enabled: request !== null && allowed(input, 'transport-fuel', 'transport.fuel.entry.read'),
   });
 }
 

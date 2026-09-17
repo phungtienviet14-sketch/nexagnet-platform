@@ -5,6 +5,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import type { CommissionCalcKind } from './commission-rules.js';
 import { canAdjust, outstandingOf } from './settlement-documents.js';
 import type { SettlementFlow } from './settlement-flows.js';
+import type { FuelHandoffScanPosition, FuelHandoffScanState } from './settlement.ports.js';
 import {
   SettlementRepository,
   type AllocateCommand,
@@ -50,6 +51,21 @@ export class InMemorySettlementRepository extends SettlementRepository {
   private readonly rules = new Map<string, CommissionRule>();
   private readonly ruleVersions = new Map<string, CommissionRuleVersion>();
   private readonly commissions = new Map<string, CommissionCalculation>();
+  /** Con tro tieu thu ban giao cua `TX-04` — xem `TransportSettlementFuelHandoffCursor`. */
+  private readonly fuelCursors = new Map<string, { revision: number; handoffId: string }>();
+
+  /**
+   * VI TRI QUET hop thu di — mot gia tri, khong mot bang.
+   *
+   * `position: null` = dau vong. `cycles` la SO HIEU VONG — giong cot cung ten o CSDL, va giong
+   * o ca cho nay: no khong con la mot so de xem, ma la ve cua CA HAI lan ghi co dieu kien — ve
+   * thu hai truoc khi quay ve dau (`rewindFuelHandoffScan`), va ve phai BANG truoc khi tien
+   * (`advanceFuelHandoffScan`).
+   */
+  private fuelScan: FuelHandoffScanState = {
+    position: null,
+    cycles: 0,
+  };
 
   private now(): string {
     return new Date().toISOString();
@@ -177,9 +193,14 @@ export class InMemorySettlementRepository extends SettlementRepository {
     }
 
     const currentGrossAmount = [...this.documents.values()]
-      .filter((doc) => doc.id === target.id || (doc.adjustsId === target.id && doc.status === 'POSTED'))
+      .filter(
+        (doc) => doc.id === target.id || (doc.adjustsId === target.id && doc.status === 'POSTED'),
+      )
       .reduce((total, doc) => total + doc.signedAmount, 0);
-    if (command.expectedGrossAmount !== undefined && currentGrossAmount !== command.expectedGrossAmount) {
+    if (
+      command.expectedGrossAmount !== undefined &&
+      currentGrossAmount !== command.expectedGrossAmount
+    ) {
       throw TransportDomainError.denied(
         'SETTLEMENT_TARGET_CONCURRENTLY_CHANGED',
         `Chuoi chung tu ${target.id} da doi tu ${command.expectedGrossAmount} thanh ${currentGrossAmount}`,
@@ -602,4 +623,90 @@ export class InMemorySettlementRepository extends SettlementRepository {
   async findCommissionByTrip(tripId: string): Promise<CommissionCalculation | null> {
     return this.commissions.get(tripId) ?? null;
   }
+
+  /* --------------------- Con tro tieu thu ban giao --------------------- */
+
+  async fuelHandoffCursors(reconciliationIds: readonly string[]): Promise<Map<string, number>> {
+    const found = new Map<string, number>();
+    for (const id of reconciliationIds) {
+      const cursor = this.fuelCursors.get(id);
+      if (cursor) found.set(id, cursor.revision);
+    }
+    return found;
+  }
+
+  /**
+   * CHI TIEN, KHONG LUI — cung luat voi ban Prisma, viet ra vi day la mot BAT BIEN chu khong phai
+   * mot chi tiet cua CSDL. Mot ban in-memory "de tinh" hon se lam bo bai don vi xanh trong khi ban
+   * that do o tang tren.
+   */
+  async advanceFuelHandoffCursor(input: {
+    readonly reconciliationId: string;
+    readonly revision: number;
+    readonly handoffId: string;
+  }): Promise<{ readonly advanced: boolean }> {
+    const current = this.fuelCursors.get(input.reconciliationId);
+    if (current && current.revision >= input.revision) return { advanced: false };
+    this.fuelCursors.set(input.reconciliationId, {
+      revision: input.revision,
+      handoffId: input.handoffId,
+    });
+    return { advanced: true };
+  }
+
+  /* --------------------- Vi tri quet hop thu di ---------------------- */
+
+  async fuelHandoffScan(): Promise<FuelHandoffScanState> {
+    return { ...this.fuelScan };
+  }
+
+  /**
+   * CHI TIEN, VA CHI TRONG VONG MA NGUOI GOI DA THAY — cung luat voi ban Prisma.
+   *
+   * Viet ra o day vi day la mot BAT BIEN chu khong mot chi tiet cua CSDL: mot ban in-memory "de
+   * tinh" hon se lam bo bai don vi xanh trong khi ban that o tang tren tu choi chinh lan ghi do.
+   *
+   * Phep so so hieu vong duoc them sau `INDEPENDENT_CHATGPT_REVIEW_3`; `V-LIVE-6` DO tren ban chi
+   * so vi tri. Vi tri cua `observed` co y KHONG duoc so — xem `SettlementRepository`.
+   */
+  async advanceFuelHandoffScan(
+    observed: FuelHandoffScanState,
+    next: FuelHandoffScanPosition,
+  ): Promise<{ readonly advanced: boolean }> {
+    if (this.fuelScan.cycles !== observed.cycles) return { advanced: false };
+    const current = this.fuelScan.position;
+    if (current !== null && !isAfterScanPosition(next, current)) return { advanced: false };
+    this.fuelScan = { ...this.fuelScan, position: next };
+    return { advanced: true };
+  }
+
+  /**
+   * QUAY VE DAU CO DIEU KIEN — cung luat voi ban Prisma, va cung ly do.
+   *
+   * Mot ban in-memory "de tinh" (quay ve dau vo dieu kien) se lam bo bai don vi xanh trong khi ban
+   * that o tang tren tu choi chinh lan ghi do — tuc bien luoi chong keo-lui thanh mot luoi chi ton
+   * tai trong bo int.
+   */
+  async rewindFuelHandoffScan(
+    expected: FuelHandoffScanState,
+  ): Promise<{ readonly rewound: boolean }> {
+    if (!isSameScanState(expected, this.fuelScan)) return { rewound: false };
+    this.fuelScan = { position: null, cycles: this.fuelScan.cycles + 1 };
+    return { rewound: true };
+  }
 }
+
+/** HAI ANH CHUP cua vi tri quet la MOT — ca vi tri lan so hieu vong phai trung. */
+const isSameScanState = (left: FuelHandoffScanState, right: FuelHandoffScanState): boolean =>
+  left.cycles === right.cycles &&
+  left.position?.emittedAt === right.position?.emittedAt &&
+  left.position?.handoffId === right.position?.handoffId;
+
+/** `(emittedAt, id)` cua `left` dung SAU `right` — cung phep so sanh bo doi voi ban Prisma. */
+const isAfterScanPosition = (
+  left: FuelHandoffScanPosition,
+  right: FuelHandoffScanPosition,
+): boolean => {
+  const byTime = left.emittedAt.localeCompare(right.emittedAt);
+  return byTime > 0 || (byTime === 0 && left.handoffId.localeCompare(right.handoffId) > 0);
+};

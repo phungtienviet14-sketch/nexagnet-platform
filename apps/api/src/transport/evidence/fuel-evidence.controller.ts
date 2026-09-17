@@ -14,9 +14,12 @@ import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { Roles } from '../../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
+import { FuelDocumentService } from '../fuel/fuel-document.service.js';
+import type { FuelDocumentDetail } from '../fuel/fuel-document.types.js';
 import { FuelReadService } from '../fuel/fuel-read.service.js';
 import { FuelService } from '../fuel/fuel.service.js';
-import type { FuelReceiptEvidence } from '../fuel/fuel.types.js';
+import type { FuelReceiptEvidenceView } from '../fuel/fuel.types.js';
+import { TransportDomainError } from '../transport.errors.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
@@ -49,6 +52,7 @@ export class FuelEvidenceController {
     private readonly evidence: TransportEvidenceService,
     private readonly fuel: FuelService,
     private readonly read: FuelReadService,
+    private readonly documents: FuelDocumentService,
   ) {}
 
   /**
@@ -68,7 +72,7 @@ export class FuelEvidenceController {
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
     @UploadedFile() file: UploadedEvidenceFile | undefined,
-  ): Promise<FuelReceiptEvidence> {
+  ): Promise<FuelReceiptEvidenceView> {
     const upload = uploadedBytes(file);
     return this.guard(async () => {
       const stored = await this.evidence.put(upload);
@@ -91,6 +95,79 @@ export class FuelEvidenceController {
   ): Promise<void> {
     const row = await this.guard(() => this.read.fuelEntryEvidence(id, evidenceId));
     sendEvidence(response, await this.guard(() => this.evidence.read(row.locator)));
+  }
+
+  /**
+   * DOC MOT TAM ANH DA LUU — `#295` Lane V, canh con thieu cua chuoi bang chung.
+   *
+   * ============================================================================================
+   * CHUOI NAY TRUOC DAY DUT O DUNG MOT CHO
+   * ============================================================================================
+   *
+   * Hai nua deu da ton tai va deu chay:
+   *
+   * ```text
+   *   TAI LEN (chay)                          TRICH XUAT (chay)
+   *   evidence.put(bytes)                     Buffer.from(base64)
+   *     -> locator ben vung                     -> FuelReceiptExtractionPort.extract()
+   *     -> TransportFuelReceiptEvidence         -> TransportFuelCandidate + do tin cay
+   *                          ^  KHONG CANH NAO  ^
+   * ```
+   *
+   * `FuelReceiptExtractionPort.extract()` nhan mot `Buffer`, khong nhan mot dinh vi, va caller san
+   * xuat duy nhat cua no la `POST /transport/fuel/documents/image` — mot route nhan `contentBase64`
+   * tu than yeu cau. Hau qua doc len rat don gian: **anh phieu do lai xe tai len khong bao gio
+   * trich xuat duoc**. Ke toan muon doc no phai tai ve roi dan lai duoi dang base64.
+   *
+   * ============================================================================================
+   * VI SAO CUA VAO LA `evidenceId` CHU KHONG PHAI MOT DINH VI
+   * ============================================================================================
+   *
+   * Duong de nhat la nhan `{ locator }` tu client. Nhung the thi client phai BIET dinh vi — dung
+   * thu ma cung lane nay vua cat khoi moi DTO (xem `FuelReceiptEvidenceView`). Nhan `evidenceId`
+   * roi tu tra cuu dinh vi o phia may chu giu duoc ca hai: client khong hoc duoc khoa kho, va
+   * `fuelEntryEvidence()` doi chieu tam anh voi DUNG phieu nen doi `:evidenceId` sang cua phieu
+   * khac se khong ra gi.
+   *
+   * Khong ma hanh dong moi: `transport.fuel.document.ingest` — cung ma voi hai cua vao kia, vi
+   * nghiep vu la MOT (dua mot chung tu nguon vao he thong). `Throttle` chat bang duong anh: moi lan
+   * goi o day la mot lan doc anh, ton tien that.
+   *
+   * `sourceRef` mang `id` cua tam anh, KHONG mang dinh vi: no nam trong mot hang se doc ra o mau
+   * kiem duyet, va mot khoa kho o do se lam chinh viec vua cat o tren tro nen vo nghia.
+   *
+   * Anh khong doc duoc (PDF, tep hong, qua lon) KHONG nem: `guardReceiptImage` cua `#243` tu choi
+   * o tang duoi va `ingestReceiptImage` ghi mot chung tu `REJECTED` kem ly do. Do la mot ket qua
+   * nghiep vu doc duoc, khong phai mot loi ha tang.
+   */
+  @Post(':evidenceId/extract')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.fuel.document.ingest')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  extract(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('evidenceId') evidenceId: string,
+  ): Promise<FuelDocumentDetail> {
+    return this.guard(async () => {
+      const row = await this.read.fuelEntryEvidence(id, evidenceId);
+      const stored = await this.evidence.read(row.locator);
+      if (stored.kind === 'MISSING') {
+        throw TransportDomainError.notFound(
+          'FUEL_EVIDENCE_NOT_FOUND',
+          `Byte cua bang chung ${evidenceId} khong con trong kho anh`,
+        );
+      }
+
+      return this.documents.ingestReceiptImage(
+        {
+          sourceRef: `fuel-evidence:${row.id}`,
+          mediaType: stored.object.contentType,
+          content: stored.object.body,
+        },
+        transportActorOf(request),
+      );
+    });
   }
 
   private async guard<T>(run: () => Promise<T>): Promise<T> {

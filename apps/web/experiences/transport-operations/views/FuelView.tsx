@@ -14,6 +14,12 @@ import {
 import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
+import {
+  FuelConsumptionDrilldown,
+  FuelConsumptionPicker,
+  type ConsumptionFocus,
+} from './FuelConsumptionDrilldown';
+import { FuelDocumentQueue } from './FuelDocumentQueue';
 import { FuelInbox } from './FuelInbox';
 import { StatementImport } from './StatementImport';
 import type { FuelDiscrepancyResolution } from '../transport-types';
@@ -42,6 +48,7 @@ export function FuelView() {
   const suppliers = toSectionQuery(useFuelSuppliers(navigation));
   const reconciliations = toSectionQuery(useReconciliations(navigation));
   const [openId, setOpenId] = useState<string | null>(null);
+  const [consumptionFocus, setConsumptionFocus] = useState<ConsumptionFocus | null>(null);
 
   if (!hasOperationsScope(navigation.role)) {
     return (
@@ -69,7 +76,21 @@ export function FuelView() {
         HANG NGAY, nhap bang ke va doi soat la viec CUOI THANG. Truoc ban nay khoi tren cung la
         nhap bang ke, va viec hang ngay khong co cho nao de lam ca.
       */}
-      <FuelInbox />
+      <FuelInbox onOpenConsumption={setConsumptionFocus} />
+
+      {/*
+        VIEC HANG NGAY THU HAI va THU BA (`#313`): soat chung tu may doc, va soi chuoi km khi mot
+        phieu co ly do soat. Ca hai nam TRUOC bang ke/doi soat — viec cuoi thang.
+      */}
+      <FuelDocumentQueue />
+      <FuelConsumptionPicker onOpen={setConsumptionFocus} />
+      {consumptionFocus === null ? null : (
+        <FuelConsumptionDrilldown
+          key={`${consumptionFocus.vehicleId}|${consumptionFocus.from}|${consumptionFocus.to}`}
+          focus={consumptionFocus}
+          onClose={() => setConsumptionFocus(null)}
+        />
+      )}
 
       {reconciliations.errorMessage === null ? null : (
         <ErrorState message={reconciliations.errorMessage} onRetry={reconciliations.refetch} />

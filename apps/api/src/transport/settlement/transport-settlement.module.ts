@@ -6,6 +6,8 @@ import { TransportAcceptanceModule } from '../acceptance/transport-acceptance.mo
 import { TransportCostingModule } from '../costing/transport-costing.module.js';
 import { TransportFuelModule } from '../fuel/transport-fuel.module.js';
 import { TransportModule } from '../transport.module.js';
+import { FuelHandoffDrainScheduler } from './fuel-handoff-drain.scheduler.js';
+import { FuelHandoffDrainService } from './fuel-handoff-drain.service.js';
 import { InMemorySettlementRepository } from './in-memory-settlement.repository.js';
 import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
 import {
@@ -95,12 +97,27 @@ import { SettlementService } from './settlement.service.js';
     { provide: SettlementOrderCompletionGate, useClass: SettlementOrderCompletionGateAdapter },
     SettlementService,
     SettlementReadService,
+    /*
+     * HAI DONG DONG LAI DUONG TU BAN GIAO SANG CONG NO — `#295` Lane V, P0.
+     *
+     * Thu tu cua chung la mot phan cua hop dong, cung khuon `RunClosureService` +
+     * `RunClosureSweepScheduler` cua `transport-core`:
+     *
+     *   · `FuelHandoffDrainService` la DUONG DOC DUY NHAT — moi lan tieu thu mot ban giao deu di
+     *     qua no, nen luat "ghi xong moi danh dau con tro" chi co MOT ban;
+     *   · `FuelHandoffDrainScheduler` danh thuc no theo nhip va khong giu trang thai nao.
+     *
+     * Khong co controller nao o day, va do la co y: xem doan 1 cua `fuel-handoff-drain.service.ts`.
+     */
+    FuelHandoffDrainService,
+    FuelHandoffDrainScheduler,
   ],
   exports: [
     SettlementService,
     SettlementReadService,
     SettlementRepository,
     SettlementOrderCompletionGate,
+    FuelHandoffDrainService,
   ],
 })
 export class TransportSettlementModule {}

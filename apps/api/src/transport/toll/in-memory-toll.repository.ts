@@ -195,7 +195,7 @@ export class InMemoryTollRepository extends TollRepository {
     const clash = await this.findImportByDigest(input.provider, input.sourceDigest);
     if (clash) {
       throw TransportDomainError.conflict(
-        'TOLL_IMPORT_FORMAT_UNSUPPORTED',
+        'TOLL_IMPORT_CONCURRENT_WRITE',
         `Nguon nay da duoc nap (${clash.id})`,
       );
     }
