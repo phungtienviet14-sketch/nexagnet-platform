@@ -86,13 +86,29 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Nap du lieu ETC tren Postgres
       where: { importId: { in: importIds } },
       select: { id: true },
     });
-    await prisma.transportTollReviewDecision.deleteMany({
-      where: { candidateId: { in: candidates.map((row) => row.id) } },
+    /*
+     * DON DEP PHAI TU TAT TRIGGER — va viec no phai lam vay CHINH LA bang chung.
+     *
+     * Tu `20260915130000_transport_toll_append_only`, hai bang duoi day tu choi moi lenh `UPDATE`
+     * va `DELETE` o TANG CSDL. Mot bo don dep chay duoc ma khong phai tat gi se co nghia la trigger
+     * khong ton tai. Khuon nay lay tu `customer-ar-test-cleanup.ts`: tat trong MOT giao dich roi
+     * bat lai ngay, nen khong luot chay nao khac thay duoc cua so do.
+     */
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('ALTER TABLE "TransportTollReviewDecision" DISABLE TRIGGER USER');
+      await tx.transportTollReviewDecision.deleteMany({
+        where: { candidateId: { in: candidates.map((row) => row.id) } },
+      });
+      await tx.$executeRawUnsafe('ALTER TABLE "TransportTollReviewDecision" ENABLE TRIGGER USER');
+
+      await tx.transportTollTransactionCandidate.deleteMany({
+        where: { importId: { in: importIds } },
+      });
+
+      await tx.$executeRawUnsafe('ALTER TABLE "TransportTollImport" DISABLE TRIGGER USER');
+      await tx.transportTollImport.deleteMany({ where: { id: { in: importIds } } });
+      await tx.$executeRawUnsafe('ALTER TABLE "TransportTollImport" ENABLE TRIGGER USER');
     });
-    await prisma.transportTollTransactionCandidate.deleteMany({
-      where: { importId: { in: importIds } },
-    });
-    await prisma.transportTollImport.deleteMany({ where: { id: { in: importIds } } });
 
     const accountRows = await prisma.transportTollAccount.findMany({
       where: { accountNo: { startsWith: ACCOUNT_PREFIX } },
@@ -464,6 +480,101 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Nap du lieu ETC tren Postgres
       previousMatchState: 'VEHICLE_UNRESOLVED',
       nextMatchState: 'MATCHED',
       note: 'doi chieu tay theo ban giay',
+    });
+  });
+
+  /**
+   * `#295` Lane V — "KHONG SUA DUOC" PHAI LA MOT PHEP DO, KHONG PHAI MOT TEN BAI TEST.
+   *
+   * ===========================================================================
+   * `J-INT-09` o tren mang chu *"mot dong lich su khong sua duoc"* trong ten, nhung no chua bao gio
+   * THU sua. No chi khang dinh dong lich su duoc ghi dung truong. Ca hai deu dung, va chi mot cai
+   * la bang chung cho loi hua kia.
+   *
+   * Khoang trong do do duoc tren `de30a082`: khong mot `CREATE TRIGGER` nao trong migration cua
+   * mien ETC, trong khi bon mien anh em deu co. `UPDATE`/`DELETE` thang qua `psql` thanh cong IM
+   * LANG — tuc cau hoi *"vi sao dong nay lai gan cho xe X"* khong con cau tra loi dang tin nao.
+   *
+   * Hai bai duoi day di VONG QUA tang ung dung — dung `prisma.<model>.update/delete` tho, khong qua
+   * service — vi do chinh la duong ma ky luat cua tang ung dung khong voi toi.
+   */
+  describe('V-TOLL — lich su va ban nap la CHI GHI THEM, cuong che o tang CSDL', () => {
+    it('V-TOLL-1 — sua mot quyet dinh review da ghi bi CSDL tu choi', async () => {
+      const account = await newAccount('V1');
+      const result = await toll.commitImport(
+        {
+          provider: 'VETC',
+          sourceKind: 'MANUAL',
+          sourceLabel: `${ACCOUNT_PREFIX}-append-only`,
+          periodStart: null,
+          periodEnd: null,
+          rows: [manual({ accountNo: account.accountNo, vehiclePlate: `${PLATE_PREFIX}-001.11` })],
+        },
+        'ke-toan',
+      );
+      const candidateId = result.candidates[0]?.id ?? '';
+
+      await toll.review(
+        {
+          candidateId,
+          action: 'RESOLVE_VEHICLE',
+          vehicleId: state.vehicleA,
+          duplicateOfCandidateId: null,
+          note: 'ban ghi goc',
+        },
+        'giam-doc',
+      );
+      const decision = await prisma.transportTollReviewDecision.findFirst({
+        where: { candidateId },
+      });
+
+      /* Doi NGUOI KY — thu nguy hiem nhat sua duoc tren mot dong bang chung. */
+      await expect(
+        prisma.transportTollReviewDecision.update({
+          where: { id: decision?.id ?? '' },
+          data: { actor: 'nguoi-khac' },
+        }),
+      ).rejects.toThrow(/transport_toll_review_decision_append_only/);
+
+      await expect(
+        prisma.transportTollReviewDecision.delete({ where: { id: decision?.id ?? '' } }),
+      ).rejects.toThrow(/transport_toll_review_decision_append_only/);
+
+      /* Va dong cu con nguyen — khong phai chi "lenh bi tu choi". */
+      const after = await prisma.transportTollReviewDecision.findUnique({
+        where: { id: decision?.id ?? '' },
+      });
+      expect(after?.actor).toBe('giam-doc');
+    });
+
+    it('V-TOLL-2 — sua danh tinh nguon cua mot ban nap bi CSDL tu choi', async () => {
+      const account = await newAccount('V2');
+      const result = await toll.commitImport(
+        {
+          provider: 'EPASS',
+          sourceKind: 'MANUAL',
+          sourceLabel: `${ACCOUNT_PREFIX}-nguon-bat-bien`,
+          periodStart: null,
+          periodEnd: null,
+          rows: [manual({ accountNo: account.accountNo, vehiclePlate: `${PLATE_PREFIX}-001.11` })],
+        },
+        'ke-toan',
+      );
+
+      /*
+       * `sourceDigest` la nua kia cua khoa chong nap trung. Sua duoc no tuc la mot tep DA NAP co
+       * the nap lai lan nua duoi mot danh tinh khac — va khi do so lieu vao hai lan.
+       */
+      await expect(
+        prisma.transportTollImport.update({
+          where: { id: result.import.id },
+          data: { sourceDigest: 'f'.repeat(64) },
+        }),
+      ).rejects.toThrow(/transport_toll_import_append_only/);
+
+      await expect(
+        prisma.transportTollImport.delete({ where: { id: result.import.id } }),
+      ).rejects.toThrow(/transport_toll_import_append_only/);
     });
   });
 

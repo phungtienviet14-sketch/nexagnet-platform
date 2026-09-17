@@ -68,6 +68,11 @@ class FakeFuel extends FuelSettlementSource {
   async handoffRevisions(): Promise<FuelHandoffFacts[]> {
     return [];
   }
+
+  /** Bo bai nay khong noi ve ban giao — hop thu rong la cau tra loi dung cho moi bai o day. */
+  async pendingHandoffs(): Promise<FuelHandoffFacts[]> {
+    return [];
+  }
 }
 
 /** Cong gia — tra ve dung ket luan ma bai dang dung, va DEM so lan bi hoi. */

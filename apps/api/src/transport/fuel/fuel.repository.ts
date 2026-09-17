@@ -11,6 +11,7 @@ import type {
   FuelDiscrepancy,
   FuelDiscrepancyResolution,
   FuelEntry,
+  FuelHandoffKeyset,
   FuelMatch,
   FuelMatchOrigin,
   FuelPaymentMethod,
@@ -744,4 +745,40 @@ export abstract class FuelRepository {
   abstract findHandoff(reconciliationId: string): Promise<FuelSettlementHandoff | null>;
   /** CA CHUOI ban sua doi, theo `revision` tang dan. Chi them, khong bao gio sua ban da phat. */
   abstract listHandoffRevisions(reconciliationId: string): Promise<FuelSettlementHandoff[]>;
+  /**
+   * BAN GIAO MOI NHAT CUA MOI KY da tung phat — MOT hang cho moi ky doi soat.
+   *
+   * ===========================================================================
+   * TON TAI CHO DUNG MOT NGUOI DOC: vong quet cua `TX-05` (`#295` Lane V, P0).
+   *
+   * Hai ham tren deu hoi ve MOT ky ma nguoi goi da biet ten. Vong quet thi khong biet ten ky nao —
+   * cau hoi cua no la *"co ky nao vua dong ma chua ai doc sang cong no khong"*, va cau hoi do
+   * khong tra loi duoc bang mot vong lap tren hai ham kia neu khong co san danh sach ky.
+   *
+   * Van la mot ham DOC. `transport-fuel` khong biet vong quet ton tai, khong biet con tro tieu thu
+   * ton tai, va khong mot dong nao cua no doi vi ban nay — chieu phu thuoc `TX-05 -> TX-04` giu
+   * nguyen. Cai duy nhat T4 lam la mo hop thu di ra cho nguoi nhan doc ca hom thay vi tung la mot.
+   *
+   * `limit` la mot CHAN CO Y (`OWNER_DECISION_2026_09_13`: *"bounded batch + deterministic
+   * ordering"*). Thu tu la `emittedAt` TANG DAN roi `id` de pha hoa: viec cu nhat luon nhin thay
+   * truoc, va hai lan doc tren cung du lieu cho ra cung mot chuoi.
+   *
+   * ===========================================================================
+   * `after` — VA VI SAO THIEU NO LA MOT LOI CHET NGUOI.
+   *
+   * Ban dau ham nay chi nhan `limit`, tuc luon tra ve `limit` hang DAU TIEN. Nguoi doc thi giu con
+   * tro tieu thu o phia minh, nen `TX-04` khong the biet hang nao da doc roi. Hau qua: khi 500 ky
+   * dau deu da co cong no, ky thu 501 KHONG BAO GIO duoc tra ve — mot ban giao hop le ma khoan
+   * phai tra cho cay xang khong bao gio xuat hien.
+   *
+   * `after` chua loi do bang cach cho NGUOI DOC noi minh dang dung o dau: tra ve nhieu nhat `limit`
+   * hang dung SAU vi tri do trong chinh thu tu tren. `null` = doc tu dau bang.
+   *
+   * Chu y: day KHONG phai "loc nhung hang chua tieu thu". `TX-04` van khong biet gi ve con tro
+   * tieu thu cua `TX-05`, va cung khong duoc biet. No chi biet phan trang.
+   */
+  abstract listLatestHandoffs(input: {
+    readonly after: FuelHandoffKeyset | null;
+    readonly limit: number;
+  }): Promise<FuelSettlementHandoff[]>;
 }

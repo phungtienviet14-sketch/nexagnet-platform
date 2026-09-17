@@ -147,6 +147,86 @@ export interface FuelHandoffFacts {
   readonly currencyCode: string;
   readonly acceptedLineCount: number;
   readonly acceptedLineIds: readonly string[];
+  /**
+   * LUC BAN GIAO DUOC PHAT, ISO-8601.
+   *
+   * Khong phai de hien thi. Day la ve trai cua khoa doc `(emittedAt, id)`, va la thu vong quet ghi
+   * lai de nhip sau biet minh dung o dau — xem `FuelHandoffScanPosition`.
+   */
+  readonly emittedAt: string;
+}
+
+/**
+ * VONG QUET DANG DUNG O DAU trong hop thu di.
+ *
+ * ===========================================================================
+ * KHAC HAN CON TRO TIEU THU, va gop hai thu nay lai la mot loi.
+ *
+ * Con tro tieu thu (`fuelHandoffCursors`) khoa theo KY DOI SOAT va tra loi *"ky nay con viec
+ * khong"*. No giu cho SO TIEN dung.
+ *
+ * Vi tri quet khoa theo HANG BAN GIAO va tra loi *"lan sau mo hop thu tu dau"*. No giu cho vong
+ * quet CHAY. Mot he thong co con tro tieu thu hoan hao van co the khong bao gio tra tien cho ky thu
+ * 501 — do la dung loi ma kieu nay sinh ra de chua.
+ *
+ * `null` = bat dau lai tu dau hop thu. Do la trang thai binh thuong sau moi vong quet tron.
+ */
+export interface FuelHandoffScanPosition {
+  readonly emittedAt: string;
+  readonly handoffId: string;
+}
+
+/**
+ * VONG QUET DANG O DAU, VA DANG O VONG THU MAY. Doc ca hai trong MOT lan doc.
+ *
+ * ===========================================================================
+ * VI SAO PHAI CO `cycles` O DAY, va vi sao mot minh `position` thi KHONG DU.
+ *
+ * Doan nay duoc them sau `INDEPENDENT_CHATGPT_REVIEW_2` (15/09/2026), va no ghi lai mot loi that.
+ *
+ * Quay ve dau (`rewindFuelHandoffScan`) tung KHONG co dieu kien nao. Voi nhieu tien trinh API cung
+ * quet — dung hinh dang trien khai ma chinh lich quet nay mo ta — mot tien trinh CHAM co the quay
+ * ve dau SAU khi mot tien trinh khac da tien toi mot vi tri moi, va keo tien do that su do ve `0`.
+ * Khong mat tien (phep chong ghi trung nam o CSDL), nhung mat dung cai tinh chat ma vi tri quet
+ * sinh ra de giu: vong quet CHAY.
+ *
+ * Chua bang mot phep so sanh truoc khi ghi (`CAS`) la dung huong. Nhung so sanh RIENG `position`
+ * van con mot lo: vi tri quet chi nhan mot TAP HUU HAN gia tri (hop thu chi co hang chuc ky, va
+ * moi vong lai di qua dung nhung hang do). Nen canh `A -> B -> A` la THAT chu khong ly thuyet:
+ *
+ *     tien trinh A doc `position = T` o vong 7
+ *     B quay ve dau        -> vong 8
+ *     B tien toi... dung T -> `position = T` o vong 8
+ *     A quay ve dau        -> so sanh `T === T` DUNG, va A vua xoa tien do cua vong 8
+ *
+ * `cycles` la SO HIEU VONG, va no chi tang. Ghep no vao phep so sanh lam canh tren khong con xay
+ * ra duoc: `(T, 7)` khong bang `(T, 8)`.
+ *
+ * ===========================================================================
+ * CUNG ANH CHUP DO LA VE CUA LAN TIEN — them sau `INDEPENDENT_CHATGPT_REVIEW_3` (16/09/2026).
+ *
+ * Ban truoc chi dua anh chup vao lan QUAY VE DAU; lan TIEN chi nhan vi tri moi va chi so vi tri.
+ * Nen mot nhip doc anh chup o vong N, khung lai qua mot lan quay ve dau, van ghi duoc vao vong N+1
+ * mien la vi tri no mang nam XA HON cho vong moi vua toi:
+ *
+ *     A doc (P, vong N), doc trang toi Q, roi khung lai
+ *     B cham day hop thu        -> vong N+1
+ *     C quet vong N+1 tu dau    -> tien toi R, voi R < Q
+ *     A tinh day, tien toi Q    -> (Q, vong N+1), va doan (R, Q] cua vong N+1 bi BO QUA
+ *
+ * Doan bi bo qua dung la noi hang ghi hong va ban giao phat lui ngay nam cho vong moi doc lai.
+ *
+ * Hai lan ghi dung CUNG anh chup nhung so KHAC nhau, va do khong phai bat nhat:
+ *
+ *   · QUAY VE DAU so ca `position` lan `cycles` — no XOA tien do, nen chi duoc xoa dung thu no da
+ *     thay;
+ *   · TIEN chi bat `cycles` phai BANG, con vi tri thi chi can TIEN. So ca vi tri se tu choi mot
+ *     nhip CUNG vong da doc xa hon mot nhip khac vua ghi truoc no — mot buoc lui ve tien do ma voi
+ *     nhieu ban sao cung quet thi xay ra o gan nhu moi nhip.
+ */
+export interface FuelHandoffScanState {
+  readonly position: FuelHandoffScanPosition | null;
+  readonly cycles: number;
 }
 
 export abstract class FuelSettlementSource {
@@ -154,6 +234,31 @@ export abstract class FuelSettlementSource {
   abstract latestHandoff(reconciliationId: string): Promise<FuelHandoffFacts | null>;
   /** CA chuoi ban sua doi, theo thu tu `revision` tang dan. */
   abstract handoffRevisions(reconciliationId: string): Promise<FuelHandoffFacts[]>;
+  /**
+   * MOT TRANG hop thu di: ban giao moi nhat cua moi ky, cu truoc moi sau, bat dau ngay SAU `after`.
+   *
+   * ===========================================================================
+   * Hai ham tren tra loi cau hoi cua mot NGUOI DUNG dang xem mot ky. Ham nay tra loi cau hoi cua
+   * mot VONG QUET khong xem ky nao ca: *"con viec gi chua ai lam khong"*.
+   *
+   * ===========================================================================
+   * `after` LA THU DA THIEU, va thieu no thi cong no BIEN MAT.
+   *
+   * Ban dau ham nay chi nhan `limit` va luon tra ve `limit` hang dau tien. Vi con tro tieu thu nam
+   * ben `TX-05`, `TX-04` khong biet hang nao da doc roi — nen khi 500 ky dau deu da co cong no,
+   * nhip nao cung nhan lai dung 500 hang do va ky thu 501 khong bao gio duoc nhin thay.
+   *
+   * Nguoi doc giu vi tri cua chinh minh (`TransportSettlementFuelHandoffScan`) va noi ra o day.
+   * `null` = doc tu dau hop thu.
+   *
+   * Van khong co ham ghi nao o cong nay. Vong quet doc ban giao, doi chieu voi CON TRO TIEU THU
+   * cua chinh `TX-05`, roi ghi vao bang cua `TX-05`. `transport-fuel` khong bi cham vao, va cung
+   * khong duoc biet vi tri quet ton tai — no chi nhan mot tham so phan trang.
+   */
+  abstract pendingHandoffs(input: {
+    readonly after: FuelHandoffScanPosition | null;
+    readonly limit: number;
+  }): Promise<FuelHandoffFacts[]>;
 }
 
 interface HandoffRow {
@@ -168,6 +273,7 @@ interface HandoffRow {
   readonly currencyCode: string;
   readonly acceptedLineCount: number;
   readonly acceptedLineIds: readonly string[];
+  readonly emittedAt: string;
 }
 
 const toHandoffFacts = (handoff: HandoffRow): FuelHandoffFacts => ({
@@ -182,6 +288,7 @@ const toHandoffFacts = (handoff: HandoffRow): FuelHandoffFacts => ({
   currencyCode: handoff.currencyCode,
   acceptedLineCount: handoff.acceptedLineCount,
   acceptedLineIds: handoff.acceptedLineIds,
+  emittedAt: handoff.emittedAt,
 });
 
 @Injectable()
@@ -198,5 +305,19 @@ export class FuelSettlementSourceAdapter extends FuelSettlementSource {
   async handoffRevisions(reconciliationId: string): Promise<FuelHandoffFacts[]> {
     const revisions = await this.fuel.listHandoffRevisions(reconciliationId);
     return revisions.map(toHandoffFacts);
+  }
+
+  async pendingHandoffs(input: {
+    readonly after: FuelHandoffScanPosition | null;
+    readonly limit: number;
+  }): Promise<FuelHandoffFacts[]> {
+    const latest = await this.fuel.listLatestHandoffs({
+      after:
+        input.after === null
+          ? null
+          : { emittedAt: input.after.emittedAt, handoffId: input.after.handoffId },
+      limit: input.limit,
+    });
+    return latest.map(toHandoffFacts);
   }
 }

@@ -11,6 +11,7 @@ import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
 import type { FuelEntryInboxFilter } from './fuel.repository.js';
+import { toFuelReceiptEvidenceView } from './fuel.types.js';
 import type {
   FuelEntry,
   FuelEntryDetail,
@@ -74,7 +75,10 @@ export class FuelReadService {
 
   async fuelEntryDetail(entryId: string): Promise<FuelEntryDetail> {
     const entry = await this.requireEntry(entryId);
-    return { entry, evidence: await this.repository.listEvidence(entry.id) };
+    const evidence = await this.repository.listEvidence(entry.id);
+    // Cat o DAY, mot lan — cung ly le voi `listSuppliersForDriver()` o tren: cat o cho goi la thu
+    // de quen o lan them route sau, va o huong nay "quen" nghia la day dinh vi kho anh ra ngoai.
+    return { entry, evidence: evidence.map(toFuelReceiptEvidenceView) };
   }
 
   /**

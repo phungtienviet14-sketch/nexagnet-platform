@@ -482,6 +482,101 @@ describe('#169 acceptance 4 — bang chung cho khoan chi thuong cua lai xe', () 
  * Day la hinh dang cua "cach ly khach" tren nen tang nay: moi khach mot stack, va ranh gioi doc
  * duoc la CAPABILITY. Mot khach ban hang khong co bang chung van tai de ma doc nham.
  */
+/**
+ * `#295` Lane V — CANH CON THIEU giua bang chung DA LUU va bo doc.
+ *
+ * Truoc lane nay, `FuelReceiptExtractionPort.extract()` chi voi toi duoc tu mot route nhan
+ * `contentBase64` trong than yeu cau. Anh phieu do lai xe TAI LEN — da nam ben vung trong kho anh,
+ * co dinh vi, co dau vet — khong bao gio doc duoc. Bo bai duoi do CHINH canh vua noi.
+ */
+describe('#295 Lane V — doc mot tam anh DA LUU, khong qua base64', () => {
+  const PNG_BYTES = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+  function harness(options: { readonly missing?: boolean } = {}) {
+    const order: string[] = [];
+    const seen: { sourceRef?: string; mediaType?: string; content?: Buffer } = {};
+
+    const read = {
+      fuelEntryEvidence: (entryId: string, evidenceId: string) => {
+        order.push(`resolve:${entryId}/${evidenceId}`);
+        return Promise.resolve({
+          id: evidenceId,
+          locator: `${TRANSPORT_EVIDENCE_KEY_PREFIX}2026/09/da-luu.png`,
+        });
+      },
+    };
+    const evidence = {
+      read: (locator: string) => {
+        order.push(`fetch:${locator}`);
+        return Promise.resolve(
+          options.missing
+            ? ({ kind: 'MISSING' } as const)
+            : ({ kind: 'FOUND', object: { body: PNG_BYTES, contentType: 'image/png' } } as const),
+        );
+      },
+    };
+    const documents = {
+      ingestReceiptImage: (image: { sourceRef: string; mediaType: string; content: Buffer }) => {
+        order.push('extract');
+        seen.sourceRef = image.sourceRef;
+        seen.mediaType = image.mediaType;
+        seen.content = image.content;
+        return Promise.resolve({ id: 'doc-1' });
+      },
+    };
+    return { order, seen, read, evidence, documents };
+  }
+
+  const controllerOf = async (h: ReturnType<typeof harness>) => {
+    const { FuelEvidenceController } = await import('./fuel-evidence.controller.js');
+    return new FuelEvidenceController(
+      h.evidence as never,
+      {} as never,
+      h.read as never,
+      h.documents as never,
+    ) as unknown as {
+      extract(request: unknown, id: string, evidenceId: string): Promise<unknown>;
+    };
+  };
+
+  const session = { authUser: { id: 'user-ke-toan', role: 'ACCOUNTING' } };
+
+  it('dinh vi duoc TRA CUU o phia may chu, roi byte moi di vao bo doc', async () => {
+    const h = harness();
+
+    await (await controllerOf(h)).extract(session, 'phieu-1', 'ev-9');
+
+    expect(h.order).toEqual([
+      'resolve:phieu-1/ev-9',
+      `fetch:${TRANSPORT_EVIDENCE_KEY_PREFIX}2026/09/da-luu.png`,
+      'extract',
+    ]);
+    expect(h.seen.content).toBe(PNG_BYTES);
+    expect(h.seen.mediaType).toBe('image/png');
+  });
+
+  /**
+   * Cung lane nay vua cat `locator` khoi moi DTO. Neu no quay lai qua `sourceRef` — mot truong doc
+   * ra o mau kiem duyet — thi viec cat o kia tro nen vo nghia.
+   */
+  it('`sourceRef` mang id cua tam anh, KHONG mang dinh vi kho', async () => {
+    const h = harness();
+
+    await (await controllerOf(h)).extract(session, 'phieu-1', 'ev-9');
+
+    expect(h.seen.sourceRef).toBe('fuel-evidence:ev-9');
+    expect(h.seen.sourceRef).not.toContain(TRANSPORT_EVIDENCE_KEY_PREFIX);
+  });
+
+  it('byte khong con trong kho: bo doc KHONG duoc goi', async () => {
+    const h = harness({ missing: true });
+
+    await expect((await controllerOf(h)).extract(session, 'phieu-1', 'ev-9')).rejects.toThrow();
+
+    expect(h.order).not.toContain('extract');
+  });
+});
+
 describe('#169 — composition cua be mat bang chung', () => {
   const namesFor = (capabilities: readonly CapabilityId[]): string[] =>
     buildAppComposition(capabilities).controllers.map((controller) => controller.name);
