@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaService } from '../../config/prisma.service.js';
@@ -230,6 +230,17 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         assignedBy: 'it-g1s',
         at: new Date('2026-09-06T00:00:00Z'),
       });
+    }, 120_000);
+
+    /*
+     * DON SAU KHI CHAY, khong chi truoc. Buoc ke tiep cua job `integration` la lenh reset PHA HUY cua
+     * du lieu mau (`demo-seed.int.spec.ts`), va danh sach bang cua no KHONG co `TransportFuelStation`:
+     * mot tram fixture con sot se chan lenh xoa `TransportFuelSupplier` o
+     * `TransportFuelStation_supplierId_fkey`. Cung khuon `transport-fuel-station.int.spec.ts`.
+     */
+    afterAll(async () => {
+      await cleanup();
+      await prisma.$disconnect();
     }, 120_000);
 
     it('G1S-1 — to khai lai xe KHONG gui cach tra tien -> luu SUPPLIER_ACCOUNT va dung tram', async () => {

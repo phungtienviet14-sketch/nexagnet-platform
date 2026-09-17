@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaService } from '../../config/prisma.service.js';
@@ -347,6 +347,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       state.orphanLineId = lineAt(3);
 
       await reconciliation.runMatching(state.reconciliationId, ACTOR);
+    }, 120_000);
+
+    // Don SAU khi chay: buoc reset pha huy cua du lieu mau chay ngay sau bo nay tren CUNG CSDL.
+    afterAll(async () => {
+      await cleanup();
+      await prisma.$disconnect();
     }, 120_000);
 
     /* ================================================================ *
