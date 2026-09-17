@@ -57,7 +57,10 @@ export interface StoredEvidenceExtraction {
 }
 
 export interface ExtractionDeps {
-  readonly extractStoredEvidence: (entryId: string, evidenceId: string) => Promise<FuelDocumentDetail>;
+  readonly extractStoredEvidence: (
+    entryId: string,
+    evidenceId: string,
+  ) => Promise<FuelDocumentDetail>;
   readonly documentReview: (id: string) => Promise<FuelDocumentReview>;
 }
 

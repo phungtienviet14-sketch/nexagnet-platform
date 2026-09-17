@@ -369,9 +369,7 @@ test.describe('ke toan — anh da luu, may doc, soat ung vien', () => {
     expect(extract).toHaveLength(1);
     expect(extract[0]?.body ?? null).toBeNull();
     // Duong base64 cu KHONG con duoc dung — anh lon khong con vuong tran than JSON cua API.
-    expect(
-      seen.filter((row) => row.url.includes('/transport/fuel/documents/image')),
-    ).toEqual([]);
+    expect(seen.filter((row) => row.url.includes('/transport/fuel/documents/image'))).toEqual([]);
     expect(leaksLocator(seen)).toBe(false);
     await expect(page.locator('body')).not.toContainText('media/transport-evidence');
 

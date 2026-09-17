@@ -440,7 +440,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_TRIP_CANCELLED: 'Chuyến đã huỷ — đường đúng là đảo phiếu đã ghi',
     FUEL_ENTRY_DRIVER_NOT_ASSIGNED: 'Lái xe chưa từng được phân công vào chuyến này',
     FUEL_ENTRY_VEHICLE_NOT_ASSIGNED: 'Xe chưa từng được phân công vào chuyến này',
-    FUEL_ENTRY_STATION_SUPPLIER_MISMATCH: 'Cây xăng khai trên phiếu không thuộc nhà cung cấp của phiếu',
+    FUEL_ENTRY_STATION_SUPPLIER_MISMATCH:
+      'Cây xăng khai trên phiếu không thuộc nhà cung cấp của phiếu',
     FUEL_ENTRY_STATION_INACTIVE: 'Cây xăng đã ngừng hợp tác — tờ khai mới không chọn được',
 
     FUEL_ENTRY_VERIFIED: 'Kế toán đã duyệt phiếu',
@@ -506,9 +507,11 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
 
     DECISION_REVISED:
       'Đã ghi quyết định thay thế — quyết định cũ vẫn nằm trong lịch sử, tổng đổi ở lần đóng kỳ sau',
-    DECISION_REVISION_REPLAYED: 'Gửi lại đúng lệnh vừa ghi — trả lại quyết định đã ghi, không ghi thêm',
+    DECISION_REVISION_REPLAYED:
+      'Gửi lại đúng lệnh vừa ghi — trả lại quyết định đã ghi, không ghi thêm',
     DECISION_NOT_RESOLVED: 'Chênh lệch chưa có quyết định — hãy quyết, không phải sửa',
-    DECISION_WITHOUT_STATEMENT_LINE: 'Quyết định không gắn dòng bảng kê nào nên không có chuỗi để sửa',
+    DECISION_WITHOUT_STATEMENT_LINE:
+      'Quyết định không gắn dòng bảng kê nào nên không có chuỗi để sửa',
     DECISION_NOT_CURRENT: 'Dòng này đã có quyết định mới hơn — sửa bản mới nhất, không sửa lịch sử',
     DECISION_MATCH_LOCKED:
       'Quyết định xác nhận khớp đã ghi một cặp khớp tay — mở lại kỳ và chạy lại so khớp',

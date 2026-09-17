@@ -114,7 +114,9 @@ export function effectiveLineDecisions<T extends DecisionRecord>(
  * cung dong (du lieu cu). Man hinh doc tap nay de ve lich su thay vi tu doan lai luat.
  */
 export function supersededDecisionIds(records: readonly DecisionRecord[]): ReadonlySet<string> {
-  const effective = new Set([...effectiveLineDecisions(records).values()].map((record) => record.id));
+  const effective = new Set(
+    [...effectiveLineDecisions(records).values()].map((record) => record.id),
+  );
   const superseded = new Set<string>();
   for (const record of records) {
     if (record.status !== 'RESOLVED' || record.statementLineId === null) continue;

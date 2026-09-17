@@ -344,9 +344,7 @@ export class FuelReadService {
     entries: readonly Pick<FuelEntry, 'stationId'>[],
   ): Promise<ReadonlyMap<string, string>> {
     const ids = [
-      ...new Set(
-        entries.map((entry) => entry.stationId).filter((id): id is string => id !== null),
-      ),
+      ...new Set(entries.map((entry) => entry.stationId).filter((id): id is string => id !== null)),
     ];
     if (ids.length === 0) return new Map();
     const rows = await this.stations.listStationsByIds(ids);

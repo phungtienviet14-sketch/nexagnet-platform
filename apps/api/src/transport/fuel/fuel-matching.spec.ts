@@ -313,7 +313,10 @@ describe('TAT DINH — cung dau vao, cung dau ra', () => {
  */
 describe('#317 G4 — so hoa don la bo phan biet tuy chon', () => {
   it('BANG NHAU (mot ung vien) -> van khop, va ghi ro so hoa don da xac nhan', () => {
-    const result = run([line('l1', { invoiceNo: 'HD-00123' })], [entry('e1', { invoiceNo: 'hd00123' })]);
+    const result = run(
+      [line('l1', { invoiceNo: 'HD-00123' })],
+      [entry('e1', { invoiceNo: 'hd00123' })],
+    );
 
     expect(result.discrepancies).toEqual([]);
     expect(result.matches).toEqual([
@@ -374,7 +377,9 @@ describe('#317 G4 — so hoa don la bo phan biet tuy chon', () => {
         [line('l1', { invoiceNo: onLine })],
         [entry('e1', { invoiceNo: onEntry })],
       );
-      expect(result.matches[0], `${onLine} ~ ${onEntry}`).toMatchObject({ invoiceRelation: 'EQUAL' });
+      expect(result.matches[0], `${onLine} ~ ${onEntry}`).toMatchObject({
+        invoiceRelation: 'EQUAL',
+      });
     }
   });
 
@@ -541,7 +546,10 @@ describe('#317 G4 — so hoa don la bo phan biet tuy chon', () => {
    * tuc van hien ra truoc mat nguoi soat chu khong bien mat.
    */
   it('mot ung vien xung dot + mot ung vien khong so -> khop ung vien khong so, phieu xung dot ra soat', () => {
-    const result = run([line('l1', { invoiceNo: '555' })], [entry('e1', { invoiceNo: '999' }), entry('e2')]);
+    const result = run(
+      [line('l1', { invoiceNo: '555' })],
+      [entry('e1', { invoiceNo: '999' }), entry('e2')],
+    );
 
     expect(result.matches).toEqual([
       {
@@ -601,7 +609,12 @@ describe('#317 G4 — so hoa don la bo phan biet tuy chon', () => {
       entry('e3', { invoiceNo: '998', businessDate: '2026-08-20' }),
     ];
 
-    const forward = runFuelMatching({ statementId: STATEMENT, lines, entries, tolerance: TOLERANCE });
+    const forward = runFuelMatching({
+      statementId: STATEMENT,
+      lines,
+      entries,
+      tolerance: TOLERANCE,
+    });
     const reversed = runFuelMatching({
       statementId: STATEMENT,
       lines: [...lines].reverse(),

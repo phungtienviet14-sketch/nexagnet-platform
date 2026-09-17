@@ -79,7 +79,9 @@ describe('ban sao tu vung soat chung tu + tieu hao khop voi may chu — #313', (
    * doi y ma may chu tu choi 400.
    */
   it('#317 — loai chenh lech va quyet dinh doi y duoc khop may chu', () => {
-    expect([...FUEL_DISCREPANCY_KINDS]).toEqual(literalsOf('fuel-matching.ts', 'FUEL_DISCREPANCY_KINDS'));
+    expect([...FUEL_DISCREPANCY_KINDS]).toEqual(
+      literalsOf('fuel-matching.ts', 'FUEL_DISCREPANCY_KINDS'),
+    );
     expect(literalsOf('fuel-matching.ts', 'FUEL_DISCREPANCY_KINDS')).toContain('INVOICE_CONFLICT');
     expect([...REVISABLE_FUEL_RESOLUTIONS]).toEqual(
       literalsOf('fuel-decision-revision.ts', 'REVISABLE_FUEL_RESOLUTIONS'),

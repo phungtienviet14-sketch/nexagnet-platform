@@ -433,9 +433,7 @@ function ReconciliationWorkspace({
               aria-label="Quyết định mới"
               required
               value={revision}
-              onChange={(event) =>
-                setRevision(event.target.value as RevisableFuelResolution | '')
-              }
+              onChange={(event) => setRevision(event.target.value as RevisableFuelResolution | '')}
             >
               <option value="">Chọn quyết định mới</option>
               {revising.reviseOptions.map((option) => (

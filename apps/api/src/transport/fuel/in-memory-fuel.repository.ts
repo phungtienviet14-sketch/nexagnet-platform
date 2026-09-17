@@ -770,7 +770,8 @@ export class InMemoryFuelRepository extends FuelRepository {
     };
     this.discrepancies.set(revision.id, revision);
 
-    const line = target.statementLineId === null ? undefined : this.lines.get(target.statementLineId);
+    const line =
+      target.statementLineId === null ? undefined : this.lines.get(target.statementLineId);
     const nextStatus = line
       ? lineStatusAfterRevision(input.resolution, line.reconciliationStatus)
       : null;

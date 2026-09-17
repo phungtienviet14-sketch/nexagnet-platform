@@ -949,7 +949,10 @@ export const transportApi = {
     resolveDiscrepancy: (id: string, input: ResolveDiscrepancyInput): Promise<FuelDiscrepancy> =>
       send('POST', `/transport/fuel/discrepancies/${encodeURIComponent(id)}/resolve`, input),
     /** `#317` G0 — THEM mot quyet dinh thay the; tong cong no doi o lan DONG KY ke tiep. */
-    reviseDiscrepancy: (id: string, input: ReviseDiscrepancyInput): Promise<RevisedDecisionResult> =>
+    reviseDiscrepancy: (
+      id: string,
+      input: ReviseDiscrepancyInput,
+    ): Promise<RevisedDecisionResult> =>
       send('POST', `/transport/fuel/discrepancies/${encodeURIComponent(id)}/revise`, input),
     /** Bi chan khi con `pendingDiscrepancyCount > 0`. */
     closeReconciliation: (id: string): Promise<ClosedReconciliationResult> =>

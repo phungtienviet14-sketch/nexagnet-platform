@@ -747,8 +747,7 @@ export function useDriverFuelStations(input: NavigationInput, supplierId: string
     queryKey: ['transport', 'me', 'fuel', 'stations', supplierId],
     queryFn: () => transportApi.me.fuelStations(supplierId),
     enabled:
-      supplierId !== '' &&
-      allowed(input, 'transport-fuel', 'transport.driver.self.fuel.submit'),
+      supplierId !== '' && allowed(input, 'transport-fuel', 'transport.driver.self.fuel.submit'),
   });
 }
 

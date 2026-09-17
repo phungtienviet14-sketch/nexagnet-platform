@@ -470,7 +470,9 @@ function DriverFuel() {
                   </option>
                   {(stations.data ?? []).map((station) => (
                     <option key={station.id} value={station.id}>
-                      {station.address === null ? station.name : `${station.name} — ${station.address}`}
+                      {station.address === null
+                        ? station.name
+                        : `${station.name} — ${station.address}`}
                     </option>
                   ))}
                 </select>

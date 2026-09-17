@@ -23,10 +23,7 @@ import {
 } from '../customer-view';
 import { canPerform } from '../transport-actions';
 import type { DeclaredFuelFacts } from './fuel-extraction';
-import {
-  REVISABLE_FUEL_RESOLUTIONS,
-  type RevisableFuelResolution,
-} from '../transport-types';
+import { REVISABLE_FUEL_RESOLUTIONS, type RevisableFuelResolution } from '../transport-types';
 import type {
   FuelDiscrepancy,
   FuelDiscrepancyKind,

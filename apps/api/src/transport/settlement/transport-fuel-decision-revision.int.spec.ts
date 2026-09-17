@@ -598,7 +598,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       // Quyet dinh DAU TIEN da co nguoi thay the -> hang thu hai thay the no dam vao UNIQUE.
       await expect(
         prisma.transportFuelDiscrepancy.create({
-          data: { ...base, statementLineId: state.orphanLineId, supersedesId: state.firstDecisionId },
+          data: {
+            ...base,
+            statementLineId: state.orphanLineId,
+            supersedesId: state.firstDecisionId,
+          },
         }),
       ).rejects.toMatchObject({ code: 'P2002' });
 

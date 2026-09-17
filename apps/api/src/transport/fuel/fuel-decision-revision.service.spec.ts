@@ -177,7 +177,11 @@ describe('G0 — ACCEPT roi mo lai va IGNORE: tong duoc chap nhan GIAM', () => {
     const { decision, closed } = await acceptOrphanAndClose();
     expect(closed.handoff).toMatchObject({ revision: 1, acceptedAmount: 6_200_000 });
 
-    await reconciliation.reopenReconciliation(reconciliationId, 'cay xang rut dong 20/09', 'giam-doc');
+    await reconciliation.reopenReconciliation(
+      reconciliationId,
+      'cay xang rut dong 20/09',
+      'giam-doc',
+    );
     const revised = await reconciliation.reviseDiscrepancyDecision(
       decision.id,
       { resolution: 'IGNORE_WITH_REASON', reason: 'cay xang xac nhan ghi nham' },
@@ -413,7 +417,8 @@ describe('G0 — nhung duong sua bi tu choi, moi duong mot ma', () => {
       false,
     );
     expect(
-      reviseDiscrepancySchema.safeParse({ resolution: 'IGNORE_WITH_REASON', reason: '   ' }).success,
+      reviseDiscrepancySchema.safeParse({ resolution: 'IGNORE_WITH_REASON', reason: '   ' })
+        .success,
     ).toBe(false);
     expect(
       reviseDiscrepancySchema.safeParse({ resolution: 'IGNORE_WITH_REASON', reason: 'ghi nham' })
@@ -436,9 +441,7 @@ describe('G0 — ban lam viec doi soat noi ro quyet dinh nao da bi thay the', ()
       repository,
       new NoCoreFacts(),
       new InMemoryFuelStationRepository(),
-    ).reconciliationWorkspace(
-      reconciliationId,
-    );
+    ).reconciliationWorkspace(reconciliationId);
     expect(workspace.supersededDiscrepancyIds).toEqual([decision.id]);
     expect(workspace.supersededDiscrepancyIds).not.toContain(revised.revision.id);
   });

@@ -19,10 +19,7 @@ import { sumAcceptedSettlement } from './fuel-settlement.js';
  * dong thoi) nam o `transport-fuel-decision-revision.int.spec.ts`, tren Postgres that.
  */
 
-const decision = (
-  id: string,
-  overrides: Partial<DecisionRecord> = {},
-): DecisionRecord => ({
+const decision = (id: string, overrides: Partial<DecisionRecord> = {}): DecisionRecord => ({
   id,
   status: 'RESOLVED',
   statementLineId: 'dong-1',
@@ -186,7 +183,13 @@ describe('evaluateDecisionRevision — ai sua duoc, sua thanh gi', () => {
   const records = [
     decision('d1'),
     decision('d2', { resolution: 'IGNORE_WITH_REASON', supersedesId: 'd1' }),
-    decision('p3', { id: 'p3', status: 'PENDING', resolution: null, resolvedAt: null, statementLineId: 'dong-2' }),
+    decision('p3', {
+      id: 'p3',
+      status: 'PENDING',
+      resolution: null,
+      resolvedAt: null,
+      statementLineId: 'dong-2',
+    }),
     decision('e4', { statementLineId: null, resolution: 'IGNORE_WITH_REASON' }),
     decision('m5', { statementLineId: 'dong-3', resolution: 'MATCH_CONFIRMED' }),
   ];
@@ -194,7 +197,11 @@ describe('evaluateDecisionRevision — ai sua duoc, sua thanh gi', () => {
 
   it('quyet dinh HIEU LUC sang mot quyet dinh khac -> cho phep', () => {
     expect(
-      evaluateDecisionRevision({ target: find('d2'), records, resolution: 'ACCEPT_SUPPLIER_AMOUNT' }),
+      evaluateDecisionRevision({
+        target: find('d2'),
+        records,
+        resolution: 'ACCEPT_SUPPLIER_AMOUNT',
+      }),
     ).toEqual({ allowed: true });
   });
 
@@ -212,7 +219,11 @@ describe('evaluateDecisionRevision — ai sua duoc, sua thanh gi', () => {
 
   it('quyet dinh khong gan dong bang ke -> DECISION_WITHOUT_STATEMENT_LINE', () => {
     expect(
-      evaluateDecisionRevision({ target: find('e4'), records, resolution: 'ENTRY_CORRECTION_REQUIRED' }),
+      evaluateDecisionRevision({
+        target: find('e4'),
+        records,
+        resolution: 'ENTRY_CORRECTION_REQUIRED',
+      }),
     ).toEqual({ allowed: false, reason: 'DECISION_WITHOUT_STATEMENT_LINE' });
   });
 
