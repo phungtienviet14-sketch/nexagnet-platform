@@ -16,6 +16,12 @@ import {
   type FuelVehicleFacts,
 } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
+import {
+  amendFuelEntrySchema,
+  driverFuelSubmitSchema,
+  submitFuelEntrySchema,
+} from './fuel.schemas.js';
+import { DEFAULT_FUEL_PAYMENT_METHOD } from './fuel.types.js';
 import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
 
@@ -467,5 +473,218 @@ describe('Be mat lai xe — INV-09 va pham vi cua chinh minh', () => {
     await expect(read.listMyFuelSlips('user-la')).rejects.toMatchObject({
       reason: 'SELF_FUEL_SCOPE_NO_DRIVER_BINDING',
     });
+  });
+});
+
+/* ==================================================================== *
+ * `#317` G1 — TRAM/DIEM DO tren to khai, va thanh toan mac dinh
+ * ==================================================================== */
+
+describe('#317 G1 — tram tren to khai co bien nha cung cap', () => {
+  const createStation = async (input: {
+    readonly supplierId: string;
+    readonly name: string;
+    readonly status?: 'ACTIVE' | 'INACTIVE';
+  }) =>
+    stations.createStation({
+      supplierId: input.supplierId,
+      name: input.name,
+      nameNormalized: input.name.toUpperCase(),
+      code: null,
+      codeNormalized: null,
+      address: 'Km 12 QL1A',
+      latitudeE7: 210_000_000,
+      longitudeE7: 1_058_000_000,
+      geofenceRadiusM: 200,
+      status: input.status ?? 'ACTIVE',
+      note: 'ghi chu noi bo',
+      at: new Date('2026-08-01T00:00:00Z'),
+    });
+
+  const otherSupplier = () =>
+    repository.createSupplier({
+      name: 'Cay xang khac',
+      code: 'CX-02',
+      phone: null,
+      address: null,
+      taxCode: null,
+      at: new Date('2026-08-01T00:00:00Z'),
+    });
+
+  it('to khai mang tram cua DUNG nha cung cap -> luu `stationId`, khung nhin co ten tram', async () => {
+    const station = await createStation({ supplierId, name: 'CHXD so 5' });
+
+    const entry = await submit({ stationId: station.id, correlationKey: 'phieu-co-tram' });
+
+    expect(entry.stationId).toBe(station.id);
+    await expect(read.getMyFuelSlip(AUTH_USER, entry.id)).resolves.toMatchObject({
+      stationId: station.id,
+      stationName: 'CHXD so 5',
+    });
+    const inbox = await read.fuelEntryInbox({
+      verification: null,
+      reconciliation: null,
+      tripCode: null,
+      driverId: null,
+      vehicleId: null,
+      supplierId: null,
+      from: null,
+      to: null,
+      limit: 50,
+      offset: 0,
+    });
+    expect(inbox.rows[0]).toMatchObject({ stationId: station.id, stationName: 'CHXD so 5' });
+  });
+
+  it('khong khai tram -> `stationId: null`, van nop duoc (nha cung cap chua co danh muc tram)', async () => {
+    const entry = await submit();
+    expect(entry.stationId).toBeNull();
+  });
+
+  it('tram cua NHA CUNG CAP KHAC -> FUEL_ENTRY_STATION_SUPPLIER_MISMATCH, khong ghi phieu', async () => {
+    const foreign = await createStation({ supplierId: (await otherSupplier()).id, name: 'Tram B' });
+
+    await expect(submit({ stationId: foreign.id })).rejects.toMatchObject({
+      kind: 'DENIED',
+      reason: 'FUEL_ENTRY_STATION_SUPPLIER_MISMATCH',
+    });
+    expect(await repository.listEntriesByTrip(TRIP)).toHaveLength(0);
+  });
+
+  it('tram khong ton tai -> FUEL_STATION_NOT_FOUND (404), khong ghi phieu', async () => {
+    await expect(submit({ stationId: 'tram-bia' })).rejects.toMatchObject({
+      kind: 'NOT_FOUND',
+      reason: 'FUEL_STATION_NOT_FOUND',
+    });
+    expect(await repository.listEntriesByTrip(TRIP)).toHaveLength(0);
+  });
+
+  it('tram DA NGUNG hop tac -> to khai moi bi tu choi FUEL_ENTRY_STATION_INACTIVE', async () => {
+    const closed = await createStation({ supplierId, name: 'Tram cu', status: 'INACTIVE' });
+
+    await expect(submit({ stationId: closed.id })).rejects.toMatchObject({
+      reason: 'FUEL_ENTRY_STATION_INACTIVE',
+    });
+  });
+
+  it('sua phieu GIU tram vua ngung -> duoc; DOI SANG tram ngung hop tac -> bi tu choi', async () => {
+    const station = await createStation({ supplierId, name: 'Tram A' });
+    const entry = await submit({ stationId: station.id, correlationKey: 'phieu-sua-tram' });
+    await stations.updateStation(station.id, { status: 'INACTIVE', at: new Date() });
+    const amendment = {
+      supplierId,
+      liters: '210',
+      amount: 4_400_000,
+      odometerKm: 100_600,
+      occurredAt: '2026-08-05T06:30:00+07:00',
+      businessDate: '2026-08-05',
+      paymentMethod: 'SUPPLIER_ACCOUNT' as const,
+    };
+
+    await expect(
+      service.amendFuelEntry(entry.id, { ...amendment, stationId: station.id }, 'ke-toan'),
+    ).resolves.toMatchObject({ stationId: station.id, amount: 4_400_000 });
+
+    const retired = await createStation({ supplierId, name: 'Tram da dong', status: 'INACTIVE' });
+    await expect(
+      service.amendFuelEntry(entry.id, { ...amendment, stationId: retired.id }, 'ke-toan'),
+    ).rejects.toMatchObject({ reason: 'FUEL_ENTRY_STATION_INACTIVE' });
+  });
+
+  /**
+   * TRAM LA MOT PHAN CUA DANH TINH CHONG GHI TRUNG: gui lai CUNG tram -> phat lai; DOI tram voi cung
+   * khoa -> va cham co ten truong. Mot tram vua ngung hop tac giua hai lan gui KHONG bien lan gui lai
+   * hop le thanh mot loi.
+   */
+  it('gui lai cung tram -> phat lai (ke ca khi tram vua ngung); doi tram cung khoa -> va cham', async () => {
+    const station = await createStation({ supplierId, name: 'Tram A' });
+    const other = await createStation({ supplierId, name: 'Tram C' });
+    const first = await submit({ stationId: station.id, correlationKey: 'khoa-tram' });
+
+    await stations.updateStation(station.id, { status: 'INACTIVE', at: new Date() });
+    const replay = await submit({ stationId: station.id, correlationKey: 'khoa-tram' });
+    expect(replay.id).toBe(first.id);
+
+    await expect(submit({ stationId: other.id, correlationKey: 'khoa-tram' })).rejects.toThrow(
+      /stationId/,
+    );
+    expect(await repository.listEntriesByTrip(TRIP)).toHaveLength(1);
+  });
+
+  it('lai xe chi thay tram DANG hop tac, khung nhin hep (khong toa do, khong ghi chu noi bo)', async () => {
+    const open = await createStation({ supplierId, name: 'Tram mo' });
+    await createStation({ supplierId, name: 'Tram dong', status: 'INACTIVE' });
+    await createStation({ supplierId: (await otherSupplier()).id, name: 'Tram nha khac' });
+
+    const views = await read.listStationsForDriver(supplierId);
+
+    expect(views).toEqual([
+      { id: open.id, supplierId, name: 'Tram mo', code: null, address: 'Km 12 QL1A' },
+    ]);
+    expect(JSON.stringify(views)).not.toContain('latitudeE7');
+    expect(JSON.stringify(views)).not.toContain('ghi chu noi bo');
+  });
+});
+
+describe('#317 — cach tra tien mac dinh la SUPPLIER_ACCOUNT, va to khai khong sinh cong no', () => {
+  it('schema nop phieu (lai xe + van hanh) bo trong cach tra tien -> SUPPLIER_ACCOUNT', () => {
+    const body = {
+      tripId: TRIP,
+      vehicleId: VEHICLE,
+      supplierId: 'cx',
+      liters: '10',
+      amount: 250_000,
+      odometerKm: 1,
+      occurredAt: '2026-08-05T06:30:00+07:00',
+    };
+
+    expect(driverFuelSubmitSchema.parse(body).paymentMethod).toBe('SUPPLIER_ACCOUNT');
+    expect(submitFuelEntrySchema.parse({ ...body, driverId: DRIVER }).paymentMethod).toBe(
+      'SUPPLIER_ACCOUNT',
+    );
+    expect(DEFAULT_FUEL_PAYMENT_METHOD).toBe('SUPPLIER_ACCOUNT');
+    // `DRIVER_CASH` chi khi CHU DONG chon.
+    expect(
+      driverFuelSubmitSchema.parse({ ...body, paymentMethod: 'DRIVER_CASH' }).paymentMethod,
+    ).toBe('DRIVER_CASH');
+  });
+
+  /**
+   * Lenh SUA KHONG co mac dinh: mot client quen gui truong khong duoc lang le doi mot phieu
+   * `DRIVER_CASH` da khai thanh `SUPPLIER_ACCOUNT` (tuc doi nguon tien o `TX-03`).
+   */
+  it('schema SUA phieu van BAT BUOC chon cach tra tien', () => {
+    const parsed = amendFuelEntrySchema.safeParse({
+      supplierId: 'cx',
+      liters: '10',
+      amount: 250_000,
+      odometerKm: 1,
+      occurredAt: '2026-08-05T06:30:00+07:00',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('khai + duyet voi mac dinh -> khoan chi COMPANY_DIRECT, khong ban giao cong no nao', async () => {
+    const parsed = driverFuelSubmitSchema.parse({
+      tripId: TRIP,
+      vehicleId: VEHICLE,
+      supplierId,
+      liters: '200',
+      amount: 4_200_000,
+      odometerKm: 100_500,
+      occurredAt: '2026-08-05T06:30:00+07:00',
+      businessDate: '2026-08-05',
+    });
+    const entry = await service.submitFuelEntry({ ...parsed, driverId: DRIVER }, 'lai-xe');
+    expect(entry.paymentMethod).toBe('SUPPLIER_ACCOUNT');
+    // Khai xong: CHUA co gi di ra ngoai TX-04 — khong khoan chi, khong ban giao cong no.
+    expect(costing.commands).toHaveLength(0);
+    expect(await repository.listLatestHandoffs({ after: null, limit: 10 })).toEqual([]);
+
+    await service.verifyFuelEntry(entry.id, 'ke-toan');
+    expect(costing.commands).toHaveLength(1);
+    expect(costing.commands[0]).toMatchObject({ fundedBy: 'COMPANY_DIRECT', driverId: null });
+    // Duyet cung KHONG phat ban giao cong no nha cung cap: AP chi sinh sau doi soat + dong ky.
+    expect(await repository.listLatestHandoffs({ after: null, limit: 10 })).toEqual([]);
   });
 });

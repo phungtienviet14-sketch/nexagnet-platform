@@ -508,8 +508,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     it('V-P0-3 — quyet chenh lech + dong ky -> mot luot quet sinh DUNG MOT cong no goc', async () => {
       /*
        * `IGNORE_WITH_REASON` cho dong le o lan dong DAU — de lan dong THU HAI (`V-P0-7`) con cho
-       * chap nhan no va lam ket qua kinh te DOI. Chieu nguoc lai khong chay duoc: xem khoi ghi chu
-       * cua `V-P0-7`.
+       * chap nhan no va lam ket qua kinh te DOI. Chieu nguoc lai (tong GIAM) do `#317` dong va duoc
+       * do o `transport-fuel-decision-revision.int.spec.ts`.
        */
       await resolveAllPending('IGNORE_WITH_REASON');
 
@@ -605,24 +605,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * `transport-fuel-recovery.int.spec.ts`, va la thu sinh lai chenh lech o trang thai `PENDING`.
        *
        * ===========================================================================
-       * CHIEU SUA O DAY LA `IGNORE -> ACCEPT`, VA DO KHONG PHAI MOT LUA CHON TUY Y.
+       * CHIEU SUA O DAY LA `IGNORE -> ACCEPT` (tong TANG).
        *
-       * Chieu nguoc lai (`ACCEPT -> IGNORE`) KHONG lam ket qua kinh te doi, do mot hanh vi da do
-       * duoc cua `TX-04`:
+       * Khi bai nay duoc viet, chieu nguoc lai (`ACCEPT -> IGNORE`) KHONG lam tong giam — do la phat
+       * hien G0 cua `#295`. `#317` da dong G0: quyet dinh moi cua mot dong NOI CHUOI vao quyet dinh cu
+       * (`supersedesId`) va phep cong chi doc quyet dinh HIEU LUC. Chieu GIAM, ban DIEU CHINH duong,
+       * doi chung am va ghi dong thoi nam o `transport-fuel-decision-revision.int.spec.ts`.
        *
-       *   · `runMatching` chi xoa chenh lech `status: 'PENDING'` (`prisma-fuel.repository.ts`), nen
-       *     ban DA QUYET cua lan dong truoc song sot;
-       *   · `reopenReconciliation` khong dua quyet dinh nao ve `PENDING`;
-       *   · `closeReconciliation` dua CA `readDiscrepancies(...)` — khong loc trang thai — vao
-       *     `sumAcceptedSettlement`, va ham do gom `statementLineId` cua MOI ban mang
-       *     `ACCEPT_SUPPLIER_AMOUNT`.
-       *
-       * Ket qua: mot dong da tung duoc chap nhan thi khong bo ra duoc nua — ban `ACCEPT` cu van keo
-       * no vao tong. Xem `OPEN_BLOCKERS` cua `#295`: do la mot phat hien ve TIEN, va sua no la doi
-       * `INV-07` nen khong lam trong lane nay.
-       *
-       * Bo bai do cai `TX-04` THAT SU lam duoc: chap nhan them mot dong -> tong tang tu 4.200.000
-       * len 6.200.000 -> ban sua doi so 2, va mot chung tu DIEU CHINH mang dung chenh lech.
+       * Bo bai nay giu chieu TANG: chap nhan them mot dong -> tong tang tu 4.200.000 len 6.200.000 ->
+       * ban sua doi so 2, va mot chung tu DIEU CHINH mang dung chenh lech.
        */
       await reconciliation.runMatching(state.reconciliationId, ACTOR);
       await resolveAllPending('ACCEPT_SUPPLIER_AMOUNT');
