@@ -4,6 +4,7 @@ import { AuditLogService } from '../../audit/audit-log.service.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { DEFAULT_FUEL_STATEMENT_COLUMNS, type TransportFuelPolicy } from './fuel-policy.js';
 import { FuelReadService } from './fuel-read.service.js';
+import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import { FuelReconciliationService } from './fuel-reconciliation.service.js';
 import { reviseDiscrepancySchema } from './fuel.schemas.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
@@ -82,6 +83,7 @@ async function createVerifiedEntry(key: string, amount: number, businessDate: st
     driverId: 'lai-xe-g0',
     supplierId: 'cay-xang-g0',
     businessDate,
+    stationId: null,
     occurredAt: new Date(`${businessDate}T01:00:00Z`),
     litersUnits: 100_000,
     amount,
@@ -430,7 +432,11 @@ describe('G0 — ban lam viec doi soat noi ro quyet dinh nao da bi thay the', ()
       ACTOR,
     );
 
-    const workspace = await new FuelReadService(repository, new NoCoreFacts()).reconciliationWorkspace(
+    const workspace = await new FuelReadService(
+      repository,
+      new NoCoreFacts(),
+      new InMemoryFuelStationRepository(),
+    ).reconciliationWorkspace(
       reconciliationId,
     );
     expect(workspace.supersededDiscrepancyIds).toEqual([decision.id]);

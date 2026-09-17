@@ -38,6 +38,11 @@ export interface FuelEntryIdentity {
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
+  /**
+   * `#317` G1 — tram la mot phan cua "phieu nao". Cung ly le voi `supplierId` o khoi tren: doi tram
+   * la doi DIA DIEM do dau, nen mot lenh doi tram khong phai lan gui lai cua lenh cu.
+   */
+  readonly stationId: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAtMs: number;
   readonly litersUnits: number;
@@ -60,6 +65,7 @@ export const fuelEntryIdentityOf = (input: {
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
+  readonly stationId: string | null | undefined;
   readonly businessDate: BusinessDate;
   readonly occurredAt: Date | string;
   readonly litersUnits: number;
@@ -73,6 +79,8 @@ export const fuelEntryIdentityOf = (input: {
   vehicleId: input.vehicleId,
   driverId: input.driverId,
   supplierId: input.supplierId,
+  // `undefined` (client cu khong gui truong) va `null` (khong khai) la MOT: ca hai deu "khong tram".
+  stationId: input.stationId ?? null,
   businessDate: input.businessDate,
   occurredAtMs: new Date(input.occurredAt).getTime(),
   litersUnits: input.litersUnits,

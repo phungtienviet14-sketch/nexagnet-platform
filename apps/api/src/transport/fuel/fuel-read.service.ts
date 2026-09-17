@@ -3,12 +3,15 @@ import { TelemetryService } from '../../observability/telemetry.service.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   toDriverFuelSlipView,
+  toDriverFuelStationView,
   toDriverFuelSupplierView,
   type DriverFuelSlipView,
+  type DriverFuelStationView,
   type DriverFuelSupplierView,
 } from './driver-fuel.view.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import { supersededDecisionIds } from './fuel-decision-revision.js';
+import { FuelStationRepository } from './fuel-station.repository.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
 import type { FuelEntryInboxFilter } from './fuel.repository.js';
@@ -55,6 +58,8 @@ export class FuelReadService {
   constructor(
     private readonly repository: FuelRepository,
     private readonly core: TransportFuelCoreFacts,
+    /** `#317` G1 — CHI DOC: doi `stationId -> ten`, va danh sach tram cho o chon cua lai xe. */
+    private readonly stations: FuelStationRepository,
     @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
@@ -72,6 +77,17 @@ export class FuelReadService {
    */
   async listSuppliersForDriver(): Promise<DriverFuelSupplierView[]> {
     return (await this.repository.listSuppliers()).map(toDriverFuelSupplierView);
+  }
+
+  /**
+   * TRAM cho BE MAT LAI XE — `#317` G1. Chi tram `ACTIVE`, khung nhin hep (`DriverFuelStationView`).
+   *
+   * Cat o DAY, mot lan — cung ly le voi `listSuppliersForDriver()`.
+   */
+  async listStationsForDriver(supplierId: string | null): Promise<DriverFuelStationView[]> {
+    return (await this.stations.listStations(supplierId))
+      .filter((station) => station.status === 'ACTIVE')
+      .map(toDriverFuelStationView);
   }
 
   async fuelEntryDetail(entryId: string): Promise<FuelEntryDetail> {
@@ -123,7 +139,7 @@ export class FuelReadService {
       offset: query.offset,
     });
 
-    const [trips, drivers, vehicles, suppliers, evidence] = await Promise.all([
+    const [trips, drivers, vehicles, suppliers, evidence, stationName] = await Promise.all([
       this.core.listTripsByIds(page.entries.map((entry) => entry.tripId)),
       this.core.listDrivers(),
       this.core.listVehicles(),
@@ -131,6 +147,7 @@ export class FuelReadService {
       // MOT lan doc cho ca trang. Goi `listEvidence` tung dong se la N lan cham DB cho mot man
       // hinh — dung kieu N+1 ma #222 cam, chi la doi cho tu trinh duyet xuong may chu.
       this.repository.listEvidenceForEntries(page.entries.map((entry) => entry.id)),
+      this.stationNames(page.entries),
     ]);
 
     const tripCode = new Map(trips.map((trip) => [trip.id, trip.code]));
@@ -156,6 +173,8 @@ export class FuelReadService {
           vehiclePlate: vehiclePlate.get(entry.vehicleId) ?? null,
           supplierId: entry.supplierId,
           supplierName: supplierName.get(entry.supplierId) ?? null,
+          stationId: entry.stationId,
+          stationName: entry.stationId === null ? null : (stationName.get(entry.stationId) ?? null),
           businessDate: entry.businessDate,
           occurredAt: entry.occurredAt,
           litersUnits: entry.litersUnits,
@@ -254,10 +273,15 @@ export class FuelReadService {
   async listMyFuelSlips(authUserId: string): Promise<DriverFuelSlipView[]> {
     const driver = await this.requireDriverBinding(authUserId);
     const entries = await this.repository.listEntriesByDriver(driver.id);
+    const stationName = await this.stationNames(entries);
 
     const views = await Promise.all(
       entries.map(async (entry) =>
-        toDriverFuelSlipView(entry, await this.repository.listEvidence(entry.id)),
+        toDriverFuelSlipView(
+          entry,
+          await this.repository.listEvidence(entry.id),
+          entry.stationId === null ? null : (stationName.get(entry.stationId) ?? null),
+        ),
       ),
     );
     this.telemetry?.decision({
@@ -302,7 +326,31 @@ export class FuelReadService {
       reason: 'SELF_FUEL_SCOPE_GRANTED',
       detail: { driverId: driver.id, fuelEntryId: entryId },
     });
-    return toDriverFuelSlipView(entry, await this.repository.listEvidence(entry.id));
+    const stationName = await this.stationNames([entry]);
+    return toDriverFuelSlipView(
+      entry,
+      await this.repository.listEvidence(entry.id),
+      entry.stationId === null ? null : (stationName.get(entry.stationId) ?? null),
+    );
+  }
+
+  /**
+   * `stationId -> ten` cho MOT nhom phieu — MOT lan doc, chi nhung tram co mat (`#317` G1).
+   *
+   * Khong keo ca danh muc: mot nha cung cap co the co hang nghin cua hang
+   * (`findResolutionCandidates`), va mot trang hop thu chi can vai ten.
+   */
+  private async stationNames(
+    entries: readonly Pick<FuelEntry, 'stationId'>[],
+  ): Promise<ReadonlyMap<string, string>> {
+    const ids = [
+      ...new Set(
+        entries.map((entry) => entry.stationId).filter((id): id is string => id !== null),
+      ),
+    ];
+    if (ids.length === 0) return new Map();
+    const rows = await this.stations.listStationsByIds(ids);
+    return new Map(rows.map((station) => [station.id, station.name]));
   }
 
   /**

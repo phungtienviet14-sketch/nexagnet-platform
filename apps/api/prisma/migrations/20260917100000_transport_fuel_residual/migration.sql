@@ -38,7 +38,7 @@ CREATE UNIQUE INDEX "TransportFuelDiscrepancy_supersedesId_key" ON "TransportFue
 ALTER TABLE "TransportFuelEntry" ADD CONSTRAINT "TransportFuelEntry_stationId_fkey" FOREIGN KEY ("stationId") REFERENCES "TransportFuelStation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "TransportFuelDiscrepancy" ADD CONSTRAINT "TransportFuelDiscrepancy_supersedesId_fkey" FOREIGN KEY ("supersedesId") REFERENCES "TransportFuelDiscrepancy"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TransportFuelDiscrepancy" ADD CONSTRAINT "TransportFuelDiscrepancy_supersedesId_fkey" FOREIGN KEY ("supersedesId") REFERENCES "TransportFuelDiscrepancy"("id") ON DELETE NO ACTION ON UPDATE CASCADE;
 
 -- ===========================================================================
 -- PHAN 2 — G0: QUYET DINH DOI SOAT LA LICH SU, CHI GHI THEM

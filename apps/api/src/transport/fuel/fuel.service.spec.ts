@@ -16,6 +16,7 @@ import {
   type FuelVehicleFacts,
 } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
+import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
 
 /**
@@ -105,6 +106,7 @@ const FUEL_POLICY: TransportFuelPolicy = {
 };
 
 let repository: InMemoryFuelRepository;
+let stations: InMemoryFuelStationRepository;
 let core: StubCoreFacts;
 let costing: RecordingCostingPort;
 let service: FuelService;
@@ -116,8 +118,9 @@ beforeEach(async () => {
   core = new StubCoreFacts();
   costing = new RecordingCostingPort();
   const audit = new AuditLogService(new InMemoryAuditLogRepository());
-  service = new FuelService(repository, core, costing, audit, CORE_POLICY, FUEL_POLICY);
-  read = new FuelReadService(repository, core);
+  stations = new InMemoryFuelStationRepository();
+  service = new FuelService(repository, stations, core, costing, audit, CORE_POLICY, FUEL_POLICY);
+  read = new FuelReadService(repository, core, stations);
 
   supplierId = (
     await repository.createSupplier({
@@ -398,7 +401,7 @@ describe('GD-10 — sua duoc khi con DECLARED, sau do chi dao', () => {
 describe('Be mat lai xe — INV-09 va pham vi cua chinh minh', () => {
   it('khung nhin lai xe KHONG mang mot truong so sach nao', async () => {
     const entry = await submit();
-    const view = toDriverFuelSlipView(entry, []);
+    const view = toDriverFuelSlipView(entry, [], null);
 
     for (const forbidden of ['costExpenseId', 'sourceStatementId', 'declaredBy', 'freightAmount']) {
       expect(Object.keys(view)).not.toContain(forbidden);

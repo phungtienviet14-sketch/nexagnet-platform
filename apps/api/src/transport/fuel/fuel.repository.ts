@@ -125,6 +125,8 @@ export interface CreateFuelEntryInput {
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
+  /** `#317` G1 — tram DA DUOC KIEM thuoc `supplierId` va dang `ACTIVE` o tang mien. */
+  readonly stationId: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: Date;
   readonly litersUnits: number;
@@ -181,6 +183,8 @@ export interface AmendFuelEntryInput {
   readonly businessDate: BusinessDate;
   readonly occurredAt: Date;
   readonly supplierId: string;
+  /** `#317` G1 — xem `CreateFuelEntryInput.stationId`. */
+  readonly stationId: string | null;
   readonly paymentMethod: FuelPaymentMethod;
   readonly invoiceNo: string | null;
   readonly note: string | null;

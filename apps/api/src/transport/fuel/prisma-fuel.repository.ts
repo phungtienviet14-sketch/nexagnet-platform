@@ -29,6 +29,7 @@ import {
   FUEL_MATCH_LINE_ONCE,
   FUEL_STATEMENT_PERIOD,
   isSelfSourcedMatchViolation,
+  isStationSupplierViolation,
 } from './fuel-storage-conflict.js';
 import {
   FuelRepository,
@@ -113,6 +114,7 @@ const toEntry = (row: any): FuelEntry => ({
   vehicleId: row.vehicleId,
   driverId: row.driverId,
   supplierId: row.supplierId,
+  stationId: row.stationId ?? null,
   businessDate: row.businessDate,
   occurredAt: iso(row.occurredAt),
   litersUnits: litersFromStored(row.liters) ?? 0,
@@ -281,6 +283,18 @@ const toHandoff = (row: any): FuelSettlementHandoff => ({
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+/**
+ * `#317` G1 — trigger `TransportFuelEntry_station_supplier` bi cham: tram khong thuoc nha cung cap
+ * cua phieu. Tang mien chan truoc voi CUNG ma nay; day chi con la luoi cho duong ghi khong qua do.
+ */
+const translateStationSupplierError = (error: unknown): unknown =>
+  isStationSupplierViolation(error)
+    ? TransportDomainError.denied(
+        'FUEL_ENTRY_STATION_SUPPLIER_MISMATCH',
+        'Tram tren phieu khong thuoc nha cung cap cua phieu',
+      )
+    : error;
+
 /** Dau van tay cua mot ban giao DA PHAT — de so voi ket qua vua tinh (T4R §2). */
 const handoffFingerprint = (handoff: FuelSettlementHandoff): string =>
   settlementResultFingerprint({
@@ -369,6 +383,7 @@ export class PrismaFuelRepository extends FuelRepository {
             vehicleId: input.vehicleId,
             driverId: input.driverId,
             supplierId: input.supplierId,
+            stationId: input.stationId,
             businessDate: input.businessDate,
             occurredAt: input.occurredAt,
             liters: formatLiters(input.litersUnits),
@@ -397,7 +412,7 @@ export class PrismaFuelRepository extends FuelRepository {
           `Khoa chong ghi trung ${input.correlationKey} vua duoc dung boi mot lan ghi khac`,
         );
       }
-      throw error;
+      throw translateStationSupplierError(error);
     }
   }
 
@@ -535,29 +550,35 @@ export class PrismaFuelRepository extends FuelRepository {
     guard: AmendFuelEntryGuard,
     patch: AmendFuelEntryInput,
   ): Promise<FuelEntry | null> {
-    const updated = await model(this.prisma, 'transportFuelEntry').updateMany({
-      where: {
-        id,
-        verificationStatus: guard.verification,
-        reconciliationStatus: { notIn: [...guard.lockedReconciliation] },
-      },
-      data: {
-        liters: formatLiters(patch.litersUnits),
-        amount: toStoredAmount(patch.amount),
-        odometerKm: patch.odometerKm,
-        previousOdometerKm: patch.previousOdometerKm,
-        consumptionL100km:
-          patch.consumptionUnits === null ? null : formatConsumption(patch.consumptionUnits),
-        reviewReasons: patch.reviewReasons,
-        businessDate: patch.businessDate,
-        occurredAt: patch.occurredAt,
-        supplierId: patch.supplierId,
-        paymentMethod: patch.paymentMethod,
-        invoiceNo: patch.invoiceNo,
-        note: patch.note,
-        updatedAt: patch.at,
-      },
-    });
+    let updated: { count: number };
+    try {
+      updated = await model(this.prisma, 'transportFuelEntry').updateMany({
+        where: {
+          id,
+          verificationStatus: guard.verification,
+          reconciliationStatus: { notIn: [...guard.lockedReconciliation] },
+        },
+        data: {
+          liters: formatLiters(patch.litersUnits),
+          amount: toStoredAmount(patch.amount),
+          odometerKm: patch.odometerKm,
+          previousOdometerKm: patch.previousOdometerKm,
+          consumptionL100km:
+            patch.consumptionUnits === null ? null : formatConsumption(patch.consumptionUnits),
+          reviewReasons: patch.reviewReasons,
+          businessDate: patch.businessDate,
+          occurredAt: patch.occurredAt,
+          supplierId: patch.supplierId,
+          stationId: patch.stationId,
+          paymentMethod: patch.paymentMethod,
+          invoiceNo: patch.invoiceNo,
+          note: patch.note,
+          updatedAt: patch.at,
+        },
+      });
+    } catch (error) {
+      throw translateStationSupplierError(error);
+    }
     return updated.count === 0 ? null : this.findEntry(id);
   }
 

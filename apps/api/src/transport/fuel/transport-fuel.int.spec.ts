@@ -17,7 +17,9 @@ import { FileFuelStatementSource } from './fuel-statement-source.js';
 import { FuelStatementService } from './fuel-statement.service.js';
 import { CostingFuelExpenseAdapter, TransportFuelCoreFactsAdapter } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
+import { deleteFuelDiscrepanciesForTest } from './fuel-test-cleanup.js';
 import { PrismaFuelRepository } from './prisma-fuel.repository.js';
+import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
 
 /**
  * T4 — MUOI BA BANG CHUNG CUA `TX-04` TREN POSTGRES THAT (Issue #86).
@@ -74,6 +76,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
     const fuel = new FuelService(
       fuelRepo,
+      new PrismaFuelStationRepository(prisma),
       fuelCore,
       new CostingFuelExpenseAdapter(costing),
       audit,
@@ -88,7 +91,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       FUEL_POLICY,
     );
     const reconciliation = new FuelReconciliationService(fuelRepo, audit, FUEL_POLICY);
-    const read = new FuelReadService(fuelRepo, fuelCore);
+    const read = new FuelReadService(fuelRepo, fuelCore, new PrismaFuelStationRepository(prisma));
 
     const CODE_PREFIX = 'IT-T4-CH';
     const PHONE_PREFIX = '0933T4';
@@ -130,9 +133,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportFuelMatch.deleteMany({
         where: { reconciliationId: { in: reconciliationIds } },
       });
-      await prisma.transportFuelDiscrepancy.deleteMany({
-        where: { reconciliationId: { in: reconciliationIds } },
-      });
+      // `#317` G0: quyet dinh da ghi co trigger chi-ghi-them — xoa qua helper tat trigger.
+      await deleteFuelDiscrepanciesForTest(prisma, reconciliationIds);
       await prisma.transportFuelReconciliation.deleteMany({
         where: { id: { in: reconciliationIds } },
       });
@@ -762,6 +764,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
             new PrismaTripRepository(freshPrisma),
             new PrismaFleetRepository(freshPrisma),
           ),
+          new PrismaFuelStationRepository(freshPrisma),
         );
 
         try {

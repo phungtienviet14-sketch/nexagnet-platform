@@ -31,6 +31,22 @@ export const FUEL_PAYMENT_METHODS = ['DRIVER_CASH', 'SUPPLIER_ACCOUNT'] as const
 export type FuelPaymentMethod = (typeof FUEL_PAYMENT_METHODS)[number];
 
 /**
+ * CACH TRA TIEN MAC DINH cua mot to khai moi — `#317`, `OWNER_DECISIONS_2026_09_17`.
+ *
+ * Luong chuan cua `#295` la CAY XANG HOP DONG: lai xe do dau, KHONG tra tien mat, cay xang ghi no
+ * roi gui bang ke. Nen mac dinh la `SUPPLIER_ACCOUNT`; `DRIVER_CASH` chi khi nguoi khai CHU DONG
+ * chon vi lai xe that su ung tien.
+ *
+ * Mac dinh nay KHONG sinh cong no: to khai van chi la mot su that van hanh / ung vien. Cong no nha
+ * cung cap chi sinh sau doi soat + dong ky (ban giao -> T5), va Fuel Supplier AP tach tuyet doi khoi
+ * Quy lai xe.
+ *
+ * CHI ap cho lenh NOP moi. Lenh SUA van bat buoc noi ro — mac dinh o do se lang le doi mot phieu
+ * `DRIVER_CASH` da khai thanh `SUPPLIER_ACCOUNT` chi vi client quen gui truong.
+ */
+export const DEFAULT_FUEL_PAYMENT_METHOD: FuelPaymentMethod = 'SUPPLIER_ACCOUNT';
+
+/**
  * CAY XANG. Xem chu thich dau muc Fuel trong `schema.prisma` ve vi sao khong la mot vai doi tac.
  *
  * KE THUA `FuelSupplierContract`: sieu du lieu hop dong nam CUNG mot bang, nen tra ve hai doi
@@ -57,6 +73,11 @@ export interface FuelEntry {
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
+  /**
+   * `#317` G1 — TRAM/DIEM DO lai xe khai. `null` = khong khai (phieu cu, hoac nha cung cap chua co
+   * danh muc tram). Khi co, tram THUOC dung `supplierId` — tang mien kiem, trigger CSDL giu.
+   */
+  readonly stationId: string | null;
   readonly businessDate: BusinessDate;
   /** Khoanh khac tren phieu. Ngay nghiep vu KHONG suy tu truong nay (`INV-25`). */
   readonly occurredAt: string;
@@ -369,6 +390,9 @@ export interface FuelEntryInboxRow {
   readonly vehiclePlate: string | null;
   readonly supplierId: string;
   readonly supplierName: string | null;
+  /** `#317` G1 — tram lai xe khai; ten doi o tang doc, theo lo, cung khuon voi `supplierName`. */
+  readonly stationId: string | null;
+  readonly stationName: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: string;
   readonly litersUnits: number;

@@ -2411,8 +2411,13 @@ model TransportFuelDiscrepancy {
   resolvedBy        String?
   /// `#317` G0 — quyet dinh ma hang nay THAY THE (cung ky, cung `statementLineId`). UNIQUE: mot
   /// quyet dinh chi bi thay the mot lan, nen chuoi khong re nhanh duoi ghi dong thoi.
+  ///
+  /// `NoAction` chu khong `Restrict`: ca hai deu cam xoa mot quyet dinh con bi tro toi, nhung
+  /// `NO ACTION` kiem o CUOI cau lenh — nen mot lenh xoa ca chuoi (cleanup kiem thu, reset demo, hay
+  /// `CASCADE` tu ky doi soat) khong vap vao thu tu hang. Duong san xuat khong xoa gi ca: trigger
+  /// `transport_fuel_discrepancy_decision_append_only` chan truoc.
   supersedesId      String?                             @unique
-  supersedes        TransportFuelDiscrepancy?           @relation("TransportFuelDiscrepancyRevision", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersedes        TransportFuelDiscrepancy?           @relation("TransportFuelDiscrepancyRevision", fields: [supersedesId], references: [id], onDelete: NoAction)
   supersededBy      TransportFuelDiscrepancy?           @relation("TransportFuelDiscrepancyRevision")
   createdAt         DateTime                            @default(now())
 

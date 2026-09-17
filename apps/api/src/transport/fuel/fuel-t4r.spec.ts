@@ -19,6 +19,7 @@ import {
   type FuelVehicleFacts,
 } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
+import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
 
 /**
@@ -110,6 +111,7 @@ beforeEach(async () => {
   const audit = new AuditLogService(new InMemoryAuditLogRepository());
   service = new FuelService(
     repository,
+    new InMemoryFuelStationRepository(),
     new StubCoreFacts(),
     new SilentCostingPort(),
     audit,

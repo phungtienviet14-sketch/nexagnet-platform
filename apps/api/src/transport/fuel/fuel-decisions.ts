@@ -45,6 +45,15 @@ export const FUEL_ENTRY_SUBMIT_REASONS = [
   'FUEL_ENTRY_DRIVER_NOT_ASSIGNED',
   /** Xe tren phieu chua tung duoc phan cong vao chuyen do. */
   'FUEL_ENTRY_VEHICLE_NOT_ASSIGNED',
+  /**
+   * `#317` G1 — tram khai tren phieu thuoc mot nha cung cap KHAC nha cung cap cua phieu.
+   *
+   * Khong phai loi chinh ta: phieu se di vao doi soat bang ke cua nha cung cap nay voi mot dia diem
+   * cua nha cung cap kia, va bao cao "tram nao ban bao nhieu" noi doi ma khong ai thay.
+   */
+  'FUEL_ENTRY_STATION_SUPPLIER_MISMATCH',
+  /** `#317` G1 — tram da ngung hop tac (`INACTIVE`); to khai MOI khong duoc tro toi no. */
+  'FUEL_ENTRY_STATION_INACTIVE',
 ] as const;
 export type FuelEntrySubmitReason = (typeof FUEL_ENTRY_SUBMIT_REASONS)[number];
 
@@ -431,6 +440,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_TRIP_CANCELLED: 'Chuyến đã huỷ — đường đúng là đảo phiếu đã ghi',
     FUEL_ENTRY_DRIVER_NOT_ASSIGNED: 'Lái xe chưa từng được phân công vào chuyến này',
     FUEL_ENTRY_VEHICLE_NOT_ASSIGNED: 'Xe chưa từng được phân công vào chuyến này',
+    FUEL_ENTRY_STATION_SUPPLIER_MISMATCH: 'Cây xăng khai trên phiếu không thuộc nhà cung cấp của phiếu',
+    FUEL_ENTRY_STATION_INACTIVE: 'Cây xăng đã ngừng hợp tác — tờ khai mới không chọn được',
 
     FUEL_ENTRY_VERIFIED: 'Kế toán đã duyệt phiếu',
     FUEL_ENTRY_REJECTED: 'Kế toán trả lại phiếu kèm lý do',
