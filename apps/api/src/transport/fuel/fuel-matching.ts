@@ -1,5 +1,6 @@
 import type { BusinessDate } from '../business-date.js';
 import type { FuelMatchReason } from './fuel-decisions.js';
+import { compareFuelInvoiceNumbers, type FuelInvoiceRelation } from './fuel-invoice-number.js';
 import type { FuelReconciliationStatus } from './fuel-lifecycle.js';
 
 /**
@@ -56,6 +57,14 @@ export interface MatchableFuelEntry {
   readonly businessDate: BusinessDate;
   /** So nguyen DONG. */
   readonly amount: number;
+  /**
+   * So hoa don lai xe khai — `#317` G4. `null` = khong khai.
+   *
+   * KHONG tuy chon (`?`) du gia tri `null` duoc: moi noi goi phai tu noi ro "phieu nay co so hoa don
+   * nao". Mot truong tuy chon la mot truong ma mot noi goi moi quen dien, va quen o day nghia la
+   * lang le tat bo phan biet ma khong ai hay.
+   */
+  readonly invoiceNo: string | null;
   /** `INV-26` — bang ke da de ra phieu nay. `null` o moi phieu do lai xe khai. */
   readonly sourceStatementId: string | null;
   readonly reconciliationStatus: FuelReconciliationStatus;
@@ -67,6 +76,8 @@ export interface MatchableStatementLine {
   readonly vehicleId: string;
   readonly businessDate: BusinessDate;
   readonly amount: number;
+  /** So hoa don tren dong bang ke — `#317` G4. Cung ly do khong tuy chon nhu ben phieu. */
+  readonly invoiceNo: string | null;
   readonly reconciliationStatus: FuelReconciliationStatus;
 }
 
@@ -77,6 +88,13 @@ export const FUEL_DISCREPANCY_KINDS = [
   'FUEL_ENTRY_ONLY',
   'OUT_OF_TOLERANCE',
   'SELF_SOURCED_BLOCKED',
+  /**
+   * `#317` G4 — dong CHI con nhung ung vien dung xe/ngay/tien nhung so hoa don TRAI nguoc.
+   *
+   * Tach khoi `OUT_OF_TOLERANCE`/`AMBIGUOUS_CANDIDATES` vi nguoi soat phai lam mot viec khac han: doi
+   * chieu to hoa don giay voi dong bang ke, khong phai hoi cay xang ve so tien.
+   */
+  'INVOICE_CONFLICT',
 ] as const;
 export type FuelDiscrepancyKind = (typeof FUEL_DISCREPANCY_KINDS)[number];
 
@@ -88,6 +106,18 @@ export interface FuelMatchProposal {
   /** `dong bang ke - phieu`, so ngay tron. CO DAU. */
   readonly businessDateDeltaDays: number;
   readonly reason: Extract<FuelMatchReason, 'MATCH_EXACT' | 'MATCH_WITHIN_TOLERANCE'>;
+  /**
+   * `#317` G4 — so hoa don cua cap nay: `EQUAL` (tang do chac) hoac `ABSENT` (khong noi gi).
+   *
+   * Khong bao gio `CONFLICT`: mot cap xung dot so hoa don khong bao gio duoc de nghi khop.
+   */
+  readonly invoiceRelation: Exclude<FuelInvoiceRelation, 'CONFLICT'>;
+  /**
+   * `true` khi BO QUA so hoa don thi cap nay KHONG tu khop duoc — co nhieu hon mot ung vien dung
+   * xe/ngay/tien o it nhat mot chieu, va chinh so hoa don (trung, hoac xung dot loai bot) da tach
+   * chung ra. Ghi ro de nguoi soat biet cap nay dua vao mot chuoi in tren giay.
+   */
+  readonly decidedByInvoice: boolean;
 }
 
 export interface FuelDiscrepancyProposal {
@@ -163,6 +193,8 @@ interface Pairing {
   readonly entry: MatchableFuelEntry;
   readonly amountDeltaVnd: number;
   readonly businessDateDeltaDays: number;
+  /** `#317` G4 — `CONFLICT` khong bao gio nam trong tap `eligible`, xem `classifyPair`. */
+  readonly invoiceRelation: FuelInvoiceRelation;
 }
 
 const byId = <T extends { id: string }>(items: readonly T[]): T[] =>
@@ -174,22 +206,42 @@ const byId = <T extends { id: string }>(items: readonly T[]): T[] =>
  * Ket qua la mot DE NGHI, khong phai mot lan ghi: tang service quyet dinh ghi gi va ghi vao dau.
  * Tach nhu vay de bo test khoa duoc dung phan logic ma `GD-08`/`GD-09`/`INV-26` noi toi, khong phai
  * dung mot CSDL len de hoi mot cau hoi so hoc.
+ *
+ * ===========================================================================
+ * SO HOA DON (`#317` G4) — BO PHAN BIET TUY CHON, KHONG PHAI KHOA.
+ *
+ * Mot cap chi duoc hoi toi so hoa don SAU KHI da qua ca bon cong cu: xe, ngay, tien, `INV-26`. Den
+ * luc do so hoa don lam dung ba viec, va chi ba:
+ *
+ *   · `CONFLICT` — LOAI DUNG CAP DO khoi tap ung vien (ca hai chieu). Khong loai ca dong, khong loai
+ *     ca phieu: hai lan do cung xe/ngay/tien ma so hoa don khac nhau la chuyen that, va chinh so hoa
+ *     don la thu tach chung ra. Dong khong con ung vien nao ngoai cac cap xung dot -> `INVOICE_CONFLICT`.
+ *   · `EQUAL` — khi CON NHIEU ung vien o mot chieu, dung MOT cap trung so thi cap do duoc chon. Hai
+ *     cap cung trung so thi van nhap nhang: bo phan biet khong phan biet duoc gi ca.
+ *   · `ABSENT` — khong lam gi. Cap von dung van dung (quyet dinh chu so huu: thieu mot ben khong duoc
+ *     pha mot cap chuan).
+ *
+ * Phep chon van HAI CHIEU va KHONG LAP: dong chon phieu, phieu chon dong, chi khi hai lan chon gap nhau
+ * moi khop. Khong co vong "loai cap da khop roi chay lai" — do la duong tham lam ma `GD-09` cam.
  */
 export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
   const lines = byId(input.lines.filter((line) => isOpen(line.reconciliationStatus)));
   const entries = byId(input.entries.filter((entry) => isOpen(entry.reconciliationStatus)));
 
-  /** Ung vien HOP LE cua tung dong: cung xe, trong dung sai, va khong bi `INV-26` chan. */
+  /** Ung vien HOP LE cua tung dong: cung xe, trong dung sai, khong bi `INV-26` chan, khong xung dot so hoa don. */
   const eligible = new Map<string, Pairing[]>();
   /** Ung vien bi `INV-26` chan — giu rieng de bao dung ly do thay vi noi "khong tim thay". */
   const selfSourced = new Map<string, Pairing[]>();
   /** Cung xe, dung ngay, nhung lech tien vuot dung sai. */
   const outOfTolerance = new Map<string, Pairing[]>();
+  /** `#317` G4 — du bon cong cu, nhung so hoa don hai ben TRAI nguoc. */
+  const invoiceConflicts = new Map<string, Pairing[]>();
 
   for (const line of lines) {
     const eligibleForLine: Pairing[] = [];
     const selfSourcedForLine: Pairing[] = [];
     const outOfToleranceForLine: Pairing[] = [];
+    const conflictsForLine: Pairing[] = [];
 
     for (const entry of entries) {
       // XE KHOP TUYET DOI (`GD-08`). Khong co duong khop mo nao — hai bien so khac nhau la hai xe.
@@ -204,6 +256,7 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
         entry,
         amountDeltaVnd: amountDelta,
         businessDateDeltaDays: dayDelta,
+        invoiceRelation: compareFuelInvoiceNumbers(line.invoiceNo, entry.invoiceNo),
       };
 
       if (Math.abs(amountDelta) > input.tolerance.amountVnd) {
@@ -219,12 +272,20 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
         continue;
       }
 
+      // `#317` G4 — so hoa don duoc hoi CUOI CUNG, tren mot cap da dung ve moi mat khac. Xung dot chi
+      // loai DUNG cap nay; cac cap khac cua cung dong/phieu van la ung vien.
+      if (pairing.invoiceRelation === 'CONFLICT') {
+        conflictsForLine.push(pairing);
+        continue;
+      }
+
       eligibleForLine.push(pairing);
     }
 
     eligible.set(line.id, eligibleForLine);
     selfSourced.set(line.id, selfSourcedForLine);
     outOfTolerance.set(line.id, outOfToleranceForLine);
+    invoiceConflicts.set(line.id, conflictsForLine);
   }
 
   /**
@@ -232,13 +293,23 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
    *
    * Day la thu lam phep khop thanh HAI CHIEU. Thieu no thi hai dong bang ke cung khop duoc voi mot
    * phieu se ca hai cung "khop" — va mot lan do dau se doi soat cho hai khoan tien.
+   *
+   * `canonicalLineCount` dem CA cap xung dot: no chi dung de biet so hoa don co la thu da tach cac
+   * ung vien ra hay khong (`decidedByInvoice`), khong bao gio dung de chon.
    */
-  const linesByEntry = new Map<string, string[]>();
-  for (const [lineId, pairings] of eligible) {
+  const pairingsByEntry = new Map<string, Pairing[]>();
+  const canonicalLineCount = new Map<string, number>();
+  for (const pairings of eligible.values()) {
     for (const pairing of pairings) {
-      const bucket = linesByEntry.get(pairing.entry.id) ?? [];
-      bucket.push(lineId);
-      linesByEntry.set(pairing.entry.id, bucket);
+      const bucket = pairingsByEntry.get(pairing.entry.id) ?? [];
+      bucket.push(pairing);
+      pairingsByEntry.set(pairing.entry.id, bucket);
+      canonicalLineCount.set(pairing.entry.id, (canonicalLineCount.get(pairing.entry.id) ?? 0) + 1);
+    }
+  }
+  for (const pairings of invoiceConflicts.values()) {
+    for (const pairing of pairings) {
+      canonicalLineCount.set(pairing.entry.id, (canonicalLineCount.get(pairing.entry.id) ?? 0) + 1);
     }
   }
 
@@ -249,19 +320,17 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
 
   for (const line of lines) {
     const candidates = eligible.get(line.id) ?? [];
-    // Tach `[dau, ...con lai]` thay vi `candidates[0]` sau khi kiem `length`: hai nhanh duoi doc
-    // ra dung ba truong hop (0 / 1 / nhieu) ma khong can mot phep truy cap chi so nao co the
-    // `undefined`, nen khong co dong `if (!only)` chet nao phai giai thich ve sau.
-    const [only, ...rest] = candidates;
+    const conflicts = invoiceConflicts.get(line.id) ?? [];
 
-    if (only === undefined) {
-      const discrepancy = emptyCandidateDiscrepancy(line, selfSourced, outOfTolerance);
+    if (candidates.length === 0) {
+      const discrepancy = emptyCandidateDiscrepancy(line, selfSourced, conflicts, outOfTolerance);
       discrepancies.push(discrepancy);
       for (const id of discrepancy.candidateEntryIds) entryIdsInDiscrepancy.add(id);
       continue;
     }
 
-    if (rest.length > 0) {
+    const chosen = discriminate(candidates);
+    if (chosen === null) {
       const candidateEntryIds = candidates.map((pairing) => pairing.entry.id).sort();
       discrepancies.push({
         kind: 'AMBIGUOUS_CANDIDATES',
@@ -275,34 +344,39 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
       continue;
     }
 
-    const competingLineIds = (linesByEntry.get(only.entry.id) ?? []).slice().sort();
+    const competing = pairingsByEntry.get(chosen.entry.id) ?? [];
+    const chosenByEntry = discriminate(competing);
 
-    // Chieu nguoc: dong nay chi co mot ung vien, nhung ung vien do lai duoc NHIEU dong nham toi.
-    // `GD-09` doi day cung la nhap nhang — day ca cum cho nguoi quyet, khong cap nao tu khop.
-    if (competingLineIds.length > 1) {
+    // Chieu nguoc: dong nay chon duoc mot phieu, nhung phieu do KHONG chon lai dong nay (nhieu dong
+    // nham toi no, va so hoa don khong tach duoc). `GD-09` doi day cung la nhap nhang.
+    if (chosenByEntry === null || chosenByEntry.line.id !== line.id) {
       discrepancies.push({
         kind: 'AMBIGUOUS_CANDIDATES',
         statementLineId: line.id,
-        fuelEntryId: only.entry.id,
-        candidateEntryIds: [only.entry.id],
-        candidateLineIds: competingLineIds,
+        fuelEntryId: chosen.entry.id,
+        candidateEntryIds: [chosen.entry.id],
+        candidateLineIds: competing.map((pairing) => pairing.line.id).sort(),
         reason: 'MATCH_AMBIGUOUS_CANDIDATES',
       });
-      entryIdsInDiscrepancy.add(only.entry.id);
+      entryIdsInDiscrepancy.add(chosen.entry.id);
       continue;
     }
 
     matches.push({
       statementLineId: line.id,
-      fuelEntryId: only.entry.id,
-      amountDeltaVnd: only.amountDeltaVnd,
-      businessDateDeltaDays: only.businessDateDeltaDays,
+      fuelEntryId: chosen.entry.id,
+      amountDeltaVnd: chosen.amountDeltaVnd,
+      businessDateDeltaDays: chosen.businessDateDeltaDays,
       reason:
-        only.amountDeltaVnd === 0 && only.businessDateDeltaDays === 0
+        chosen.amountDeltaVnd === 0 && chosen.businessDateDeltaDays === 0
           ? 'MATCH_EXACT'
           : 'MATCH_WITHIN_TOLERANCE',
+      invoiceRelation: chosen.invoiceRelation === 'EQUAL' ? 'EQUAL' : 'ABSENT',
+      decidedByInvoice:
+        candidates.length + conflicts.length > 1 ||
+        (canonicalLineCount.get(chosen.entry.id) ?? 0) > 1,
     });
-    matchedEntryIds.add(only.entry.id);
+    matchedEntryIds.add(chosen.entry.id);
   }
 
   /**
@@ -330,15 +404,33 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
 const isOpen = (status: FuelReconciliationStatus): boolean => OPEN_FOR_MATCHING.includes(status);
 
 /**
- * BA LY DO khac nhau cho cung mot hien tuong "dong nay khong khop duoc voi gi".
+ * CHON MOT CAP trong mot tap ung vien — hoac KHONG chon (`null`).
+ *
+ * Dung mot ung vien -> cap do. Nhieu ung vien -> chi khi DUNG MOT cap trung so hoa don (`#317` G4).
+ * Khong co nhanh thu ba: khong "gan nhat", khong "lech it nhat". Dung cho CA HAI chieu — dong chon
+ * phieu va phieu chon dong di qua cung mot luat, nen hai chieu khong the lech nhau.
+ */
+function discriminate(pairings: readonly Pairing[]): Pairing | null {
+  const [only, ...rest] = pairings;
+  if (only === undefined) return null;
+  if (rest.length === 0) return only;
+
+  const [equal, ...moreEqual] = pairings.filter((pairing) => pairing.invoiceRelation === 'EQUAL');
+  return equal !== undefined && moreEqual.length === 0 ? equal : null;
+}
+
+/**
+ * BON LY DO khac nhau cho cung mot hien tuong "dong nay khong khop duoc voi gi".
  *
  * Thu tu uu tien khong tuy y: `INV-26` truoc, vi no la ly do NGHIEM TRONG nhat — no noi rang co ai
- * do dang co khop mot bang ke voi chinh no. Roi den lech dung sai (co ung vien that, chi la so
- * khong khop), roi cuoi cung la "khong co gi ca".
+ * do dang co khop mot bang ke voi chinh no. Roi den xung dot so hoa don (`#317` G4 — ung vien DUNG
+ * ve xe/ngay/tien, chi trai so hoa don, tuc gan nhat voi mot cap that), roi lech dung sai (co ung vien
+ * that, chi la so khong khop), roi cuoi cung la "khong co gi ca".
  */
 function emptyCandidateDiscrepancy(
   line: MatchableStatementLine,
   selfSourced: ReadonlyMap<string, Pairing[]>,
+  conflicts: readonly Pairing[],
   outOfTolerance: ReadonlyMap<string, Pairing[]>,
 ): FuelDiscrepancyProposal {
   const blocked = selfSourced.get(line.id) ?? [];
@@ -350,6 +442,17 @@ function emptyCandidateDiscrepancy(
       candidateEntryIds: blocked.map((pairing) => pairing.entry.id).sort(),
       candidateLineIds: [],
       reason: 'MATCH_SELF_SOURCED_BLOCKED',
+    };
+  }
+
+  if (conflicts.length > 0) {
+    return {
+      kind: 'INVOICE_CONFLICT',
+      statementLineId: line.id,
+      fuelEntryId: null,
+      candidateEntryIds: conflicts.map((pairing) => pairing.entry.id).sort(),
+      candidateLineIds: [],
+      reason: 'MATCH_INVOICE_CONFLICT',
     };
   }
 

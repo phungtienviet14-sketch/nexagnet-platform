@@ -120,6 +120,8 @@ export class FuelReconciliationService {
         vehicleId: line.vehicleId ?? '',
         businessDate: line.businessDate ?? '',
         amount: line.amount ?? 0,
+        // `#317` G4 — so hoa don TUY CHON: `null` nghia la dong khong noi gi, va khong pha cap nao.
+        invoiceNo: line.invoiceNo,
         reconciliationStatus: line.reconciliationStatus,
       }));
 
@@ -134,6 +136,7 @@ export class FuelReconciliationService {
         vehicleId: entry.vehicleId,
         businessDate: entry.businessDate,
         amount: entry.amount,
+        invoiceNo: entry.invoiceNo,
         sourceStatementId: entry.sourceStatementId,
         reconciliationStatus: entry.reconciliationStatus,
       }));
@@ -173,6 +176,8 @@ export class FuelReconciliationService {
           fuelEntryId: match.fuelEntryId,
           amountDeltaVnd: match.amountDeltaVnd,
           businessDateDeltaDays: match.businessDateDeltaDays,
+          invoiceRelation: match.invoiceRelation,
+          decidedByInvoice: match.decidedByInvoice,
         },
       });
     }

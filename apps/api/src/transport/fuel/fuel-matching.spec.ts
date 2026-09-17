@@ -32,6 +32,7 @@ const line = (
   vehicleId: VEHICLE,
   businessDate: '2026-08-05',
   amount: 4_200_000,
+  invoiceNo: null,
   reconciliationStatus: 'UNMATCHED',
   ...overrides,
 });
@@ -41,6 +42,7 @@ const entry = (id: string, overrides: Partial<MatchableFuelEntry> = {}): Matchab
   vehicleId: VEHICLE,
   businessDate: '2026-08-05',
   amount: 4_200_000,
+  invoiceNo: null,
   sourceStatementId: null,
   reconciliationStatus: 'UNMATCHED',
   ...overrides,
@@ -61,6 +63,8 @@ describe('FUEL-RECON-001 — khop', () => {
         amountDeltaVnd: 0,
         businessDateDeltaDays: 0,
         reason: 'MATCH_EXACT',
+        invoiceRelation: 'ABSENT',
+        decidedByInvoice: false,
       },
     ]);
   });
@@ -297,6 +301,322 @@ describe('TAT DINH — cung dau vao, cung dau ra', () => {
     );
 
     expect(second).toEqual(first);
+  });
+});
+
+/**
+ * `#317` G4 — MA TRAN SO HOA DON: bang nhau / xung dot / thieu mot ben / khac dinh dang.
+ *
+ * Quyet dinh chu so huu: `invoiceNo` la BO PHAN BIET TUY CHON. No chi duoc lam ba viec — tang do
+ * chac khi trung, chan tu khop khi xung dot, va IM LANG khi mot ben thieu. Nó khong bao gio tu tao
+ * mot cap: xe/ngay/tien van la ba cong bat buoc truoc khi so hoa don duoc hoi toi.
+ */
+describe('#317 G4 — so hoa don la bo phan biet tuy chon', () => {
+  it('BANG NHAU (mot ung vien) -> van khop, va ghi ro so hoa don da xac nhan', () => {
+    const result = run([line('l1', { invoiceNo: 'HD-00123' })], [entry('e1', { invoiceNo: 'hd00123' })]);
+
+    expect(result.discrepancies).toEqual([]);
+    expect(result.matches).toEqual([
+      {
+        statementLineId: 'l1',
+        fuelEntryId: 'e1',
+        amountDeltaVnd: 0,
+        businessDateDeltaDays: 0,
+        reason: 'MATCH_EXACT',
+        invoiceRelation: 'EQUAL',
+        decidedByInvoice: false,
+      },
+    ]);
+  });
+
+  it('XUNG DOT -> KHONG tu khop; dua ve INVOICE_CONFLICT, phieu khong bi bao "khong thay"', () => {
+    const result = run([line('l1', { invoiceNo: '123' })], [entry('e1', { invoiceNo: '124' })]);
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies).toEqual([
+      {
+        kind: 'INVOICE_CONFLICT',
+        statementLineId: 'l1',
+        fuelEntryId: null,
+        candidateEntryIds: ['e1'],
+        candidateLineIds: [],
+        reason: 'MATCH_INVOICE_CONFLICT',
+      },
+    ]);
+  });
+
+  it('THIEU MOT BEN (dong khong co so) -> cap von dung VAN khop', () => {
+    const result = run([line('l1')], [entry('e1', { invoiceNo: '0000123' })]);
+
+    expect(result.discrepancies).toEqual([]);
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]).toMatchObject({ fuelEntryId: 'e1', invoiceRelation: 'ABSENT' });
+  });
+
+  it('THIEU MOT BEN (phieu khong co so, hoac chi khoang trang) -> cap von dung VAN khop', () => {
+    const blank = run([line('l1', { invoiceNo: '123' })], [entry('e1', { invoiceNo: '   ' })]);
+    const missing = run([line('l1', { invoiceNo: '123' })], [entry('e1')]);
+
+    for (const result of [blank, missing]) {
+      expect(result.discrepancies).toEqual([]);
+      expect(result.matches[0]).toMatchObject({ fuelEntryId: 'e1', invoiceRelation: 'ABSENT' });
+    }
+  });
+
+  it('KHAC DINH DANG nhung trung sau chuan hoa (so 0 dau, dau phan cach, chu thuong) -> EQUAL', () => {
+    const cases: readonly (readonly [string, string])[] = [
+      ['0000123', '123'],
+      [' hd-123 ', 'HD123'],
+      ['HD/12.3', 'hd 123'],
+    ];
+    for (const [onLine, onEntry] of cases) {
+      const result = run(
+        [line('l1', { invoiceNo: onLine })],
+        [entry('e1', { invoiceNo: onEntry })],
+      );
+      expect(result.matches[0], `${onLine} ~ ${onEntry}`).toMatchObject({ invoiceRelation: 'EQUAL' });
+    }
+  });
+
+  it('so 0 TRONG ma co chu KHONG duoc bo -> `A0123` va `A123` la xung dot', () => {
+    const result = run([line('l1', { invoiceNo: 'A0123' })], [entry('e1', { invoiceNo: 'A123' })]);
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies[0]).toMatchObject({ kind: 'INVOICE_CONFLICT' });
+  });
+
+  /**
+   * CHUOI HOA DON KHONG PHAI DANH TINH KINH TE: trung so ma khac xe, hay lech tien vuot dung sai, thi
+   * van KHONG khop — va ly do bao ra la ly do cua xe/tien, khong phai cua so hoa don.
+   */
+  it('trung so hoa don nhung KHAC XE -> khong khop', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '777' })],
+      [entry('e1', { invoiceNo: '777', vehicleId: 'xe-2' })],
+    );
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies.map((item) => item.kind).sort()).toEqual([
+      'FUEL_ENTRY_ONLY',
+      'STATEMENT_LINE_ONLY',
+    ]);
+  });
+
+  it('trung so hoa don nhung LECH TIEN vuot dung sai -> OUT_OF_TOLERANCE, khong khop', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '777', amount: 9_000_000 })],
+      [entry('e1', { invoiceNo: '777' })],
+    );
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies[0]).toMatchObject({ kind: 'OUT_OF_TOLERANCE' });
+  });
+
+  /**
+   * BO PHAN BIET: hai phieu cung xe/ngay/tien voi mot dong — truoc G4 la nhap nhang. Mot phieu co
+   * so hoa don TRUNG voi dong thi do la bang chung tat dinh; phieu con lai khong co so thi khong noi
+   * duoc gi, nen no ra "khong thay tren bang ke" chu khong bi ep vao cap nay.
+   */
+  it('HAI ung vien, DUNG MOT trung so hoa don -> khop cap do, danh dau quyet bang so hoa don', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '555' })],
+      [entry('e1', { invoiceNo: '555' }), entry('e2')],
+    );
+
+    expect(result.matches).toEqual([
+      {
+        statementLineId: 'l1',
+        fuelEntryId: 'e1',
+        amountDeltaVnd: 0,
+        businessDateDeltaDays: 0,
+        reason: 'MATCH_EXACT',
+        invoiceRelation: 'EQUAL',
+        decidedByInvoice: true,
+      },
+    ]);
+    expect(result.discrepancies).toEqual([
+      {
+        kind: 'FUEL_ENTRY_ONLY',
+        statementLineId: null,
+        fuelEntryId: 'e2',
+        candidateEntryIds: [],
+        candidateLineIds: [],
+        reason: 'MATCH_FUEL_ENTRY_ONLY',
+      },
+    ]);
+  });
+
+  it('HAI ung vien deu KHONG co so -> van nhap nhang nhu truoc G4', () => {
+    const result = run([line('l1', { invoiceNo: '555' })], [entry('e1'), entry('e2')]);
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies[0]).toMatchObject({
+      kind: 'AMBIGUOUS_CANDIDATES',
+      candidateEntryIds: ['e1', 'e2'],
+    });
+  });
+
+  it('HAI ung vien deu TRUNG so -> van nhap nhang, khong chon', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '555' })],
+      [entry('e1', { invoiceNo: '555' }), entry('e2', { invoiceNo: '0555' })],
+    );
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies[0]).toMatchObject({ kind: 'AMBIGUOUS_CANDIDATES' });
+  });
+
+  it('HAI DONG cung trung so voi MOT phieu -> chieu nguoc van nhap nhang, khong khop dong nao', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '555' }), line('l2', { invoiceNo: '555' })],
+      [entry('e1', { invoiceNo: '555' })],
+    );
+
+    expect(result.matches).toEqual([]);
+    for (const discrepancy of result.discrepancies) {
+      expect(discrepancy).toMatchObject({
+        kind: 'AMBIGUOUS_CANDIDATES',
+        fuelEntryId: 'e1',
+        candidateLineIds: ['l1', 'l2'],
+      });
+    }
+  });
+
+  /**
+   * XUNG DOT LOAI DUNG CAP DO, khong loai ca dong hay ca phieu. `l2` noi mot so hoa don KHAC `e1`,
+   * nen `l2` khong con la ung vien cua `e1`; `l1` trung so -> cap `l1-e1` khong con ai tranh. Truoc
+   * G4 ca hai dong deu la nhap nhang, nen `decidedByInvoice` phai bat.
+   */
+  it('HAI DONG, chieu nguoc: mot dong TRUNG, mot dong XUNG DOT -> dong trung khop, dong kia ve soat', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '555' }), line('l2', { invoiceNo: '999' })],
+      [entry('e1', { invoiceNo: '555' })],
+    );
+
+    expect(result.matches).toEqual([
+      expect.objectContaining({
+        statementLineId: 'l1',
+        fuelEntryId: 'e1',
+        invoiceRelation: 'EQUAL',
+        decidedByInvoice: true,
+      }),
+    ]);
+    expect(result.discrepancies).toEqual([
+      {
+        kind: 'INVOICE_CONFLICT',
+        statementLineId: 'l2',
+        fuelEntryId: null,
+        candidateEntryIds: ['e1'],
+        candidateLineIds: [],
+        reason: 'MATCH_INVOICE_CONFLICT',
+      },
+    ]);
+  });
+
+  it('HAI DONG, chieu nguoc: dong kia KHONG co so -> dong trung so khop, dong kia la nhap nhang cu', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '555' }), line('l2')],
+      [entry('e1', { invoiceNo: '555' })],
+    );
+
+    expect(result.matches).toEqual([
+      expect.objectContaining({ statementLineId: 'l1', fuelEntryId: 'e1', decidedByInvoice: true }),
+    ]);
+    expect(result.discrepancies).toEqual([
+      {
+        kind: 'AMBIGUOUS_CANDIDATES',
+        statementLineId: 'l2',
+        fuelEntryId: 'e1',
+        candidateEntryIds: ['e1'],
+        candidateLineIds: ['l1', 'l2'],
+        reason: 'MATCH_AMBIGUOUS_CANDIDATES',
+      },
+    ]);
+  });
+
+  /**
+   * XUNG DOT CHI LOAI DUNG CAP XUNG DOT. `e1` noi mot so hoa don KHAC dong nay, nen no khong phai
+   * mot ung vien "hop ly" nua; `e2` khong khai so thi theo quyet dinh chu so huu KHONG duoc bi pha.
+   * Cap `l1-e2` la cap duy nhat con lai o CA HAI chieu. `e1` khong co dong nao -> `FUEL_ENTRY_ONLY`,
+   * tuc van hien ra truoc mat nguoi soat chu khong bien mat.
+   */
+  it('mot ung vien xung dot + mot ung vien khong so -> khop ung vien khong so, phieu xung dot ra soat', () => {
+    const result = run([line('l1', { invoiceNo: '555' })], [entry('e1', { invoiceNo: '999' }), entry('e2')]);
+
+    expect(result.matches).toEqual([
+      {
+        statementLineId: 'l1',
+        fuelEntryId: 'e2',
+        amountDeltaVnd: 0,
+        businessDateDeltaDays: 0,
+        reason: 'MATCH_EXACT',
+        invoiceRelation: 'ABSENT',
+        decidedByInvoice: true,
+      },
+    ]);
+    expect(result.discrepancies).toEqual([
+      {
+        kind: 'FUEL_ENTRY_ONLY',
+        statementLineId: null,
+        fuelEntryId: 'e1',
+        candidateEntryIds: [],
+        candidateLineIds: [],
+        reason: 'MATCH_FUEL_ENTRY_ONLY',
+      },
+    ]);
+  });
+
+  it('XUNG DOT uu tien hon lech dung sai khi chon ly do cho mot dong khong con ung vien', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '555' })],
+      [entry('e1', { invoiceNo: '999' }), entry('e2', { amount: 9_000_000 })],
+    );
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies[0]).toMatchObject({
+      kind: 'INVOICE_CONFLICT',
+      candidateEntryIds: ['e1'],
+    });
+  });
+
+  it('INV-26 duoc hoi TRUOC so hoa don — phieu tu-nguon trung so van bi chan', () => {
+    const result = run(
+      [line('l1', { invoiceNo: '555' })],
+      [entry('e1', { invoiceNo: '555', sourceStatementId: STATEMENT })],
+    );
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies[0]).toMatchObject({ kind: 'SELF_SOURCED_BLOCKED' });
+  });
+
+  it('TAT DINH voi so hoa don — dao thu tu dau vao cho ra ket qua giong het', () => {
+    const lines = [
+      line('l1', { invoiceNo: '555' }),
+      line('l2', { invoiceNo: '777' }),
+      line('l3', { invoiceNo: '999', businessDate: '2026-08-20' }),
+    ];
+    const entries = [
+      entry('e1', { invoiceNo: '777' }),
+      entry('e2', { invoiceNo: '0555' }),
+      entry('e3', { invoiceNo: '998', businessDate: '2026-08-20' }),
+    ];
+
+    const forward = runFuelMatching({ statementId: STATEMENT, lines, entries, tolerance: TOLERANCE });
+    const reversed = runFuelMatching({
+      statementId: STATEMENT,
+      lines: [...lines].reverse(),
+      entries: [...entries].reverse(),
+      tolerance: TOLERANCE,
+    });
+
+    expect(reversed).toEqual(forward);
+    expect(forward.matches.map((match) => [match.statementLineId, match.fuelEntryId])).toEqual([
+      ['l1', 'e2'],
+      ['l2', 'e1'],
+    ]);
+    expect(forward.discrepancies).toEqual([
+      expect.objectContaining({ kind: 'INVOICE_CONFLICT', statementLineId: 'l3' }),
+    ]);
   });
 });
 

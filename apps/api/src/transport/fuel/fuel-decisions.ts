@@ -153,6 +153,13 @@ export const FUEL_MATCH_REASONS = [
   'MATCH_OUT_OF_TOLERANCE',
   /** `INV-26` — ung vien duy nhat la phieu de ra tu chinh bang ke nay. */
   'MATCH_SELF_SOURCED_BLOCKED',
+  /**
+   * `#317` G4 — ung vien dung xe/ngay/tien nhung so hoa don hai ben TRAI nguoc. KHONG tu khop.
+   *
+   * So hoa don la bo phan biet tuy chon, khong phai khoa: ma nay chi phat khi dong KHONG con ung
+   * vien sach nao khac.
+   */
+  'MATCH_INVOICE_CONFLICT',
 ] as const;
 export type FuelMatchReason = (typeof FUEL_MATCH_REASONS)[number];
 
@@ -444,6 +451,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     MATCH_FUEL_ENTRY_ONLY: 'Phiếu lái xe không thấy trên bảng kê kỳ này',
     MATCH_OUT_OF_TOLERANCE: 'Có ứng viên duy nhất nhưng lệch vượt dung sai',
     MATCH_SELF_SOURCED_BLOCKED: 'Ứng viên là phiếu đẻ ra từ chính bảng kê này (INV-26)',
+    MATCH_INVOICE_CONFLICT:
+      'Ứng viên đúng xe, ngày, tiền nhưng số hoá đơn hai bên khác nhau — không tự khớp',
 
     RECONCILIATION_OPENED: 'Đã mở kỳ đối soát cho bảng kê',
     RECONCILIATION_MATCHING_RUN: 'Đã chạy so khớp tất định',

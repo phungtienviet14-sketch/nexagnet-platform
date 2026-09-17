@@ -872,7 +872,7 @@ async function writePlan(
               verificationStatus: verified ? 'VERIFIED' : 'DECLARED',
               reconciliationStatus: 'UNMATCHED',
               correlationKey: `demo:${fuel.key}`,
-              invoiceNo: `HD-${fuel.key}`,
+              invoiceNo: fuel.invoiceNo,
               declaredBy: driverUsername.get(trip.driverRef) ?? DEMO_SEED_ACTOR,
               verifiedAt: verified ? iso(trip.businessDate, 17) : null,
               verifiedBy: verified ? DEMO_SEED_ACTOR : null,
@@ -1000,6 +1000,7 @@ async function writePlan(
           vehicleId: vehicleId.get(line.vehicleRef) as string,
           businessDate: line.businessDate,
           amount: line.amount,
+          invoiceNo: line.invoiceNo,
           reconciliationStatus: 'UNMATCHED',
         }));
 
@@ -1013,6 +1014,7 @@ async function writePlan(
             vehicleId: true,
             businessDate: true,
             amount: true,
+            invoiceNo: true,
             sourceStatementId: true,
           },
         });
@@ -1021,6 +1023,7 @@ async function writePlan(
           vehicleId: entry.vehicleId,
           businessDate: entry.businessDate,
           amount: Number(entry.amount),
+          invoiceNo: entry.invoiceNo,
           sourceStatementId: entry.sourceStatementId,
           reconciliationStatus: 'UNMATCHED',
         }));

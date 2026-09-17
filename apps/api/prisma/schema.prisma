@@ -1763,6 +1763,8 @@ enum TransportFuelDiscrepancyKind {
   OUT_OF_TOLERANCE
   /// `INV-26` — ung vien duy nhat lai chinh la phieu duoc nhap ra tu bang ke nay.
   SELF_SOURCED_BLOCKED
+  /// `#317` G4 — ung vien dung xe/ngay/tien nhung so hoa don hai ben TRAI nguoc. Khong tu khop.
+  INVOICE_CONFLICT
 }
 
 enum TransportFuelDiscrepancyStatus {
@@ -1904,6 +1906,8 @@ model TransportFuelStation {
 
   aliases    TransportFuelStationAlias[]
   candidates TransportFuelCandidate[]
+  /// `#317` G1 — cac phieu lai xe khai da do tai tram nay.
+  entries    TransportFuelEntry[]
 
   /// Ma cua hang duy nhat TRONG mot nha cung cap — khong phai toan cuc. Hai chuoi khac nhau deu
   /// co the co mot `CH-05`, va ep no duy nhat toan cuc se chan mot du lieu that.
@@ -2157,6 +2161,11 @@ model TransportFuelEntry {
   driver               TransportDriver                   @relation(fields: [driverId], references: [id])
   supplierId           String
   supplier             TransportFuelSupplier             @relation(fields: [supplierId], references: [id])
+  /// `#317` G1 — TRAM/DIEM DO ma lai xe khai. NULL = khong khai (phieu cu, hoac nha cung cap chua co
+  /// danh muc tram). Khi co, trigger `TransportFuelEntry_station_supplier` cuong che tram PHAI thuoc
+  /// dung `supplierId` cua phieu — Prisma khong khai duoc mot quan he tuy chon ghep voi cot bat buoc.
+  stationId            String?
+  station              TransportFuelStation?             @relation(fields: [stationId], references: [id], onDelete: Restrict)
   /// `YYYY-MM-DD` theo mui gio tenant — tinh MOT LAN luc ghi (`INV-25`).
   businessDate         String                            @db.VarChar(10)
   /// KHOANH KHAC tren phieu (bang chung gio do dau). Ngay nghiep vu KHONG suy tu cot nay.
@@ -2202,6 +2211,7 @@ model TransportFuelEntry {
   @@index([vehicleId, businessDate])
   @@index([driverId])
   @@index([supplierId, businessDate])
+  @@index([stationId])
   @@index([verificationStatus])
   @@index([reconciliationStatus])
   @@index([sourceStatementId])
@@ -2371,6 +2381,17 @@ model TransportFuelMatch {
 }
 
 /// MOT CHENH LECH CHO NGUOI QUYET. `PENDING` la trang thai chan cua `FUEL-RECON-004`.
+///
+/// ---------------------------------------------------------------------------
+/// `#317` G0 — MOT QUYET DINH DA GHI LA LICH SU, KHONG SUA, KHONG XOA.
+///
+/// Doi y ve mot dong bang ke (vd `ACCEPT_SUPPLIER_AMOUNT` -> `IGNORE_WITH_REASON` sau khi mo lai ky)
+/// la them MOT hang `RESOLVED` moi co `supersedesId` tro ve quyet dinh no thay the — cung khuon chuoi
+/// ban sua doi cua `TransportFuelSettlementHandoff`. Quyet dinh HIEU LUC cua mot `statementLineId` la
+/// quyet dinh khong bi ai thay the (`fuel-decision-revision.ts`), va tong duoc chap nhan chi doc no.
+///
+/// Trigger `TransportFuelDiscrepancy_decision_append_only` tu choi moi `UPDATE`/`DELETE` len hang
+/// da `RESOLVED`: duong "dua quyet dinh cu ve PENDING" hay "xoa roi quyet lai" bi chan o tang CSDL.
 model TransportFuelDiscrepancy {
   id                String                              @id @default(cuid())
   reconciliationId  String
@@ -2388,6 +2409,11 @@ model TransportFuelDiscrepancy {
   resolutionNote    String?
   resolvedAt        DateTime?
   resolvedBy        String?
+  /// `#317` G0 — quyet dinh ma hang nay THAY THE (cung ky, cung `statementLineId`). UNIQUE: mot
+  /// quyet dinh chi bi thay the mot lan, nen chuoi khong re nhanh duoi ghi dong thoi.
+  supersedesId      String?                             @unique
+  supersedes        TransportFuelDiscrepancy?           @relation("TransportFuelDiscrepancyRevision", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy      TransportFuelDiscrepancy?           @relation("TransportFuelDiscrepancyRevision")
   createdAt         DateTime                            @default(now())
 
   @@index([reconciliationId, status])
