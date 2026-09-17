@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type { BusinessDate } from '../business-date.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { vehicleLinkConflict } from './toll-account-link.js';
+import {
+  assertTollDuplicateChainAcyclic,
+  traceTollDuplicateChain,
+} from './toll-duplicate-guard.js';
 import type { TollProvider } from './toll-provider.port.js';
 import type {
   ApplyTollReviewInput,
@@ -9,6 +13,7 @@ import type {
   CreateTollImportInput,
   OpenTollLinkInput,
   TollCandidateFilter,
+  TollReviewExpectedState,
 } from './toll.ports.js';
 import { TollRepository, type CreatedTollImport } from './toll.repository.js';
 import type {
@@ -31,7 +36,8 @@ import type {
  * Hai bat bien duoc lam lai o day:
  *   · `unique(provider, accountNo)`  — mot so tai khoan chi khai mot lan;
  *   · MOT doan dang mo cho moi xe    — ND 119/2024 D.11 kh.3;
- *   · `unique(provider, sourceDigest)` — nap lai cung bo byte la mot va cham, khong phai mot ban sao.
+ *   · `unique(provider, sourceDigest)` — nap lai cung bo byte la mot va cham, khong phai mot ban sao;
+ *   · `#318` — lan quyet chi ghi tren DUNG anh chup da doc (CAS), va ghi trung khong khep vong.
  */
 export class InMemoryTollRepository extends TollRepository {
   private readonly accounts = new Map<string, TollAccount>();
@@ -39,6 +45,8 @@ export class InMemoryTollRepository extends TollRepository {
   private readonly imports = new Map<string, TollImport>();
   private readonly candidates = new Map<string, TollTransactionCandidateRecord>();
   private readonly decisions: TollReviewDecisionRecord[] = [];
+  /** Duoi hang doi cac lan quyet — xem `applyReview`. */
+  private reviewQueue: Promise<unknown> = Promise.resolve();
 
   async createAccount(input: CreateTollAccountInput): Promise<TollAccount> {
     const existing = await this.findAccountByNo(input.provider, input.accountNo);
@@ -300,12 +308,43 @@ export class InMemoryTollRepository extends TollRepository {
     return found;
   }
 
-  async applyReview(input: ApplyTollReviewInput): Promise<TollTransactionCandidateRecord> {
-    const candidate = this.candidates.get(input.candidateId);
-    if (!candidate) {
+  /**
+   * CUNG HAI CONG ma `PrismaTollRepository.applyReview` giu — `#318`.
+   *
+   * Moi lan quyet di qua MOT hang doi (song doi cua `pg_advisory_xact_lock`), nen phep lan chuoi
+   * dong goc va phep so anh chup chay TRONG lan ghi, khong mot lan quyet nao chen vao giua. Thieu
+   * hang doi, hai `await` trong phep lan chuoi du de hai lenh ghi trung song song cung lot — va che
+   * do `memory` se XANH cho mot vong trung ma Postgres chan.
+   */
+  applyReview(input: ApplyTollReviewInput): Promise<TollTransactionCandidateRecord> {
+    const run = this.reviewQueue.then(() => this.applyReviewExclusively(input));
+    this.reviewQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async applyReviewExclusively(
+    input: ApplyTollReviewInput,
+  ): Promise<TollTransactionCandidateRecord> {
+    if (!this.candidates.has(input.candidateId)) {
       throw TransportDomainError.notFound(
         'TOLL_CANDIDATE_NOT_FOUND',
         `Khong tim thay dong ${input.candidateId}`,
+      );
+    }
+    if (input.duplicateOfCandidateId !== null) {
+      assertTollDuplicateChainAcyclic(
+        await traceTollDuplicateChain({
+          sourceId: input.candidateId,
+          targetId: input.duplicateOfCandidateId,
+          duplicateOf: async (id) => this.candidates.get(id)?.duplicateOfCandidateId ?? null,
+        }),
+      );
+    }
+    const candidate = this.candidates.get(input.candidateId);
+    if (!candidate || !matchesExpected(candidate, input.expected)) {
+      throw TransportDomainError.conflict(
+        'TOLL_REVIEW_CONCURRENT_WRITE',
+        `Dong ${input.candidateId} vua duoc mot lan quyet khac thay doi — tai lai roi quyet lai`,
       );
     }
     const updated: TollTransactionCandidateRecord = {
@@ -338,4 +377,17 @@ export class InMemoryTollRepository extends TollRepository {
       .filter((decision) => decision.candidateId === candidateId)
       .sort((left, right) => left.at.getTime() - right.at.getTime());
   }
+}
+
+/** Phep so CAS — dung bon cot ma `PrismaTollRepository.applyReview` dat vao `WHERE`. */
+function matchesExpected(
+  candidate: TollTransactionCandidateRecord,
+  expected: TollReviewExpectedState,
+): boolean {
+  return (
+    candidate.vehicleId === expected.vehicleId &&
+    candidate.matchState === expected.matchState &&
+    candidate.reviewState === expected.reviewState &&
+    candidate.duplicateOfCandidateId === expected.duplicateOfCandidateId
+  );
 }
