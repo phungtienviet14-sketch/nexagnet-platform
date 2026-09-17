@@ -260,6 +260,15 @@ máy chủ — không chỉ màn hình — phải cưỡng chế. Máy chủ ph�
 `RESOLVE_VEHICLE` bị chặn cùng `CONFIRM` vì nó từng là cửa sau: đổi dòng nghi trùng thành `MATCHED`
 rồi `CONFIRM` qua được mà không ai trả lời câu hỏi trùng.
 
+**Trả lời câu hỏi trùng chưa phải là xác nhận.** `CLEAR_DUPLICATE` chỉ trả lời câu hỏi trùng: dòng
+về `PENDING` (khớp xe tính lại như trước: có xe → `MATCHED`, lượt qua trạm chưa có xe →
+`VEHICLE_UNRESOLVED`), kể cả khi trước đó nó đang `CONFIRMED`, và nằm ở cột **chưa đối soát xong**
+của báo cáo chi phí. Muốn sang cột **đã có người xác nhận** phải có một lần `CONFIRM` **riêng** — lịch
+sử luôn có hai dòng `CLEAR_DUPLICATE` rồi `CONFIRM`, không có bước nào gộp cả hai. `FLAG_DUPLICATE`
+thì khác, **có chủ đích**: ghi trùng tự nó là quyết định loại trừ của người, nên dòng để `CONFIRMED`;
+dòng đã ghi trùng không vào tổng nào bất kể trạng thái đối soát. Bằng chứng qua HTTP thật (kho bộ nhớ
+và Postgres): `toll-review.http.spec.ts`; trên Postgres kèm đối chứng âm: `V318-INT-8`.
+
 Mỗi dòng có **một** con trỏ dòng gốc, nên tự trỏ, `A→B→A` và `A→B→C→A` đều biểu diễn được. Một
 **chuỗi** không vòng an toàn về tiền (mọi dòng đã ghi trùng bị loại, dòng gốc cuối chuỗi đứng cho
 sự kiện thật); một **vòng** thì không — cả vòng rơi khỏi mọi tổng. Nên `FLAG_DUPLICATE` bị từ chối

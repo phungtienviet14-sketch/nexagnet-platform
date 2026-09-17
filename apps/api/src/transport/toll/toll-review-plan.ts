@@ -27,6 +27,9 @@ import type {
  * THU TU CAC CONG la mot phan cua hop dong: cong TRUNG truoc moi luat rieng cua tung viec. Mot dong
  * nghi trung khong duoc qua `CONFIRM` hay `RESOLVE_VEHICLE` bang BAT KY ly do nao khac, ke ca khi
  * mot luat rieng cua viec do cung se tu choi no.
+ *
+ * Va chi DUNG MOT viec dua dong vao `CONFIRMED` ma khong phai quyet dinh loai tru: `CONFIRM`.
+ * `CLEAR_DUPLICATE` tra loi cau hoi trung roi de dong `PENDING`; xac nhan la mot buoc rieng sau do.
  */
 
 export interface TollReviewCommand {
@@ -236,6 +239,11 @@ async function planFlagDuplicate(
     reason: 'TOLL_REVIEW_DUPLICATE_FLAGGED',
     nextVehicleId: null,
     nextMatchState: 'DUPLICATE_CANDIDATE',
+    /*
+     * CO Y khac `CLEAR_DUPLICATE`: GHI TRUNG TU NO la quyet dinh loai tru cua nguoi — khong con buoc
+     * xac nhan nao sau no. Dong da ghi trung khong vao tong chi phi nao bat ke trang thai doi soat,
+     * va `CONFIRM`/`RESOLVE_VEHICLE` tren no bi cong trung chan (`TOLL_REVIEW_DUPLICATE_DECLARED`).
+     */
     nextReviewState: 'CONFIRMED',
     duplicateOfCandidateId: targetId,
   };
@@ -247,14 +255,25 @@ async function planFlagDuplicate(
  * Day chinh la tinh huong VETC tu cong bo: loi doc cheo lan sinh ra hai giao dich cho mot luot xe.
  * Nguoi doi soat phai noi duoc dieu do ra, va he thong phai GHI LAI — neu khong, moi lan nhin lai
  * dong nay se lai thay cai nhan cu.
+ *
+ * ===========================================================================
+ * BO NGHI TRUNG KHONG PHAI LA XAC NHAN.
+ *
+ * `#318` chot hai buoc RIENG: tra loi cau hoi trung truoc, ROI MOI `CONFIRM`. Lenh nay chi tra loi
+ * cau hoi trung — dong ve `PENDING` (ke ca khi truoc do no dang `CONFIRMED`: mot xac nhan ghi khi
+ * cau hoi trung con mo, hoac lan ghi trung vua bi go, khong con dung cho dong nay nua), va vao cot
+ * "chua doi soat xong" cua bao cao cho toi khi co mot lan `CONFIRM` rieng. Kieu tra ve khoa dieu do
+ * luc bien dich: ham nay khong the tra `CONFIRMED`.
  */
-function planClearDuplicate(candidate: TollTransactionCandidateRecord): TollReviewPlan {
+function planClearDuplicate(
+  candidate: TollTransactionCandidateRecord,
+): TollReviewPlan & { readonly nextReviewState: 'PENDING' } {
   const resolved = candidate.vehicleId !== null || candidate.kind !== 'TOLL_PASS';
   return {
     reason: 'TOLL_REVIEW_DUPLICATE_CLEARED',
     nextVehicleId: candidate.vehicleId,
     nextMatchState: resolved ? 'MATCHED' : 'VEHICLE_UNRESOLVED',
-    nextReviewState: 'CONFIRMED',
+    nextReviewState: 'PENDING',
     duplicateOfCandidateId: null,
   };
 }

@@ -589,10 +589,11 @@ async function mockToll(
           duplicateOfCandidateId: input.duplicateOfCandidateId,
         });
       } else if (input.action === 'CLEAR_DUPLICATE') {
+        // `#318`: bo nghi trung CHI tra loi cau hoi trung — dong ve PENDING, xac nhan la buoc rieng.
         const resolved = row.vehicleId !== null || row.kind !== 'TOLL_PASS';
         Object.assign(row, {
           matchState: resolved ? 'MATCHED' : 'VEHICLE_UNRESOLVED',
-          reviewState: 'CONFIRMED',
+          reviewState: 'PENDING',
           duplicateOfCandidateId: null,
         });
       } else if (input.action === 'REOPEN') {
@@ -812,7 +813,14 @@ test.describe('ETC — hang cho: khong chon xe giup, quyet trung co kiem toan (#
     await expect(panel).toContainText('Mở lại dòng để quyết lại');
   });
 
-  test('bo nghi trung: hop xac nhan noi dong se duoc tinh cho xe nao', async ({ page }) => {
+  /**
+   * `#318` — BO NGHI TRUNG KHONG PHAI LA XAC NHAN. Hop xac nhan noi dieu do TRUOC khi ghi; ghi xong,
+   * may chu tra dong `PENDING`, nen hang cho doi "Quyết trùng…" thanh nut «Xác nhận» cho mot lan xac
+   * nhan RIENG — va chi lan do moi dua dong sang `CONFIRMED`.
+   */
+  test('bo nghi trung: hop xac nhan noi dong se duoc tinh cho xe nao, roi dong con cho mot lan Xac nhan rieng (#318)', async ({
+    page,
+  }) => {
     const mock = await mockToll(page, 'ADMIN');
     await openToll(page);
     await page.getByRole('button', { name: /Quyết trùng cho dòng 3/ }).click();
@@ -821,14 +829,31 @@ test.describe('ETC — hang cho: khong chon xe giup, quyet trung co kiem toan (#
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('của xe 15C-556.33');
+    await expect(dialog).toContainText('chưa phải là xác nhận');
     await dialog.getByRole('button', { name: 'Bỏ nghi trùng' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Đã bỏ nghi trùng cho dòng 3' }),
-    ).toBeVisible();
+    ).toContainText('vẫn chờ một lần «Xác nhận» riêng');
     expect(lastRequest(mock, 'POST', '/candidates/cand-3/review')?.body).toMatchObject({
       action: 'CLEAR_DUPLICATE',
       duplicateOfCandidateId: null,
     });
+    const row = mock.candidates.find((entry) => entry.id === 'cand-3');
+    expect(row?.reviewState).toBe('PENDING');
+
+    const confirm = page.getByRole('button', { name: /Xác nhận dòng 3/ });
+    await expect(confirm).toBeVisible();
+    await expect(page.getByRole('button', { name: /Quyết trùng cho dòng 3/ })).toHaveCount(0);
+    await confirm.click();
+
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Xác nhận dòng này đã đúng' }),
+    ).toContainText('dòng 3');
+    expect(lastRequest(mock, 'POST', '/candidates/cand-3/review')?.body).toMatchObject({
+      action: 'CONFIRM',
+    });
+    expect(row?.reviewState).toBe('CONFIRMED');
+    await expect(page.getByRole('button', { name: /Mở lại dòng 3/ })).toBeVisible();
   });
 
   /**

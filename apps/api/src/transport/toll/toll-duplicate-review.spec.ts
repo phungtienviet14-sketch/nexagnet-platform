@@ -239,21 +239,137 @@ describe('#318 — CONFIRM khong vuot qua cau hoi trung', () => {
     expect(detail.decisions.map((entry) => entry.action)).toEqual(['FLAG_DUPLICATE']);
   });
 
-  it('giai trung TRUOC roi moi xac nhan duoc: CLEAR -> REOPEN -> CONFIRM, lich su noi tiep', async () => {
+  /**
+   * BO NGHI TRUNG KHONG PHAI LA XAC NHAN (review `5236671955` cua PR `#319`). `CLEAR_DUPLICATE` tra
+   * loi cau hoi trung roi de dong `PENDING` — no nam o cot "chua doi soat xong" cua bao cao. Chi mot
+   * lan `CONFIRM` RIENG moi dua dong sang cot da xac nhan.
+   */
+  it('CLEAR_DUPLICATE KHONG tu xac nhan: CLEAR -> PENDING (bao cao: chua xong) -> CONFIRM -> CONFIRMED', async () => {
     const harness = await build();
-    const [first] = await suspectedRows(harness, 2);
+    const [first, second] = await suspectedRows(harness, 2);
 
-    await review(harness, first ?? '', 'CLEAR_DUPLICATE');
-    await review(harness, first ?? '', 'REOPEN');
+    const cleared = await review(harness, first ?? '', 'CLEAR_DUPLICATE');
+    expect(cleared).toMatchObject({
+      matchState: 'MATCHED',
+      reviewState: 'PENDING',
+      duplicateOfCandidateId: null,
+    });
+    expect((await detailOf(harness, first ?? '')).candidate.reviewState).toBe('PENDING');
+
+    const open = await harness.reports.spendReport(AUGUST);
+    expect(open.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
+      ['veh-1', { rowCount: 0, amount: 0 }, { rowCount: 1, amount: -52_000 }],
+    ]);
+    expect(
+      open.totals.map((row) => [row.attributed.confirmed.rowCount, row.attributed.open.rowCount]),
+    ).toEqual([[0, 1]]);
+    // Dong kia VAN nghi trung: bo nghi trung dong nay khong tra loi thay cho no.
+    expect(open.duplicates.map((row) => [row.state, row.total.rowCount])).toEqual([
+      ['SUSPECTED', 1],
+    ]);
+
     const confirmed = await review(harness, first ?? '', 'CONFIRM');
-
     expect(confirmed).toMatchObject({ matchState: 'MATCHED', reviewState: 'CONFIRMED' });
+
+    const done = await harness.reports.spendReport(AUGUST);
+    expect(done.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
+      ['veh-1', { rowCount: 1, amount: -52_000 }, { rowCount: 0, amount: 0 }],
+    ]);
     const detail = await detailOf(harness, first ?? '');
     expect(detail.decisions.map((entry) => [entry.action, entry.reason])).toEqual([
       ['CLEAR_DUPLICATE', 'TOLL_REVIEW_DUPLICATE_CLEARED'],
-      ['REOPEN', 'TOLL_REVIEW_REOPENED'],
       ['CONFIRM', 'TOLL_REVIEW_CONFIRMED'],
     ]);
+    expect(deniedReasons(harness)).toEqual([]);
+    expect((await detailOf(harness, second ?? '')).candidate).toMatchObject({
+      matchState: 'DUPLICATE_CANDIDATE',
+      reviewState: 'PENDING',
+    });
+  });
+
+  /**
+   * Go mot lan GHI TRUNG bang `CLEAR_DUPLICATE`. Ghi trung de dong `CONFIRMED` (co y: do la quyet dinh
+   * loai tru cua nguoi) — nen day la duong DE lot nhat: neu bo nghi trung giu trang thai cu, dong se
+   * vao cot da xac nhan ma khong ai xac nhan no la mot chi phi.
+   */
+  it('dong DA GHI TRUNG (CONFIRMED) bi go bang CLEAR_DUPLICATE cung ve PENDING, va phai CONFIRM rieng', async () => {
+    const harness = await build();
+    const [first, second] = await suspectedRows(harness, 2);
+    const flagged = await review(harness, second ?? '', 'FLAG_DUPLICATE', {
+      duplicateOfCandidateId: first ?? '',
+    });
+    expect(flagged).toMatchObject({ reviewState: 'CONFIRMED', duplicateOfCandidateId: first });
+
+    const cleared = await review(harness, second ?? '', 'CLEAR_DUPLICATE');
+    expect(cleared).toMatchObject({
+      matchState: 'MATCHED',
+      reviewState: 'PENDING',
+      duplicateOfCandidateId: null,
+    });
+    const open = await harness.reports.spendReport(AUGUST);
+    expect(open.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
+      ['veh-1', { rowCount: 0, amount: 0 }, { rowCount: 1, amount: -52_000 }],
+    ]);
+
+    await review(harness, second ?? '', 'CONFIRM');
+    const done = await harness.reports.spendReport(AUGUST);
+    expect(done.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
+      ['veh-1', { rowCount: 1, amount: -52_000 }, { rowCount: 0, amount: 0 }],
+    ]);
+    expect((await detailOf(harness, second ?? '')).decisions.map((entry) => entry.action)).toEqual([
+      'FLAG_DUPLICATE',
+      'CLEAR_DUPLICATE',
+      'CONFIRM',
+    ]);
+  });
+
+  /** Luot qua tram CHUA co xe: bo nghi trung -> cho chi dinh xe -> van cho xac nhan -> xac nhan. */
+  it('CLEAR_DUPLICATE tren luot qua tram chua co xe: VEHICLE_UNRESOLVED + PENDING; chi dinh xe van PENDING; CONFIRM moi xong', async () => {
+    const harness = await build();
+    const candidates = await importRows(harness, [
+      manual({ vehiclePlate: '30E-111.22' }),
+      manual({ vehiclePlate: '30E-111.22' }),
+    ]);
+    const [first] = candidates;
+    expect(first).toMatchObject({ matchState: 'DUPLICATE_CANDIDATE', vehicleId: null });
+
+    const cleared = await review(harness, first?.id ?? '', 'CLEAR_DUPLICATE');
+    expect(cleared).toMatchObject({ matchState: 'VEHICLE_UNRESOLVED', reviewState: 'PENDING' });
+    const unresolved = await harness.reports.spendReport(AUGUST);
+    expect(
+      unresolved.unattributed.map((row) => [row.reason, row.confirmed.rowCount, row.open.rowCount]),
+    ).toEqual([['VEHICLE_UNRESOLVED', 0, 1]]);
+
+    const resolved = await review(harness, first?.id ?? '', 'RESOLVE_VEHICLE', {
+      vehicleId: 'veh-2',
+    });
+    expect(resolved).toMatchObject({ matchState: 'MATCHED', reviewState: 'PENDING' });
+    await review(harness, first?.id ?? '', 'CONFIRM');
+
+    const done = await harness.reports.spendReport(AUGUST);
+    expect(done.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
+      ['veh-2', { rowCount: 1, amount: -52_000 }, { rowCount: 0, amount: 0 }],
+    ]);
+    expect(done.unattributed).toEqual([]);
+  });
+
+  /**
+   * TAB CU: man hinh van hien dong la nghi trung va gui lai `CLEAR_DUPLICATE` sau khi nguoi khac da bo
+   * nghi trung. May chu tu choi, va lan gui lai do KHONG la mot cua sau vao `CONFIRMED`.
+   */
+  it('CLEAR_DUPLICATE gui lai tu tab cu bi tu choi — dong van PENDING, khong co lich su thua', async () => {
+    const harness = await build();
+    const [first] = await suspectedRows(harness, 2);
+    await review(harness, first ?? '', 'CLEAR_DUPLICATE');
+
+    await expect(review(harness, first ?? '', 'CLEAR_DUPLICATE')).rejects.toMatchObject({
+      kind: 'CONFLICT',
+      reason: 'TOLL_REVIEW_DUPLICATE_NOT_SUSPECTED',
+    });
+    const detail = await detailOf(harness, first ?? '');
+    expect(detail.candidate).toMatchObject({ matchState: 'MATCHED', reviewState: 'PENDING' });
+    expect(detail.decisions.map((entry) => entry.action)).toEqual(['CLEAR_DUPLICATE']);
+    expect(deniedReasons(harness)).toEqual(['TOLL_REVIEW_DUPLICATE_NOT_SUSPECTED']);
   });
 
   it('MO LAI mot dong da ghi trung dua no ve NGHI TRUNG — CONFIRM van bi chan cho toi khi quyet lai', async () => {
@@ -312,7 +428,12 @@ describe('#318 — CONFIRM khong vuot qua cau hoi trung', () => {
       reason: 'TOLL_REVIEW_DUPLICATE_UNRESOLVED',
     });
     const cleared = await review(harness, first ?? '', 'CLEAR_DUPLICATE');
-    expect(cleared.matchState).toBe('MATCHED');
+    // Lan xac nhan CU ghi khi cau hoi trung con mo KHONG duoc mang sang: phai xac nhan lai.
+    expect(cleared).toMatchObject({ matchState: 'MATCHED', reviewState: 'PENDING' });
+    const reopened = await harness.reports.spendReport(AUGUST);
+    expect(reopened.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
+      ['veh-1', { rowCount: 0, amount: 0 }, { rowCount: 1, amount: -52_000 }],
+    ]);
   });
 
   it('CLEAR_DUPLICATE tren dong KHONG nghi trung bi tu choi — trang thai khop khong bi doi', async () => {
@@ -411,11 +532,18 @@ describe('#318 — khong co vong trung', () => {
 
     await review(harness, b ?? '', 'CLEAR_DUPLICATE');
     const resolved = await harness.reports.spendReport(AUGUST);
+    // Giai trung xong: dong goc vao chi phi xe, nhung o cot CHUA doi soat xong.
     expect(resolved.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
-      ['veh-1', { rowCount: 1, amount: -52_000 }, { rowCount: 0, amount: 0 }],
+      ['veh-1', { rowCount: 0, amount: 0 }, { rowCount: 1, amount: -52_000 }],
     ]);
     expect(resolved.duplicates.map((row) => [row.state, row.total.rowCount])).toEqual([
       ['DECLARED', 2],
+    ]);
+
+    await review(harness, b ?? '', 'CONFIRM');
+    const confirmed = await harness.reports.spendReport(AUGUST);
+    expect(confirmed.vehicles.map((row) => [row.vehicleId, row.confirmed, row.open])).toEqual([
+      ['veh-1', { rowCount: 1, amount: -52_000 }, { rowCount: 0, amount: 0 }],
     ]);
   });
 

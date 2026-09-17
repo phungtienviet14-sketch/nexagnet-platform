@@ -11,7 +11,8 @@ import type { TollReviewAction, TollTransactionCandidateRecord } from './toll.ty
  *
  *   1. `DUPLICATE_CANDIDATE` la MOT TRANG THAI TAI CHINH CHUA GIAI. Chi `FLAG_DUPLICATE` (vao dung
  *      dong goc) hoac `CLEAR_DUPLICATE` tra loi duoc no. `CONFIRM` va `RESOLVE_VEHICLE` khong tra
- *      loi — nen chung DONG cho toi khi cau hoi trung da co cau tra loi.
+ *      loi — nen chung DONG cho toi khi cau hoi trung da co cau tra loi. Va tra loi xong CHUA phai
+ *      xac nhan: `CLEAR_DUPLICATE` de dong `PENDING`, `CONFIRM` la mot buoc rieng sau do.
  *   2. Do thi trung KHONG CO VONG. Moi dong co TOI DA MOT con tro `duplicateOfCandidateId`, nen do
  *      thi la do thi ham: tu tro, hai nut, ba nut... deu bieu dien duoc. Mot chuoi KHONG vong van an
  *      toan ve tien (moi dong da ghi trung bi loai, dong goc cuoi chuoi dung cho su kien that); mot

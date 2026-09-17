@@ -445,7 +445,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     ]);
 
     await review(a, 'CLEAR_DUPLICATE');
-    await review(a, 'REOPEN');
+    // Bo nghi trung KHONG xac nhan: hang ve PENDING va nam o cot CHUA doi soat xong.
+    expect(await rowOf(a)).toEqual({
+      matchState: 'MATCHED',
+      reviewState: 'PENDING',
+      duplicateOfCandidateId: null,
+      vehicleId: state.vehicleA,
+    });
+    const cleared = await dayReport('02');
+    expect(
+      cleared.vehicles.filter(mine).map((entry) => [entry.vehicleId, entry.confirmed, entry.open]),
+    ).toEqual([[state.vehicleA, { rowCount: 0, amount: 0 }, { rowCount: 1, amount: -52_000 }]]);
+
     await review(a, 'CONFIRM');
 
     const resolved = await dayReport('02');
@@ -461,11 +472,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     try {
       const fresh = build(restarted);
       const detailA = await fresh.toll.candidateDetail(a);
+      // Hai buoc RIENG trong lich su: bo nghi trung, roi xac nhan — khong co buoc nao gop ca hai.
       expect(detailA.decisions.map((entry) => [entry.action, entry.reason, entry.actor])).toEqual([
         ['CLEAR_DUPLICATE', 'TOLL_REVIEW_DUPLICATE_CLEARED', 'ke-toan'],
-        ['REOPEN', 'TOLL_REVIEW_REOPENED', 'ke-toan'],
         ['CONFIRM', 'TOLL_REVIEW_CONFIRMED', 'ke-toan'],
       ]);
+      expect(detailA.candidate).toMatchObject({ matchState: 'MATCHED', reviewState: 'CONFIRMED' });
       const detailB = await fresh.toll.candidateDetail(b);
       // Lan CONFIRM bi tu choi KHONG de lai dong nao — chi co lan ghi trung.
       expect(
@@ -651,6 +663,153 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('#318 — trung ETC tren Postg
     /* ...va vong go duoc bang duong ra co san: mo lai mot dong trong vong roi quyet lai. */
     await review(p, 'REOPEN');
     await review(p, 'CLEAR_DUPLICATE');
-    expect(countedRows((await dayReport('07')).vehicles)).toBe(1);
+    const untangled = await dayReport('07');
+    expect(countedRows(untangled.vehicles)).toBe(1);
+    // Tu `REOPENED` cung vay: bo nghi trung de dong o cot CHUA doi soat xong, khong xac nhan ho.
+    expect(
+      untangled.vehicles
+        .filter(mine)
+        .map((entry) => [entry.confirmed.rowCount, entry.open.rowCount]),
+    ).toEqual([[0, 1]]);
+    expect((await rowOf(p)).reviewState).toBe('PENDING');
+  }, 60_000);
+
+  /* ================== CLEAR_DUPLICATE KHONG tu xac nhan (review #319) ================== */
+
+  /** DUNG ke hoach ma `planTollReview` lap cho `CLEAR_DUPLICATE` — tren anh chup doc LUC NAY. */
+  const clearInput = async (
+    id: string,
+    nextReviewState: ApplyTollReviewInput['nextReviewState'],
+  ): Promise<ApplyTollReviewInput> => {
+    const current = await repository.findCandidate(id);
+    if (current === null) throw new Error(`khong co dong ${id}`);
+    const resolved = current.vehicleId !== null || current.kind !== 'TOLL_PASS';
+    return {
+      candidateId: id,
+      action: 'CLEAR_DUPLICATE',
+      actor: 'ke-toan',
+      at: clock(),
+      reason: 'TOLL_REVIEW_DUPLICATE_CLEARED',
+      note: null,
+      nextVehicleId: current.vehicleId,
+      nextMatchState: resolved ? 'MATCHED' : 'VEHICLE_UNRESOLVED',
+      nextReviewState,
+      duplicateOfCandidateId: null,
+      expected: await snapshotOf(id),
+    };
+  };
+
+  const vehicleAProgress = async (day: string) =>
+    (await dayReport(day)).vehicles
+      .filter((entry) => entry.vehicleId === state.vehicleA)
+      .map((entry) => [entry.confirmed, entry.open]);
+
+  /**
+   * `CLEAR_DUPLICATE` chi tra loi cau hoi trung; `CONFIRM` la buoc RIENG. Tren Postgres that, qua ca
+   * hai trang thai trung (nghi trung va da ghi trung), qua lenh gui lai tu tab cu va qua ke hoach lap
+   * tren anh chup cu.
+   */
+  it('V318-INT-8 — CLEAR_DUPLICATE -> PENDING (bao cao: chua xong) -> CONFIRM -> CONFIRMED; tab cu va anh chup cu khong di tat vao CONFIRMED', async () => {
+    const [first, second] = await importRows('clear-confirm', [row('08'), row('08')]);
+    const x = idOf(first);
+    const y = idOf(second);
+    const staleClear = await clearInput(x, 'PENDING');
+
+    /* 1. Nghi trung -> bo nghi trung: PENDING, cot chua xong. */
+    const cleared = await review(x, 'CLEAR_DUPLICATE');
+    expect(cleared).toMatchObject({ matchState: 'MATCHED', reviewState: 'PENDING' });
+    expect(await rowOf(x)).toMatchObject({ reviewState: 'PENDING', duplicateOfCandidateId: null });
+    expect(await vehicleAProgress('08')).toEqual([
+      [
+        { rowCount: 0, amount: 0 },
+        { rowCount: 1, amount: -52_000 },
+      ],
+    ]);
+
+    /* 2. Tab cu gui lai CLEAR: bi tu choi, khong co lich su thua, hang van PENDING. */
+    await expect(review(x, 'CLEAR_DUPLICATE')).rejects.toMatchObject({
+      kind: 'CONFLICT',
+      reason: 'TOLL_REVIEW_DUPLICATE_NOT_SUSPECTED',
+    });
+    /* 3. Ke hoach CLEAR lap tren anh chup CU (con nghi trung): thua CAS o tang kho. */
+    await expect(repository.applyReview(staleClear)).rejects.toMatchObject({
+      kind: 'CONFLICT',
+      reason: 'TOLL_REVIEW_CONCURRENT_WRITE',
+    });
+    expect(await rowOf(x)).toMatchObject({ matchState: 'MATCHED', reviewState: 'PENDING' });
+    expect(await decisionCount([x])).toBe(1);
+
+    /* 4. Chi CONFIRM rieng moi dua hang sang cot da xac nhan. */
+    await review(x, 'CONFIRM');
+    expect(await vehicleAProgress('08')).toEqual([
+      [
+        { rowCount: 1, amount: -52_000 },
+        { rowCount: 0, amount: 0 },
+      ],
+    ]);
+
+    /* 5. Da ghi trung (CONFIRMED vi ghi trung) -> bo nghi trung: CUNG ve PENDING. */
+    await review(y, 'FLAG_DUPLICATE', { duplicateOfCandidateId: x });
+    expect(await rowOf(y)).toMatchObject({ reviewState: 'CONFIRMED', duplicateOfCandidateId: x });
+    await review(y, 'CLEAR_DUPLICATE');
+    expect(await rowOf(y)).toMatchObject({
+      matchState: 'MATCHED',
+      reviewState: 'PENDING',
+      duplicateOfCandidateId: null,
+    });
+    expect(await vehicleAProgress('08')).toEqual([
+      [
+        { rowCount: 1, amount: -52_000 },
+        { rowCount: 1, amount: -52_000 },
+      ],
+    ]);
+    await review(y, 'CONFIRM');
+    expect(await vehicleAProgress('08')).toEqual([
+      [
+        { rowCount: 2, amount: -104_000 },
+        { rowCount: 0, amount: 0 },
+      ],
+    ]);
+
+    /* Lich su doc lai qua client Prisma MOI: moi buoc la MOT dong, khong buoc nao gop hai viec. */
+    const restarted = new PrismaService();
+    try {
+      const fresh = build(restarted);
+      expect((await fresh.toll.candidateDetail(x)).decisions.map((entry) => entry.action)).toEqual([
+        'CLEAR_DUPLICATE',
+        'CONFIRM',
+      ]);
+      expect((await fresh.toll.candidateDetail(y)).decisions.map((entry) => entry.action)).toEqual([
+        'FLAG_DUPLICATE',
+        'CLEAR_DUPLICATE',
+        'CONFIRM',
+      ]);
+    } finally {
+      await restarted.$disconnect();
+    }
+
+    /*
+     * DOI CHUNG AM — ke hoach `CLEAR_DUPLICATE` NGUYEN VAN o `2adc25f` (`nextReviewState: 'CONFIRMED'`)
+     * qua CUNG kho (CAS, khoa, anh chup khop): kho ghi dung dieu ke hoach noi, nen hang vao cot DA XAC
+     * NHAN ma lich su khong co lan `CONFIRM` nao. Cong that nam o ke hoach, va cac khang dinh o tren
+     * bat duoc dung hinh dang loi do.
+     */
+    const [third, fourth] = await importRows('clear-confirm-legacy', [
+      row('08', { passedAt: '08/05/2032 10:00', amount: '-11.000' }),
+      row('08', { passedAt: '08/05/2032 10:00', amount: '-11.000' }),
+    ]);
+    const legacy = idOf(third);
+    expect(fourth?.matchState).toBe('DUPLICATE_CANDIDATE');
+    await repository.applyReview(await clearInput(legacy, 'CONFIRMED'));
+    expect(await rowOf(legacy)).toMatchObject({ matchState: 'MATCHED', reviewState: 'CONFIRMED' });
+    expect((await toll.candidateDetail(legacy)).decisions.map((entry) => entry.action)).toEqual([
+      'CLEAR_DUPLICATE',
+    ]);
+    expect(await vehicleAProgress('08')).toEqual([
+      [
+        { rowCount: 3, amount: -115_000 },
+        { rowCount: 0, amount: 0 },
+      ],
+    ]);
   }, 60_000);
 });

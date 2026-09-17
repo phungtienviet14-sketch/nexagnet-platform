@@ -88,6 +88,21 @@ describe('viec nao hien tren MOT dong cua hang cho', () => {
     ]);
   });
 
+  /**
+   * `#318`: may chu tra dong VUA BO NGHI TRUNG o `PENDING`. Hang cho phai mo lai nut xac nhan cho mot
+   * lan xac nhan RIENG — khong phai "Mo lai" nhu mot dong da co nguoi xac nhan.
+   */
+  it('dong vua bo nghi trung (PENDING) -> "Xac nhan" rieng; chua co xe thi chi dinh xe truoc hoac xac nhan', () => {
+    expect(
+      tollQueueRowActions(candidate({ matchState: 'MATCHED', reviewState: 'PENDING' })),
+    ).toEqual(['CONFIRM']);
+    expect(
+      tollQueueRowActions(
+        candidate({ matchState: 'VEHICLE_UNRESOLVED', vehicleId: null, reviewState: 'PENDING' }),
+      ),
+    ).toEqual(['RESOLVE_VEHICLE', 'CONFIRM']);
+  });
+
   it('dong da co nguoi quyet -> mo lai; neu van chua co xe thi van chi dinh xe duoc', () => {
     expect(
       tollQueueRowActions(
@@ -263,6 +278,20 @@ describe('cau hau qua noi DUNG dieu may chu se lam', () => {
     expect(
       clearDuplicateConsequence(candidate({ vehicleId: null, kind: 'TOP_UP' }), null),
     ).toContain('cấp tài khoản');
+  });
+
+  /** `#318`: may chu de dong `PENDING` sau khi bo nghi trung — cau hau qua khong duoc hua "xong". */
+  it('bo nghi trung: ca ba nhanh deu noi CHUA xac nhan va con mot lan «Xác nhận» rieng', () => {
+    const sentences = [
+      clearDuplicateConsequence(candidate(), '15C-556.33'),
+      clearDuplicateConsequence(candidate({ vehicleId: null }), null),
+      clearDuplicateConsequence(candidate({ vehicleId: null, kind: 'TOP_UP' }), null),
+    ];
+    for (const sentence of sentences) {
+      expect(sentence).toContain('chưa phải là xác nhận');
+      expect(sentence).toContain('«Xác nhận» riêng');
+    }
+    expect(sentences[0]).toContain('«Chưa đối soát xong»');
   });
 });
 

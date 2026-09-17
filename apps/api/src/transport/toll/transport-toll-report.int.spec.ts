@@ -266,10 +266,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Bao cao ETC tren Postgres THA
     });
     await review(dupFirst?.id ?? '', 'CLEAR_DUPLICATE');
 
+    // `#318`: bo nghi trung KHONG xac nhan — dong do vao xe B o cot CHUA doi soat xong...
+    const cleared = await reports.spendReport({ ...MARCH_2031, provider: 'EPASS' });
+    const clearedB = cleared.vehicles.find((row) => row.vehicleId === state.vehicleB);
+    expect(clearedB?.open).toEqual({ rowCount: 2, amount: -75_000 });
+    expect(clearedB?.confirmed).toEqual({ rowCount: 0, amount: 0 });
+    // ...cho toi khi co mot lan CONFIRM RIENG.
+    await review(dupFirst?.id ?? '', 'CONFIRM');
+
     const decided = await reports.spendReport({ ...MARCH_2031, provider: 'EPASS' });
     const byVehicle = new Map(decided.vehicles.map((row) => [row.vehicleId, row]));
     expect(byVehicle.get(state.vehicleA)?.confirmed).toEqual({ rowCount: 1, amount: -52_000 });
-    // Xe B: dong nguoi chi dinh (chua xac nhan) + dong vua bo nghi trung (da xac nhan).
+    // Xe B: dong nguoi chi dinh (chua xac nhan) + dong da bo nghi trung ROI xac nhan rieng.
     expect(byVehicle.get(state.vehicleB)?.open).toEqual({ rowCount: 1, amount: -40_000 });
     expect(byVehicle.get(state.vehicleB)?.confirmed).toEqual({ rowCount: 1, amount: -35_000 });
     expect(decided.unattributed.map((row) => row.reason)).toEqual(['ACCOUNT_LEVEL']);
