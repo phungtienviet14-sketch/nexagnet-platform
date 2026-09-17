@@ -11,6 +11,11 @@ import {
   type FuelReconciliationStatus,
   type FuelVerificationStatus,
 } from './fuel-lifecycle.js';
+import {
+  effectiveLineDecisions,
+  evaluateDecisionRevision,
+  lineStatusAfterRevision,
+} from './fuel-decision-revision.js';
 import { settlementResultFingerprint, sumAcceptedSettlement } from './fuel-settlement.js';
 import {
   FuelRepository,
@@ -30,6 +35,8 @@ import {
   type ReopenReconciliationInput,
   type ResolveDiscrepancyInput,
   type ResolveDiscrepancyOutcome,
+  type ReviseDecisionInput,
+  type ReviseDecisionOutcome,
   type SetFuelVerificationInput,
   type UpdateFuelSupplierProfileInput,
   type WithdrawEvidenceInput,
@@ -594,6 +601,7 @@ export class InMemoryFuelRepository extends FuelRepository {
         resolutionNote: null,
         resolvedAt: null,
         resolvedBy: null,
+        supersedesId: null,
         createdAt: input.at.toISOString(),
       };
       this.discrepancies.set(stored.id, stored);
@@ -646,6 +654,14 @@ export class InMemoryFuelRepository extends FuelRepository {
     }
     if (current.status !== 'PENDING') return { kind: 'DISCREPANCY_RACE' };
 
+    // `#317` G0 — doi tuong doi cua ban Prisma: noi chuoi vao quyet dinh dang hieu luc cua dong.
+    const supersedesId =
+      current.statementLineId === null
+        ? null
+        : (effectiveLineDecisions(this.decisionsOf(input.reconciliationId)).get(
+            current.statementLineId,
+          )?.id ?? null);
+
     const updated: FuelDiscrepancy = {
       ...current,
       status: 'RESOLVED',
@@ -653,6 +669,7 @@ export class InMemoryFuelRepository extends FuelRepository {
       resolutionNote: input.resolutionNote,
       resolvedAt: input.at.toISOString(),
       resolvedBy: input.actor,
+      supersedesId,
     };
     this.discrepancies.set(updated.id, updated);
 
@@ -686,6 +703,89 @@ export class InMemoryFuelRepository extends FuelRepository {
           }) ?? locked.state);
 
     return { kind: 'RESOLVED', state, resolved: { discrepancy: clone(updated), match } };
+  }
+
+  /**
+   * Doi tuong doi cua `PrismaFuelRepository.reviseDecision` — cung phep chieu, cung luat.
+   *
+   * Kho nay khong co giao dich va khong co trigger, nen no KHONG chung minh duoc tinh chi-ghi-them
+   * hay chong ghi dong thoi; bo int tren Postgres lam viec do. Cai no giu la: THEM hang moi, KHONG
+   * dong vao hang cu, va tu choi cung nhung dau vao ma ban Prisma tu choi.
+   */
+  async reviseDecision(input: ReviseDecisionInput): Promise<ReviseDecisionOutcome> {
+    const locked = this.reconciliations.get(input.reconciliationId);
+    if (!locked) return { kind: 'RECONCILIATION_REJECTED', state: null };
+    if (isFrozenFuelReconciliation(locked.state)) {
+      return { kind: 'RECONCILIATION_REJECTED', state: locked.state };
+    }
+
+    const records = this.decisionsOf(input.reconciliationId);
+    const target = records.find((record) => record.id === input.discrepancyId);
+    if (!target) return { kind: 'DECISION_NOT_FOUND' };
+
+    const successor = records.find((record) => record.supersedesId === target.id);
+    if (
+      successor &&
+      successor.resolution === input.resolution &&
+      successor.resolutionNote === input.reason &&
+      successor.resolvedBy === input.actor
+    ) {
+      return {
+        kind: 'REPLAYED',
+        revision: clone(successor),
+        superseded: clone(target),
+        state: locked.state,
+      };
+    }
+
+    const decision = evaluateDecisionRevision({ target, records, resolution: input.resolution });
+    if (!decision.allowed) {
+      return {
+        kind: 'DENIED',
+        reason: decision.reason,
+        currentId:
+          target.statementLineId === null
+            ? null
+            : (effectiveLineDecisions(records).get(target.statementLineId)?.id ?? null),
+      };
+    }
+
+    const revision: FuelDiscrepancy = {
+      id: randomUUID(),
+      reconciliationId: target.reconciliationId,
+      kind: target.kind,
+      status: 'RESOLVED',
+      statementLineId: target.statementLineId,
+      fuelEntryId: target.fuelEntryId,
+      candidateEntryIds: [...target.candidateEntryIds],
+      candidateLineIds: [...target.candidateLineIds],
+      resolution: input.resolution,
+      resolutionNote: input.reason,
+      resolvedAt: input.at.toISOString(),
+      resolvedBy: input.actor,
+      supersedesId: target.id,
+      createdAt: input.at.toISOString(),
+    };
+    this.discrepancies.set(revision.id, revision);
+
+    const line = target.statementLineId === null ? undefined : this.lines.get(target.statementLineId);
+    const nextStatus = line
+      ? lineStatusAfterRevision(input.resolution, line.reconciliationStatus)
+      : null;
+    if (line && nextStatus !== null) this.setLineStatus(line.id, nextStatus);
+
+    return {
+      kind: 'REVISED',
+      revision: clone(revision),
+      superseded: clone(target),
+      state: locked.state,
+    };
+  }
+
+  private decisionsOf(reconciliationId: string): FuelDiscrepancy[] {
+    return [...this.discrepancies.values()].filter(
+      (item) => item.reconciliationId === reconciliationId,
+    );
   }
 
   async closeReconciliation(input: CloseReconciliationInput): Promise<CloseReconciliationOutcome> {

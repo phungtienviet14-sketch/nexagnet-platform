@@ -10,6 +10,11 @@ import {
   type FuelReconciliationStatus,
   type FuelVerificationStatus,
 } from './fuel-lifecycle.js';
+import {
+  effectiveLineDecisions,
+  evaluateDecisionRevision,
+  lineStatusAfterRevision,
+} from './fuel-decision-revision.js';
 import { settlementResultFingerprint, sumAcceptedSettlement } from './fuel-settlement.js';
 import {
   consumptionFromStored,
@@ -18,6 +23,7 @@ import {
   litersFromStored,
 } from './fuel-quantity.js';
 import {
+  FUEL_DECISION_SUPERSEDED_ONCE,
   FUEL_ENTRY_CORRELATION,
   FUEL_MATCH_ENTRY_ONCE,
   FUEL_MATCH_LINE_ONCE,
@@ -42,6 +48,8 @@ import {
   type ReopenReconciliationInput,
   type ResolveDiscrepancyInput,
   type ResolveDiscrepancyOutcome,
+  type ReviseDecisionInput,
+  type ReviseDecisionOutcome,
   type SetFuelVerificationInput,
   type UpdateFuelSupplierProfileInput,
   type WithdrawEvidenceInput,
@@ -250,6 +258,9 @@ const toDiscrepancy = (row: any): FuelDiscrepancy => ({
   resolutionNote: row.resolutionNote,
   resolvedAt: isoOrNull(row.resolvedAt),
   resolvedBy: row.resolvedBy,
+  // `?? null` cung ly do voi `ingestChannels ?? []` o tren: mot ban client sinh truoc migration
+  // `#317` khong co khoa nay, va `undefined` lot ra ngoai se lam phep chieu chuoi doc sai.
+  supersedesId: row.supersedesId ?? null,
   createdAt: iso(row.createdAt),
 });
 
@@ -959,6 +970,21 @@ export class PrismaFuelRepository extends FuelRepository {
           return { kind: 'RECONCILIATION_REJECTED', state: locked.state };
         }
 
+        /*
+         * `#317` G0 — NOI CHUOI, DUOI KHOA. Mot chenh lech moi cua mot dong DA co quyet dinh (vd lan
+         * chay lai so khop sau khi mo ky) thay the quyet dinh dang hieu luc cua dong do, chu khong
+         * dung CANH no. Doc chuoi o day, sau `lockReconciliation`, nen khong lan quyet nao chen vao
+         * giua duoc; UNIQUE `supersedesId` la luoi thu hai.
+         */
+        const records = await this.readDiscrepancies(scoped, input.reconciliationId);
+        const deciding = records.find(
+          (record) => record.id === input.discrepancyId && record.status === 'PENDING',
+        );
+        const supersedesId =
+          deciding?.statementLineId != null
+            ? (effectiveLineDecisions(records).get(deciding.statementLineId)?.id ?? null)
+            : null;
+
         // `reconciliationId` nam trong `WHERE`: mot chenh lech cua ky KHAC khong duoc quyet duoi
         // khoa cua ky nay — do se la mot lan ghi khong ai noi tiep hoa.
         const updated = await model(scoped, 'transportFuelDiscrepancy').updateMany({
@@ -973,6 +999,7 @@ export class PrismaFuelRepository extends FuelRepository {
             resolutionNote: input.resolutionNote,
             resolvedAt: input.at,
             resolvedBy: input.actor,
+            supersedesId,
           },
         });
         if (updated.count === 0) return { kind: 'DISCREPANCY_RACE' };
@@ -1029,6 +1056,110 @@ export class PrismaFuelRepository extends FuelRepository {
       });
     } catch (error) {
       throw this.translateMatchError(error);
+    }
+  }
+
+  /**
+   * DOI Y ve mot quyet dinh da ghi — `#317` G0. Xem `ReviseDecisionInput`.
+   *
+   * ===========================================================================
+   * MOT `INSERT`, KHONG MOT `UPDATE` NAO LEN HANG CU.
+   *
+   * ```text
+   * 1. khoa hang doi soat (T4R §1), tu choi neu ky da dong
+   * 2. doc TOAN BO chuoi quyet dinh cua ky — duoi khoa
+   * 3. lan gui lai cua dung lenh vua ghi?        -> REPLAYED, khong ghi gi
+   * 4. `evaluateDecisionRevision` tren du lieu do  -> DENIED co ma
+   * 5. INSERT hang RESOLVED moi, `supersedesId` = hang cu
+   * 6. dong bang ke doc lai trang thai cua quyet dinh moi (chi khi dang o trang thai chenh lech)
+   * ```
+   *
+   * Tong duoc chap nhan KHONG duoc tinh o day: no chi di sang T5 khi ky duoc DONG lai, qua
+   * `closeReconciliation` — va lan dong do phat mot ban sua doi ban giao neu tong da doi.
+   */
+  async reviseDecision(input: ReviseDecisionInput): Promise<ReviseDecisionOutcome> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const scoped = tx as unknown as PrismaService;
+
+        const locked = await this.lockReconciliation(scoped, input.reconciliationId);
+        if (!locked) return { kind: 'RECONCILIATION_REJECTED', state: null };
+        if (isFrozenFuelReconciliation(locked.state)) {
+          return { kind: 'RECONCILIATION_REJECTED', state: locked.state };
+        }
+
+        const records = await this.readDiscrepancies(scoped, input.reconciliationId);
+        const target = records.find((record) => record.id === input.discrepancyId);
+        if (!target) return { kind: 'DECISION_NOT_FOUND' };
+
+        const successor = records.find((record) => record.supersedesId === target.id);
+        if (
+          successor &&
+          successor.resolution === input.resolution &&
+          successor.resolutionNote === input.reason &&
+          successor.resolvedBy === input.actor
+        ) {
+          return { kind: 'REPLAYED', revision: successor, superseded: target, state: locked.state };
+        }
+
+        const decision = evaluateDecisionRevision({
+          target,
+          records,
+          resolution: input.resolution,
+        });
+        if (!decision.allowed) {
+          return {
+            kind: 'DENIED',
+            reason: decision.reason,
+            currentId:
+              target.statementLineId === null
+                ? null
+                : (effectiveLineDecisions(records).get(target.statementLineId)?.id ?? null),
+          };
+        }
+
+        const revision = toDiscrepancy(
+          await model(scoped, 'transportFuelDiscrepancy').create({
+            data: {
+              reconciliationId: target.reconciliationId,
+              kind: target.kind,
+              status: 'RESOLVED',
+              statementLineId: target.statementLineId,
+              fuelEntryId: target.fuelEntryId,
+              candidateEntryIds: [...target.candidateEntryIds],
+              candidateLineIds: [...target.candidateLineIds],
+              resolution: input.resolution,
+              resolutionNote: input.reason,
+              resolvedAt: input.at,
+              resolvedBy: input.actor,
+              supersedesId: target.id,
+              createdAt: input.at,
+            },
+          }),
+        );
+
+        const line = await model(scoped, 'transportFuelStatementLine').findUnique({
+          where: { id: target.statementLineId as string },
+          select: { reconciliationStatus: true },
+        });
+        const nextStatus = line
+          ? lineStatusAfterRevision(input.resolution, line.reconciliationStatus)
+          : null;
+        if (line && nextStatus !== null) {
+          // Dieu kien di THEO lenh ghi: dong chi doi neu van o dung trang thai vua doc.
+          await model(scoped, 'transportFuelStatementLine').updateMany({
+            where: { id: target.statementLineId, reconciliationStatus: line.reconciliationStatus },
+            data: { reconciliationStatus: nextStatus },
+          });
+        }
+
+        return { kind: 'REVISED', revision, superseded: target, state: locked.state };
+      });
+    } catch (error) {
+      if (isUniqueViolationOn(error, FUEL_DECISION_SUPERSEDED_ONCE)) {
+        return { kind: 'DENIED', reason: 'DECISION_NOT_CURRENT', currentId: null };
+      }
+      throw error;
     }
   }
 
@@ -1403,6 +1534,12 @@ export class PrismaFuelRepository extends FuelRepository {
       return TransportDomainError.conflict(
         'FUEL_ENTRY_ALREADY_MATCHED',
         'Phieu nay vua duoc nguoi khac khop voi mot dong khac — tai lai roi thu lai',
+      );
+    }
+    if (isUniqueViolationOn(error, FUEL_DECISION_SUPERSEDED_ONCE)) {
+      return TransportDomainError.conflict(
+        'FUEL_RECONCILIATION_STATE_RACE',
+        'Quyet dinh cua dong bang ke nay vua duoc nguoi khac thay the — tai lai roi doc lai',
       );
     }
     return error;

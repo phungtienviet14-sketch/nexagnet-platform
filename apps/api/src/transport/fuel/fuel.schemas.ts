@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MONEY_MAX_AMOUNT } from '../money.js';
+import { REVISABLE_FUEL_RESOLUTIONS } from './fuel-decision-revision.js';
 import { LITERS_SCALE } from './fuel-quantity.js';
 import {
   FUEL_DISCREPANCY_RESOLUTIONS,
@@ -213,6 +214,19 @@ export const resolveDiscrepancySchema = z
     note: optionalText,
     statementLineId: z.string().trim().min(1).optional(),
     fuelEntryId: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+/**
+ * DOI Y ve mot quyet dinh DA GHI — `#317` G0.
+ *
+ * `MATCH_CONFIRMED` KHONG co trong danh sach, o CA HAI chieu: xem `REVISABLE_FUEL_RESOLUTIONS`. `reason`
+ * BAT BUOC — mot lan doi y lam tong phai tra cay xang thay doi thi phai noi duoc vi sao.
+ */
+export const reviseDiscrepancySchema = z
+  .object({
+    resolution: z.enum(REVISABLE_FUEL_RESOLUTIONS),
+    reason: nonEmpty.max(500),
   })
   .strict();
 

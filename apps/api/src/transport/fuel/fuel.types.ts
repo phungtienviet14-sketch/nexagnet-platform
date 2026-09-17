@@ -260,6 +260,11 @@ export interface FuelDiscrepancy {
   readonly resolutionNote: string | null;
   readonly resolvedAt: string | null;
   readonly resolvedBy: string | null;
+  /**
+   * `#317` G0 — quyet dinh ma hang nay THAY THE (cung ky, cung dong bang ke). `null` = quyet dinh
+   * dau tien cua dong, hoac chenh lech chua quyet. Xem `fuel-decision-revision.ts`.
+   */
+  readonly supersedesId: string | null;
   readonly createdAt: string;
 }
 
@@ -419,5 +424,12 @@ export interface FuelReconciliationWorkspace {
   readonly discrepancies: readonly FuelDiscrepancy[];
   /** Con bao nhieu chenh lech chua ai quyet — con so chan `FUEL-RECON-004`. */
   readonly pendingDiscrepancyCount: number;
+  /**
+   * `#317` G0 — cac quyet dinh DA GHI nhung KHONG con hieu luc (bi thay the), da sap xep.
+   *
+   * Tinh o may chu bang CHINH phep chieu ma tong tien dung (`supersededDecisionIds`), de man hinh
+   * khong phai tu viet lai luat "ban nao dang hieu luc" — hai ban sao cua mot luat tien som muon lech.
+   */
+  readonly supersededDiscrepancyIds: readonly string[];
   readonly handoff: FuelSettlementHandoff | null;
 }

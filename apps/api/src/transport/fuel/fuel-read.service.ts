@@ -8,6 +8,7 @@ import {
   type DriverFuelSupplierView,
 } from './driver-fuel.view.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
+import { supersededDecisionIds } from './fuel-decision-revision.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
 import type { FuelEntryInboxFilter } from './fuel.repository.js';
@@ -242,6 +243,7 @@ export class FuelReadService {
       matches,
       discrepancies,
       pendingDiscrepancyCount: discrepancies.filter((item) => item.status === 'PENDING').length,
+      supersededDiscrepancyIds: [...supersededDecisionIds(discrepancies)].sort(),
       handoff,
     };
   }

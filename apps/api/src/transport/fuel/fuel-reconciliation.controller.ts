@@ -26,6 +26,7 @@ import {
   importStatementSchema,
   reopenReconciliationSchema,
   resolveDiscrepancySchema,
+  reviseDiscrepancySchema,
 } from './fuel.schemas.js';
 
 /**
@@ -98,6 +99,22 @@ export class FuelReconciliationController {
     const input = this.parse(resolveDiscrepancySchema, body);
     return this.guard(() =>
       this.reconciliation.resolveDiscrepancy(id, input, transportActorOf(request)),
+    );
+  }
+
+  /**
+   * `#317` G0 — DOI Y ve mot quyet dinh da ghi: THEM mot quyet dinh thay the, khong sua hang cu.
+   *
+   * Cung ma hanh dong voi `resolve`: day van la viec QUYET mot chenh lech, va duong den mot ky da
+   * dong van phai di qua `reopen` (quyen rieng) truoc — `FuelReconciliationService` tu choi ky dong.
+   */
+  @Post('discrepancies/:id/revise')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.fuel.reconciliation.resolve')
+  revise(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(reviseDiscrepancySchema, body);
+    return this.guard(() =>
+      this.reconciliation.reviseDiscrepancyDecision(id, input, transportActorOf(request)),
     );
   }
 
