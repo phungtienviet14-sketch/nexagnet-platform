@@ -336,8 +336,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       );
       state.reconciliationId = imported.reconciliation.id;
       state.statementId = imported.statement.id;
-      state.matchedLineId = imported.lines.find((line) => line.rowNumber === 1)?.id as string;
-      state.orphanLineId = imported.lines.find((line) => line.rowNumber === 2)?.id as string;
+      // `rowNumber` dem theo DONG CUA TEP (tieu de la dong 1 — `fuel-statement-source.ts`), nen hai
+      // dong du lieu la 2 va 3. Tra sai thi DUNG NGAY o day, khong de 11 bai do day chuyen.
+      const lineAt = (rowNumber: number): string => {
+        const found = imported.lines.find((line) => line.rowNumber === rowNumber);
+        if (!found) throw new Error(`Bang ke fixture khong co dong so ${rowNumber}`);
+        return found.id;
+      };
+      state.matchedLineId = lineAt(2);
+      state.orphanLineId = lineAt(3);
 
       await reconciliation.runMatching(state.reconciliationId, ACTOR);
     }, 120_000);
