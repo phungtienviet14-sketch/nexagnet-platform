@@ -27,6 +27,8 @@ import type { BusinessDate, FuelPaymentMethod } from '../transport-types';
 
 export interface DriverFuelForm {
   readonly supplierId: string;
+  /** `#317` G1 — tram/diem do. `''` = khong khai (nha cung cap chua co danh muc tram). */
+  readonly stationId: string;
   readonly liters: string;
   readonly amount: string;
   readonly odometerKm: string;
@@ -37,12 +39,16 @@ export interface DriverFuelForm {
 }
 
 /**
- * MAC DINH GIU NGUYEN hanh vi cua `main` (`DRIVER_CASH`). Luong chuan cua `#295` noi lai xe do o cay
- * xang co hop dong KHONG tra tien mat — nhung doi mac dinh la doi dong tien cua moi phieu ma lai xe
- * khong de y (`DRIVER_CASH` -> quy lai xe khi duyet). Do la quyet dinh cua chu so huu, khong phai
- * cua man hinh; man hinh chi cho lai xe CHON dung su that.
+ * MAC DINH LA GHI NO CAY XANG (`SUPPLIER_ACCOUNT`) — `OWNER_DECISIONS_2026_09_17`, `#317`.
+ *
+ * Luong chuan cua `#295` la cay xang HOP DONG: lai xe do dau va KHONG tra tien mat. `DRIVER_CASH`
+ * (-> quy lai xe khi duyet) chi khi lai xe CHU DONG chon vi that su ung tien. Guong cua
+ * `DEFAULT_FUEL_PAYMENT_METHOD` o may chu.
+ *
+ * Mac dinh nay KHONG sinh cong no luc khai: to khai van chi la mot su that van hanh; cong no nha
+ * cung cap chi xuat hien sau doi soat bang ke + dong ky.
  */
-export const DEFAULT_DRIVER_PAYMENT_METHOD: FuelPaymentMethod = 'DRIVER_CASH';
+export const DEFAULT_DRIVER_PAYMENT_METHOD: FuelPaymentMethod = 'SUPPLIER_ACCOUNT';
 
 /** Dong ho dien thoai lech vai phut la chuyen thuong; mot phieu cua ngay mai thi khong. */
 export const OCCURRED_AT_CLOCK_SKEW_MS = 5 * 60_000;
@@ -109,6 +115,8 @@ export const toDriverFuelSubmission = (input: {
     tripId: input.trip.id,
     vehicleId: input.trip.vehicleId,
     supplierId: input.form.supplierId,
+    // `null` tuong minh chu khong bo truong: than yeu cau la ham thuan cua form, gui lai phai giong het.
+    stationId: input.form.stationId === '' ? null : input.form.stationId,
     liters: input.form.liters.trim(),
     amount: Number(input.form.amount),
     odometerKm: Number(input.form.odometerKm),

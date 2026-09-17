@@ -4,6 +4,7 @@ import type {
   FuelReviewReason,
   FuelVerificationStatus,
 } from './fuel-lifecycle.js';
+import type { FuelStation } from './fuel-station.types.js';
 import type {
   FuelEntry,
   FuelPaymentMethod,
@@ -39,6 +40,9 @@ export interface DriverFuelSlipView {
   readonly tripId: string;
   readonly vehicleId: string;
   readonly supplierId: string;
+  /** `#317` G1 — tram lai xe da khai, va TEN tren bien hieu cua no (khong ma so thue, khong toa do). */
+  readonly stationId: string | null;
+  readonly stationName: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: string;
   readonly litersUnits: number;
@@ -90,12 +94,16 @@ export interface DriverFuelEvidenceView {
 export function toDriverFuelSlipView(
   entry: FuelEntry,
   evidence: readonly FuelReceiptEvidence[],
+  /** BAT BUOC du co the `null`: mot tham so tuy chon la mot noi goi quen doi ten tram. */
+  stationName: string | null,
 ): DriverFuelSlipView {
   return {
     id: entry.id,
     tripId: entry.tripId,
     vehicleId: entry.vehicleId,
     supplierId: entry.supplierId,
+    stationId: entry.stationId,
+    stationName: entry.stationId === null ? null : stationName,
     businessDate: entry.businessDate,
     occurredAt: entry.occurredAt,
     litersUnits: entry.litersUnits,
@@ -143,4 +151,33 @@ export interface DriverFuelSupplierView {
 export function toDriverFuelSupplierView(supplier: FuelSupplier): DriverFuelSupplierView {
   // Chon TUNG TRUONG, khong spread — cung ly le nhu `evidence` o tren.
   return { id: supplier.id, name: supplier.name };
+}
+
+/**
+ * TRAM/DIEM DO — khung nhin cua LAI XE (`#317` G1).
+ *
+ * Cung ly le voi `DriverFuelSupplierView`: `POST me/fuel/slips` nhan `stationId`, nhung danh muc tram
+ * nam sau quyen `transport.fuel.station.read` cua van hanh. Lai xe can dung nhung gi de NHAN RA mot
+ * cua hang tren duong: ten, ma cua hang, dia chi. Toa do, ban kinh hang rao va ghi chu noi bo CO Y
+ * vang mat — chung khong giup chon, va mot truong khong gui di la mot truong khong the ro ri.
+ *
+ * Chi tram `ACTIVE`: mot tram da ngung hop tac se bi tu choi o duong nop (`FUEL_ENTRY_STATION_INACTIVE`),
+ * nen dua no vao o chon la moi lai xe chon mot thu chac chan bi tu choi.
+ */
+export interface DriverFuelStationView {
+  readonly id: string;
+  readonly supplierId: string;
+  readonly name: string;
+  readonly code: string | null;
+  readonly address: string | null;
+}
+
+export function toDriverFuelStationView(station: FuelStation): DriverFuelStationView {
+  return {
+    id: station.id,
+    supplierId: station.supplierId,
+    name: station.name,
+    code: station.code,
+    address: station.address,
+  };
 }

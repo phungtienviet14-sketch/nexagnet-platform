@@ -1,4 +1,4 @@
-import type { FuelDiscrepancyResolution } from './fuel.types.js';
+import { effectiveLineDecisions, type DecisionRecord } from './fuel-decision-revision.js';
 
 /**
  * KET QUA KINH TE cua mot ky doi soat — ham THUAN, khong biet Nest, khong biet Prisma.
@@ -30,10 +30,13 @@ export interface AcceptedMatchRef {
   readonly statementLineId: string;
 }
 
-export interface AcceptedDiscrepancyRef {
-  readonly statementLineId: string | null;
-  readonly resolution: FuelDiscrepancyResolution | null;
-}
+/**
+ * Mot chenh lech o dang phep cong doc — du truong de dung lai CHUOI quyet dinh (`#317` G0).
+ *
+ * Truoc `#317` kieu nay chi co `statementLineId` + `resolution`, va chinh su ngheo do la loi: phep
+ * cong khong the biet mot `ACCEPT` da bi thay the hay chua.
+ */
+export type AcceptedDiscrepancyRef = DecisionRecord;
 
 export interface AcceptedSettlementResult {
   readonly amount: number;
@@ -53,10 +56,15 @@ export interface AcceptedSettlementResult {
  *
  * Hai nguon, va chi hai:
  *   · dong DA KHOP (may hoac nguoi) — so cua cay xang trung so cua ta trong dung sai;
- *   · dong co chenh lech duoc quyet `ACCEPT_SUPPLIER_AMOUNT` — ta chap nhan so cua ho.
+ *   · dong co quyet dinh HIEU LUC la `ACCEPT_SUPPLIER_AMOUNT` — ta chap nhan so cua ho.
  *
  * MOI THU KHAC BI LOAI, ke ca `IGNORE_WITH_REASON` va `ENTRY_CORRECTION_REQUIRED`. Do la `INV-07`
  * duoc viet thanh mot phep cong: mot dong khong khop KHONG tu vao cong no phai tra.
+ *
+ * `#317` G0 — "HIEU LUC" nghia la quyet dinh MOI NHAT cua dong theo chuoi thay the
+ * (`effectiveLineDecisions`). Mot `ACCEPT` da bi thay bang `IGNORE` sau khi mo lai ky KHONG con keo
+ * dong vao tong, nen tong duoc phep giam va ban giao moi mang so nho hon. Lich su van nguyen: ban
+ * `ACCEPT` cu van nam trong bang, chi khong con duoc cong.
  */
 export function sumAcceptedSettlement(input: {
   readonly lines: readonly AcceptableStatementLine[];
@@ -64,9 +72,8 @@ export function sumAcceptedSettlement(input: {
   readonly discrepancies: readonly AcceptedDiscrepancyRef[];
 }): AcceptedSettlementResult {
   const acceptedLineIds = new Set(input.matches.map((match) => match.statementLineId));
-  for (const discrepancy of input.discrepancies) {
-    if (discrepancy.resolution !== 'ACCEPT_SUPPLIER_AMOUNT') continue;
-    if (discrepancy.statementLineId) acceptedLineIds.add(discrepancy.statementLineId);
+  for (const [statementLineId, decision] of effectiveLineDecisions(input.discrepancies)) {
+    if (decision.resolution === 'ACCEPT_SUPPLIER_AMOUNT') acceptedLineIds.add(statementLineId);
   }
 
   const accepted = input.lines.filter((line) => acceptedLineIds.has(line.id));

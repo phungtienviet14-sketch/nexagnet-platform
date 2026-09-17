@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { MONEY_MAX_AMOUNT } from '../money.js';
+import { REVISABLE_FUEL_RESOLUTIONS } from './fuel-decision-revision.js';
 import { LITERS_SCALE } from './fuel-quantity.js';
 import {
+  DEFAULT_FUEL_PAYMENT_METHOD,
   FUEL_DISCREPANCY_RESOLUTIONS,
   FUEL_PAYMENT_METHODS,
   FUEL_STATEMENT_FORMATS,
@@ -57,6 +59,11 @@ const correlationKey = z.string().trim().min(8).max(120).optional();
 
 const fuelEntryFields = {
   supplierId: nonEmpty,
+  /**
+   * `#317` G1 — TRAM/DIEM DO. Tuy chon: mot nha cung cap chua khai danh muc tram van nhan to khai.
+   * Khi co, tang mien kiem tram ton tai, `ACTIVE` va thuoc dung `supplierId`.
+   */
+  stationId: z.string().trim().min(1).max(64).nullable().optional(),
   liters,
   amount: vndAmount,
   odometerKm,
@@ -66,6 +73,14 @@ const fuelEntryFields = {
   invoiceNo: optionalText,
   note: optionalText,
 };
+
+/**
+ * CACH TRA TIEN cua lenh NOP MOI — bo trong thi la `SUPPLIER_ACCOUNT` (`#317`).
+ *
+ * Xem `DEFAULT_FUEL_PAYMENT_METHOD`. Chi lenh nop dung truong nay; lenh SUA van dung
+ * `fuelEntryFields.paymentMethod` bat buoc.
+ */
+const submitPaymentMethod = z.enum(FUEL_PAYMENT_METHODS).default(DEFAULT_FUEL_PAYMENT_METHOD);
 
 /**
  * BE MAT VAN HANH nop ho mot phieu — co `driverId`/`vehicleId` tuong minh.
@@ -79,6 +94,7 @@ export const submitFuelEntrySchema = z
     vehicleId: nonEmpty,
     driverId: nonEmpty,
     ...fuelEntryFields,
+    paymentMethod: submitPaymentMethod,
     correlationKey,
   })
   .strict();
@@ -94,9 +110,19 @@ export const driverFuelSubmitSchema = z
     tripId: nonEmpty,
     vehicleId: nonEmpty,
     ...fuelEntryFields,
+    paymentMethod: submitPaymentMethod,
     correlationKey,
   })
   .strict();
+
+/** `#317` G1 — danh sach tram cho o chon cua lai xe. `supplierId` bo trong = moi nha cung cap. */
+export const driverFuelStationQuerySchema = z.object({
+  supplierId: z
+    .string()
+    .trim()
+    .nullish()
+    .transform((value) => (value && value.length > 0 ? value : null)),
+});
 
 export const amendFuelEntrySchema = z.object(fuelEntryFields).strict();
 
@@ -213,6 +239,19 @@ export const resolveDiscrepancySchema = z
     note: optionalText,
     statementLineId: z.string().trim().min(1).optional(),
     fuelEntryId: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+/**
+ * DOI Y ve mot quyet dinh DA GHI — `#317` G0.
+ *
+ * `MATCH_CONFIRMED` KHONG co trong danh sach, o CA HAI chieu: xem `REVISABLE_FUEL_RESOLUTIONS`. `reason`
+ * BAT BUOC — mot lan doi y lam tong phai tra cay xang thay doi thi phai noi duoc vi sao.
+ */
+export const reviseDiscrepancySchema = z
+  .object({
+    resolution: z.enum(REVISABLE_FUEL_RESOLUTIONS),
+    reason: nonEmpty.max(500),
   })
   .strict();
 

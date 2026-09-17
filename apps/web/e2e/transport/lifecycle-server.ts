@@ -77,6 +77,11 @@ export const FUEL_SUPPLIERS = [
   { id: 'sup-1', name: 'Petrolimex Cầu Giấy', taxCode: null, createdAt: AT, updatedAt: AT },
 ];
 
+/** `#317` G1 — tram DANG hop tac cua `sup-1`, dung hinh dang `DriverFuelStationView`. */
+export const FUEL_STATIONS = [
+  { id: 'sta-12', supplierId: 'sup-1', name: 'CHXD số 12', code: 'CH-12', address: 'Km 12 QL5' },
+];
+
 interface Trip {
   id: string;
   code: string;
@@ -104,6 +109,8 @@ interface FuelEntry {
   vehicleId: string;
   driverId: string;
   supplierId: string;
+  /** `#317` G1 — tuy chon trong may chu gia: phieu cu cua cac bai khac khong khai tram. */
+  stationId?: string | null;
   businessDate: string;
   occurredAt: string;
   litersUnits: number;
@@ -264,6 +271,14 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
       FUEL_SUPPLIERS.map((row) => ({ id: row.id, name: row.name })),
     ),
   );
+  // `#317` G1 — tram cua MOT cay xang, loc theo `supplierId` dung nhu may chu that.
+  await page.route(/\/transport\/me\/fuel\/stations(\?[^/]*)?$/, (route) => {
+    const supplierId = new URL(route.request().url()).searchParams.get('supplierId');
+    return json(
+      route,
+      FUEL_STATIONS.filter((station) => supplierId === null || station.supplierId === supplierId),
+    );
+  });
   await page.route('**/transport/me/expense-categories', (route) =>
     json(route, [{ code: 'ROAD_TOLL', label: 'Phí cầu đường', requiresEvidence: false }]),
   );
@@ -443,6 +458,8 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
     tripId: entry.tripId,
     vehicleId: entry.vehicleId,
     supplierId: entry.supplierId,
+    stationId: entry.stationId ?? null,
+    stationName: FUEL_STATIONS.find((station) => station.id === entry.stationId)?.name ?? null,
     businessDate: entry.businessDate,
     occurredAt: entry.occurredAt,
     litersUnits: entry.litersUnits,
@@ -480,6 +497,7 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
       vehicleId: String(body.vehicleId),
       driverId: 'drv-1',
       supplierId: String(body.supplierId),
+      stationId: (body.stationId as string | null | undefined) ?? null,
       businessDate: String(body.businessDate ?? '2026-09-04'),
       occurredAt: AT,
       litersUnits: Number(body.litersUnits),
@@ -489,7 +507,8 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
       previousOdometerKm: null,
       consumptionUnits: null,
       reviewReasons: [],
-      paymentMethod: String(body.paymentMethod ?? 'DRIVER_CASH'),
+      // `#317` — may chu that dat mac dinh `SUPPLIER_ACCOUNT` khi than bo trong truong nay.
+      paymentMethod: String(body.paymentMethod ?? 'SUPPLIER_ACCOUNT'),
       verificationStatus: 'DECLARED',
       reconciliationStatus: 'UNMATCHED',
       sourceStatementId: null,

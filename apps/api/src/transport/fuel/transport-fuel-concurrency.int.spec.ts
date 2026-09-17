@@ -16,7 +16,9 @@ import { FuelStatementService } from './fuel-statement.service.js';
 import { CostingFuelExpenseAdapter, TransportFuelCoreFactsAdapter } from './fuel.ports.js';
 import { FuelService } from './fuel.service.js';
 import type { FuelEntry } from './fuel.types.js';
+import { deleteFuelDiscrepanciesForTest } from './fuel-test-cleanup.js';
 import { PrismaFuelRepository } from './prisma-fuel.repository.js';
+import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
 
 /**
  * T4R §1 va §4 — HAI LENH CUNG CHAY, VA CHI MOT KET CUC DOC DUOC (Issue #103).
@@ -153,11 +155,21 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       COSTING_POLICY,
     );
     const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
+    const stationRepo = new PrismaFuelStationRepository(prisma);
     const costingPort = new CostingFuelExpenseAdapter(costing);
 
-    const fuel = new FuelService(fuelRepo, fuelCore, costingPort, audit, CORE_POLICY, FUEL_POLICY);
+    const fuel = new FuelService(
+      fuelRepo,
+      stationRepo,
+      fuelCore,
+      costingPort,
+      audit,
+      CORE_POLICY,
+      FUEL_POLICY,
+    );
     const gatedFuel = new FuelService(
       gatedRepo,
+      stationRepo,
       fuelCore,
       costingPort,
       audit,
@@ -200,9 +212,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportFuelMatch.deleteMany({
         where: { reconciliationId: { in: reconciliationIds } },
       });
-      await prisma.transportFuelDiscrepancy.deleteMany({
-        where: { reconciliationId: { in: reconciliationIds } },
-      });
+      // `#317` G0: quyet dinh da ghi co trigger chi-ghi-them — xoa qua helper tat trigger.
+      await deleteFuelDiscrepanciesForTest(prisma, reconciliationIds);
       await prisma.transportFuelReconciliation.deleteMany({
         where: { id: { in: reconciliationIds } },
       });

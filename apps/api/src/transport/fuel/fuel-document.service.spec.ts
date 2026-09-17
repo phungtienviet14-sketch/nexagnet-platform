@@ -424,6 +424,8 @@ describe('DOC-16 — khong duong tinh tien nao doc ung vien', () => {
       .map((name) => join(costingDir, name));
     return [
       join(HERE, 'fuel-settlement.ts'),
+      // `#317` G0 — phep chieu "quyet dinh hieu luc" nam TRONG phep cong tien.
+      join(HERE, 'fuel-decision-revision.ts'),
       join(HERE, 'fuel-reconciliation.service.ts'),
       join(HERE, 'fuel-matching.ts'),
       join(HERE, 'fuel.service.ts'),

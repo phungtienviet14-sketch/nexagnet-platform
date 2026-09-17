@@ -1,5 +1,9 @@
 import type { BusinessDate } from '../business-date.js';
 import type {
+  FuelDecisionRevisionDeniedReason,
+  RevisableFuelResolution,
+} from './fuel-decision-revision.js';
+import type {
   FuelReconciliationState,
   FuelReconciliationStatus,
   FuelReviewReason,
@@ -121,6 +125,8 @@ export interface CreateFuelEntryInput {
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
+  /** `#317` G1 — tram DA DUOC KIEM thuoc `supplierId` va dang `ACTIVE` o tang mien. */
+  readonly stationId: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: Date;
   readonly litersUnits: number;
@@ -177,6 +183,8 @@ export interface AmendFuelEntryInput {
   readonly businessDate: BusinessDate;
   readonly occurredAt: Date;
   readonly supplierId: string;
+  /** `#317` G1 — xem `CreateFuelEntryInput.stationId`. */
+  readonly stationId: string | null;
   readonly paymentMethod: FuelPaymentMethod;
   readonly invoiceNo: string | null;
   readonly note: string | null;
@@ -501,6 +509,51 @@ export type ResolveDiscrepancyOutcome =
   | { readonly kind: 'DISCREPANCY_RACE' };
 
 /**
+ * DOI Y ve mot quyet dinh DA GHI — `#317` G0.
+ *
+ * ===========================================================================
+ * KHONG SUA HANG CU. Lenh nay THEM mot hang `RESOLVED` moi, `supersedesId` tro ve quyet dinh bi thay
+ * the — va CSDL (`transport_fuel_discrepancy_decision_append_only`) tu choi moi `UPDATE`/`DELETE` len
+ * hang da quyet. `resolveDiscrepancy` cung noi chuoi theo DUNG luat nay khi mot chenh lech moi (sinh
+ * ra tu lan chay lai so khop sau khi mo ky) duoc quyet tren mot dong da co quyet dinh.
+ *
+ * ===========================================================================
+ * GIAO THUC NOI TIEP HOA giu nguyen (T4R §1): khoa hang doi soat -> doc lai TOAN BO chuoi quyet dinh
+ * cua ky DUOI khoa -> chay `evaluateDecisionRevision` tren du lieu do -> ghi. Hai lan sua dong thoi
+ * cung mot quyet dinh xep hang sau khoa; lan sau thay chuoi da dai them va nhan `DECISION_NOT_CURRENT`
+ * — tru khi no la LAN GUI LAI cua dung lenh vua ghi (cung quyet dinh, cung ly do, cung nguoi), khi do
+ * nhan lai chinh hang da ghi (`REPLAYED`). UNIQUE `supersedesId` la luoi thu hai.
+ */
+export interface ReviseDecisionInput {
+  readonly reconciliationId: string;
+  /** Quyet dinh BI THAY THE — phai la quyet dinh hieu luc cua dong do luc ghi. */
+  readonly discrepancyId: string;
+  readonly resolution: RevisableFuelResolution;
+  /** Ly do doi y — BAT BUOC, di vao `resolutionNote` cua hang moi va vao dau vet kiem toan. */
+  readonly reason: string;
+  readonly actor: string;
+  readonly at: Date;
+}
+
+export type ReviseDecisionOutcome =
+  | {
+      readonly kind: 'REVISED' | 'REPLAYED';
+      /** Hang MOI — quyet dinh hieu luc sau lenh nay. */
+      readonly revision: FuelDiscrepancy;
+      /** Hang CU, nguyen ven — de dau vet ghi duoc ca hai phia. */
+      readonly superseded: FuelDiscrepancy;
+      readonly state: FuelReconciliationState;
+    }
+  | { readonly kind: 'RECONCILIATION_REJECTED'; readonly state: FuelReconciliationState | null }
+  | { readonly kind: 'DECISION_NOT_FOUND' }
+  | {
+      readonly kind: 'DENIED';
+      readonly reason: FuelDecisionRevisionDeniedReason;
+      /** Quyet dinh DANG hieu luc cua dong do (neu co) — de nguoi dung biet phai sua ban nao. */
+      readonly currentId: string | null;
+    };
+
+/**
  * DONG MOT KY DOI SOAT — MOT giao dich, BA viec.
  *
  * ```text
@@ -735,6 +788,8 @@ export abstract class FuelRepository {
   abstract listDiscrepancies(reconciliationId: string): Promise<FuelDiscrepancy[]>;
   abstract findDiscrepancy(id: string): Promise<FuelDiscrepancy | null>;
   abstract resolveDiscrepancy(input: ResolveDiscrepancyInput): Promise<ResolveDiscrepancyOutcome>;
+  /** `#317` G0 — xem `ReviseDecisionInput`. Chi them hang, khong bao gio sua hang cu. */
+  abstract reviseDecision(input: ReviseDecisionInput): Promise<ReviseDecisionOutcome>;
   abstract closeReconciliation(
     input: CloseReconciliationInput,
   ): Promise<CloseReconciliationOutcome>;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_DRIVER_PAYMENT_METHOD,
   businessDateOf,
   fromDateTimeLocalValue,
   occurredAtProblem,
@@ -19,6 +20,7 @@ import {
 
 const FORM: DriverFuelForm = {
   supplierId: 'cay-xang-1',
+  stationId: 'tram-5',
   liters: ' 62.5 ',
   amount: '1437500',
   odometerKm: '120450',
@@ -80,6 +82,36 @@ describe('toDriverFuelSubmission', () => {
     });
 
     expect(body.invoiceNo).toBeNull();
+  });
+
+  it('#317 — form MOI mac dinh ghi no cay xang; DRIVER_CASH chi khi lai xe chu dong chon', () => {
+    expect(DEFAULT_DRIVER_PAYMENT_METHOD).toBe('SUPPLIER_ACCOUNT');
+    const cash = toDriverFuelSubmission({
+      form: { ...FORM, paymentMethod: 'DRIVER_CASH' },
+      trip: TRIP,
+      correlationKey: 'khoa-1',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+    expect(cash.paymentMethod).toBe('DRIVER_CASH');
+  });
+
+  it('#317 G1 — tram da chon di vao than yeu cau; khong chon thi gui null tuong minh', () => {
+    const withStation = toDriverFuelSubmission({
+      form: FORM,
+      trip: TRIP,
+      correlationKey: 'khoa-1',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+    const withoutStation = toDriverFuelSubmission({
+      form: { ...FORM, stationId: '' },
+      trip: TRIP,
+      correlationKey: 'khoa-1',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+
+    expect(withStation.stationId).toBe('tram-5');
+    expect(withoutStation.stationId).toBeNull();
+    expect(Object.keys(withoutStation)).toContain('stationId');
   });
 
   it('lai xe chon ghi no cay xang thi gui dung phuong thuc do', () => {

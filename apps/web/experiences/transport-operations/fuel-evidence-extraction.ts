@@ -1,47 +1,38 @@
-import { readFileAsBase64 } from './file-base64';
 import {
   FUEL_RECEIPT_MEDIA_TYPES,
   type FuelDocumentDetail,
   type FuelDocumentReview,
   type FuelReceiptMediaType,
-  type IngestFuelReceiptImageInput,
 } from './fuel-review-types';
-import { TransportApiError, transportApi } from './transport-api';
+import { transportApi } from './transport-api';
 
 /**
- * DOC MOT ANH CHUNG TU DA LUU — seam phia client cua `#313`.
+ * DOC MOT ANH CHUNG TU DA LUU — seam phia client (`#313`, noi vao route may chu o `#317`).
  *
  * ================================================================================================
- * CUA VAO LA `evidenceId`, KHONG BAO GIO LA DINH VI KHO
+ * CUA VAO LA `evidenceId`, VA BYTE KHONG DI QUA TRINH DUYET
  * ================================================================================================
  *
- * Byte duoc tai ve qua route CO XAC THUC `GET .../entries/:id/evidence/:evidenceId`, roi gui vao
- * `POST /transport/fuel/documents/image` — hai duong da co tren `main`. Than yeu cau chi mang
- * `sourceRef = fuel-evidence:<evidenceId>`, `mediaType` va byte; khong mot truong nao cua doi tuong
- * bang chung duoc chuyen tiep nguyen khoi, nen mot `locator` con sot trong DTO (chi tiet phieu tren
- * `main` van tra no) khong co duong nao di ra.
+ * `POST /transport/fuel/entries/:id/evidence/:evidenceId/extract` (`#308`) nhan DUNG hai `id` tren
+ * duong dan va KHONG co than yeu cau. May chu tu tra `evidenceId` ra byte trong kho, doi chieu tam
+ * anh voi DUNG phieu, roi dua vao bo doc — `sourceRef` do may chu dat (`fuel-evidence:<id>`), khong
+ * con la mot chuoi client khai.
  *
- * ================================================================================================
- * GIOI HAN DA DO — VA VI SAO NO CO TEN RIENG
- * ================================================================================================
+ * Ban `#313` truoc day tai byte ve roi gui lai duoi dang base64 trong than JSON, va vuong tran than
+ * JSON 100 kb cua API: anh chup that tu dien thoai ra `413`. Duong nay khong con than yeu cau nao de
+ * vuong, nen `#317` KHONG nang gioi han JSON toan cuc (quyet dinh chu so huu) ma bo han duong do.
  *
- * API tao app bang `NestFactory.create()` mac dinh, tuc than JSON toi da 100 kb (do: 99 kb -> 201,
- * 150 kb -> 413). Anh chup that tu dien thoai lon hon the rat nhieu, nen tren `main` duong nay chi
- * doc duoc anh nho; anh lon ra `413`. `TRANSPORT_BODY_LIMIT` bien no thanh mot cau noi dung su that
- * thay vi "khong doc duoc phan hoi". Duong doc anh DA LUU khong qua than yeu cau thuoc PR #308; khi
- * no vao `main`, chi can doi phan than cua ham nay.
- *
- * `sourceRef` o duong nay la do CLIENT khai: ke toan co quyen nhap chung tu von da gui duoc bat ky
- * anh nao voi bat ky `sourceRef` nao, nen seam nay khong mo rong quyen — nhung no cung khong phai
- * mot rang buoc phia may chu giua chung tu va tam anh.
+ * Moi tam anh duoc goi bang `{ id, contentType }` DUNG HAI TRUONG — mot DTO co them truong gi di nua
+ * (ke ca mot `locator` sot lai) cung khong co duong nao di vao URL.
  */
 
+/**
+ * Tien to `sourceRef` ma MAY CHU dat cho chung tu doc tu mot anh da luu (`fuel-evidence:<id>`).
+ * Man hinh chi DOC no de goi ten nguon; client khong con tu dat chuoi nay.
+ */
 export const FUEL_EVIDENCE_SOURCE_PREFIX = 'fuel-evidence:';
 
-export const fuelEvidenceSourceRef = (evidenceId: string): string =>
-  `${FUEL_EVIDENCE_SOURCE_PREFIX}${evidenceId}`;
-
-export type StoredEvidenceExtractionFailure = 'UNSUPPORTED_MEDIA_TYPE' | 'TRANSPORT_BODY_LIMIT';
+export type StoredEvidenceExtractionFailure = 'UNSUPPORTED_MEDIA_TYPE';
 
 export class StoredEvidenceExtractionError extends Error {
   readonly kind: StoredEvidenceExtractionFailure;
@@ -66,16 +57,16 @@ export interface StoredEvidenceExtraction {
 }
 
 export interface ExtractionDeps {
-  readonly evidenceBytes: (entryId: string, evidenceId: string) => Promise<Blob>;
-  readonly toBase64: (blob: Blob) => Promise<string>;
-  readonly ingestReceiptImage: (input: IngestFuelReceiptImageInput) => Promise<FuelDocumentDetail>;
+  readonly extractStoredEvidence: (
+    entryId: string,
+    evidenceId: string,
+  ) => Promise<FuelDocumentDetail>;
   readonly documentReview: (id: string) => Promise<FuelDocumentReview>;
 }
 
 const DEFAULT_DEPS: ExtractionDeps = {
-  evidenceBytes: (entryId, evidenceId) => transportApi.fuel.evidenceBytes(entryId, evidenceId),
-  toBase64: readFileAsBase64,
-  ingestReceiptImage: (input) => transportApi.fuel.ingestReceiptImage(input),
+  extractStoredEvidence: (entryId, evidenceId) =>
+    transportApi.fuel.extractStoredEvidence(entryId, evidenceId),
   documentReview: (id) => transportApi.fuel.documentReview(id),
 };
 
@@ -92,39 +83,18 @@ export const receiptMediaTypeOf = (
 export const UNSUPPORTED_EVIDENCE_MESSAGE =
   'Chỉ đọc được ảnh JPEG, PNG hoặc WebP. Chứng từ PDF cần kế toán xem trực tiếp.';
 
-export const TRANSPORT_BODY_LIMIT_MESSAGE =
-  'Ảnh này lớn hơn giới hạn gửi đọc của máy chủ hiện tại nên chưa đọc được. Ảnh gốc vẫn còn nguyên — hãy đối chiếu trực tiếp trên ảnh.';
-
 export async function extractStoredFuelEvidence(
   entryId: string,
   evidence: StoredEvidenceRef,
   deps: ExtractionDeps = DEFAULT_DEPS,
 ): Promise<StoredEvidenceExtraction> {
-  // Chan TRUOC khi tai: mot PDF vai megabyte tai ve chi de bi tu choi la phi bang thong cua nguoi
-  // dung va phi mot lan tai vao route doc byte.
-  const declared = receiptMediaTypeOf(evidence.contentType);
-  if (declared === null) {
+  // Chan TRUOC khi goi: mot PDF gui sang bo doc chi de bi tu choi la mot lan doc ton tien that.
+  if (receiptMediaTypeOf(evidence.contentType) === null) {
     throw new StoredEvidenceExtractionError('UNSUPPORTED_MEDIA_TYPE', UNSUPPORTED_EVIDENCE_MESSAGE);
   }
 
-  const blob = await deps.evidenceBytes(entryId, evidence.id);
-  // Loai may chu PHUC VU thang loai da khai. Bo doc phia may chu van so byte dau tep.
-  const mediaType = receiptMediaTypeOf(blob.type) ?? declared;
-  const contentBase64 = await deps.toBase64(blob);
-
-  let detail: FuelDocumentDetail;
-  try {
-    detail = await deps.ingestReceiptImage({
-      sourceRef: fuelEvidenceSourceRef(evidence.id),
-      mediaType,
-      contentBase64,
-    });
-  } catch (error) {
-    if (error instanceof TransportApiError && error.status === 413) {
-      throw new StoredEvidenceExtractionError('TRANSPORT_BODY_LIMIT', TRANSPORT_BODY_LIMIT_MESSAGE);
-    }
-    throw error;
-  }
+  // CHI hai `id` di ra ngoai — xem khoi chu thich dau tep.
+  const detail = await deps.extractStoredEvidence(entryId, evidence.id);
 
   const review = await deps.documentReview(detail.document.id);
   const originalReview =

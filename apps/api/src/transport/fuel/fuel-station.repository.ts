@@ -83,6 +83,12 @@ export abstract class FuelStationRepository {
   abstract findStation(id: string): Promise<FuelStation | null>;
   /** `supplierId = null` = moi tram. Doi tram cua mot khach van tai la con so nho co gioi han that. */
   abstract listStations(supplierId: string | null): Promise<FuelStation[]>;
+  /**
+   * `#317` G1 — tram theo DANH SACH ID, mot lan doc. Dung cho tang doc doi `stationId -> ten` cua
+   * mot trang hop thu/phieu lai xe ma khong keo ca danh muc tram (co the hang nghin cua hang) len.
+   * `[]` tra ve `[]`, khong phai mot cau lenh `IN ()`.
+   */
+  abstract listStationsByIds(ids: readonly string[]): Promise<FuelStation[]>;
   /** Ma DA CHUAN HOA da thuoc tram nao trong nha cung cap do chua — cong chan mot lan trung ma. */
   abstract findStationByCode(
     supplierId: string,
@@ -218,6 +224,14 @@ export class InMemoryFuelStationRepository extends FuelStationRepository {
   async listStations(supplierId: string | null): Promise<FuelStation[]> {
     return [...this.stations.values()]
       .filter((station) => supplierId === null || station.supplierId === supplierId)
+      .sort(byName)
+      .map(clone);
+  }
+
+  async listStationsByIds(ids: readonly string[]): Promise<FuelStation[]> {
+    const wanted = new Set(ids);
+    return [...this.stations.values()]
+      .filter((station) => wanted.has(station.id))
       .sort(byName)
       .map(clone);
   }

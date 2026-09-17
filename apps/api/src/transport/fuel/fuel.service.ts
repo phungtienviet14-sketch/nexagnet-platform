@@ -44,6 +44,7 @@ import {
   type FuelTripFacts,
 } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
+import { FuelStationRepository } from './fuel-station.repository.js';
 import { toFuelReceiptEvidenceView } from './fuel.types.js';
 import type {
   FuelEntry,
@@ -58,6 +59,8 @@ export interface SubmitFuelEntryCommand {
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
+  /** `#317` G1 — tram/diem do. `null`/bo trong = khong khai. */
+  readonly stationId?: string | null;
   /** So lit — chuoi hoac so, KHONG bao gio di qua mot phep nhan so thuc. Xem `fuel-quantity.ts`. */
   readonly liters: number | string;
   readonly amount: number;
@@ -109,6 +112,8 @@ export interface AttachFuelEvidenceCommand {
 export class FuelService {
   constructor(
     private readonly repository: FuelRepository,
+    /** `#317` G1 — CHI DOC: kiem tram tren to khai. Danh muc tram thuoc `FuelStationService`. */
+    private readonly stations: FuelStationRepository,
     private readonly core: TransportFuelCoreFacts,
     private readonly costing: FuelCostingPort,
     private readonly audit: AuditLogService,
@@ -156,6 +161,7 @@ export class FuelService {
           vehicleId: command.vehicleId,
           driverId: command.driverId,
           supplierId: command.supplierId,
+          stationId: command.stationId,
           businessDate,
           occurredAt,
           litersUnits,
@@ -176,6 +182,18 @@ export class FuelService {
       return replay;
     }
 
+    /*
+     * TRAM duoc kiem SAU lan do phat lai, co y: mot tram vua bi ngung hop tac giua lan gui dau va lan
+     * gui lai KHONG duoc bien mot lan gui lai hop le thanh mot loi. Lan gui dau da qua cong nay; phep
+     * so danh tinh o tren da bat moi lenh doi tram.
+     */
+    const stationId = await this.requireStation({
+      stationId: command.stationId ?? null,
+      supplierId: command.supplierId,
+      point: 'fuel_entry.submit',
+      previousStationId: null,
+    });
+
     const consumption = await this.measureConsumption({
       vehicleId: command.vehicleId,
       vehicleClass: vehicle.vehicleClass,
@@ -190,6 +208,7 @@ export class FuelService {
       vehicleId: command.vehicleId,
       driverId: command.driverId,
       supplierId: command.supplierId,
+      stationId,
       businessDate,
       occurredAt,
       litersUnits,
@@ -475,6 +494,12 @@ export class FuelService {
     const amount = this.parseAmount(command.amount);
     const odometerKm = this.parseOdometer(command.odometerKm);
     const supplier = await this.requireSupplier(command.supplierId);
+    const stationId = await this.requireStation({
+      stationId: command.stationId ?? null,
+      supplierId: supplier.id,
+      point: 'fuel_entry.amend',
+      previousStationId: entry.stationId,
+    });
     const vehicle = await this.core.findVehicle(entry.vehicleId);
 
     const consumption = await this.measureConsumption({
@@ -507,6 +532,7 @@ export class FuelService {
         businessDate,
         occurredAt,
         supplierId: supplier.id,
+        stationId,
         paymentMethod: command.paymentMethod,
         invoiceNo: command.invoiceNo ?? null,
         note: command.note ?? null,
@@ -836,6 +862,65 @@ export class FuelService {
       );
     }
     return supplier;
+  }
+
+  /**
+   * TRAM TREN TO KHAI — `#317` G1. Tra ve `stationId` da kiem, hoac `null` khi khong khai.
+   *
+   * BA cong, BA ma:
+   *   · khong ton tai                       -> `FUEL_STATION_NOT_FOUND` (404);
+   *   · thuoc nha cung cap KHAC phieu       -> `FUEL_ENTRY_STATION_SUPPLIER_MISMATCH` (403);
+   *   · da ngung hop tac (`INACTIVE`)       -> `FUEL_ENTRY_STATION_INACTIVE` (403).
+   *
+   * Cong thu ba CHI ap khi tram DOI (`previousStationId`): sua mot phieu cu dang tro toi mot tram vua
+   * ngung hop tac khong duoc bi chan chi vi nguoi sua dong vao so lit. Doi SANG mot tram ngung hop tac
+   * thi van bi chan.
+   *
+   * Pham vi TENANT o day la cau truc (mot stack mot CSDL); pham vi VAI la cua controller. Ham nay giu
+   * pham vi con lai: mot to khai khong tro duoc toi dia diem cua mot nha cung cap khac.
+   */
+  private async requireStation(input: {
+    readonly stationId: string | null;
+    readonly supplierId: string;
+    readonly point: 'fuel_entry.submit' | 'fuel_entry.amend';
+    readonly previousStationId: string | null;
+  }): Promise<string | null> {
+    if (input.stationId === null) return null;
+
+    const station = await this.stations.findStation(input.stationId);
+    if (!station) {
+      throw TransportDomainError.notFound(
+        'FUEL_STATION_NOT_FOUND',
+        `Khong tim thay cay xang ${input.stationId}`,
+      );
+    }
+
+    const denial =
+      station.supplierId !== input.supplierId
+        ? ('FUEL_ENTRY_STATION_SUPPLIER_MISMATCH' as const)
+        : station.status !== 'ACTIVE' && station.id !== input.previousStationId
+          ? ('FUEL_ENTRY_STATION_INACTIVE' as const)
+          : null;
+    if (denial === null) return station.id;
+
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: input.point,
+      outcome: 'denied',
+      reason: denial,
+      detail: {
+        stationId: station.id,
+        stationSupplierId: station.supplierId,
+        supplierId: input.supplierId,
+        stationStatus: station.status,
+      },
+    });
+    throw TransportDomainError.denied(
+      denial,
+      denial === 'FUEL_ENTRY_STATION_SUPPLIER_MISMATCH'
+        ? `Cay xang ${station.id} khong thuoc nha cung cap ${input.supplierId} cua phieu`
+        : `Cay xang ${station.id} da ngung hop tac — chon mot cay xang dang hoat dong`,
+    );
   }
 
   private async requireEntry(entryId: string): Promise<FuelEntry> {

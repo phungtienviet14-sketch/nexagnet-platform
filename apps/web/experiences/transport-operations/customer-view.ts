@@ -270,6 +270,7 @@ export const FUEL_DISCREPANCY_KIND_LABEL = {
   FUEL_ENTRY_ONLY: 'Chỉ có phiếu nội bộ',
   OUT_OF_TOLERANCE: 'Lệch quá dung sai',
   SELF_SOURCED_BLOCKED: 'Phiếu sinh từ chính bảng kê',
+  INVOICE_CONFLICT: 'Số hoá đơn hai bên khác nhau',
 } as const satisfies Record<FuelDiscrepancyKind, string>;
 
 export const FUEL_DISCREPANCY_RESOLUTION_LABEL = {

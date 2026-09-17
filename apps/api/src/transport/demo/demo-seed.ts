@@ -229,6 +229,25 @@ async function wipeFrozenCashoutAllocations(prisma: PrismaClient): Promise<numbe
 }
 
 /**
+ * XOA LICH SU QUYET DINH DOI SOAT NHIEN LIEU — `#317` G0.
+ *
+ * `transport_fuel_discrepancy_decision_append_only` tu choi moi `DELETE` len mot chenh lech DA
+ * QUYET. Tren `transport-preview` nguoi van hanh quyet chenh lech that trong luc chay thu, nen vong
+ * lap xoa ben duoi se chet ngay o hang da quyet dau tien neu khong co buoc nay.
+ *
+ * Cung khuon voi hai ham tren: chi chay sau `assertDemoResetAllowed()`, tat trigger TRONG DUNG mot
+ * giao dich roi bat lai, va giao dich chi chua lenh xoa nay.
+ */
+async function wipeFuelDecisionHistory(prisma: PrismaClient): Promise<number> {
+  const [, deleted] = await prisma.$transaction([
+    prisma.$executeRawUnsafe('ALTER TABLE "TransportFuelDiscrepancy" DISABLE TRIGGER USER'),
+    prisma.$executeRawUnsafe('DELETE FROM "TransportFuelDiscrepancy"'),
+    prisma.$executeRawUnsafe('ALTER TABLE "TransportFuelDiscrepancy" ENABLE TRIGGER USER'),
+  ]);
+  return deleted ?? 0;
+}
+
+/**
  * Xoa lich su Order/doi soat CHI trong reset demo da qua hai cong bao ve.
  *
  * Cac trigger append-only dung de bao ve giao dich that. Reset demo la thao tac pha huy co chu
@@ -329,6 +348,8 @@ export async function resetTransportDemoData(
   const allocations = await wipeFrozenCashoutAllocations(prisma);
   if (allocations > 0) deleted['transportDriverCashoutAllocation'] = allocations;
   Object.assign(deleted, await wipeCustomerArDemoHistory(prisma));
+  const fuelDecisions = await wipeFuelDecisionHistory(prisma);
+  if (fuelDecisions > 0) deleted['transportFuelDiscrepancy'] = fuelDecisions;
 
   for (const table of TRANSPORT_TABLES_CHILD_FIRST) {
     const delegate = prisma[table] as unknown as { deleteMany: () => Promise<{ count: number }> };
@@ -872,7 +893,7 @@ async function writePlan(
               verificationStatus: verified ? 'VERIFIED' : 'DECLARED',
               reconciliationStatus: 'UNMATCHED',
               correlationKey: `demo:${fuel.key}`,
-              invoiceNo: `HD-${fuel.key}`,
+              invoiceNo: fuel.invoiceNo,
               declaredBy: driverUsername.get(trip.driverRef) ?? DEMO_SEED_ACTOR,
               verifiedAt: verified ? iso(trip.businessDate, 17) : null,
               verifiedBy: verified ? DEMO_SEED_ACTOR : null,
@@ -1000,6 +1021,7 @@ async function writePlan(
           vehicleId: vehicleId.get(line.vehicleRef) as string,
           businessDate: line.businessDate,
           amount: line.amount,
+          invoiceNo: line.invoiceNo,
           reconciliationStatus: 'UNMATCHED',
         }));
 
@@ -1013,6 +1035,7 @@ async function writePlan(
             vehicleId: true,
             businessDate: true,
             amount: true,
+            invoiceNo: true,
             sourceStatementId: true,
           },
         });
@@ -1021,6 +1044,7 @@ async function writePlan(
           vehicleId: entry.vehicleId,
           businessDate: entry.businessDate,
           amount: Number(entry.amount),
+          invoiceNo: entry.invoiceNo,
           sourceStatementId: entry.sourceStatementId,
           reconciliationStatus: 'UNMATCHED',
         }));
