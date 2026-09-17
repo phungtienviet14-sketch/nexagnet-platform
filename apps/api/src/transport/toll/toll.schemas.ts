@@ -106,6 +106,21 @@ export const listTollProviderQuerySchema = z
   .strict();
 
 /**
+ * KY cua bao cao chi phi ETC theo xe — `#314` G9.
+ *
+ * Hai ngay deu TUY CHON: vang mat thi may chu lay thang nghiep vu hien tai theo mui gio khach, chu
+ * khong de trinh duyet tu dat "thang nay". Phep kiem SAU hon (ngay co that, `from <= to`, toi da
+ * `TOLL_SPEND_REPORT_MAX_DAYS`) nam o `resolveTollSpendWindow` — MOT cho, cho ca HTTP lan bai kiem.
+ */
+export const tollSpendReportQuerySchema = z
+  .object({
+    from: businessDate.optional(),
+    to: businessDate.optional(),
+    provider: z.enum(TOLL_PROVIDERS).optional(),
+  })
+  .strict();
+
+/**
  * MOT LAN QUYET cua nguoi doi soat.
  *
  * `note` la CHU CHO NGUOI DOC, khong thay the `reason` — `reason` la mot ma do he thong sinh tu

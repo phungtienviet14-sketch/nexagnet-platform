@@ -21,6 +21,7 @@ import {
 import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
 import { TollAccountService } from './toll-account.service.js';
+import { TollReportService } from './toll-report.service.js';
 import { TollService } from './toll.service.js';
 import {
   closeTollLinkSchema,
@@ -30,6 +31,7 @@ import {
   openTollLinkSchema,
   tollImportSchema,
   tollReviewSchema,
+  tollSpendReportQuerySchema,
   updateTollAccountSchema,
 } from './toll.schemas.js';
 
@@ -53,6 +55,7 @@ export class TollController {
   constructor(
     private readonly toll: TollService,
     private readonly accounts: TollAccountService,
+    private readonly reports: TollReportService,
   ) {}
 
   /**
@@ -147,6 +150,19 @@ export class TollController {
     return this.guard(() => this.accounts.closeLink(id, effectiveTo, transportActorOf(request)));
   }
 
+  /**
+   * LICH SU NHAN CHI TRA cua MOT XE qua moi tai khoan — `#314` G7.
+   *
+   * Cung ma quyen voi so doan noi theo tai khoan: cung mot du lieu, nhin tu phia chiec xe. Duong
+   * nay la cau tra loi cho nguoi vua bi `TOLL_VEHICLE_ALREADY_LINKED` — *xe nay dang o tai khoan
+   * nao* — ma khong phai mo tung tai khoan ra tim.
+   */
+  @Get('vehicles/:vehicleId/links')
+  @RequiresTransportAction('transport.toll.account.read')
+  vehicleLinks(@Param('vehicleId') vehicleId: string) {
+    return this.guard(() => this.accounts.listLinkHistoryForVehicle(vehicleId));
+  }
+
   /* -------------------------------- Nap -------------------------------- */
 
   /** DOC THU — khong ghi mot hang nao. An toan de bam bao nhieu lan cung duoc. */
@@ -203,6 +219,18 @@ export class TollController {
     return this.guard(() => this.toll.candidateDetail(id));
   }
 
+  /**
+   * DONG DOI UNG de quyet trung — `#314` G8. CHI DOC.
+   *
+   * `FLAG_DUPLICATE` doi chi ra DUNG MOT dong khac. Duong nay dat cac ung vien (cung nha cung cap,
+   * cung dau van) canh nhau de nguoi doi soat chon; no khong chon ho, va no khong ghi gi.
+   */
+  @Get('candidates/:id/duplicate-peers')
+  @RequiresTransportAction('transport.toll.review.read')
+  duplicatePeers(@Param('id') id: string) {
+    return this.guard(() => this.reports.duplicatePeers(id));
+  }
+
   @Post('candidates/:id/review')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.toll.review.resolve')
@@ -210,6 +238,28 @@ export class TollController {
     const input = this.parse(tollReviewSchema, body);
     return this.guard(() =>
       this.toll.review({ ...input, candidateId: id }, transportActorOf(request)),
+    );
+  }
+
+  /* ------------------------------ Bao cao ------------------------------- */
+
+  /**
+   * CHI PHI ETC THEO XE / KY — `#314` G9. CHI DOC.
+   *
+   * Gac bang `transport.toll.review.read`: bao cao doc chinh nhung dong ma hang cho doi soat doc, va
+   * noi ro dong nao da co nguoi xac nhan. Khong mo ma quyen moi — va khong mot vai nao ngoai Ke toan
+   * / Quan tri doc duoc no, vi lai xe (`SALE`) khong co ma `transport.toll.*` nao.
+   */
+  @Get('reports/spend')
+  @RequiresTransportAction('transport.toll.review.read')
+  spendReport(@Query() query: unknown) {
+    const parsed = this.parse(tollSpendReportQuerySchema, query ?? {});
+    return this.guard(() =>
+      this.reports.spendReport({
+        from: parsed.from ?? null,
+        to: parsed.to ?? null,
+        provider: parsed.provider ?? null,
+      }),
     );
   }
 

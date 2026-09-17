@@ -78,15 +78,18 @@ export function TollImport({
   navigation,
   readiness,
   canImport,
+  onShowRows,
 }: {
   readonly navigation: NavigationInput;
   readonly readiness: readonly TollProviderReadiness[];
   readonly canImport: boolean;
+  /** `#314` — mo hang cho doi soat, loc dung cac dong cua lan nap nay. Vang = vai khong doc hang cho. */
+  readonly onShowRows?: (entry: TollImportRecord) => void;
 }) {
   return (
     <>
       {canImport ? <TollImportForm readiness={readiness} /> : null}
-      <TollImportHistory navigation={navigation} />
+      <TollImportHistory navigation={navigation} onShowRows={onShowRows} />
     </>
   );
 }
@@ -412,7 +415,7 @@ function ManualRows({
   return (
     <div className="tx-detail__block">
       <h3>Các dòng nhập tay</h3>
-      <p className="tx-panel__hint">
+      <p className="tx-panel__lead">
         Số tài khoản và số tiền là bắt buộc. Để trống biển số nếu dòng đó không thuộc về một chiếc
         xe (nạp tiền, phí tài khoản).
       </p>
@@ -484,7 +487,7 @@ function ManualRows({
           <div className="tx-detail__actions">
             <button
               type="button"
-              className="tx-button tx-button--quiet"
+              className="tx-btn tx-btn--small"
               disabled={rows.length === 1}
               onClick={() => onChange(rows.filter((_, position) => position !== index))}
             >
@@ -497,7 +500,7 @@ function ManualRows({
       <div className="tx-detail__actions">
         <button
           type="button"
-          className="tx-button tx-button--quiet"
+          className="tx-btn tx-btn--small"
           onClick={() => onChange([...rows, EMPTY_MANUAL_TOLL_ROW])}
         >
           Thêm dòng
@@ -588,7 +591,7 @@ function PreviewPanel({
 
       {model.sample.length === 0 ? null : (
         <>
-          <p className="tx-panel__hint">{model.sampleNotice}</p>
+          <p className="tx-panel__lead">{model.sampleNotice}</p>
           <DataTable
             caption="Các dòng đọc thử được từ nguồn"
             rows={model.sample}
@@ -649,7 +652,13 @@ function PreviewPanel({
  * `sourceDigest` duoc cat con muoi hai ky tu: du de doi chieu hai lan nap co cung mot bo byte hay
  * khong, va khong bien mot bang thanh mot buc tuong chu.
  */
-function TollImportHistory({ navigation }: { readonly navigation: NavigationInput }) {
+function TollImportHistory({
+  navigation,
+  onShowRows,
+}: {
+  readonly navigation: NavigationInput;
+  readonly onShowRows?: (entry: TollImportRecord) => void;
+}) {
   const imports = toSectionQuery(useTollImports(navigation));
 
   if (imports.isBlocked) return null;
@@ -663,6 +672,14 @@ function TollImportHistory({ navigation }: { readonly navigation: NavigationInpu
   return (
     <section className="tx-panel" aria-labelledby="toll-imports-heading">
       <h2 id="toll-imports-heading">Lịch sử nạp bảng kê</h2>
+      {/*
+        `#314` — "PARSED_IMPLIES_ACCOUNTED=NO" noi bang CHU, ngay canh bang: mot lan nap thanh cong
+        chi dua cac dong vao hang cho. Khong cot nao o day noi "da doi soat" hay "da thanh toan".
+      */}
+      <p className="tx-panel__lead">
+        Nạp xong nghĩa là các dòng đã vào hàng chờ đối soát — chưa phải đã đối soát, càng không phải
+        đã thanh toán.
+      </p>
 
       {rows.length === 0 ? (
         <EmptyState title="Chưa nạp bảng kê nào." />
@@ -722,6 +739,24 @@ function TollImportHistory({ navigation }: { readonly navigation: NavigationInpu
               // Muoi hai ky tu dau la du de doi chieu hai lan nap; ca chuoi SHA-256 thi khong.
               render: (row) => row.sourceDigest.slice(0, 12),
             },
+            ...(onShowRows === undefined
+              ? []
+              : [
+                  {
+                    key: 'rows-in-queue',
+                    header: 'Dòng trong hàng chờ',
+                    render: (row: TollImportRecord) => (
+                      <button
+                        type="button"
+                        className="tx-btn tx-btn--small"
+                        aria-label={`Xem các dòng của lần nạp ${row.sourceLabel}`}
+                        onClick={() => onShowRows(row)}
+                      >
+                        Xem các dòng
+                      </button>
+                    ),
+                  },
+                ]),
           ]}
         />
       )}

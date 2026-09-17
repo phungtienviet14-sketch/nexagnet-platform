@@ -1,6 +1,11 @@
 import { publicApiBase } from '../../lib/api-base';
 import { authFetch } from '../../lib/auth';
 import type {
+  TollDuplicatePeerListing,
+  TollSpendReport,
+  TollSpendReportQuery,
+} from './toll-report-types';
+import type {
   FuelDocument,
   FuelDocumentDetail,
   FuelDocumentListQuery,
@@ -983,6 +988,13 @@ export const transportApi = {
      */
     closeLink: (linkId: string, effectiveTo: BusinessDate): Promise<TollAccountVehicleLink> =>
       send('PATCH', `/transport/toll/links/${encodeURIComponent(linkId)}`, { effectiveTo }),
+    /**
+     * `#314` — lich su nhan chi tra cua MOT XE qua MOI tai khoan, `effective` do may chu cham.
+     *
+     * La cau tra loi cho `TOLL_VEHICLE_ALREADY_LINKED`: xe nay DANG o tai khoan nao, tu ngay nao.
+     */
+    vehicleLinks: (vehicleId: string): Promise<TollAccountLinkListing> =>
+      get(`/transport/toll/vehicles/${encodeURIComponent(vehicleId)}/links`),
 
     /** DOC THU — khong ghi mot hang nao. An toan de bam bao nhieu lan cung duoc. */
     previewImport: (input: TollImportInput): Promise<TollImportPreview> =>
@@ -1006,8 +1018,27 @@ export const transportApi = {
       ),
     candidate: (id: string): Promise<TollCandidateDetail> =>
       get(`/transport/toll/candidates/${encodeURIComponent(id)}`),
+    /**
+     * `#314` — dong CUNG nha cung cap + CUNG dau van, de chon DUNG MOT dong khi noi "trung". CHI DOC:
+     * may chu khong chon ho, va quyet dinh van chi di qua `review`.
+     */
+    duplicatePeers: (id: string): Promise<TollDuplicatePeerListing> =>
+      get(`/transport/toll/candidates/${encodeURIComponent(id)}/duplicate-peers`),
     review: (id: string, input: TollReviewInput): Promise<TollCandidate> =>
       send('POST', `/transport/toll/candidates/${encodeURIComponent(id)}/review`, input),
+
+    /**
+     * `#314` — CHI PHI ETC THEO XE / KY, do MAY CHU cong. Vang `from`/`to` thi may chu lay thang
+     * nghiep vu hien tai theo mui gio khach — man hinh KHONG tu dat "thang nay" tu dong ho trinh duyet.
+     */
+    spendReport: (query: TollSpendReportQuery = {}): Promise<TollSpendReport> =>
+      get(
+        `/transport/toll/reports/spend${toQuery({
+          from: query.from,
+          to: query.to,
+          provider: query.provider,
+        })}`,
+      ),
   },
 
   /**

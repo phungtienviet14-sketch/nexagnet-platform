@@ -90,16 +90,26 @@ export class TollAccountService {
    * da dung, va no khong duoc tu lay ngay tu dong ho trinh duyet.
    */
   async listLinksForAccount(accountId: string): Promise<TollAccountLinkListing> {
-    const onDate = toBusinessDate(this.now(), this.policy.timeZone);
-    const links = await this.repository.listLinksForAccount(accountId);
-    return {
-      onDate,
-      links: links.map((link) => ({ ...link, effective: tollLinkEffectiveOn(link, onDate) })),
-    };
+    return this.toListing(await this.repository.listLinksForAccount(accountId));
   }
 
   listLinksForVehicle(vehicleId: string): Promise<readonly TollAccountVehicleLink[]> {
     return this.repository.listLinksForVehicle(vehicleId);
+  }
+
+  /**
+   * LICH SU NHAN CHI TRA cua MOT XE, qua MOI tai khoan — `#314` G7.
+   *
+   * "Xe doi tai khoan" la DONG doan o tai khoan cu roi MO doan o tai khoan moi. So theo tai khoan
+   * chi ke mot nua cau chuyen do, va nguoi van hanh vua bi `TOLL_VEHICLE_ALREADY_LINKED` can dung
+   * nua kia: *chiec xe nay DANG nhan chi tra tu tai khoan nao, tu ngay nao*. Tra loi o day, cham
+   * `effective` bang DUNG ham cua phep dem va phep doc theo tai khoan.
+   *
+   * Mot `vehicleId` khong ton tai cho ra danh sach RONG, khong phai loi: day la mot phep DOC so noi,
+   * va no khong tiet lo gi hon chinh danh sach tai khoan ma nguoi goi von doc duoc.
+   */
+  async listLinkHistoryForVehicle(vehicleId: string): Promise<TollAccountLinkListing> {
+    return this.toListing(await this.repository.listLinksForVehicle(vehicleId));
   }
 
   /**
@@ -260,6 +270,20 @@ export class TollAccountService {
       after: { effectiveTo: closed.effectiveTo },
     });
     return closed;
+  }
+
+  /**
+   * MOT dinh nghia "dang hieu luc" cho MOI be mat doc doan noi — theo tai khoan va theo xe.
+   *
+   * `onDate` la ngay nghiep vu cua MAY CHU; man hinh noi ra moc nay thay vi tu lay dong ho trinh
+   * duyet (xem khoi chu thich cua `listLinksForAccount`).
+   */
+  private toListing(links: readonly TollAccountVehicleLink[]): TollAccountLinkListing {
+    const onDate = toBusinessDate(this.now(), this.policy.timeZone);
+    return {
+      onDate,
+      links: links.map((link) => ({ ...link, effective: tollLinkEffectiveOn(link, onDate) })),
+    };
   }
 
   private requireBusinessDate(value: string): BusinessDate {
