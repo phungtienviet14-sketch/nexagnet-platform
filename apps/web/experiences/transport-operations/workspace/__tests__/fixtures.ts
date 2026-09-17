@@ -189,6 +189,7 @@ export const fuelEntry = (over: Partial<FuelEntry> = {}): FuelEntry => ({
   vehicleId: 'veh-1',
   driverId: 'drv-1',
   supplierId: 'sup-1',
+  stationId: null,
   businessDate: TODAY,
   occurredAt: '2026-09-04T06:30:00.000Z',
   // 200 lit = 200_000 mililit. Day la cho de doc sai gap mot nghin lan.
@@ -264,6 +265,7 @@ export const discrepancy = (over: Partial<FuelDiscrepancy> = {}): FuelDiscrepanc
   resolutionNote: null,
   resolvedAt: null,
   resolvedBy: null,
+  supersedesId: null,
   createdAt: '2026-10-01T02:05:00.000Z',
   ...over,
 });
@@ -294,6 +296,7 @@ export const workspace = (
   matches: [],
   discrepancies: [discrepancy()],
   pendingDiscrepancyCount: 1,
+  supersededDiscrepancyIds: [],
   handoff: null,
   ...over,
 });
@@ -322,6 +325,8 @@ export const driverFuelSlip = (over: Partial<DriverFuelSlipView> = {}): DriverFu
   tripId: '11111111-1111-4111-8111-111111111111',
   vehicleId: 'veh-1',
   supplierId: 'sup-1',
+  stationId: null,
+  stationName: null,
   businessDate: TODAY,
   occurredAt: '2026-09-04T06:30:00.000Z',
   litersUnits: 200_000,

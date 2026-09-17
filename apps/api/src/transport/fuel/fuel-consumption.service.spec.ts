@@ -93,6 +93,7 @@ const seed = async (input: {
     vehicleId: input.vehicleId ?? VEHICLE,
     driverId: 'lai-xe-1',
     supplierId: 'cay-xang-1',
+    stationId: null,
     businessDate: input.businessDate,
     occurredAt: new Date(`${input.businessDate}T01:00:00.000Z`),
     litersUnits: input.liters * 1000,

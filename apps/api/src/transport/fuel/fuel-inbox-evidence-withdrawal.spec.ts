@@ -8,6 +8,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import type { TripKind, TripStatus } from '../trips/trip-lifecycle.js';
 import { DEFAULT_FUEL_STATEMENT_COLUMNS, type TransportFuelPolicy } from './fuel-policy.js';
 import { FuelReadService } from './fuel-read.service.js';
+import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import {
   FUEL_VERIFICATION_STATUSES,
   evaluateFuelEvidenceRemoval,
@@ -132,13 +133,14 @@ beforeEach(async () => {
   const audit = new AuditLogService(new InMemoryAuditLogRepository());
   service = new FuelService(
     repository,
+    new InMemoryFuelStationRepository(),
     core,
     new SilentCostingPort(),
     audit,
     CORE_POLICY,
     FUEL_POLICY,
   );
-  read = new FuelReadService(repository, core);
+  read = new FuelReadService(repository, core, new InMemoryFuelStationRepository());
 
   supplierId = (
     await repository.createSupplier({

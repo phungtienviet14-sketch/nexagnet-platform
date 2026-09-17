@@ -200,6 +200,9 @@ describe('bon ket cuc doi soat deu co mat trong du lieu', () => {
     expect(entries[0]?.amount).toBe(entries[1]?.amount);
     expect(entries[0]?.odometerKm).toBe(entries[1]?.odometerKm);
     expect(entries.filter((entry) => entry.statementAmount !== null).length).toBe(1);
+    // `#317` G4: mot phieu co so hoa don trung dong bang ke se TACH duoc cum nay — kich ban chi con
+    // la nhap nhang that khi ca hai phieu khong khai so hoa don.
+    expect(entries.map((entry) => entry.invoiceNo)).toEqual([null, null]);
   });
 
   it('DONG MO COI — bang ke co dong ma khong phieu nao doi ung', () => {

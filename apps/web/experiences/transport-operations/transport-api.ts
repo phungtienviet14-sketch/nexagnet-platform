@@ -78,6 +78,7 @@ import type {
   SettlementDocumentChain,
   SettlementFlow,
   DriverFuelSlipView,
+  DriverFuelStation,
   DriverFuelSupplier,
   DriverFundEntry,
   DriverFundPeriod,
@@ -88,6 +89,7 @@ import type {
   ExpenseFundingSource,
   FuelDiscrepancy,
   FuelDiscrepancyResolution,
+  RevisableFuelResolution,
   FuelEntry,
   FuelEntryDetail,
   FuelEntryInboxPage,
@@ -527,6 +529,8 @@ export interface OpenFundPeriodInput {
 
 export interface FuelEntryFields {
   readonly supplierId: string;
+  /** `#317` G1 — tram/diem do; phai thuoc `supplierId` va dang hop tac, khong thi 403 co ma. */
+  readonly stationId?: string | null;
   /** So la number hoac chuoi thap phan toi 3 chu so — server nhan ca hai. */
   readonly liters: number | string;
   readonly amount: number;
@@ -587,6 +591,22 @@ export interface ResolveDiscrepancyInput {
   readonly note?: string | null;
   readonly statementLineId?: string;
   readonly fuelEntryId?: string;
+}
+
+/**
+ * `#317` G0 — doi y ve mot quyet dinh DA GHI. `reason` BAT BUOC (400 neu rong). Ky DA DONG phai mo
+ * lai truoc (403 `RECONCILIATION_FROZEN`); sua mot ban cu da bi thay the -> 409 `DECISION_NOT_CURRENT`.
+ */
+export interface ReviseDiscrepancyInput {
+  readonly resolution: RevisableFuelResolution;
+  readonly reason: string;
+}
+
+/** Ket qua doi y: quyet dinh MOI (hieu luc) va quyet dinh CU (van trong lich su). */
+export interface RevisedDecisionResult {
+  readonly revision: FuelDiscrepancy;
+  readonly superseded: FuelDiscrepancy;
+  readonly replayed: boolean;
 }
 
 /* --- `TX-08` phi duong bo / ETC (#295) --- */
@@ -889,14 +909,17 @@ export const transportApi = {
     ingestReceiptImage: (input: IngestFuelReceiptImageInput): Promise<FuelDocumentDetail> =>
       send('POST', '/transport/fuel/documents/image', input),
     /**
-     * BYTE cua mot anh chung tu DA LUU — lay bang `evidenceId` qua route co xac thuc, khong bao gio
-     * bang dinh vi kho. Loi thi di qua `readBody` de mang dung `TransportApiError` co `status`.
+     * DOC MOT ANH CHUNG TU DA LUU — `#317`, route may chu cua `#308`.
+     *
+     * KHONG THAN YEU CAU: may chu tu tra `evidenceId` ra byte trong kho, doi chieu voi DUNG phieu, roi
+     * dua vao bo doc. Byte khong di qua trinh duyet, nen anh lon khong con vuong tran than JSON cua
+     * API; va client khong can biet, khong gui duoc mot dinh vi kho nao.
      */
-    evidenceBytes: async (entryId: string, evidenceId: string): Promise<Blob> => {
-      const response = await authFetch(evidenceUrls.fuelEntry(entryId, evidenceId));
-      if (!response.ok) return readBody<never>(response);
-      return response.blob();
-    },
+    extractStoredEvidence: (entryId: string, evidenceId: string): Promise<FuelDocumentDetail> =>
+      send(
+        'POST',
+        `/transport/fuel/entries/${encodeURIComponent(entryId)}/evidence/${encodeURIComponent(evidenceId)}/extract`,
+      ),
     /** Drill-down tieu hao theo xe/ky (`#313`) — chi doc. */
     vehicleConsumption: (
       vehicleId: string,
@@ -925,6 +948,12 @@ export const transportApi = {
     /** Duong nay nam duoi `/discrepancies/`, KHONG long trong ky doi soat. */
     resolveDiscrepancy: (id: string, input: ResolveDiscrepancyInput): Promise<FuelDiscrepancy> =>
       send('POST', `/transport/fuel/discrepancies/${encodeURIComponent(id)}/resolve`, input),
+    /** `#317` G0 — THEM mot quyet dinh thay the; tong cong no doi o lan DONG KY ke tiep. */
+    reviseDiscrepancy: (
+      id: string,
+      input: ReviseDiscrepancyInput,
+    ): Promise<RevisedDecisionResult> =>
+      send('POST', `/transport/fuel/discrepancies/${encodeURIComponent(id)}/revise`, input),
     /** Bi chan khi con `pendingDiscrepancyCount > 0`. */
     closeReconciliation: (id: string): Promise<ClosedReconciliationResult> =>
       send('POST', `/transport/fuel/reconciliations/${encodeURIComponent(id)}/close`),
@@ -1102,6 +1131,13 @@ export const transportApi = {
      */
     fuelSuppliers: (): Promise<readonly DriverFuelSupplier[]> =>
       get('/transport/me/fuel/suppliers'),
+    /**
+     * TRAM/DIEM DO cua mot cay xang — `GET /transport/me/fuel/stations?supplierId=` (`#317` G1).
+     *
+     * Cung ly do voi `fuelSuppliers`: danh muc tram cua van hanh doi `transport.fuel.station.read`.
+     */
+    fuelStations: (supplierId: string): Promise<readonly DriverFuelStation[]> =>
+      get(`/transport/me/fuel/stations${toQuery({ supplierId })}`),
     fuelSlips: (): Promise<readonly DriverFuelSlipView[]> => get('/transport/me/fuel/slips'),
     fuelSlip: (id: string): Promise<DriverFuelSlipView> =>
       get(`/transport/me/fuel/slips/${encodeURIComponent(id)}`),

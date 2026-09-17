@@ -1,28 +1,25 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   extractStoredFuelEvidence,
-  fuelEvidenceSourceRef,
   receiptMediaTypeOf,
   StoredEvidenceExtractionError,
   type ExtractionDeps,
 } from '../fuel-evidence-extraction';
-import type {
-  FuelDocument,
-  FuelDocumentDetail,
-  FuelDocumentReview,
-  IngestFuelReceiptImageInput,
-} from '../fuel-review-types';
+import type { FuelDocument, FuelDocumentDetail, FuelDocumentReview } from '../fuel-review-types';
 import { TransportApiError } from '../transport-api';
 
 /**
- * SEAM "doc anh chung tu DA LUU" — `#313`.
+ * SEAM "doc anh chung tu DA LUU" — `#313`, noi vao route may chu o `#317`.
  *
  * Ba dieu duoc khoa o day:
- *   1. Cua vao la `evidenceId` — dinh vi kho KHONG bao gio di vao than yeu cau, ke ca khi doi tuong
- *      bang chung o tay client co mang no (DTO chi tiet phieu tren `main` hom nay van mang).
- *   2. PDF khong bi tai ve roi moi bi tu choi: chan TRUOC khi tai.
- *   3. `413` cua may chu (tran than JSON 100 kb do duoc tren `main`) thanh mot ket cuc CO TEN,
- *      khong phai "he thong loi".
+ *   1. Cua vao la HAI `id` tren duong dan — khong than yeu cau, khong byte, khong dinh vi kho, ke ca
+ *      khi doi tuong bang chung o tay client co mang them truong.
+ *   2. PDF bi chan TRUOC khi goi may chu.
+ *   3. Seam KHONG con tai byte ve / doi base64: route may chu lam viec do, nen anh lon khong con vuong
+ *      tran than JSON cua API (va gioi han do KHONG bi nang — quyet dinh chu so huu).
  */
 
 const document = (overrides: Partial<FuelDocument> = {}): FuelDocument => ({
@@ -46,35 +43,28 @@ const reviewOf = (doc: FuelDocument): FuelDocumentReview => ({ document: doc, ca
 
 interface Recorder {
   readonly calls: string[];
-  readonly ingested: IngestFuelReceiptImageInput[];
+  /** Moi doi so tung di vao lan goi `extract` — de khang dinh khong truong la nao lot ra. */
+  readonly extractArgs: unknown[][];
 }
 
 const fakeDeps = (
   options: {
-    readonly blobType?: string;
-    readonly ingest?: (input: IngestFuelReceiptImageInput) => Promise<FuelDocumentDetail>;
+    readonly extract?: (entryId: string, evidenceId: string) => Promise<FuelDocumentDetail>;
     readonly reviews?: Readonly<Record<string, FuelDocumentReview>>;
   } = {},
 ): ExtractionDeps & Recorder => {
   const calls: string[] = [];
-  const ingested: IngestFuelReceiptImageInput[] = [];
+  const extractArgs: unknown[][] = [];
   return {
     calls,
-    ingested,
-    evidenceBytes: async (entryId, evidenceId) => {
-      calls.push(`bytes:${entryId}:${evidenceId}`);
-      return new Blob([new Uint8Array([0xff, 0xd8, 0xff])], {
-        type: options.blobType ?? 'image/jpeg',
-      });
-    },
-    toBase64: async () => {
-      calls.push('base64');
-      return '/9j/';
-    },
-    ingestReceiptImage: async (input) => {
-      calls.push('ingest');
-      ingested.push(input);
-      return options.ingest ? options.ingest(input) : { document: document(), candidates: [] };
+    extractArgs,
+    extractStoredEvidence: async (...args) => {
+      const [entryId, evidenceId] = args;
+      calls.push(`extract:${entryId}:${evidenceId}`);
+      extractArgs.push(args);
+      return options.extract
+        ? options.extract(entryId, evidenceId)
+        : { document: document(), candidates: [] };
     },
     documentReview: async (id) => {
       calls.push(`review:${id}`);
@@ -83,8 +73,8 @@ const fakeDeps = (
   };
 };
 
-describe('extractStoredFuelEvidence', () => {
-  it('tai byte BANG evidenceId, gui anh voi sourceRef mo, roi doc ban soat', async () => {
+describe('extractStoredFuelEvidence — route may chu theo evidenceId', () => {
+  it('goi route bang HAI id, roi doc ban soat — khong tai byte, khong base64', async () => {
     const deps = fakeDeps();
 
     const result = await extractStoredFuelEvidence(
@@ -93,10 +83,7 @@ describe('extractStoredFuelEvidence', () => {
       deps,
     );
 
-    expect(deps.calls).toEqual(['bytes:phieu-1:anh-1', 'base64', 'ingest', 'review:chung-tu-1']);
-    expect(deps.ingested).toEqual([
-      { sourceRef: 'fuel-evidence:anh-1', mediaType: 'image/jpeg', contentBase64: '/9j/' },
-    ]);
+    expect(deps.calls).toEqual(['extract:phieu-1:anh-1', 'review:chung-tu-1']);
     expect(result.review.document.id).toBe('chung-tu-1');
     expect(result.originalReview).toBeNull();
   });
@@ -111,13 +98,12 @@ describe('extractStoredFuelEvidence', () => {
 
     await extractStoredFuelEvidence('phieu-1', leakyEvidence, deps);
 
-    const [sent] = deps.ingested;
-    expect(Object.keys(sent ?? {}).sort()).toEqual(['contentBase64', 'mediaType', 'sourceRef']);
-    expect(JSON.stringify(deps.ingested)).not.toContain('media/transport-evidence');
+    expect(deps.extractArgs).toEqual([['phieu-1', 'anh-1']]);
+    expect(JSON.stringify(deps.extractArgs)).not.toContain('media/transport-evidence');
     expect(deps.calls.join('|')).not.toContain('bi-mat');
   });
 
-  it('PDF bi chan TRUOC khi tai ve — khong mot byte nao di qua mang', async () => {
+  it('PDF bi chan TRUOC khi goi may chu — khong mot lan doc nao bi ton', async () => {
     const deps = fakeDeps();
 
     const attempt = extractStoredFuelEvidence(
@@ -131,49 +117,25 @@ describe('extractStoredFuelEvidence', () => {
     expect(deps.calls).toEqual([]);
   });
 
-  it('loai noi dung may chu tra ve thang loai da khai (anh luu la PNG)', async () => {
-    const deps = fakeDeps({ blobType: 'image/png' });
-
-    await extractStoredFuelEvidence('phieu-1', { id: 'anh-1', contentType: 'image/jpeg' }, deps);
-
-    expect(deps.ingested[0]?.mediaType).toBe('image/png');
-  });
-
-  it('413 cua may chu -> TRANSPORT_BODY_LIMIT co ten, khong doc ban soat', async () => {
+  it('loi cua may chu (vd 404 byte khong con trong kho) di nguyen ra ngoai, khong doc ban soat', async () => {
+    const missing = new TransportApiError('Byte cua bang chung khong con trong kho anh', 404);
     const deps = fakeDeps({
-      ingest: async () => {
-        throw new TransportApiError('Không đọc được phản hồi của hệ thống. Hãy thử lại.', 413);
-      },
-    });
-
-    const attempt = extractStoredFuelEvidence(
-      'phieu-1',
-      { id: 'anh-1', contentType: 'image/jpeg' },
-      deps,
-    );
-
-    await expect(attempt).rejects.toMatchObject({ kind: 'TRANSPORT_BODY_LIMIT' });
-    expect(deps.calls).not.toContain('review:chung-tu-1');
-  });
-
-  it('loi khac (vd 403) di nguyen ra ngoai, khong bi doi ten', async () => {
-    const denied = new TransportApiError('Ban khong co quyen thuc hien thao tac nay', 403);
-    const deps = fakeDeps({
-      ingest: async () => {
-        throw denied;
+      extract: async () => {
+        throw missing;
       },
     });
 
     await expect(
       extractStoredFuelEvidence('phieu-1', { id: 'anh-1', contentType: 'image/jpeg' }, deps),
-    ).rejects.toBe(denied);
+    ).rejects.toBe(missing);
+    expect(deps.calls).toEqual(['extract:phieu-1:anh-1']);
   });
 
   it('hoa don TRUNG: doc them ban soat cua chung tu GOC, noi ung vien that dang nam', async () => {
     const duplicate = document({ id: 'chung-tu-2', status: 'DUPLICATE', duplicateOfId: 'goc-1' });
     const original = reviewOf(document({ id: 'goc-1' }));
     const deps = fakeDeps({
-      ingest: async () => ({ document: duplicate, candidates: [] }),
+      extract: async () => ({ document: duplicate, candidates: [] }),
       reviews: { 'chung-tu-2': reviewOf(duplicate), 'goc-1': original },
     });
 
@@ -185,6 +147,30 @@ describe('extractStoredFuelEvidence', () => {
 
     expect(result.review.document.status).toBe('DUPLICATE');
     expect(result.originalReview).toBe(original);
+  });
+
+  /**
+   * Doi chieu voi CHINH route may chu: duong dan client goi phai la route `:evidenceId/extract` cua
+   * `FuelEvidenceController`, va route do khong nhan than yeu cau (`@Body`). Mot lan doi ten route o
+   * mot ben ma quen ben kia se do o day, khong phai o lan bam dau tien tren ban da trien khai.
+   */
+  it('duong dan client khop route `FuelEvidenceController.extract` va route do khong co `@Body`', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const client = readFileSync(resolve(here, '../transport-api.ts'), 'utf8');
+    const controller = readFileSync(
+      resolve(here, '../../../../api/src/transport/evidence/fuel-evidence.controller.ts'),
+      'utf8',
+    );
+
+    expect(client).toContain('/evidence/${encodeURIComponent(evidenceId)}/extract`');
+    expect(controller).toContain("@Controller('transport/fuel/entries/:id/evidence')");
+    expect(controller).toContain("@Post(':evidenceId/extract')");
+    const extractMethod = controller.slice(controller.indexOf("@Post(':evidenceId/extract')"));
+    const start = extractMethod.indexOf('extract(');
+    const signature = extractMethod.slice(start, extractMethod.indexOf('): Promise', start));
+    // Doi chung duong: chu ky that su da duoc cat ra (co hai `@Param`), nen `not.toContain` co nghia.
+    expect(signature).toContain("@Param('evidenceId')");
+    expect(signature).not.toContain('@Body');
   });
 });
 
@@ -199,11 +185,5 @@ describe('receiptMediaTypeOf', () => {
     ['', null],
   ])('%s -> %s', (input, expected) => {
     expect(receiptMediaTypeOf(input)).toBe(expected);
-  });
-});
-
-describe('fuelEvidenceSourceRef', () => {
-  it('chi mang id cua anh, khong mang dinh vi kho', () => {
-    expect(fuelEvidenceSourceRef('anh-1')).toBe('fuel-evidence:anh-1');
   });
 });

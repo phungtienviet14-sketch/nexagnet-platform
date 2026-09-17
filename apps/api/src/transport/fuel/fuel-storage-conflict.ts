@@ -48,6 +48,33 @@ export const FUEL_MATCH_ENTRY_ONCE: UniqueIndexRef = {
 };
 
 /**
+ * `#317` G0 — mot quyet dinh chi bi THAY THE mot lan.
+ *
+ * Luoi thu hai sau khoa hang doi soat: neu mot duong ghi tuong lai quen lay khoa, hai lan doi y
+ * dong thoi ve cung mot quyet dinh se dam vao day thay vi re chuoi thanh hai nhanh "hieu luc".
+ *
+ * KHONG nam trong `FUEL_UNIQUE_INDEXES`: danh sach do duoc `transport-fuel-storage.spec.ts` doi chieu
+ * voi migration GOC cua T4. Index nay sinh o `20260917100000_transport_fuel_residual`, va
+ * `transport-fuel-residual-storage.spec.ts` khoa no o do.
+ */
+export const FUEL_DECISION_SUPERSEDED_ONCE: UniqueIndexRef = {
+  indexName: 'TransportFuelDiscrepancy_supersedesId_key',
+  model: 'TransportFuelDiscrepancy',
+  column: 'supersedesId',
+};
+
+/**
+ * `#317` G1 — ten TRIGGER giu tram tren phieu thuoc dung nha cung cap cua phieu.
+ *
+ * Tang mien chan truoc voi ma `FUEL_STATION_SUPPLIER_MISMATCH`; trigger chi con la luoi cuoi cho moi
+ * duong ghi khong di qua tang do. Cung co che nhan dien bang THONG DIEP voi `INV-26` ben duoi.
+ */
+export const FUEL_ENTRY_STATION_SUPPLIER = 'TransportFuelEntry_station_supplier';
+
+export const isStationSupplierViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUEL_ENTRY_STATION_SUPPLIER);
+
+/**
  * `INV-26` — ten cua TRIGGER, khong phai cua mot unique.
  *
  * Vi sao phai xu ly rieng: mot trigger `RAISE EXCEPTION` khong mang ma `P2002`, va Prisma khong mo

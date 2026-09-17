@@ -114,6 +114,14 @@ export interface PlannedFuelEntry {
   readonly reviewReasons: readonly FuelReviewReason[];
   /** So tien ma BANG KE ghi cho lan do nay — `null` = bang ke khong co dong nao. */
   readonly statementAmount: number | null;
+  /**
+   * So hoa don LAI XE KHAI — `null` = khong khai.
+   *
+   * `#317` G4 bien so hoa don thanh bo phan biet cua phep so khop, nen gia tri nay quyet dinh kich ban:
+   * kich ban `AMBIGUOUS` PHAI de `null` o ca hai phieu, neu khong so hoa don se tach hai phieu ra va
+   * ban demo mat dung man hinh "may khong duoc tu chon" ma no duoc gieo de trung bay.
+   */
+  readonly invoiceNo: string | null;
 }
 
 export interface PlannedTrip {
@@ -492,6 +500,7 @@ export function buildDemoPlan(dataset: DemoMonthDataset, context: DemoPlanContex
         consumptionUnits: consumption.consumptionUnits,
         reviewReasons,
         statementAmount: amount,
+        invoiceNo: `HD-${key}`,
       };
 
       if (trip.fuel.case === 'MISMATCH') {
@@ -510,8 +519,10 @@ export function buildDemoPlan(dataset: DemoMonthDataset, context: DemoPlanContex
          * `AMBIGUOUS_CANDIDATES` va day ca cum cho nguoi quyet (`GD-09`). Day la mot tinh huong ke
          * toan that su gap, va la ly do man hinh doi soat co nut chon phieu.
          */
-        fuelEntries.push({ ...base, statementAmount: amount });
-        fuelEntries.push({ ...base, key: `${key}-B`, statementAmount: null });
+        // Ca hai phieu KHONG khai so hoa don: lai xe khong go, nen may that su khong co gi de tach
+        // hai lan do (`#317` G4 — thieu mot ben khong phai bang chung).
+        fuelEntries.push({ ...base, statementAmount: amount, invoiceNo: null });
+        fuelEntries.push({ ...base, key: `${key}-B`, statementAmount: null, invoiceNo: null });
       } else {
         fuelEntries.push(base);
       }

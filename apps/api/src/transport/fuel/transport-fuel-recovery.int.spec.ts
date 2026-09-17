@@ -17,7 +17,9 @@ import { FileFuelStatementSource } from './fuel-statement-source.js';
 import { FuelStatementService } from './fuel-statement.service.js';
 import { CostingFuelExpenseAdapter, TransportFuelCoreFactsAdapter } from './fuel.ports.js';
 import { FuelService } from './fuel.service.js';
+import { deleteFuelDiscrepanciesForTest } from './fuel-test-cleanup.js';
 import { PrismaFuelRepository } from './prisma-fuel.repository.js';
+import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
 
 /**
  * T4R §2 va §3 — MOT LAN GHI HONG KHONG DUOC DE LAI MANH VUN, VA MOT LAN SUA PHAI DEN DUOC T5.
@@ -91,6 +93,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
     const fuel = new FuelService(
       fuelRepo,
+      new PrismaFuelStationRepository(prisma),
       fuelCore,
       new CostingFuelExpenseAdapter(costing),
       audit,
@@ -135,9 +138,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportFuelMatch.deleteMany({
         where: { reconciliationId: { in: reconciliationIds } },
       });
-      await prisma.transportFuelDiscrepancy.deleteMany({
-        where: { reconciliationId: { in: reconciliationIds } },
-      });
+      // `#317` G0: quyet dinh da ghi co trigger chi-ghi-them — xoa qua helper tat trigger.
+      await deleteFuelDiscrepanciesForTest(prisma, reconciliationIds);
       await prisma.transportFuelReconciliation.deleteMany({
         where: { id: { in: reconciliationIds } },
       });

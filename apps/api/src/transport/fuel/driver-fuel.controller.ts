@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -20,10 +21,18 @@ import {
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
-import type { DriverFuelSlipView, DriverFuelSupplierView } from './driver-fuel.view.js';
+import type {
+  DriverFuelSlipView,
+  DriverFuelStationView,
+  DriverFuelSupplierView,
+} from './driver-fuel.view.js';
 import { FuelReadService } from './fuel-read.service.js';
 import { FuelService } from './fuel.service.js';
-import { attachFuelEvidenceSchema, driverFuelSubmitSchema } from './fuel.schemas.js';
+import {
+  attachFuelEvidenceSchema,
+  driverFuelStationQuerySchema,
+  driverFuelSubmitSchema,
+} from './fuel.schemas.js';
 
 /**
  * BE MAT LAI XE cho phieu do dau — `GD-23`, `INV-09`, VT-083.
@@ -60,6 +69,20 @@ export class DriverFuelController {
   @RequiresTransportAction('transport.driver.self.fuel.submit')
   listSuppliers(): Promise<DriverFuelSupplierView[]> {
     return this.guard(() => this.read.listSuppliersForDriver());
+  }
+
+  /**
+   * TRAM/DIEM DO cho o chon cua lai xe — `#317` G1.
+   *
+   * Cung cong voi `suppliers` ngay tren (`transport.driver.self.fuel.submit`) va cung ly do: day la
+   * thu mot nguoi PHAI co de nop duoc phieu cua chinh minh, khong phai quyen doc danh muc van hanh.
+   * Chi tram `ACTIVE`, khung nhin hep — xem `DriverFuelStationView`.
+   */
+  @Get('stations')
+  @RequiresTransportAction('transport.driver.self.fuel.submit')
+  listStations(@Query() query: unknown): Promise<DriverFuelStationView[]> {
+    const { supplierId } = this.parse(driverFuelStationQuerySchema, query);
+    return this.guard(() => this.read.listStationsForDriver(supplierId));
   }
 
   @Get('slips')

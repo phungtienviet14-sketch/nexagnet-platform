@@ -149,6 +149,8 @@ export interface DriverFuelSlipRow {
   readonly consumptionLabel: string;
   /** `#313` — lai xe thay lai DUNG nhung gi minh da khai: so hoa don va cach tra tien. */
   readonly invoiceNo: string | null;
+  /** `#317` G1 — tram da khai. `null` = phieu khong khai tram. */
+  readonly stationLabel: string | null;
   readonly paymentLabel: string;
   /** Ly do may chu gan de ke toan soat — noi bang cau, khong bang ma, va khong buoc toi ai. */
   readonly reviewReasonLabels: readonly string[];
@@ -247,6 +249,7 @@ export const toDriverFuelSlipRows = (
     odometerLabel: formatOdometer(slip.odometerKm),
     consumptionLabel: formatConsumption(slip.consumptionUnits),
     invoiceNo: slip.invoiceNo,
+    stationLabel: slip.stationId === null ? null : (slip.stationName ?? 'Trạm đã khai'),
     paymentLabel: FUEL_PAYMENT_METHOD_LABEL[slip.paymentMethod],
     reviewReasonLabels: slip.reviewReasons.map(fuelReviewReasonLabel),
     verificationLabel: FUEL_VERIFICATION_LABEL[slip.verificationStatus],

@@ -140,6 +140,15 @@ export class PrismaFuelStationRepository extends FuelStationRepository {
     return rows.map(toStation);
   }
 
+  async listStationsByIds(ids: readonly string[]): Promise<FuelStation[]> {
+    if (ids.length === 0) return [];
+    const rows: StationRow[] = await model(this.prisma, 'transportFuelStation').findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(toStation);
+  }
+
   async findStationByCode(supplierId: string, codeNormalized: string): Promise<FuelStation | null> {
     const row = await model(this.prisma, 'transportFuelStation').findUnique({
       where: { supplierId_codeNormalized: { supplierId, codeNormalized } },

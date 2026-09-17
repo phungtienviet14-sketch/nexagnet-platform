@@ -7,13 +7,17 @@ import { mockLifecycle, type LifecycleState } from './lifecycle-server';
  * ==============================================================================================
  * KIEM DIEU GI
  *
- *   1. Ke toan chon mot anh DA LUU bang `evidenceId`, cho may doc, va thay ung vien + muc tin + diem
- *      lech voi to khai — ma khong mot yeu cau nao mang dinh vi kho, va phieu KHONG bi sua.
- *   2. `413` cua may chu (tran than JSON do duoc tren `main`) hien thanh mot cau co ten.
- *   3. PDF khong bi tai ve de roi bi tu choi.
+ *   1. Ke toan chon mot anh DA LUU bang `evidenceId`, cho may doc qua ROUTE MAY CHU
+ *      `.../evidence/:evidenceId/extract` (`#317`) — khong than yeu cau, khong byte/base64 qua trinh
+ *      duyet, khong dinh vi kho — va thay ung vien + muc tin + diem lech; phieu KHONG bi sua.
+ *   2. Byte anh khong con trong kho (404 cua route) hien thanh mot cau noi that, khong gia vo da doc.
+ *   3. PDF khong bi gui di doc.
  *   4. Drill-down tieu hao: odo khong tang -> KHONG co L/100km; canh bao noi ro khong tru tien.
- *   5. Lai xe bam gui lai sau mat mang -> CUNG than yeu cau -> MOT phieu, anh dinh dung phieu.
+ *   5. Lai xe bam gui lai sau mat mang -> CUNG than yeu cau -> MOT phieu, anh dinh dung phieu; to
+ *      khai MOI mac dinh ghi no cay xang va mang tram da chon (`#317` G1).
  *   6. Vai lai xe khong ban mot yeu cau nao toi be mat ke toan nhien lieu.
+ *   7. `#317` G0 — ke toan DOI quyet dinh sau khi mo lai ky: nut chi o quyet dinh hieu luc, ly do bat
+ *      buoc, than yeu cau dung hop dong, va lich su hien ro quyet dinh cu da bi thay the.
  *
  * KHONG KIEM: may chu that tinh dung — do la viec cua bo `apps/api`
  * (`fuel-consumption-drilldown.spec.ts`, `fuel-consumption.controller.spec.ts`, ...).
@@ -226,7 +230,7 @@ const CONSUMPTION = {
 async function mockFuelProduct(
   page: Page,
   state: LifecycleState,
-  options: { readonly ingestStatus?: number } = {},
+  options: { readonly extractStatus?: number } = {},
 ): Promise<SeenRequest[]> {
   const seen: SeenRequest[] = [];
   page.on('request', (request) => {
@@ -291,17 +295,29 @@ async function mockFuelProduct(
     route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPEG_BYTES }),
   );
 
-  await page.route(/\/transport\/fuel\/documents\/image$/, (route) => {
-    if (options.ingestStatus === 413) {
-      // Than loi cua body-parser la HTML, khong phai JSON — dung nhu Express tra that.
-      return route.fulfill({
-        status: 413,
-        contentType: 'text/html',
-        body: '<pre>PayloadTooLargeError: request entity too large</pre>',
-      });
+  /*
+   * ROUTE MAY CHU doc anh da luu (`#308`, noi o `#317`): KHONG than yeu cau, may chu tu doc byte.
+   * `documents/image` (duong base64) van duoc ghi lai qua `seen` de bai kiem khang dinh no KHONG bi goi.
+   */
+  await page.route(/\/transport\/fuel\/entries\/[^/]+\/evidence\/[^/]+\/extract$/, (route) => {
+    if (options.extractStatus === 404) {
+      // Than loi DUNG khuon `transportErrorBody` cua may chu that (`fuel-evidence.controller.ts`).
+      return json(
+        route,
+        {
+          statusCode: 404,
+          message: 'Byte cua bang chung ev-1 khong con trong kho anh',
+          error: 'Not Found',
+          reason: 'FUEL_EVIDENCE_NOT_FOUND',
+        },
+        404,
+      );
     }
     return json(route, { document: DOCUMENT, candidates: [CANDIDATE] });
   });
+  await page.route(/\/transport\/fuel\/documents\/image$/, (route) =>
+    json(route, { message: 'Duong base64 khong duoc dung cho anh da luu' }, 500),
+  );
   await page.route(/\/transport\/fuel\/documents\/doc-1\/review$/, (route) => json(route, REVIEW));
   await page.route(/\/transport\/fuel\/documents(\?[^/]*)?$/, (route) => json(route, [DOCUMENT]));
   await page.route(/\/transport\/fuel\/vehicles\/[^/]+\/consumption(\?[^/]*)?$/, (route) =>
@@ -344,37 +360,50 @@ test.describe('ke toan — anh da luu, may doc, soat ung vien', () => {
     await expect(comparison.getByRole('row', { name: /Số hoá đơn/ })).toContainText('Lệch');
     await expect(comparison.getByRole('row', { name: /Số lít/ })).toContainText('Khớp');
 
-    // PHIA MAY CHU: cua vao la evidenceId, khong phai dinh vi.
-    const ingest = seen.find(
-      (row) => row.method === 'POST' && row.url.endsWith('/transport/fuel/documents/image'),
+    // PHIA MAY CHU: cua vao la HAI id tren duong dan cua route extract — khong than, khong byte.
+    const extract = seen.filter(
+      (row) =>
+        row.method === 'POST' &&
+        row.url.endsWith('/transport/fuel/entries/fuel-1/evidence/ev-1/extract'),
     );
-    expect(ingest).toBeDefined();
-    expect(JSON.parse(ingest?.body ?? '{}')).toMatchObject({
-      sourceRef: 'fuel-evidence:ev-1',
-      mediaType: 'image/jpeg',
-    });
+    expect(extract).toHaveLength(1);
+    expect(extract[0]?.body ?? null).toBeNull();
+    // Duong base64 cu KHONG con duoc dung — anh lon khong con vuong tran than JSON cua API.
+    expect(seen.filter((row) => row.url.includes('/transport/fuel/documents/image'))).toEqual([]);
     expect(leaksLocator(seen)).toBe(false);
     await expect(page.locator('body')).not.toContainText('media/transport-evidence');
 
-    // AI chi la ung vien: khong mot lenh ghi nao toi phieu, phieu van cho nguoi xac thuc.
+    // AI chi la ung vien: ngoai CHINH lenh doc anh o tren (tao chung tu, khong cham phieu), khong
+    // mot lenh ghi nao toi phieu — phieu van cho nguoi xac thuc.
     expect(
-      seen.filter((row) => row.method !== 'GET' && row.url.includes('/transport/fuel/entries')),
+      seen.filter(
+        (row) =>
+          row.method !== 'GET' &&
+          row.url.includes('/transport/fuel/entries') &&
+          !row.url.endsWith('/evidence/ev-1/extract'),
+      ),
     ).toEqual([]);
     expect(state.fuelEntries.get('fuel-1')?.verificationStatus).toBe('DECLARED');
   });
 
-  test('anh vuot tran than JSON cua may chu: noi ro, khong gia vo da doc', async ({ page }) => {
+  test('byte anh khong con trong kho (404 cua route): noi ro, khong gia vo da doc', async ({
+    page,
+  }) => {
     const state = await mockLifecycle(page, 'ACCOUNTING');
     seedEntry(state);
-    await mockFuelProduct(page, state, { ingestStatus: 413 });
+    const seen = await mockFuelProduct(page, state, { extractStatus: 404 });
 
     await page.goto('/?section=fuel');
     await page.getByRole('rowheader', { name: 'VT-FUEL-01' }).click();
     const detail = page.getByRole('region', { name: /Phiếu đổ dầu VT-FUEL-01/ });
     await detail.getByRole('button', { name: 'Đọc ảnh này' }).click();
 
-    await expect(detail.getByRole('alert')).toContainText('lớn hơn giới hạn gửi đọc');
+    // Cau cua may chu hien NGUYEN VAN — khong bi viet lai thanh "tinh nang chua bat".
+    await expect(detail.getByRole('alert')).toContainText('khong con trong kho anh');
+    await expect(detail.getByRole('alert')).not.toContainText('chưa được bật');
     await expect(detail.getByRole('group', { name: 'Kết quả máy đọc' })).toHaveCount(0);
+    // Khong co duong lui ve base64: 404 KHONG kich hoat tai byte ve roi gui lai.
+    expect(seen.filter((row) => row.url.includes('/transport/fuel/documents/image'))).toEqual([]);
   });
 
   test('chung tu PDF: noi ro khong doc duoc, va khong tai byte ve', async ({ page }) => {
@@ -487,6 +516,7 @@ test.describe('lai xe — to khai nhien lieu', () => {
         vehicleId: String(body.vehicleId),
         driverId: 'drv-1',
         supplierId: String(body.supplierId),
+        stationId: (body.stationId as string | null | undefined) ?? null,
         businessDate: String(body.businessDate),
         occurredAt: String(body.occurredAt),
         litersUnits: 60_000,
@@ -515,12 +545,15 @@ test.describe('lai xe — to khai nhien lieu', () => {
     await expect(slipForm.getByRole('button', { name: 'Gửi phiếu' })).toBeVisible();
 
     await slipForm.getByLabel('Cây xăng').selectOption({ label: 'Petrolimex Cầu Giấy' });
+    // `#317` G1 — tram lay tu danh muc cua DUNG cay xang vua chon (`GET /transport/me/fuel/stations`).
+    await slipForm.getByLabel('Trạm đổ').selectOption({ label: 'CHXD số 12 — Km 12 QL5' });
     await slipForm.getByLabel('Số lít').fill('60');
     await slipForm.getByLabel('Số tiền (đồng)').fill('1320000');
     await slipForm.getByLabel('Số km trên đồng hồ').fill('120450');
     await slipForm.getByLabel('Số hoá đơn (nếu có)').fill('0001234');
     await expect(slipForm.getByLabel('Thời điểm đổ')).not.toHaveValue('');
-    await slipForm.getByLabel('Thanh toán').selectOption({ label: 'Ghi nợ cây xăng' });
+    // `#317` — KHONG chon gi: to khai moi mac dinh ghi no cay xang; tien mat lai xe phai chu dong chon.
+    await expect(slipForm.getByLabel('Thanh toán')).toHaveValue('SUPPLIER_ACCOUNT');
     await slipForm.getByLabel('Ảnh phiếu (nếu có)').setInputFiles({
       name: 'phieu.jpg',
       mimeType: 'image/jpeg',
@@ -541,6 +574,8 @@ test.describe('lai xe — to khai nhien lieu', () => {
     expect(JSON.parse(bodies[0] ?? '{}')).toMatchObject({
       tripId: 'trip-1',
       vehicleId: 'veh-1',
+      supplierId: 'sup-1',
+      stationId: 'sta-12',
       paymentMethod: 'SUPPLIER_ACCOUNT',
       invoiceNo: '0001234',
     });
@@ -548,6 +583,150 @@ test.describe('lai xe — to khai nhien lieu', () => {
     expect(sent.businessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(sent.driverId).toBeUndefined();
     await expect.poll(() => (state.fuelEvidence.get('fuel-new') ?? []).length).toBe(1);
+  });
+});
+
+test.describe('ke toan — doi quyet dinh sau khi mo lai ky (#317 G0)', () => {
+  const RECONCILIATION = {
+    id: 'rec-317',
+    supplierId: 'sup-1',
+    statementId: 'stm-317',
+    periodStart: '2026-09-01',
+    periodEnd: '2026-09-15',
+    state: 'REOPENED',
+    closedAt: null,
+    closedBy: null,
+    reopenedAt: AT,
+    reopenedBy: 'u-admin',
+    reopenReason: 'Cây xăng gửi lại bảng kê',
+    createdAt: AT,
+    updatedAt: AT,
+  };
+
+  const ACCEPTED = {
+    id: 'dis-1',
+    reconciliationId: 'rec-317',
+    kind: 'OUT_OF_TOLERANCE',
+    status: 'RESOLVED',
+    statementLineId: 'line-1',
+    fuelEntryId: 'fuel-1',
+    candidateEntryIds: [],
+    candidateLineIds: [],
+    resolution: 'ACCEPT_SUPPLIER_AMOUNT',
+    resolutionNote: 'Lệch do làm tròn',
+    resolvedAt: AT,
+    resolvedBy: 'u-acc',
+    supersedesId: null,
+    createdAt: AT,
+  };
+
+  test('nut doi y chi o quyet dinh hieu luc; than yeu cau dung hop dong; quyet dinh cu van nam trong lich su', async ({
+    page,
+  }) => {
+    const state = await mockLifecycle(page, 'ACCOUNTING');
+    state.reconciliations.set('rec-317', RECONCILIATION);
+    const seen = await mockFuelProduct(page, state);
+
+    /*
+     * MAY CHU GIA theo DUNG luat cua may chu that: doi y la THEM mot hang tro ve hang cu
+     * (`supersedesId`), hang cu KHONG bi sua hay xoa, va ban lam viec tra ve danh sach id da bi thay.
+     */
+    const discrepancies: Record<string, unknown>[] = [ACCEPTED];
+    const supersededIds: string[] = [];
+    await page.route(/\/transport\/fuel\/reconciliations\/rec-317$/, (route) =>
+      json(route, {
+        reconciliation: RECONCILIATION,
+        statement: {
+          id: 'stm-317',
+          supplierId: 'sup-1',
+          periodStart: '2026-09-01',
+          periodEnd: '2026-09-15',
+          filename: 'bang-ke-thang-9.csv',
+          format: 'CSV',
+          sourceDigest: 'sha256:mock',
+          importedAt: AT,
+          importedBy: 'u-acc',
+        },
+        lines: [
+          {
+            id: 'line-1',
+            statementId: 'stm-317',
+            rowNumber: 1,
+            status: 'ACCEPTED',
+            rejectReason: null,
+            vehiclePlateRaw: '29H-123.45',
+            vehicleId: 'veh-1',
+            businessDate: '2026-09-04',
+            litersUnits: 10_000,
+            amount: 230_000,
+            currencyCode: 'VND',
+            reconciliationStatus: 'MISMATCHED',
+            invoiceNo: null,
+            note: null,
+            createdAt: AT,
+          },
+        ],
+        matches: [],
+        discrepancies: [...discrepancies],
+        pendingDiscrepancyCount: 0,
+        supersededDiscrepancyIds: [...supersededIds],
+        handoff: null,
+      }),
+    );
+    await page.route(/\/transport\/fuel\/discrepancies\/[^/]+\/revise$/, (route) => {
+      const body = route.request().postDataJSON() as { resolution: string; reason: string };
+      const revision = {
+        ...ACCEPTED,
+        id: 'dis-2',
+        resolution: body.resolution,
+        resolutionNote: body.reason,
+        supersedesId: 'dis-1',
+        createdAt: '2026-09-16T01:00:00.000Z',
+      };
+      discrepancies.push(revision);
+      supersededIds.push('dis-1');
+      return json(route, { revision, superseded: ACCEPTED, replayed: false }, 201);
+    });
+
+    await page.goto('/?section=fuel');
+    await page
+      .getByRole('table', { name: 'Các kỳ đối soát bảng kê' })
+      .getByRole('rowheader', { name: 'Petrolimex Cầu Giấy' })
+      .click();
+    const desk = page.getByRole('region', { name: /Bàn đối soát/ });
+    const table = desk.getByRole('table', { name: 'Chênh lệch của kỳ đối soát' });
+    await expect(table.getByRole('row', { name: /Chấp nhận số của cây xăng/ })).toBeVisible();
+
+    await table.getByRole('button', { name: 'Đổi quyết định' }).click();
+    const form = desk.getByRole('form', { name: 'Đổi quyết định: Lệch quá dung sai' });
+    await expect(form.getByRole('note')).toContainText('Quyết định cũ vẫn giữ trong lịch sử');
+    await expect(form.getByRole('note')).toContainText('chứng từ điều chỉnh');
+    await form.getByLabel('Quyết định mới').selectOption({ label: 'Bỏ qua có lý do' });
+
+    // Ly do BAT BUOC: bam gui khi o ly do con trong thi trinh duyet chan, khong mot yeu cau nao di.
+    await form.getByRole('button', { name: 'Ghi quyết định mới' }).click();
+    await expect(form).toBeVisible();
+
+    await form.getByLabel('Lý do đổi quyết định').fill('Cây xăng ghi trùng dòng này');
+    await form.getByRole('button', { name: 'Ghi quyết định mới' }).click();
+
+    // Doi tin hieu CHI co sau `onSuccess` + doc lai ban lam viec, roi moi doc than yeu cau.
+    await expect(form).toHaveCount(0);
+    const history = table.getByRole('row', { name: /đã thay bằng quyết định mới/ });
+    await expect(history).toContainText('Chấp nhận số của cây xăng');
+    await expect(history.getByRole('button')).toHaveCount(0);
+    const current = table.getByRole('row', { name: /Bỏ qua có lý do/ });
+    await expect(current).toContainText('Cây xăng ghi trùng dòng này');
+    await expect(current.getByRole('button', { name: 'Đổi quyết định' })).toBeVisible();
+
+    // PHIA MAY CHU: DUNG MOT lenh doi y, dung hai truong, va khong mot lenh ghi nao khac.
+    const writes = seen.filter((row) => row.method !== 'GET');
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.url).toMatch(/\/transport\/fuel\/discrepancies\/dis-1\/revise$/);
+    expect(JSON.parse(writes[0]?.body ?? '{}')).toEqual({
+      resolution: 'IGNORE_WITH_REASON',
+      reason: 'Cây xăng ghi trùng dòng này',
+    });
   });
 });
 

@@ -45,6 +45,15 @@ export const FUEL_ENTRY_SUBMIT_REASONS = [
   'FUEL_ENTRY_DRIVER_NOT_ASSIGNED',
   /** Xe tren phieu chua tung duoc phan cong vao chuyen do. */
   'FUEL_ENTRY_VEHICLE_NOT_ASSIGNED',
+  /**
+   * `#317` G1 — tram khai tren phieu thuoc mot nha cung cap KHAC nha cung cap cua phieu.
+   *
+   * Khong phai loi chinh ta: phieu se di vao doi soat bang ke cua nha cung cap nay voi mot dia diem
+   * cua nha cung cap kia, va bao cao "tram nao ban bao nhieu" noi doi ma khong ai thay.
+   */
+  'FUEL_ENTRY_STATION_SUPPLIER_MISMATCH',
+  /** `#317` G1 — tram da ngung hop tac (`INACTIVE`); to khai MOI khong duoc tro toi no. */
+  'FUEL_ENTRY_STATION_INACTIVE',
 ] as const;
 export type FuelEntrySubmitReason = (typeof FUEL_ENTRY_SUBMIT_REASONS)[number];
 
@@ -153,6 +162,13 @@ export const FUEL_MATCH_REASONS = [
   'MATCH_OUT_OF_TOLERANCE',
   /** `INV-26` — ung vien duy nhat la phieu de ra tu chinh bang ke nay. */
   'MATCH_SELF_SOURCED_BLOCKED',
+  /**
+   * `#317` G4 — ung vien dung xe/ngay/tien nhung so hoa don hai ben TRAI nguoc. KHONG tu khop.
+   *
+   * So hoa don la bo phan biet tuy chon, khong phai khoa: ma nay chi phat khi dong KHONG con ung
+   * vien sach nao khac.
+   */
+  'MATCH_INVOICE_CONFLICT',
 ] as const;
 export type FuelMatchReason = (typeof FUEL_MATCH_REASONS)[number];
 
@@ -188,6 +204,27 @@ export const FUEL_DISCREPANCY_RESOLVE_REASONS = [
   'DISCREPANCY_MATCH_TARGET_REQUIRED',
 ] as const;
 export type FuelDiscrepancyResolveReason = (typeof FUEL_DISCREPANCY_RESOLVE_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel_discrepancy.revise — `#317` G0: doi y ve mot quyet dinh DA GHI
+ * ------------------------------------------------------------------ *
+ *
+ * BAY ket cuc, va nam trong so do la NAM duong tu choi khac nhau (`evaluateDecisionRevision`). Nguoi
+ * truc doc trace phai phan biet duoc "sua nham ban cu" voi "sua mot quyet dinh khop tay" — hai viec
+ * phai lam khac han nhau.
+ */
+export const FUEL_DISCREPANCY_REVISE_REASONS = [
+  /** Da THEM mot quyet dinh thay the. Hang cu nguyen ven, tong duoc chap nhan doi o lan dong ky sau. */
+  'DECISION_REVISED',
+  /** Lan gui lai cua dung lenh vua ghi (cung quyet dinh, cung ly do, cung nguoi) — khong ghi them. */
+  'DECISION_REVISION_REPLAYED',
+  'DECISION_NOT_RESOLVED',
+  'DECISION_WITHOUT_STATEMENT_LINE',
+  'DECISION_NOT_CURRENT',
+  'DECISION_MATCH_LOCKED',
+  'DECISION_REVISION_NO_CHANGE',
+] as const;
+export type FuelDiscrepancyReviseReason = (typeof FUEL_DISCREPANCY_REVISE_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
  * fuel.settlement_handoff — cau sang T5
@@ -362,6 +399,7 @@ export type TransportFuelDecisionReason =
   | FuelMatchReason
   | FuelReconciliationTransitionReason
   | FuelDiscrepancyResolveReason
+  | FuelDiscrepancyReviseReason
   | FuelSettlementHandoffReason
   | DriverSelfFuelScopeReason
   | FuelStationWriteReason
@@ -382,6 +420,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel.match',
     'fuel_reconciliation.transition',
     'fuel_discrepancy.resolve',
+    'fuel_discrepancy.revise',
     'fuel.settlement_handoff',
     'driver.self_fuel_scope',
     'fuel_station.write',
@@ -401,6 +440,9 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_TRIP_CANCELLED: 'Chuyến đã huỷ — đường đúng là đảo phiếu đã ghi',
     FUEL_ENTRY_DRIVER_NOT_ASSIGNED: 'Lái xe chưa từng được phân công vào chuyến này',
     FUEL_ENTRY_VEHICLE_NOT_ASSIGNED: 'Xe chưa từng được phân công vào chuyến này',
+    FUEL_ENTRY_STATION_SUPPLIER_MISMATCH:
+      'Cây xăng khai trên phiếu không thuộc nhà cung cấp của phiếu',
+    FUEL_ENTRY_STATION_INACTIVE: 'Cây xăng đã ngừng hợp tác — tờ khai mới không chọn được',
 
     FUEL_ENTRY_VERIFIED: 'Kế toán đã duyệt phiếu',
     FUEL_ENTRY_REJECTED: 'Kế toán trả lại phiếu kèm lý do',
@@ -444,6 +486,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     MATCH_FUEL_ENTRY_ONLY: 'Phiếu lái xe không thấy trên bảng kê kỳ này',
     MATCH_OUT_OF_TOLERANCE: 'Có ứng viên duy nhất nhưng lệch vượt dung sai',
     MATCH_SELF_SOURCED_BLOCKED: 'Ứng viên là phiếu đẻ ra từ chính bảng kê này (INV-26)',
+    MATCH_INVOICE_CONFLICT:
+      'Ứng viên đúng xe, ngày, tiền nhưng số hoá đơn hai bên khác nhau — không tự khớp',
 
     RECONCILIATION_OPENED: 'Đã mở kỳ đối soát cho bảng kê',
     RECONCILIATION_MATCHING_RUN: 'Đã chạy so khớp tất định',
@@ -460,6 +504,18 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     DISCREPANCY_ALREADY_RESOLVED: 'Chênh lệch này đã có người quyết trước đó',
     DISCREPANCY_RECONCILIATION_FROZEN: 'Kỳ đối soát đã đóng nên không nhận quyết định mới',
     DISCREPANCY_MATCH_TARGET_REQUIRED: 'Xác nhận khớp phải chỉ rõ cặp nào',
+
+    DECISION_REVISED:
+      'Đã ghi quyết định thay thế — quyết định cũ vẫn nằm trong lịch sử, tổng đổi ở lần đóng kỳ sau',
+    DECISION_REVISION_REPLAYED:
+      'Gửi lại đúng lệnh vừa ghi — trả lại quyết định đã ghi, không ghi thêm',
+    DECISION_NOT_RESOLVED: 'Chênh lệch chưa có quyết định — hãy quyết, không phải sửa',
+    DECISION_WITHOUT_STATEMENT_LINE:
+      'Quyết định không gắn dòng bảng kê nào nên không có chuỗi để sửa',
+    DECISION_NOT_CURRENT: 'Dòng này đã có quyết định mới hơn — sửa bản mới nhất, không sửa lịch sử',
+    DECISION_MATCH_LOCKED:
+      'Quyết định xác nhận khớp đã ghi một cặp khớp tay — mở lại kỳ và chạy lại so khớp',
+    DECISION_REVISION_NO_CHANGE: 'Quyết định mới trùng quyết định đang có — không ghi bản rỗng',
 
     HANDOFF_EMITTED: 'Đã phát bàn giao công nợ nhà cung cấp cho T5',
     HANDOFF_REVISION_EMITTED: 'Kết quả kinh tế đã đổi — phát một bản sửa đổi mới của bàn giao',

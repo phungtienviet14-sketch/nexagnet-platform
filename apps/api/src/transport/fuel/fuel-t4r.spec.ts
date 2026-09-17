@@ -19,6 +19,7 @@ import {
   type FuelVehicleFacts,
 } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
+import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
 
 /**
@@ -110,6 +111,7 @@ beforeEach(async () => {
   const audit = new AuditLogService(new InMemoryAuditLogRepository());
   service = new FuelService(
     repository,
+    new InMemoryFuelStationRepository(),
     new StubCoreFacts(),
     new SilentCostingPort(),
     audit,
@@ -305,8 +307,24 @@ describe('T4R §2 — dau van tay phan biet "phat lai" voi "da sua"', () => {
       lines,
       matches: [{ statementLineId: 'dong-1' }],
       discrepancies: [
-        { statementLineId: 'dong-2', resolution: 'ACCEPT_SUPPLIER_AMOUNT' },
-        { statementLineId: 'dong-3', resolution: 'IGNORE_WITH_REASON' },
+        {
+          id: 'chenh-2',
+          status: 'RESOLVED',
+          statementLineId: 'dong-2',
+          resolution: 'ACCEPT_SUPPLIER_AMOUNT',
+          supersedesId: null,
+          resolvedAt: '2026-09-10T08:00:00.000Z',
+          createdAt: '2026-09-10T07:00:00.000Z',
+        },
+        {
+          id: 'chenh-3',
+          status: 'RESOLVED',
+          statementLineId: 'dong-3',
+          resolution: 'IGNORE_WITH_REASON',
+          supersedesId: null,
+          resolvedAt: '2026-09-10T08:00:00.000Z',
+          createdAt: '2026-09-10T07:00:00.000Z',
+        },
       ],
     });
 

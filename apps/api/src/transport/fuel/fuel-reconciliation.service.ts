@@ -4,6 +4,10 @@ import { TelemetryService } from '../../observability/telemetry.service.js';
 import { TRANSPORT_CLOCK } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
+import type {
+  FuelDecisionRevisionDeniedReason,
+  RevisableFuelResolution,
+} from './fuel-decision-revision.js';
 import {
   isFrozenFuelReconciliation,
   type FuelReconciliationState,
@@ -36,6 +40,21 @@ export interface ResolveDiscrepancyCommand {
 export interface ClosedReconciliationResult {
   readonly reconciliation: FuelReconciliation;
   readonly handoff: FuelSettlementHandoff;
+}
+
+/** `#317` G0 — doi y ve mot quyet dinh da ghi. `reason` BAT BUOC: doi y ve tien phai noi vi sao. */
+export interface ReviseDecisionCommand {
+  readonly resolution: RevisableFuelResolution;
+  readonly reason: string;
+}
+
+export interface RevisedDecisionResult {
+  /** Quyet dinh MOI, dang hieu luc. */
+  readonly revision: FuelDiscrepancy;
+  /** Quyet dinh CU, nguyen ven — van nam trong lich su. */
+  readonly superseded: FuelDiscrepancy;
+  /** `true` = lan gui lai cua dung lenh vua ghi; khong co hang nao duoc them. */
+  readonly replayed: boolean;
 }
 
 /**
@@ -120,6 +139,8 @@ export class FuelReconciliationService {
         vehicleId: line.vehicleId ?? '',
         businessDate: line.businessDate ?? '',
         amount: line.amount ?? 0,
+        // `#317` G4 — so hoa don TUY CHON: `null` nghia la dong khong noi gi, va khong pha cap nao.
+        invoiceNo: line.invoiceNo,
         reconciliationStatus: line.reconciliationStatus,
       }));
 
@@ -134,6 +155,7 @@ export class FuelReconciliationService {
         vehicleId: entry.vehicleId,
         businessDate: entry.businessDate,
         amount: entry.amount,
+        invoiceNo: entry.invoiceNo,
         sourceStatementId: entry.sourceStatementId,
         reconciliationStatus: entry.reconciliationStatus,
       }));
@@ -173,6 +195,8 @@ export class FuelReconciliationService {
           fuelEntryId: match.fuelEntryId,
           amountDeltaVnd: match.amountDeltaVnd,
           businessDateDeltaDays: match.businessDateDeltaDays,
+          invoiceRelation: match.invoiceRelation,
+          decidedByInvoice: match.decidedByInvoice,
         },
       });
     }
@@ -340,6 +364,8 @@ export class FuelReconciliationService {
         discrepancyId,
         resolution: command.resolution,
         matchId: outcome.resolved.match?.id ?? null,
+        // `#317` G0 — quyet dinh cu cua CUNG dong ma lan quyet nay thay the (neu co).
+        supersedesId: outcome.resolved.discrepancy.supersedesId,
         state: outcome.state,
       },
     });
@@ -362,6 +388,91 @@ export class FuelReconciliationService {
     });
 
     return outcome.resolved.discrepancy;
+  }
+
+  /**
+   * DOI Y VE MOT QUYET DINH DA GHI — `#317` G0.
+   *
+   * ===========================================================================
+   * VI SAO LENH NAY TON TAI
+   *
+   * `OWNER_DECISIONS_2026_09_17`: *"ACCEPT_SUPPLIER_AMOUNT -> IGNORE_WITH_REASON sau reopen phai lam
+   * dong do khong con dong gop vao accepted total"* va *"Khong reset/xoa lich su ve PENDING"*. Truoc
+   * lenh nay, cach duy nhat de doi y la chay lai so khop sau khi mo ky, va ngay ca khi do quyet dinh
+   * `ACCEPT` cu van duoc cong — tong khong bao gio giam.
+   *
+   * Lenh nay THEM mot quyet dinh thay the. No khong dong vao tong tien: tong chi doi o lan DONG KY
+   * ke tiep, va lan dong do phat mot ban sua doi ban giao — T5 doc ban do thanh mot chung tu DIEU
+   * CHINH mang chenh lech (co the am), khong sua chung tu cong no cu.
+   *
+   * ===========================================================================
+   * KY DA DONG thi PHAI MO LAI TRUOC (`GD-11`, quyen rieng `transport.fuel.reconciliation.reopen`).
+   * Tu choi o day bang cung cau tra loi `RECONCILIATION_FROZEN` voi ba lenh ghi kia.
+   */
+  async reviseDiscrepancyDecision(
+    discrepancyId: string,
+    command: ReviseDecisionCommand,
+    actor: string,
+  ): Promise<RevisedDecisionResult> {
+    const discrepancy = await this.repository.findDiscrepancy(discrepancyId);
+    if (!discrepancy) {
+      throw TransportDomainError.notFound(
+        'FUEL_DISCREPANCY_NOT_FOUND',
+        `Khong tim thay chenh lech ${discrepancyId}`,
+      );
+    }
+    await this.requireOpen(discrepancy.reconciliationId);
+
+    const outcome = await this.repository.reviseDecision({
+      reconciliationId: discrepancy.reconciliationId,
+      discrepancyId,
+      resolution: command.resolution,
+      reason: command.reason.trim(),
+      actor,
+      at: this.now(),
+    });
+
+    if (outcome.kind === 'RECONCILIATION_REJECTED') {
+      return this.denyFrozen(discrepancy.reconciliationId, outcome.state);
+    }
+    if (outcome.kind === 'DECISION_NOT_FOUND') {
+      throw TransportDomainError.notFound(
+        'FUEL_DISCREPANCY_NOT_FOUND',
+        `Khong tim thay chenh lech ${discrepancyId}`,
+      );
+    }
+    if (outcome.kind === 'DENIED') {
+      return this.denyRevision(discrepancyId, outcome.reason, outcome.currentId);
+    }
+
+    const replayed = outcome.kind === 'REPLAYED';
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel_discrepancy.revise',
+      outcome: 'allowed',
+      reason: replayed ? 'DECISION_REVISION_REPLAYED' : 'DECISION_REVISED',
+      detail: {
+        reconciliationId: discrepancy.reconciliationId,
+        statementLineId: outcome.revision.statementLineId,
+        supersededId: outcome.superseded.id,
+        revisionId: outcome.revision.id,
+        from: outcome.superseded.resolution,
+        to: outcome.revision.resolution,
+        state: outcome.state,
+      },
+    });
+    if (!replayed) {
+      await this.audit.append({
+        actor,
+        action: 'transport.fuel.discrepancy.revise',
+        entityType: 'TransportFuelDiscrepancy',
+        entityId: outcome.revision.id,
+        before: outcome.superseded,
+        after: outcome.revision,
+      });
+    }
+
+    return { revision: outcome.revision, superseded: outcome.superseded, replayed };
   }
 
   /**
@@ -518,6 +629,38 @@ export class FuelReconciliationService {
       'RECONCILIATION_FROZEN',
       `Ky doi soat ${reconciliationId} da dong — mo lai (co quyen rieng) truoc khi sua bat cu thu gi`,
     );
+  }
+
+  /**
+   * NAM duong tu choi mot lan doi y — moi duong mot ma, va hai nhom HTTP khac nhau.
+   *
+   * `DECISION_NOT_CURRENT`/`DECISION_NOT_RESOLVED` la VA CHAM (409): du lieu da doi hoac chua toi
+   * cho, nguoi dung tai lai roi lam tiep. Ba ma con lai la LUAT (403): lam lai bao nhieu lan cung
+   * khong qua, phai di mot duong khac.
+   */
+  private denyRevision(
+    discrepancyId: string,
+    reason: FuelDecisionRevisionDeniedReason,
+    currentId: string | null,
+  ): never {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel_discrepancy.revise',
+      outcome: 'denied',
+      reason,
+      detail: { discrepancyId, currentId },
+    });
+    const messages: Readonly<Record<FuelDecisionRevisionDeniedReason, string>> = {
+      DECISION_NOT_RESOLVED: `Chenh lech ${discrepancyId} chua co quyet dinh — hay quyet no, khong phai sua`,
+      DECISION_WITHOUT_STATEMENT_LINE: `Quyet dinh ${discrepancyId} khong gan dong bang ke nao — khong co chuoi quyet dinh de sua`,
+      DECISION_NOT_CURRENT: `Dong nay da co quyet dinh moi hon (${currentId ?? 'khong ro'}) — tai lai roi sua ban moi nhat`,
+      DECISION_MATCH_LOCKED: `Quyet dinh ${discrepancyId} da ghi mot cap khop tay — mo lai ky va chay lai so khop thay vi sua`,
+      DECISION_REVISION_NO_CHANGE: `Quyet dinh moi trung quyet dinh dang co cua ${discrepancyId} — khong ghi ban sua rong`,
+    };
+    if (reason === 'DECISION_NOT_CURRENT' || reason === 'DECISION_NOT_RESOLVED') {
+      throw TransportDomainError.conflict(reason, messages[reason]);
+    }
+    throw TransportDomainError.denied(reason, messages[reason]);
   }
 
   private denyTransition(reconciliation: FuelReconciliation, to: FuelReconciliationState): never {

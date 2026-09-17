@@ -22,8 +22,9 @@ import {
 import { FuelDocumentQueue } from './FuelDocumentQueue';
 import { FuelInbox } from './FuelInbox';
 import { StatementImport } from './StatementImport';
-import type { FuelDiscrepancyResolution } from '../transport-types';
+import type { FuelDiscrepancyResolution, RevisableFuelResolution } from '../transport-types';
 import {
+  DECISION_REVISION_NOTICE,
   MATCHING_REQUIRES_REFETCH,
   toReconciliationRows,
   toReconciliationWorkspace,
@@ -177,6 +178,10 @@ function ReconciliationWorkspace({
 
   const [pendingClose, setPendingClose] = useState<'close' | 'reopen' | null>(null);
   const [resolving, setResolving] = useState<DiscrepancyRow | null>(null);
+  /** `#317` G0 — doi y ve mot quyet dinh DA GHI (them quyet dinh thay the, khong sua hang cu). */
+  const [revising, setRevising] = useState<DiscrepancyRow | null>(null);
+  const [revision, setRevision] = useState<RevisableFuelResolution | ''>('');
+  const [revisionReason, setRevisionReason] = useState('');
   const [resolution, setResolution] = useState<FuelDiscrepancyResolution | ''>('');
   const [pairLineId, setPairLineId] = useState('');
   const [pairEntryId, setPairEntryId] = useState('');
@@ -219,6 +224,26 @@ function ReconciliationWorkspace({
       setPairLineId('');
       setPairEntryId('');
       setReason('');
+      setFailure(null);
+      refresh();
+    },
+    onError: (error: Error) => setFailure(error.message),
+  });
+
+  const reviseDecision = useMutation({
+    mutationFn: async (row: DiscrepancyRow) => {
+      if (revision === '') throw new Error('Chưa chọn quyết định mới.');
+      // May chu tu choi ly do rong (400); noi truoc thay vi de nguoi dung bam roi doc loi.
+      if (revisionReason.trim() === '') throw new Error('Đổi quyết định phải ghi lý do.');
+      return transportApi.fuel.reviseDiscrepancy(row.id, {
+        resolution: revision,
+        reason: revisionReason.trim(),
+      });
+    },
+    onSuccess: () => {
+      setRevising(null);
+      setRevision('');
+      setRevisionReason('');
       setFailure(null);
       refresh();
     },
@@ -335,6 +360,11 @@ function ReconciliationWorkspace({
               render: (row) =>
                 row.isPending ? (
                   <StatusBadge label="Chờ xử lý" tone="wait" />
+                ) : row.isSuperseded ? (
+                  <StatusBadge
+                    label={`${row.resolutionLabel ?? 'Đã xử lý'} · đã thay bằng quyết định mới`}
+                    tone="flat"
+                  />
                 ) : (
                   <StatusBadge label={row.resolutionLabel ?? 'Đã xử lý'} tone="done" />
                 ),
@@ -350,6 +380,7 @@ function ReconciliationWorkspace({
                     className="tx-btn tx-btn--small"
                     onClick={() => {
                       setFailure(null);
+                      setRevising(null);
                       setResolution('');
                       setPairLineId(row.statementLineId ?? '');
                       setPairEntryId(row.fuelEntryId ?? '');
@@ -359,10 +390,77 @@ function ReconciliationWorkspace({
                   >
                     Xử lý
                   </button>
+                ) : row.canRevise ? (
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn--small"
+                    onClick={() => {
+                      setFailure(null);
+                      setResolving(null);
+                      setRevision('');
+                      setRevisionReason('');
+                      setRevising(row);
+                    }}
+                  >
+                    Đổi quyết định
+                  </button>
                 ) : null,
             },
           ]}
         />
+      )}
+
+      {revising === null ? null : (
+        <form
+          className="tx-panel tx-panel--form"
+          aria-label={`Đổi quyết định: ${revising.kindLabel}`}
+          onSubmit={(event) => {
+            event.preventDefault();
+            reviseDecision.mutate(revising);
+          }}
+        >
+          <h3>Đổi quyết định — {revising.kindLabel}</h3>
+          <p className="tx-note">
+            Quyết định đang có: {revising.resolutionLabel ?? '—'}
+            {revising.resolutionNote === null ? null : ` (${revising.resolutionNote})`}
+          </p>
+          <p className="tx-note" role="note">
+            {DECISION_REVISION_NOTICE}
+          </p>
+          <label className="tx-field">
+            <span>Quyết định mới</span>
+            <select
+              aria-label="Quyết định mới"
+              required
+              value={revision}
+              onChange={(event) => setRevision(event.target.value as RevisableFuelResolution | '')}
+            >
+              <option value="">Chọn quyết định mới</option>
+              {revising.reviseOptions.map((option) => (
+                <option key={option.resolution} value={option.resolution}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="tx-field">
+            <span>Lý do đổi quyết định</span>
+            <input
+              aria-label="Lý do đổi quyết định"
+              required
+              value={revisionReason}
+              onChange={(event) => setRevisionReason(event.target.value)}
+            />
+          </label>
+          <div className="tx-confirm__actions">
+            <button type="button" className="tx-btn" onClick={() => setRevising(null)}>
+              Quay lại
+            </button>
+            <button type="submit" className="tx-btn tx-btn--go" disabled={reviseDecision.isPending}>
+              {reviseDecision.isPending ? 'Đang gửi…' : 'Ghi quyết định mới'}
+            </button>
+          </div>
+        </form>
       )}
 
       {resolving === null ? null : (
