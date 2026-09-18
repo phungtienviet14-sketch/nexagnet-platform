@@ -1,0 +1,7 @@
+{
+  "status": "ok",
+  "expected_status": "ok",
+  "purpose": "PoC CI auto-fix: gieo mot loi CI TAT DINH trong sandbox de chung minh chuoi CI FAIL -> App push -> CI(B) tu chay -> PASS",
+  "fixed_by": "nexagent-autopilot[bot]",
+  "fix_run_id": 33717357378
+}

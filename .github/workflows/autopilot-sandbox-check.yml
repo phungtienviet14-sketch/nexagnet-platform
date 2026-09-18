@@ -1,0 +1,57 @@
+name: Nexagent Autopilot Sandbox Check
+
+# Mot cong CI TAT DINH, chi doc trong sandbox `docs/poc/autopilot/`.
+# Vai tro trong PoC: dong "CI FAIL A". Khi `selfcheck.json` co status != expected thi cong nay DO
+# — do that, khong phai mo phong — de buoc autofix phai sua roi push, va de lan chay tren HEAD moi
+# chung minh duoc no tu XANH lai.
+#
+# CO Y KHONG dat `concurrency`: neu dat kem `cancel-in-progress` thi lan push cua autofix se HUY
+# lan chay dang do nay, va bang chung "CI FAIL A" bien mat truoc khi kip ghi nhan.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - .github/workflows/autopilot-sandbox-check.yml
+      - docs/poc/autopilot/**
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox-check:
+    name: autopilot-sandbox-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sandbox selfcheck must be green
+        shell: bash
+        env:
+          SELFCHECK: docs/poc/autopilot/selfcheck.json
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "$SELFCHECK" ]; then
+            echo "FAIL: thieu $SELFCHECK"
+            exit 1
+          fi
+
+          status="$(jq -r '.status' "$SELFCHECK")"
+          expected="$(jq -r '.expected_status' "$SELFCHECK")"
+
+          echo "SANDBOX_SELFCHECK_STATUS=$status"
+          echo "SANDBOX_SELFCHECK_EXPECTED=$expected"
+
+          if [ "$status" != "$expected" ]; then
+            echo "SANDBOX_CHECK_VERDICT=FAIL"
+            echo "FAIL: status='$status' nhung phai la '$expected'."
+            echo "Day la loi CI co chu dich cua PoC — autofix se sua no bang App token."
+            exit 1
+          fi
+
+          echo "SANDBOX_CHECK_VERDICT=PASS"
