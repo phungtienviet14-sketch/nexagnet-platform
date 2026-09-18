@@ -103,6 +103,14 @@ export const FILE_READ_REASONS = [
   'FILE_OBJECT_MISSING',
   /** `storageKey` khong tro vao khu cua nen tang tep. Mot lan tu choi CO CHU DICH. */
   'FILE_KEY_OUT_OF_SCOPE',
+  /**
+   * BYTE DOC RA KHONG KHOP BAN GHI — kich thuoc hoac bam.
+   *
+   * Mot he thong bang chung luu mot ma bam roi KHONG BAO GIO so lai chi dang luu mot vat
+   * trang tri. Ma nay la cho phep so do co nghia: no noi rang byte trong kho da doi ke tu
+   * luc ghi — bi ghi de, bi thay, hoac hong — va tep KHONG duoc tra ra nhu mot bang chung.
+   */
+  'FILE_INTEGRITY_MISMATCH',
 ] as const;
 export type FileReadReason = (typeof FILE_READ_REASONS)[number];
 
@@ -212,6 +220,7 @@ export const FILE_DECISIONS = defineDecisionVocabulary({
     FILE_SERVED: 'Đã trả tệp cho người có quyền xem',
     FILE_OBJECT_MISSING: 'Có dòng metadata nhưng không còn byte trong kho',
     FILE_KEY_OUT_OF_SCOPE: 'Khóa lưu trữ trỏ ra ngoài khu của nền tảng tệp — từ chối đọc',
+    FILE_INTEGRITY_MISMATCH: 'Byte trong kho không khớp bản ghi — từ chối trả ra',
 
     FILE_WITHDRAWN: 'Đã rút tệp khỏi hồ sơ; lịch sử ở lại',
     FILE_WITHDRAWAL_LOCKED_BY_DOMAIN: 'Miền đã chốt bằng chứng — không ai rút được nữa',

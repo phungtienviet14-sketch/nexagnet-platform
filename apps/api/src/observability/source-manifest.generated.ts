@@ -128,7 +128,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "file.attach": {
       "functionName": "FileService.createLink",
       "filePath": "apps/api/src/files/file.service.ts",
-      "line": 429
+      "line": 478
     },
     "file.link": {
       "filePath": "apps/api/src/files/file.service.ts"
@@ -1275,7 +1275,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "file.link|FILE_LINKED": {
       "functionName": "FileService.createLink",
       "filePath": "apps/api/src/files/file.service.ts",
-      "line": 422
+      "line": 471
     },
     "file.link|FILE_LINK_ALREADY_ACTIVE": {
       "functionName": "FileService.createLink",
@@ -1299,7 +1299,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "file.read|FILE_SERVED": {
       "functionName": "FileService.read",
       "filePath": "apps/api/src/files/file.service.ts",
-      "line": 321
+      "line": 323
     },
     "file.stage|FILE_STAGED": {
       "functionName": "FileService.stage",
@@ -1309,7 +1309,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "file.withdraw|FILE_WITHDRAWN": {
       "functionName": "FileService.withdraw",
       "filePath": "apps/api/src/files/file.service.ts",
-      "line": 535
+      "line": 584
     },
     "finance.summary|FINANCE_CURRENCY_MIXED": {
       "functionName": "FinanceReadService.summary",

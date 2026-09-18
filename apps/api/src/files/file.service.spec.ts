@@ -741,3 +741,48 @@ describe('Hai lan gan den cung luc — PF-028', () => {
     expect(await files.activeLinksOf(file.id)).toHaveLength(1);
   });
 });
+
+/**
+ * TOAN VEN NOI DUNG — `#287` P5, bai 9 cua P12.
+ *
+ * Mot he thong bang chung luu mot ma bam roi khong bao gio so lai chi dang luu mot vat trang tri.
+ * Hai bai duoi day do dung dieu do: byte trong kho doi di, va duong doc PHAI dong lai.
+ */
+describe('Byte doc ra phai la byte da ghi — PF-029', () => {
+  it('kich thuoc lech: tu choi tra byte', async () => {
+    const { service, blobs } = harness();
+    const file = await service.upload(upload());
+    // Mot object bi ghi de trong kho — mot lan don byte di lac, mot lan khoi phuc sai, hay mot
+    // nguoi co quyen vao bucket.
+    blobs.objects.set(file.storageKey, {
+      body: Buffer.concat([jpegBytes(), Buffer.from('them byte')]),
+      contentType: 'image/jpeg',
+    });
+
+    expect(await reasonOf(service.read(file.id, DRIVER_A))).toBe('FILE_INTEGRITY_MISMATCH');
+  });
+
+  /**
+   * CUNG KICH THUOC, KHAC NOI DUNG — truong hop ma mot phep kiem kich thuoc don thuan BO LOT, va
+   * la ly do ma bam phai duoc so lai chu khong chi cat di.
+   */
+  it('cung kich thuoc nhung khac noi dung: van tu choi', async () => {
+    const { service, blobs } = harness();
+    const file = await service.upload(upload());
+    const swapped = Buffer.from(jpegBytes());
+    swapped[swapped.length - 1] = swapped[swapped.length - 1]! ^ 0xff;
+    expect(swapped.byteLength).toBe(file.byteSize);
+    blobs.objects.set(file.storageKey, { body: swapped, contentType: 'image/jpeg' });
+
+    expect(await reasonOf(service.read(file.id, DRIVER_A))).toBe('FILE_INTEGRITY_MISMATCH');
+  });
+
+  it('byte nguyen ven: tra ra binh thuong', async () => {
+    const { service } = harness();
+    const file = await service.upload(upload());
+
+    await expect(service.read(file.id, DRIVER_A)).resolves.toMatchObject({
+      blob: { contentType: 'image/jpeg' },
+    });
+  });
+});

@@ -318,6 +318,8 @@ export class FileService {
       throw FileDomainError.notFound('FILE_OBJECT_MISSING', 'Khong con byte cua tep nay trong kho');
     }
 
+    this.assertIntegrity(file, blob.body);
+
     this.telemetry?.decision({
       vocabulary: FILE_DECISIONS,
       point: 'file.read',
@@ -326,6 +328,53 @@ export class FileService {
       detail: { fileId, byteSize: blob.body.byteLength, contentType: blob.contentType },
     });
     return { file, blob };
+  }
+
+  /**
+   * BYTE DOC RA CO DUNG LA BYTE DA GHI KHONG — `#287` P5/P12 bai 9.
+   *
+   * ============================================================================================
+   * MOT MA BAM KHONG BAO GIO DUOC SO LAI LA MOT VAT TRANG TRI
+   * ============================================================================================
+   *
+   * `sha256` duoc tinh luc ghi va cat vao CSDL. Neu khong cho nao so lai no, thi cot do khong khang
+   * dinh dieu gi: mot object bi ghi de trong kho — do mot lan don byte di lac, mot lan khoi phuc
+   * sai, hay mot nguoi co quyen vao bucket — se duoc tra ra nhu bang chung hop le, va khong mot
+   * cong nghiep vu nao thay.
+   *
+   * KICH THUOC do TRUOC, va do la mot quyet dinh: no mien phi, no bat phan lon truong hop, va no
+   * cho mot ma ly do cu the hon cho nguoi van hanh doc. Bam bat phan con lai.
+   *
+   * CHI PHI: mot lan bam lai tren moi lan doc. No CO CHAN tren — `FILE_PURPOSE_RULES[*].maxBytes`
+   * la 15MB, tuc vai chuc mili-giay o truong hop xau nhat, va byte da nam san trong bo nho. Doi lai
+   * la mot phep bao dam toan ven THAT thay vi mot cot du lieu khong ai kiem.
+   *
+   * FAIL-CLOSED: lech thi KHONG tra byte ra. Tra ra kem mot canh bao se de bang chung do di tiep
+   * vao mot quyet dinh, va canh bao thi khong ai doc.
+   */
+  private assertIntegrity(file: FileRecord, bytes: Buffer): void {
+    if (bytes.byteLength !== file.byteSize) {
+      this.deny('file.read', 'FILE_INTEGRITY_MISMATCH', {
+        fileId: file.id,
+        expectedByteSize: file.byteSize,
+        actualByteSize: bytes.byteLength,
+      });
+      throw FileDomainError.conflict(
+        'FILE_INTEGRITY_MISMATCH',
+        'Byte trong kho khong khop ban ghi cua tep nay',
+      );
+    }
+
+    const digest = sha256Of(bytes);
+    if (digest !== file.sha256) {
+      // KHONG dua ca hai ma bam vao `detail`: mot ma bam la mot dau van tay cua NOI DUNG, va noi
+      // dung o day la du lieu khach. Mot co `mismatch` la du de nguoi van hanh loc.
+      this.deny('file.read', 'FILE_INTEGRITY_MISMATCH', { fileId: file.id, digestMatches: false });
+      throw FileDomainError.conflict(
+        'FILE_INTEGRITY_MISMATCH',
+        'Byte trong kho khong khop ban ghi cua tep nay',
+      );
+    }
   }
 
   /**
