@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
+import { UserRepository } from '../../auth/user.repository.js';
 import { loadFoundationEnv } from '../../config/foundation-env.js';
+import { FileDomainAuthorizerRegistry } from '../../files/file-authorization.port.js';
+import { FilesModule } from '../../files/files.module.js';
 import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { TransportCheckpointCoreFacts } from '../checkpoint/checkpoint-facts.port.js';
 import { TransportCheckpointModule } from '../checkpoint/transport-checkpoint.module.js';
 import { TRANSPORT_CORE_POLICY, tenantTransportCorePolicy } from '../transport-policy.js';
 import { TransportModule } from '../transport.module.js';
@@ -11,7 +15,9 @@ import {
   TransportDocumentSiteFacts,
   TransportDocumentSiteFactsAdapter,
 } from './document-facts.port.js';
-import { NoFilePlatformAdapter, TransportDocumentFilePort } from './document-file.port.js';
+import { TransportDocumentFilePort } from './document-file.port.js';
+import { FilePlatformDocumentAdapter } from './file-platform.adapter.js';
+import { OperationalDocumentFileAuthorizer } from './operational-document-file.authorizer.js';
 import {
   InMemoryOperationalDocumentRepository,
   OperationalDocumentRepository,
@@ -52,7 +58,7 @@ import { PrismaPhysicalReceiptHandoverRepository } from './prisma-handover.repos
  * luat mien nao, khong mot bang nao, khong mot bai test nghiep vu nao.
  */
 @Module({
-  imports: [PrismaModule, TransportModule, TransportCheckpointModule],
+  imports: [PrismaModule, FilesModule, TransportModule, TransportCheckpointModule],
   providers: [
     {
       provide: OperationalDocumentRepository,
@@ -72,8 +78,45 @@ import { PrismaPhysicalReceiptHandoverRepository } from './prisma-handover.repos
     },
     { provide: TransportDocumentCoreFacts, useClass: TransportDocumentCoreFactsAdapter },
     { provide: TransportDocumentSiteFacts, useClass: TransportDocumentSiteFactsAdapter },
-    /** DONG DUY NHAT phai doi khi `#287` vao `main`. Xem khoi chu thich cua lop. */
-    { provide: TransportDocumentFilePort, useClass: NoFilePlatformAdapter },
+    /** DONG DUY NHAT phai doi khi `#287` vao `main` — va no DA doi. Xem khoi chu thich cua lop. */
+    { provide: TransportDocumentFilePort, useClass: FilePlatformDocumentAdapter },
+    /**
+     * MIEN TU DANG KY nguoi tra loi quyen cua chinh no — `#287` P2/P6.
+     *
+     * Dang ky trong `useFactory` thay vi mot mang tiem vao `FilesModule`: nen tang tep thuoc
+     * `foundation` va duoc nap TRUOC moi mien, nen mot mang tiem o do se buoc no phai biet ten tung
+     * mien — dung dieu `#287` P2 cam. Chieu phu thuoc vi vay bi dao, va lop nay la cho no dao.
+     *
+     * Nest khoi tao MOI provider cua module luc boot, nen lan dang ky nay xay ra ke ca khi khong ai
+     * tiem `OperationalDocumentFileAuthorizer`. `transport-document-file-binding.spec.ts` dung mot
+     * lan boot that de chung minh dieu do thay vi tin vao no.
+     */
+    {
+      provide: OperationalDocumentFileAuthorizer,
+      useFactory: (
+        documents: OperationalDocumentRepository,
+        handovers: PhysicalReceiptHandoverRepository,
+        identity: TransportCheckpointCoreFacts,
+        users: UserRepository,
+        registry: FileDomainAuthorizerRegistry,
+      ): OperationalDocumentFileAuthorizer => {
+        const authorizer = new OperationalDocumentFileAuthorizer(
+          documents,
+          handovers,
+          identity,
+          users,
+        );
+        registry.register(authorizer);
+        return authorizer;
+      },
+      inject: [
+        OperationalDocumentRepository,
+        PhysicalReceiptHandoverRepository,
+        TransportCheckpointCoreFacts,
+        UserRepository,
+        FileDomainAuthorizerRegistry,
+      ],
+    },
     { provide: TRANSPORT_CORE_POLICY, useFactory: tenantTransportCorePolicy },
     OperationalDocumentService,
     PhysicalReceiptHandoverService,

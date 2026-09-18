@@ -267,7 +267,36 @@ trong cửa sổ thời gian.
 `/demo/simulate` bơm một tin nhắn giả lập qua **đúng pipeline thật** — dùng cho kịch bản demo và
 cho smoke test lúc deploy.
 
-### 3.9 Sức khoẻ & hệ thống ngoài
+### 3.9 Nền tảng Tệp — `/files`
+
+> Hợp đồng đầy đủ: [`nen-tang-tep.md`](nen-tang-tep.md) · nguồn: `#287`
+
+| Method | Path | Vai | Ghi chú |
+|---|---|---|---|
+| POST | `/files` | 4 vai | `multipart/form-data`, trường `file` + `purpose`. 30 lần/phút |
+| GET | `/files/:fileId` | 4 vai | Mô tả tệp — **không** định vị kho |
+| GET | `/files/:fileId/content` | 4 vai | Trả byte; `nosniff` + `sandbox` + `no-store` |
+| POST | `/files/:fileId/links` | 4 vai | Gắn tệp vào một đối tượng nghiệp vụ |
+| POST | `/files/:fileId/withdraw` | 4 vai | Bịa mờ — byte vẫn còn, lịch sử ở lại |
+| POST | `/files/:fileId/legal-hold` | **ADMIN** | Đặt/gỡ lệnh giữ pháp lý — chặn dọn byte |
+
+**Bốn vai ở đây KHÔNG phải cổng thật.** Chúng chỉ trả lời "có phải một người đã đăng nhập không";
+còn "người này có được xem TỜ NÀY không" là câu mà nền tảng hỏi lại **miền sở hữu** đối tượng
+nghiệp vụ mà tệp đang gắn vào. Một tài khoản `ACCOUNTING` gọi `GET /files/:id` trên một tệp không
+thuộc hồ sơ nào của họ nhận **403**, đúng như một tài khoản `SALE`.
+
+`/files/:fileId/legal-hold` là tuyến duy nhất ở đây chốt bằng vai, và vì một lý do khác hẳn: lệnh
+giữ thuộc về **hồ sơ lưu trữ của cả tổ chức**, không về một đối tượng nghiệp vụ cụ thể — nên không
+có miền nào để hỏi.
+
+**Mã lỗi:** một mã không tồn tại và một mã có thật nhưng không phải của người gọi trả **cùng** một
+`403 FILE_NOT_AVAILABLE_TO_CALLER`. Nếu khác nhau, thử lần lượt các mã là đếm được bao nhiêu tệp có
+thật trên hệ thống.
+
+**Không có URL công khai vĩnh viễn nào.** `GET /files/:fileId/content` là đường duy nhất byte ra
+ngoài, và nó đi qua cổng quyền mỗi lần.
+
+### 3.10 Sức khoẻ & hệ thống ngoài
 
 | Method | Path | Vai | Ghi chú |
 |---|---|---|---|

@@ -73,8 +73,15 @@ class FakeSites extends TransportDocumentSiteFacts {
 /** Cong tep GIA — de do ba nhanh cua `DocumentFileLookup` ma khong can Nen tang Tep that. */
 class FakeFilePort extends TransportDocumentFilePort {
   readonly answers = new Map<string, DocumentFileLookup>();
+  /** Lan gan da xay ra — `#287` P11. Ghi lai de bai test doc duoc THU TU, khong chi ket qua. */
+  readonly bound: { fileId: string; documentId: string; authUserId: string }[] = [];
+
   async describe(fileId: string): Promise<DocumentFileLookup> {
     return this.answers.get(fileId) ?? { kind: 'DENIED', reason: 'FILE_NOT_AVAILABLE_TO_CALLER' };
+  }
+
+  async bind(fileId: string, documentId: string, authUserId: string): Promise<void> {
+    this.bound.push({ fileId, documentId, authUserId });
   }
 }
 
@@ -175,9 +182,7 @@ describe('OperationalDocumentService — DC-020', () => {
   });
 
   it('lai xe khong cam vong chay do thi khong ghi duoc', async () => {
-    expect(await reasonOf(record({ authUserId: 'u.cuong' }))).toBe(
-      'DOCUMENT_DRIVER_NOT_ASSIGNED',
-    );
+    expect(await reasonOf(record({ authUserId: 'u.cuong' }))).toBe('DOCUMENT_DRIVER_NOT_ASSIGNED');
   });
 
   /** `#279` O12 — lai xe A khong neo chung tu vao moc cua lai xe B. */
@@ -222,7 +227,9 @@ describe('OperationalDocumentService — DC-020', () => {
   it('tep da bi rut hoac cach ly khong thoa man mot chung tu nao', async () => {
     files.answers.set('file-rut', { kind: 'DENIED', reason: 'FILE_NOT_ACTIVE' });
     expect(
-      await reasonOf(record({ basis: 'DIGITAL_FILE', fileId: 'file-rut', externalNote: undefined })),
+      await reasonOf(
+        record({ basis: 'DIGITAL_FILE', fileId: 'file-rut', externalNote: undefined }),
+      ),
     ).toBe('DOCUMENT_FILE_NOT_ACTIVE');
   });
 
@@ -306,7 +313,13 @@ describe('OperationalDocumentService — DC-020', () => {
       businessDate: '2026-09-09',
     });
     // CON trong tay lai xe: van bia mo duoc, vi chua ai o van phong doi chieu no.
-    expect(await service.withdraw({ documentId: document.id, reason: 'chup nham', authUserId: 'u.admin' })).toBeTruthy();
+    expect(
+      await service.withdraw({
+        documentId: document.id,
+        reason: 'chup nham',
+        authUserId: 'u.admin',
+      }),
+    ).toBeTruthy();
 
     const second = await record({ clientEventId: 'd.2' });
     await handovers.create({

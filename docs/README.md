@@ -30,6 +30,7 @@ Tài liệu tách theo **tuổi thọ và chủ sở hữu**, không theo địn
 | [`he-thong.md`](kien-truc/he-thong.md)                                 | **Thiết kế kỹ thuật & as-built** — sơ đồ, quyết định kỹ thuật, phụ lục PoC                                                                                                      | Không được mâu thuẫn với file trên                                        |
 | [`api-http.md`](kien-truc/api-http.md)                                 | **Hợp đồng HTTP** — xác thực, phân quyền, toàn bộ endpoint, giới hạn tần suất, hình dạng lỗi                                                                                    | Không phải hướng dẫn vận hành, không chứa dữ liệu khách                   |
 | [`business-decision-ledger.md`](kien-truc/business-decision-ledger.md) | **Sổ cái quyết định nghiệp vụ** — bốn mặt phẳng sự thật, khi nào dùng sổ cái / telemetry / audit log, chống trùng, chính sách thất bại theo mức nghiêm trọng, hợp đồng riêng tư | Không phải Evidence Graph, không phải Replay, không phải Diagnostic Agent |
+| [`nen-tang-tep.md`](kien-truc/nen-tang-tep.md) | **Nền tảng Tệp** — mã tệp đục, `biết mã ≠ được đọc`, vòng đời rút/cách ly/dọn byte, cổng quyền theo miền, trung lập nhà cung cấp | Không nhắc taxonomy của miền nào; **chưa có backfill**, chưa có primitive web |
 
 > ⚠️ Đừng nhầm [`kien-truc/nen-tang-da-khach.md`](kien-truc/nen-tang-da-khach.md) (kiến trúc) với
 > [`phat-trien/ke-hoach/dot-0-nen-tang.md`](phat-trien/ke-hoach/dot-0-nen-tang.md) (kế hoạch Đợt 0).

@@ -90,6 +90,32 @@ export type DocumentFileDenialReason = (typeof DOCUMENT_FILE_DENIAL_REASONS)[num
  */
 export abstract class TransportDocumentFilePort {
   abstract describe(fileId: string, authUserId: string): Promise<DocumentFileLookup>;
+
+  /**
+   * GAN tep vao mot chung tu VUA DUOC GHI — `#287` P2/P11.
+   *
+   * ============================================================================================
+   * VI SAO PHAI LA MOT PHEP THU HAI, khong gop vao `describe()`
+   * ============================================================================================
+   *
+   * `describe()` chay TRUOC khi hang chung tu ton tai — luc do chua co `documentId` de gan vao.
+   * Nen mot lan gan chi thuc hien duoc SAU `create()`, va gop hai viec vao mot ham se bien mot cau
+   * hoi thanh mot lenh ghi.
+   *
+   * ============================================================================================
+   * VI SAO MOT LIEN KET LA BAT BUOC, khong phai mot cot `fileId` la du
+   * ============================================================================================
+   *
+   * Cot `fileId` noi duoc "to nay la tep nao". No KHONG noi duoc "ai duoc xem tep nay" — va do moi
+   * la cau ma nen tang tep phai tra loi khi ke toan mo mot to bien nhan. Khong co lien ket, tep chi
+   * co nguoi tai len doc duoc (`#287` P2), tuc ke toan se khong mo duoc chinh cai ho dang doi
+   * soat.
+   *
+   * KHONG NEM. Mot lan gan hong khong duoc lam hong ca lan ghi chung tu: to giay VAN da duoc chup,
+   * va hang chung tu VAN dung. Duong hong o day lam tep tro ve pham vi cua rieng nguoi tai len —
+   * mot trang thai nghiep vu chat hon, khong long hon.
+   */
+  abstract bind(fileId: string, documentId: string, authUserId: string): Promise<void>;
 }
 
 /**
@@ -108,4 +134,13 @@ export class NoFilePlatformAdapter extends TransportDocumentFilePort {
   async describe(): Promise<DocumentFileLookup> {
     return { kind: 'UNAVAILABLE' };
   }
+
+  /**
+   * KHONG LAM GI, va khong bao gio duoc goi.
+   *
+   * `describe()` o ban nay tra `UNAVAILABLE` cho MOI ma, nen `OperationalDocumentService` khong bao
+   * gio ghi duoc mot chung tu co `fileId`. Than ham rong la HE QUA cua dieu do chu khong mot cho
+   * trong — va no van phai ton tai de ban khong-co-nen-tang-tep thoa man cung mot cong.
+   */
+  async bind(): Promise<void> {}
 }

@@ -17,10 +17,7 @@ import {
   type DocumentWithdrawReason,
   type TransportDocumentDecisionReason,
 } from './document-decisions.js';
-import {
-  TransportDocumentCoreFacts,
-  TransportDocumentSiteFacts,
-} from './document-facts.port.js';
+import { TransportDocumentCoreFacts, TransportDocumentSiteFacts } from './document-facts.port.js';
 import { TransportDocumentFilePort } from './document-file.port.js';
 import { evaluateDocumentRecord, evaluateDocumentWithdraw } from './document-lifecycle.js';
 import {
@@ -202,6 +199,11 @@ export class OperationalDocumentService {
         receivedAt,
         businessDate: toBusinessDate(receivedAt, this.corePolicy.timeZone),
       });
+      // GAN TEP VAO CHUNG TU VUA GHI — `#287` P2/P11. Sau `create()` vi truoc do chua co ma chung
+      // tu de gan vao; xem `TransportDocumentFilePort.bind()`.
+      if (document.fileId !== null) {
+        await this.files.bind(document.fileId, document.id, command.authUserId);
+      }
       this.allow('document.record', 'DOCUMENT_RECORDED', {
         documentId: document.id,
         type: document.type,
