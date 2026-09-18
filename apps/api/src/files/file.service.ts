@@ -33,6 +33,14 @@ import type {
 /** Dong ho tiem vao thay vi `new Date()` rai rac — de bai test dat duoc mot moc luu tru cu the. */
 export const FILE_CLOCK = Symbol('FILE_CLOCK');
 
+/**
+ * MOT LIEN KET CU THE dang o dau — cau tra loi cua `FileService.linkStateOf()`.
+ *
+ * `NONE` va `RELEASED` la HAI su that khac nhau, khong mot `boolean`: cai thu nhat la mot lo hong
+ * phai va, cai thu hai la mot quyet dinh cua van hanh phai ton trong.
+ */
+export type FileLinkPresence = 'ACTIVE' | 'RELEASED' | 'NONE';
+
 /** Ket qua mot lan doc: mo ta + byte. Mo ta la ban CONG KHAI, khong mang `storageKey`. */
 export interface FileReadResult {
   readonly file: FileRecord;
@@ -375,6 +383,72 @@ export class FileService {
         'Byte trong kho khong khop ban ghi cua tep nay',
       );
     }
+  }
+
+  /**
+   * LIEN KET DO DANG O DAU? — cau hoi CHI DOC de mot mien TU SUA duoc mot lan gan hong.
+   *
+   * ============================================================================================
+   * BA CAU TRA LOI, va `NONE` khac han `RELEASED`
+   * ============================================================================================
+   *
+   * Do la ca diem cua ham nay. Mot lan rut tep KHONG xoa lien ket, no chuyen lien ket sang
+   * `WITHDRAWN` (xem `FileRepository.withdraw`). Nen hai tinh huong sau nhin tu `findActiveLink()`
+   * la giong het nhau, trong khi chung la hai viec nguoc nhau:
+   *
+   *   · `NONE`     — CHUA BAO GIO gan duoc. Day la lo hong: hang chung tu co `fileId` ma nen tang
+   *     tep khong co mot dong nao. Phai va lai;
+   *   · `RELEASED` — DA gan, roi mot nguoi co quyen RUT no di. Khong co gi de va: gan lai o day se
+   *     lam lai dung cai ma van hanh vua co y go bo.
+   *
+   * Tron hai thu nay lam mot lenh gui lai binh thuong — sau khi van hanh rut mot tam anh chup nham
+   * — bao loi nhu the he thong dang hong.
+   *
+   * ============================================================================================
+   * VI SAO KHONG DUNG THANG `link()` DE HOI
+   * ============================================================================================
+   *
+   * `link()` la mot lenh GHI, nen no chay ca ba cong cua duong ghi: quyen `ATTACH` tren tep, trang
+   * thai tep phai `ACTIVE`, va mien so huu phai dong y NHAN. Dung no de hoi "da gan chua" se lam
+   * ba tinh huong sau bao SAI:
+   *
+   *   · tep da bi rut SAU khi gan xong -> `FILE_NOT_ACTIVE`, trong khi lien ket van con nguyen;
+   *   · chung tu da bia mo SAU khi gan xong -> mien tu choi, trong khi lien ket van con nguyen;
+   *   · mot nguoi khac gui lai dung lenh cu -> tu choi, trong khi lien ket van con nguyen.
+   *
+   * Ca ba deu la "da gan roi", va bao chung thanh loi se lam mot lenh gui lai binh thuong hong di.
+   * Nen cau hoi phai tach khoi lenh ghi.
+   *
+   * ============================================================================================
+   * VI SAO CAU HOI NAY KHONG CAN MOT CONG QUYEN
+   * ============================================================================================
+   *
+   * No khong mo them mot duong doc nao: ben goi phai TU KHAI du ca bon toa do (`fileId`, ten mien
+   * so huu, ma doi tuong, muc dich) va chi nhan lai mot `boolean`. Khong mot `FileLink` nao di ra,
+   * nen khong mot `storageKey` nao di ra. Va no khong DEM duoc gi: muon hoi ve mot tep thi phai da
+   * biet chinh xac no gan vao doi tuong nao — tuc da biet cau tra loi.
+   *
+   * Quan trong hon: no khong CHO them quyen gi. Muon tao lien ket van phai qua `link()` voi day du
+   * hai cong. `#287` P2 (*"knowing File ID != permission to read File"*) khong bi dong toi.
+   *
+   * KHONG co tuyen HTTP nao goi toi day, va do la co y — xem `files.controller.ts`.
+   */
+  async linkStateOf(query: {
+    readonly fileId: string;
+    readonly businessOwnerType: string;
+    readonly businessOwnerId: string;
+    readonly purpose: string;
+  }): Promise<FileLinkPresence> {
+    // `linksOf` chu khong `findActiveLink`: ta can thay ca lien ket DA RUT de phan biet `RELEASED`
+    // voi `NONE`, va do la ca ly do ham nay ton tai.
+    const matching = (await this.files.linksOf(query.fileId)).filter(
+      (link) =>
+        link.businessOwnerType === query.businessOwnerType &&
+        link.businessOwnerId === query.businessOwnerId &&
+        link.purpose === query.purpose,
+    );
+    if (matching.length === 0) return 'NONE';
+    return matching.some((link) => link.state === 'ACTIVE') ? 'ACTIVE' : 'RELEASED';
   }
 
   /**

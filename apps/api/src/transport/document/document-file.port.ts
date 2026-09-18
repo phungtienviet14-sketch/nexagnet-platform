@@ -81,6 +81,73 @@ export const DOCUMENT_FILE_DENIAL_REASONS = [
 export type DocumentFileDenialReason = (typeof DOCUMENT_FILE_DENIAL_REASONS)[number];
 
 /**
+ * LY DO mot lan GAN bi tu choi VINH VIEN — bon duong, bon ma.
+ *
+ * Hai ma dau trung ten voi `DocumentFileDenialReason` vi do dung la hai su that do ("khong dung
+ * duoc ma tep" / "tep da bi rut"). Hai ma sau chi ton tai o duong GAN: chung noi ve DOI TUONG NHAN
+ * chu khong ve tep. Gop chung vao `FILE_NOT_AVAILABLE_TO_CALLER` se lam mot loi dang ky mien —
+ * khong ai nhan tra loi quyen cho `TRANSPORT_OPERATIONAL_DOCUMENT` — trong y het mot ma tep go bua,
+ * tuc mot su co cau hinh se bi doc thanh mot lan nguoi dung go sai.
+ */
+export const DOCUMENT_FILE_BINDING_DENIAL_REASONS = [
+  'FILE_NOT_AVAILABLE_TO_CALLER',
+  'FILE_NOT_ACTIVE',
+  /** Khong mien nao dang ky nhan tra loi quyen cho loai doi tuong nay. Fail closed. */
+  'FILE_BINDING_OWNER_UNKNOWN',
+  /** Mien so huu noi KHONG — vd chung tu da bia mo, hoac nguoi gan khong phai nguoi da ghi no. */
+  'FILE_BINDING_REFUSED_BY_DOMAIN',
+] as const;
+export type DocumentFileBindingDenialReason = (typeof DOCUMENT_FILE_BINDING_DENIAL_REASONS)[number];
+
+/**
+ * LY DO mot lan GAN CHUA xong nhung CON SUA DUOC — hai duong, hai ma.
+ *
+ * Tach khoi `DENIED` vi viec phai lam khac han: o day gui lai chinh lenh cu la sua duoc, con o
+ * `DENIED` thi gui lai bao nhieu lan cung the.
+ */
+export const DOCUMENT_FILE_BINDING_PENDING_REASONS = [
+  /** Nen tang tep hong o tang ha tang — mat ket noi CSDL, kho byte khong tra loi. */
+  'FILE_BINDING_PLATFORM_FAULT',
+  /** Hai lan gan cua cung mot lenh va nhau. Lan gui lai sau doc ra chinh lien ket that. */
+  'FILE_BINDING_RACED',
+] as const;
+export type DocumentFileBindingPendingReason =
+  (typeof DOCUMENT_FILE_BINDING_PENDING_REASONS)[number];
+
+/**
+ * KET QUA mot lan GAN — mot UNION CO NHAN, khong mot `void`.
+ *
+ * ============================================================================================
+ * `void` CHINH LA LO HONG
+ * ============================================================================================
+ *
+ * Voi `Promise<void>`, mot lan gan HONG tra ve giong het mot lan gan DUOC. Ben goi khong con cach
+ * nao biet rang `OperationalDocument.fileId` da tro toi mot tep ma KHONG co lien ket nao dang hieu
+ * luc — va do dung la trang thai lam ke toan khong mo duoc chinh to bang chung ho dang doi soat.
+ *
+ * Bon nhanh duoi day tach dung bon viec khac nhau:
+ *
+ *   · `BOUND`       — lien ket dang hieu luc NGAY BAY GIO. `created` noi ro lan goi nay co phai la
+ *     lan tao ra no khong: `false` la duong gui lai binh thuong, con `true` tren mot lan gui lai
+ *     nghia la vua VA xong mot lo hong co that — mot su kien nguoi van hanh phai thay duoc;
+ *   · `RELEASED`    — DA tung gan, roi mot nguoi CO QUYEN rut tep di. Khong phai lo hong, va
+ *     KHONG duoc gan lai: lam vay la lam lai dung cai ma van hanh vua co y go bo;
+ *   · `UNAVAILABLE` — ban nay chua co nen tang tep;
+ *   · `PENDING`     — CHUA gan duoc, nhung lan gui lai co the gan duoc. KHONG duoc bao thanh cong;
+ *   · `DENIED`      — nen tang tu choi, va lan gui lai nao cung se bi tu choi nhu vay.
+ *
+ * `RELEASED` tach khoi `DENIED` la mot phan biet PHAI CO. Thieu no, mot lenh gui lai binh thuong —
+ * sau khi van hanh rut mot tam anh chup nham — se bao loi nhu the he thong dang hong, trong khi
+ * moi thu dang dung: to giay van co, va tep thi da duoc co y go ra.
+ */
+export type DocumentFileBinding =
+  | { readonly kind: 'BOUND'; readonly created: boolean }
+  | { readonly kind: 'RELEASED' }
+  | { readonly kind: 'UNAVAILABLE' }
+  | { readonly kind: 'PENDING'; readonly reason: DocumentFileBindingPendingReason }
+  | { readonly kind: 'DENIED'; readonly reason: DocumentFileBindingDenialReason };
+
+/**
  * CONG. Mot ham, mot cau hoi.
  *
  * `FILE_NOT_AVAILABLE_TO_CALLER` co y GOP hai tinh huong — "khong co" va "khong phai cua ban" —
@@ -111,11 +178,26 @@ export abstract class TransportDocumentFilePort {
    * co nguoi tai len doc duoc (`#287` P2), tuc ke toan se khong mo duoc chinh cai ho dang doi
    * soat.
    *
-   * KHONG NEM. Mot lan gan hong khong duoc lam hong ca lan ghi chung tu: to giay VAN da duoc chup,
-   * va hang chung tu VAN dung. Duong hong o day lam tep tro ve pham vi cua rieng nguoi tai len —
-   * mot trang thai nghiep vu chat hon, khong long hon.
+   * ============================================================================================
+   * GAN LA MOT PHEP "BAO DAM", KHONG MOT PHEP "LAM MOT LAN"
+   * ============================================================================================
+   *
+   * Goi ham nay nhieu lan cho cung mot cap (tep, chung tu) phai ra cung mot ket qua: DUNG MOT lien
+   * ket dang hieu luc. Do la dieu kien de mot lenh gui lai SUA duoc mot lan gan hong truoc do ma
+   * khong sinh them gi — va la ly do `OperationalDocumentService` goi lai no tren CA duong gui lai,
+   * khong chi sau `create()`.
+   *
+   * KHONG NEM — nhung cung KHONG NOI DOI. Mot lan gan hong khong duoc lam hong ca lan ghi chung tu:
+   * to giay VAN da duoc chup, va hang chung tu VAN dung. Nhung ket qua tra ve phai NOI RA rang lien
+   * ket chua co, de ben goi con quyet duoc. Tra `void` cho ca hai truong hop — nhu ban dau — lam
+   * mot lan gan hong thanh mot trang thai VINH VIEN khong ai do duoc va khong lan gui lai nao sua
+   * duoc: `fileId` co tren hang chung tu, lien ket thi khong, va ke toan mo khong ra.
    */
-  abstract bind(fileId: string, documentId: string, authUserId: string): Promise<void>;
+  abstract bind(
+    fileId: string,
+    documentId: string,
+    authUserId: string,
+  ): Promise<DocumentFileBinding>;
 }
 
 /**
@@ -136,11 +218,14 @@ export class NoFilePlatformAdapter extends TransportDocumentFilePort {
   }
 
   /**
-   * KHONG LAM GI, va khong bao gio duoc goi.
+   * KHONG CO GI DE GAN, va khong bao gio duoc goi.
    *
    * `describe()` o ban nay tra `UNAVAILABLE` cho MOI ma, nen `OperationalDocumentService` khong bao
-   * gio ghi duoc mot chung tu co `fileId`. Than ham rong la HE QUA cua dieu do chu khong mot cho
-   * trong — va no van phai ton tai de ban khong-co-nen-tang-tep thoa man cung mot cong.
+   * gio ghi duoc mot chung tu co `fileId`. Nhung cau tra loi van phai la `UNAVAILABLE` chu khong
+   * phai mot `BOUND` rong: neu mot duong nao do goi toi day that, bao "da gan xong" se dung lai
+   * chinh lo hong ma cong nay vua duoc viet lai de dong.
    */
-  async bind(): Promise<void> {}
+  async bind(): Promise<DocumentFileBinding> {
+    return { kind: 'UNAVAILABLE' };
+  }
 }

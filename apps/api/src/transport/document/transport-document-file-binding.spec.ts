@@ -242,12 +242,14 @@ describe('Cong tep noi voi nen tang that — PF-060 (`#287` P11)', () => {
    * tu VAN dung. Duong hong lam tep tro ve pham vi cua rieng nguoi tai len — chat hon, khong long
    * hon.
    */
-  it('gan that bai khong nem, va tep KHONG mo ra cho nguoi khac', async () => {
+  it('gan that bai khong nem, nhung NOI RA, va tep KHONG mo ra cho nguoi khac', async () => {
     const file = await uploadBy(h, DRIVER_A_USER);
 
-    await expect(
-      h.adapter.bind(file.id, 'chung-tu-khong-ton-tai', DRIVER_A_USER),
-    ).resolves.toBeUndefined();
+    // KHONG `undefined`. Mot `void` o day chinh la lo hong: ben goi khong con cach nao biet rang
+    // lien ket chua co, nen no bao "da ghi xong" cho mot chung tu ma bang chung khong he dinh vao.
+    await expect(h.adapter.bind(file.id, 'chung-tu-khong-ton-tai', DRIVER_A_USER)).resolves.toEqual(
+      { kind: 'DENIED', reason: 'FILE_BINDING_REFUSED_BY_DOMAIN' },
+    );
 
     expect(await h.files.activeLinksOf(file.id)).toHaveLength(0);
     expect(await denialOf(h.service.describeFor(file.id, ACCOUNTANT))).toBe(
