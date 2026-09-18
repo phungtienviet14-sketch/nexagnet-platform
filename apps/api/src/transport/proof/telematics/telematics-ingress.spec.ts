@@ -56,6 +56,10 @@ const agedBy = (seconds: number): Date => new Date(NOW.getTime() - seconds * 100
  * mot dau noi gui len mot ma xe khong tro toi dau"*.
  */
 class FakeCoreFacts extends TransportProofCoreFacts {
+  constructor(private readonly known: ReadonlySet<string> = new Set([VEHICLE])) {
+    super();
+  }
+
   async findDriverByAuthUserId(): Promise<ProofDriverFacts | null> {
     return null;
   }
@@ -73,7 +77,7 @@ class FakeCoreFacts extends TransportProofCoreFacts {
   }
 
   async findVehicle(vehicleId: string): Promise<ProofVehicleFacts | null> {
-    return vehicleId === VEHICLE ? { id: VEHICLE, registrationPlate: '29H-123.45' } : null;
+    return this.known.has(vehicleId) ? { id: vehicleId, registrationPlate: '29H-123.45' } : null;
   }
 }
 
@@ -123,11 +127,14 @@ class OutageTelematicsAdapter extends VehicleTelematicsPort {
 let repository: InMemoryTrackingRepository;
 let eventSeq = 0;
 
-const serviceWith = (telematics: VehicleTelematicsPort): TelematicsIngressService =>
+const serviceWith = (
+  telematics: VehicleTelematicsPort,
+  fleet?: ReadonlySet<string>,
+): TelematicsIngressService =>
   new TelematicsIngressService(
     repository,
     telematics,
-    new FakeCoreFacts(),
+    new FakeCoreFacts(fleet),
     { timeZone: 'Asia/Ho_Chi_Minh' },
     undefined,
     () => NOW,
@@ -317,10 +324,26 @@ describe('T10.11 / T10.12 — phat lai va dung lai ma su kien', () => {
     ).toBe('TELEMATICS_EVENT_ID_REUSED');
   });
 
-  it('CUNG ma su kien, KHAC chiec xe -> khong bao gio duoc nuot thanh mot lan gui lai', async () => {
+  it('CUNG ma su kien, KHAC chiec xe -> TU CHOI, ke ca khi xe kia CO THAT va DA dang ky', async () => {
     // Duong tan cong cu the: mot lan nhap hop le cho xe A duoc gui lai voi ma xe B. Neu khoa chan
-    // phat lai chi so toa do thi lan thu hai se duoc coi la "gui lai" va bi nuot — chiec xe B mat
-    // mot ban ghi ma khong ai biet. O day no bi TU CHOI, va ma ly do noi ro no bi chan o cong nao.
+    // phat lai chi so toa do va moc thoi gian thi lan thu hai se duoc coi la "gui lai" va bi nuot —
+    // chiec xe B mat mot ban ghi ma khong ai biet.
+    //
+    // Ca HAI chiec xe o day deu co that va deu da dang ky thiet bi, nen ba cong dau deu cho di qua.
+    // Do la co y: neu de xe B khong ton tai thi bai nay xanh nho cong thu ba, va phep so `vehicleId`
+    // trong `resolveReplay` se khong bao gio duoc chay — mot bai kiem xanh khong chung minh gi.
+    const fleet = new Set([VEHICLE, 'vehicle-2']);
+    const ingress = serviceWith(new TestTelematicsAdapter(fleet), fleet);
+    await ingress.ingest(fix({ externalEventId: 'evt-lap' }));
+
+    expect(
+      await reasonOf(ingress.ingest(fix({ externalEventId: 'evt-lap', vehicleId: 'vehicle-2' }))),
+    ).toBe('TELEMATICS_EVENT_ID_REUSED');
+  });
+
+  it('xe khong ton tai van bi chan o cong THU BA, truoc khi toi phep chan phat lai', async () => {
+    // Doi chung cua bai tren: hai ma ly do khac nhau cho hai tinh huong khac nhau, de nguoi dang
+    // cam dau noi biet minh phai sua HO SO XE hay sua chinh than yeu cau.
     const ingress = serviceWith(new TestTelematicsAdapter(new Set([VEHICLE, 'vehicle-2'])));
     await ingress.ingest(fix({ externalEventId: 'evt-lap' }));
 
