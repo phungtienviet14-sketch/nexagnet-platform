@@ -1,0 +1,21 @@
+{
+  "name": "@netviet/autopilot-dispatcher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dispatcher V0 — mat phang thuc thi CUC BO: GitHub agent:ready -> worktree moi -> Claude Code Opus/max. Chi goi RA, khong mo cong VAO.",
+  "bin": {
+    "autopilot-dispatcher": "./src/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@netviet/autopilot-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}
