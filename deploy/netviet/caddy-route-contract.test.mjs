@@ -514,9 +514,24 @@ test('image khong mang danh tinh khach — TENANT den tu lop deploy luc chay', a
 // ra la doc duoc so lieu cua khach khac. Kiem tra tren IMAGE THAT: image-isolation.contract.mjs.
 test('du lieu khach den tu volume mount, khong nam trong image', async () => {
   const dockerignore = await readFile(new URL('../../.dockerignore', import.meta.url), 'utf8');
+  const dockerfile = await readFile(new URL('./Dockerfile', import.meta.url), 'utf8');
 
-  // Build context khong co `tenants/` -> khong `COPY` nao cham toi duoc, ke ca `COPY . .`.
-  assert.match(dockerignore, /^tenants$/m);
+  // Build context mac dinh van chan TOAN BO goi khach. Ngoai le duy nhat duoc phep la
+  // `transport-preview` — goi synthetic/demo can cho source-builder khong co host volume
+  // (vd Railway Railpack). Bat ky lenh `!` tenant nao khac deu la mot lo PII/gia that.
+  const tenantRules = dockerignore
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line === 'tenants' || line.startsWith('tenants/') || line.startsWith('!tenants/'));
+  assert.deepEqual(tenantRules, [
+    'tenants/*',
+    '!tenants/transport-preview',
+    '!tenants/transport-preview/**',
+  ]);
+
+  // Re-include build-context KHONG duoc bien thanh tenant trong generic production image:
+  // build stage phai xoa toan bo thu muc truoc khi runtime stage COPY /app.
+  assert.match(dockerfile, /^RUN rm -rf tenants$/m);
 
   // BON tien trinh doc goi tu volume chi-doc, khong tu trong image: `api`, `web`,
   // `workflow-worker-v1` va `workflow-worker-sales-handoff-v1`.
