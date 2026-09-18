@@ -16,6 +16,7 @@ import {
 import {
   NoFilePlatformAdapter,
   TransportDocumentFilePort,
+  type DocumentFileBinding,
   type DocumentFileLookup,
 } from './document-file.port.js';
 import { InMemoryOperationalDocumentRepository } from './document.repository.js';
@@ -70,11 +71,45 @@ class FakeSites extends TransportDocumentSiteFacts {
   }
 }
 
-/** Cong tep GIA — de do ba nhanh cua `DocumentFileLookup` ma khong can Nen tang Tep that. */
+/**
+ * Cong tep GIA — de do cac nhanh cua `DocumentFileLookup`/`DocumentFileBinding` ma khong can Nen
+ * tang Tep that.
+ *
+ * `links` giu dung BAT BIEN cua nen tang that: mot khi mot cap (tep, chung tu) da gan, moi lan goi
+ * sau tra `BOUND` voi `created: false`. Thieu bat bien do thi bai test "gui lai khong sinh lien ket
+ * thu hai" se xanh ma khong chung minh gi.
+ */
 class FakeFilePort extends TransportDocumentFilePort {
   readonly answers = new Map<string, DocumentFileLookup>();
+  /** Lan gan da xay ra — `#287` P11. Ghi lai de bai test doc duoc THU TU, khong chi ket qua. */
+  readonly bound: { fileId: string; documentId: string; authUserId: string }[] = [];
+  /** Lien ket dang hieu luc, khoa `<fileId>::<documentId>`. */
+  readonly links = new Set<string>();
+
+  /** Ket qua EP cho cac lan gan ke tiep — de dat mot lan gan hong vao dung khe cua so that. */
+  private readonly forced: DocumentFileBinding[] = [];
+
+  forceNextBind(...results: readonly DocumentFileBinding[]): void {
+    this.forced.push(...results);
+  }
+
   async describe(fileId: string): Promise<DocumentFileLookup> {
     return this.answers.get(fileId) ?? { kind: 'DENIED', reason: 'FILE_NOT_AVAILABLE_TO_CALLER' };
+  }
+
+  async bind(fileId: string, documentId: string, authUserId: string): Promise<DocumentFileBinding> {
+    this.bound.push({ fileId, documentId, authUserId });
+
+    // Da gan roi thi khong co gi de lam — va do la cau tra loi ke ca khi con ket qua ep trong hang
+    // doi, dung nhu nen tang that: `linkStateOf()` chay TRUOC moi phep ghi.
+    const key = `${fileId}::${documentId}`;
+    if (this.links.has(key)) return { kind: 'BOUND', created: false };
+
+    const forced = this.forced.shift();
+    if (forced) return forced;
+
+    this.links.add(key);
+    return { kind: 'BOUND', created: true };
   }
 }
 
@@ -175,9 +210,7 @@ describe('OperationalDocumentService — DC-020', () => {
   });
 
   it('lai xe khong cam vong chay do thi khong ghi duoc', async () => {
-    expect(await reasonOf(record({ authUserId: 'u.cuong' }))).toBe(
-      'DOCUMENT_DRIVER_NOT_ASSIGNED',
-    );
+    expect(await reasonOf(record({ authUserId: 'u.cuong' }))).toBe('DOCUMENT_DRIVER_NOT_ASSIGNED');
   });
 
   /** `#279` O12 — lai xe A khong neo chung tu vao moc cua lai xe B. */
@@ -222,7 +255,9 @@ describe('OperationalDocumentService — DC-020', () => {
   it('tep da bi rut hoac cach ly khong thoa man mot chung tu nao', async () => {
     files.answers.set('file-rut', { kind: 'DENIED', reason: 'FILE_NOT_ACTIVE' });
     expect(
-      await reasonOf(record({ basis: 'DIGITAL_FILE', fileId: 'file-rut', externalNote: undefined })),
+      await reasonOf(
+        record({ basis: 'DIGITAL_FILE', fileId: 'file-rut', externalNote: undefined }),
+      ),
     ).toBe('DOCUMENT_FILE_NOT_ACTIVE');
   });
 
@@ -306,7 +341,13 @@ describe('OperationalDocumentService — DC-020', () => {
       businessDate: '2026-09-09',
     });
     // CON trong tay lai xe: van bia mo duoc, vi chua ai o van phong doi chieu no.
-    expect(await service.withdraw({ documentId: document.id, reason: 'chup nham', authUserId: 'u.admin' })).toBeTruthy();
+    expect(
+      await service.withdraw({
+        documentId: document.id,
+        reason: 'chup nham',
+        authUserId: 'u.admin',
+      }),
+    ).toBeTruthy();
 
     const second = await record({ clientEventId: 'd.2' });
     await handovers.create({
@@ -364,5 +405,124 @@ describe('OperationalDocumentService — DC-020', () => {
     expect(document.driverId).toBeNull();
     expect(document.checkpointId).toBeNull();
     expect(document.recordedBy).toBe('u.admin');
+  });
+
+  /* -------------------------------------------------------------------------------------- *
+   * LIEN KET TEP PHAI SUA DUOC — DC-021 (`#287` P2/P11)
+   *
+   * `documents.create()` va `files.bind()` la HAI lan ghi vao HAI noi. Truoc bo bai nay, cua so
+   * giua chung de lai mot trang thai VINH VIEN: `fileId` co tren hang chung tu, lien ket thi
+   * khong, va CA HAI duong gui lai tra ve hang chung tu cu truoc khi thu gan lai lan nao.
+   * -------------------------------------------------------------------------------------- */
+
+  /** Ghi mot chung tu co can cu SO — ba truong luon di cung nhau, nen gom lai mot cho. */
+  const recordWithFile = (over: Record<string, unknown> = {}) => {
+    files.answers.set('file_1', {
+      kind: 'AVAILABLE',
+      file: { fileId: 'file_1', state: 'ACTIVE', contentType: 'image/jpeg', byteSize: 1024 },
+    });
+    return record({ basis: 'DIGITAL_FILE', fileId: 'file_1', externalNote: undefined, ...over });
+  };
+
+  /**
+   * BAI CHINH cua ban soat xet doc lap: gan hong -> gui lai DUNG lenh cu -> MOT chung tu, MOT lien
+   * ket. Khong mot to thu hai, va khong mot lan bao thanh cong nao khi lien ket con thieu.
+   */
+  it('lan gan hong: lenh gui lai VA lai lien ket, va khong sinh to thu hai', async () => {
+    files.forceNextBind({ kind: 'PENDING', reason: 'FILE_BINDING_PLATFORM_FAULT' });
+
+    expect(await reasonOf(recordWithFile())).toBe('DOCUMENT_FILE_BINDING_PENDING');
+
+    // Hang chung tu DA ghi — mot to giay da duoc chup thi da duoc chup. Nhung lien ket thi chua co,
+    // va do dung la trang thai ma truoc day khong ai sua duoc.
+    const afterFailure = await documents.listForRun('run_1');
+    expect(afterFailure).toHaveLength(1);
+    expect(files.links.size).toBe(0);
+
+    const repaired = await recordWithFile();
+
+    expect(repaired.id).toBe(afterFailure[0]!.id);
+    expect(await documents.listForRun('run_1')).toHaveLength(1);
+    expect([...files.links]).toEqual([`file_1::${repaired.id}`]);
+  });
+
+  /**
+   * DOI KHANG: mot lan tu choi VINH VIEN khong duoc bao thanh cong o bat ky lan gui lai nao.
+   *
+   * Day la bai chan dung duong vong de nhat: "cu tra ve chung tu da ghi cho no qua". Lam vay la
+   * khang dinh bang chung so da dinh vao chung tu trong khi no khong he dinh.
+   */
+  it('tu choi VINH VIEN: khong lan gui lai nao bao thanh cong khi lien ket con thieu', async () => {
+    const denied = { kind: 'DENIED', reason: 'FILE_BINDING_REFUSED_BY_DOMAIN' } as const;
+    files.forceNextBind(denied, denied, denied);
+
+    expect(await reasonOf(recordWithFile())).toBe('DOCUMENT_FILE_BINDING_DENIED');
+    expect(await reasonOf(recordWithFile())).toBe('DOCUMENT_FILE_BINDING_DENIED');
+    expect(await reasonOf(recordWithFile())).toBe('DOCUMENT_FILE_BINDING_DENIED');
+
+    expect(await documents.listForRun('run_1')).toHaveLength(1);
+    expect(files.links.size).toBe(0);
+  });
+
+  /** DUNG MOT LAN: phep bao dam chay moi lan, nhung no khong bao gio sinh lien ket thu hai. */
+  it('lien ket dung roi thi gui lai bao nhieu lan cung chi co MOT', async () => {
+    const first = await recordWithFile();
+    await recordWithFile();
+    await recordWithFile();
+
+    expect(files.links.size).toBe(1);
+    expect(await documents.listForRun('run_1')).toHaveLength(1);
+    // Cong tep VAN duoc hoi du ba lan — day la phep BAO DAM, khong phai mot lan bo qua.
+    expect(files.bound.filter((call) => call.documentId === first.id)).toHaveLength(3);
+  });
+
+  /**
+   * `RELEASED` KHONG PHAI LO HONG.
+   *
+   * Van hanh rut mot tam anh chup nham -> lien ket ve `WITHDRAWN`. Mot lenh gui lai sau do khong
+   * duoc bao loi (khong co gi hong) va khong duoc gan lai (lam lai dung cai vua co y go bo).
+   */
+  it('tep da bi rut co chu dich: gui lai KHONG bao loi va KHONG gan lai', async () => {
+    const first = await recordWithFile();
+    files.links.clear();
+    files.forceNextBind({ kind: 'RELEASED' });
+
+    const again = await recordWithFile();
+
+    expect(again.id).toBe(first.id);
+    expect(files.links.size).toBe(0);
+  });
+
+  /** Chung tu GIAY khong co gi de gan — cong tep khong duoc hoi lan nao, ke ca khi gui lai. */
+  it('chung tu giay: khong mot lan gan nao duoc hoi', async () => {
+    await record();
+    await record();
+
+    expect(files.bound).toHaveLength(0);
+  });
+
+  /** Duong VAN HANH di qua cung mot phep bao dam — khong mot duong nao duoc bo sot. */
+  it('duong van hanh cung va duoc lien ket con thieu', async () => {
+    files.answers.set('file_op', {
+      kind: 'AVAILABLE',
+      file: { fileId: 'file_op', state: 'ACTIVE', contentType: 'image/jpeg', byteSize: 2048 },
+    });
+    const command = {
+      type: 'GATE_PASS',
+      runId: 'run_1',
+      legId: 'leg_1',
+      basis: 'DIGITAL_FILE',
+      fileId: 'file_op',
+      clientEventId: 'op.file.1',
+      authUserId: 'u.admin',
+    } as Parameters<typeof service.recordAsOperator>[0];
+
+    files.forceNextBind({ kind: 'PENDING', reason: 'FILE_BINDING_RACED' });
+    expect(await reasonOf(service.recordAsOperator(command))).toBe('DOCUMENT_FILE_BINDING_PENDING');
+
+    const repaired = await service.recordAsOperator(command);
+
+    expect(await documents.listForRun('run_1')).toHaveLength(1);
+    expect([...files.links]).toEqual([`file_op::${repaired.id}`]);
   });
 });

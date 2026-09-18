@@ -38,6 +38,39 @@ export const DOCUMENT_RECORD_REASONS = [
    * han. O day nguoi dung khong sai gi ca — ho chi phai di duong chung tu giay.
    */
   'DOCUMENT_FILE_PLATFORM_UNAVAILABLE',
+  /**
+   * MOT LENH GUI LAI VUA VA XONG mot lien ket tep con thieu — `#287` P2/P11.
+   *
+   * Ma nay chi xuat hien khi mot lan ghi TRUOC do da tao duoc hang chung tu nhung KHONG gan duoc
+   * tep. Do la mot su kien nguoi van hanh phai thay duoc: no noi rang he thong tung o trang thai
+   * "co `fileId`, khong co lien ket" — trang thai ma ke toan mo khong ra bang chung — va rang lan
+   * gui lai nay da dua no ve dung.
+   *
+   * Dem duoc ma nay tren mot khoang thoi gian la dem duoc bao nhieu lan duong gan tep hong that.
+   */
+  'DOCUMENT_FILE_BINDING_REPAIRED',
+  /**
+   * Lenh gui lai cua mot chung tu ma tep cua no DA BI RUT co chu dich.
+   *
+   * KHONG phai loi, va KHONG gan lai: gan lai la lam lai dung cai ma van hanh vua co y go bo. Ghi
+   * lai vi day la mot lan gui lai tra ve mot chung tu ma bang chung so KHONG con dinh vao — nguoi
+   * doc dong thoi gian phai thay duoc dieu do thay vi chi thay mot `DOCUMENT_REPLAYED` tron.
+   */
+  'DOCUMENT_FILE_BINDING_RELEASED',
+  /**
+   * Hang chung tu DA GHI, nhung tep CHUA gan duoc — va lan gui lai co the gan duoc.
+   *
+   * KHONG bao thanh cong. Truoc khi co ma nay, mot lan gan hong tra ve giong het mot lan gan duoc,
+   * nen ben goi tuong bang chung da dinh vao chung tu trong khi no khong he dinh.
+   */
+  'DOCUMENT_FILE_BINDING_PENDING',
+  /**
+   * Hang chung tu DA GHI, va nen tang tep TU CHOI gan — gui lai bao nhieu lan cung vay.
+   *
+   * Tach khoi `DOCUMENT_FILE_BINDING_PENDING` vi viec phai lam khac han: o day khong ai bam lai
+   * duoc, phai bia mo chung tu roi ghi lai bang mot tep dung.
+   */
+  'DOCUMENT_FILE_BINDING_DENIED',
   /** Can cu `DIGITAL_FILE` ma khong kem ma tep, hoac nguoc lai. */
   'DOCUMENT_BASIS_MISMATCH',
   /** Can cu chung tu giay ma khong ai noi dang cam cai gi. */
@@ -94,9 +127,7 @@ export const RECEIPT_HANDOVER_REASONS = [
 export type ReceiptHandoverReason = (typeof RECEIPT_HANDOVER_REASONS)[number];
 
 export type TransportDocumentDecisionReason =
-  | DocumentRecordReason
-  | DocumentWithdrawReason
-  | ReceiptHandoverReason;
+  DocumentRecordReason | DocumentWithdrawReason | ReceiptHandoverReason;
 
 export const TRANSPORT_DOCUMENT_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-checkpoint',
@@ -116,6 +147,11 @@ export const TRANSPORT_DOCUMENT_DECISIONS = defineDecisionVocabulary({
     DOCUMENT_FILE_NOT_ACTIVE: 'Tep do da bi rut hoac dang bi cach ly',
     DOCUMENT_FILE_PLATFORM_UNAVAILABLE:
       'Ban nay chua co nen tang tep — hay ghi theo duong chung tu giay',
+    DOCUMENT_FILE_BINDING_REPAIRED: 'Lenh gui lai da gan lai tep con thieu vao chung tu da ghi',
+    DOCUMENT_FILE_BINDING_RELEASED: 'Tep cua chung tu nay da bi rut co chu dich — khong gan lai',
+    DOCUMENT_FILE_BINDING_PENDING:
+      'Chung tu da ghi nhung chua gan duoc tep — hay gui lai dung lenh cu',
+    DOCUMENT_FILE_BINDING_DENIED: 'Chung tu da ghi nhung nen tang tep tu choi gan tep do',
     DOCUMENT_BASIS_MISMATCH: 'Can cu va ma tep khong khop nhau',
     DOCUMENT_EXTERNAL_NOTE_REQUIRED: 'Phai ghi ro dang cam chung tu giay nao',
     DOCUMENT_WITHDRAWN: 'Da bia mo mot chung tu',

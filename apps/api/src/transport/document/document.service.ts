@@ -17,10 +17,7 @@ import {
   type DocumentWithdrawReason,
   type TransportDocumentDecisionReason,
 } from './document-decisions.js';
-import {
-  TransportDocumentCoreFacts,
-  TransportDocumentSiteFacts,
-} from './document-facts.port.js';
+import { TransportDocumentCoreFacts, TransportDocumentSiteFacts } from './document-facts.port.js';
 import { TransportDocumentFilePort } from './document-file.port.js';
 import { evaluateDocumentRecord, evaluateDocumentWithdraw } from './document-lifecycle.js';
 import {
@@ -96,6 +93,9 @@ export class OperationalDocumentService {
       command.clientEventId,
     );
     if (replayed) {
+      // SUA TRUOC KHI BAO. Mot lenh gui lai la co hoi DUY NHAT de va mot lien ket tep con thieu,
+      // nen phep bao dam phai chay TRUOC khi ta bao "da ghi roi" — xem `ensureFileBound()`.
+      await this.ensureFileBound(replayed, command.authUserId, true);
       this.allow('document.record', 'DOCUMENT_REPLAYED', { documentId: replayed.id });
       return replayed;
     }
@@ -130,6 +130,9 @@ export class OperationalDocumentService {
       command.clientEventId,
     );
     if (replayed) {
+      // SUA TRUOC KHI BAO. Mot lenh gui lai la co hoi DUY NHAT de va mot lien ket tep con thieu,
+      // nen phep bao dam phai chay TRUOC khi ta bao "da ghi roi" — xem `ensureFileBound()`.
+      await this.ensureFileBound(replayed, command.authUserId, true);
       this.allow('document.record', 'DOCUMENT_REPLAYED', { documentId: replayed.id });
       return replayed;
     }
@@ -202,6 +205,10 @@ export class OperationalDocumentService {
         receivedAt,
         businessDate: toBusinessDate(receivedAt, this.corePolicy.timeZone),
       });
+      // HANG DA GHI XONG — ghi nhan NGAY, TRUOC phep gan tep. Thu tu do la co y: hang chung tu da
+      // ton tai va se o lai du phep gan co hong hay khong, nen mot dong thoi gian trung thuc phai
+      // noi ra dieu do truoc. Neu gan hong, dong `DOCUMENT_FILE_BINDING_*` ngay sau noi not phan
+      // con lai — hai dong cho hai su that khac nhau, thay vi mot dong nua voi.
       this.allow('document.record', 'DOCUMENT_RECORDED', {
         documentId: document.id,
         type: document.type,
@@ -209,6 +216,9 @@ export class OperationalDocumentService {
         // KHONG log ma tep. Mot dong thoi gian van hanh khong phai cho de liet ke kho tep.
         hasFile: document.fileId !== null,
       });
+      // GAN TEP VAO CHUNG TU VUA GHI — `#287` P2/P11. Sau `create()` vi truoc do chua co ma chung
+      // tu de gan vao; xem `TransportDocumentFilePort.bind()`.
+      await this.ensureFileBound(document, command.authUserId, false);
       return document;
     } catch (error) {
       if (isUniqueViolationOn(error, DOCUMENT_CLIENT_EVENT)) {
@@ -218,6 +228,9 @@ export class OperationalDocumentService {
           command.clientEventId,
         );
         if (already) {
+          // Hai lan bam DONG THOI cua cung mot lenh: mot lan thang khoa duy nhat, lan nay doc ra
+          // hang do. Van la mot duong dan toi mot hang chung tu, nen phep bao dam cung phai chay.
+          await this.ensureFileBound(already, command.authUserId, true);
           this.allow('document.record', 'DOCUMENT_REPLAYED', { documentId: already.id });
           return already;
         }
@@ -313,6 +326,97 @@ export class OperationalDocumentService {
       );
     }
     return lookup.file.fileId;
+  }
+
+  /**
+   * BAO DAM tep da gan vao chung tu — phep SUA DUOC cua `#287` P2/P11.
+   *
+   * ============================================================================================
+   * VI SAO PHEP NAY PHAI CHAY CA TREN DUONG GUI LAI
+   * ============================================================================================
+   *
+   * `documents.create()` va `files.bind()` la HAI lan ghi vao HAI noi, va khong mot giao dich nao
+   * bao duoc ca hai: hang chung tu nam o mien van tai, lien ket nam o nen tang tep. Nen co that
+   * mot cua so ma lan ghi thu nhat xong con lan thu hai hong — mat ket noi, hoac mien tu choi.
+   *
+   * Truoc, cua so do de lai mot trang thai VINH VIEN: `fileId` co tren hang chung tu, lien ket thi
+   * khong — va CA HAI duong gui lai tra ve hang chung tu cu NGAY LAP TUC, truoc khi thu gan lai lan
+   * nao. Ke toan mo khong ra to bang chung, va khong mot thao tac nao cua nguoi dung sua duoc.
+   *
+   * Nay phep bao dam chay tren MOI duong dan toi mot hang chung tu: lan ghi dau, lan gui lai, va ca
+   * lan va cham khoa duy nhat. Goi lai `bind()` tren mot chung tu DA gan dung khong doi gi — do la
+   * phep BAO DAM chu khong phep LAM MOT LAN (`#287` P12 bai 16), nen tinh dung-mot-lan cua lien ket
+   * khong bi dong toi.
+   *
+   * ============================================================================================
+   * KHONG BAO THANH CONG KHI CHUA GAN DUOC
+   * ============================================================================================
+   *
+   * Nem o day co lam hong lan ghi chung tu khong? KHONG: hang DA ghi va o lai — mot to giay da duoc
+   * chup thi da duoc chup, va lan gui lai sau van doc ra dung hang do chu khong sinh hang thu hai.
+   * Cai ta tu choi la NOI DOI rang bang chung da dinh vao chung tu.
+   *
+   * Nguoi goi nhan mot ma CO KIEU, va hai ma do doi hai viec khac han: `DOCUMENT_FILE_BINDING_PENDING`
+   * thi gui lai dung lenh cu la sua duoc; `DOCUMENT_FILE_BINDING_DENIED` thi khong, phai bia mo
+   * chung tu roi ghi lai bang mot tep dung.
+   */
+  private async ensureFileBound(
+    document: OperationalDocument,
+    authUserId: string,
+    replayed: boolean,
+  ): Promise<void> {
+    if (document.fileId === null) return;
+
+    const binding = await this.files.bind(document.fileId, document.id, authUserId);
+    if (binding.kind === 'BOUND') {
+      // `created` tren mot lan GUI LAI nghia la lan nay vua VA xong mot lo hong co that. Tren lan
+      // ghi dau thi `created` luon dung va khong noi len dieu gi — nen chi dem o duong gui lai.
+      if (binding.created && replayed) {
+        this.allow('document.record', 'DOCUMENT_FILE_BINDING_REPAIRED', {
+          documentId: document.id,
+        });
+      }
+      return;
+    }
+
+    if (binding.kind === 'RELEASED') {
+      // KHONG phai lo hong, va khong gan lai — mot nguoi co quyen da rut tep di. Van ghi mot dong:
+      // lan gui lai nay tra ve mot chung tu ma bang chung so khong con dinh vao.
+      this.allow('document.record', 'DOCUMENT_FILE_BINDING_RELEASED', { documentId: document.id });
+      return;
+    }
+
+    if (binding.kind === 'UNAVAILABLE') {
+      this.deny('document.record', 'DOCUMENT_FILE_PLATFORM_UNAVAILABLE', {
+        documentId: document.id,
+      });
+      throw TransportDomainError.invalid(
+        'DOCUMENT_FILE_PLATFORM_UNAVAILABLE',
+        'Ban nay chua co nen tang tep — hay ghi theo duong chung tu giay',
+      );
+    }
+
+    if (binding.kind === 'PENDING') {
+      // `binding` trong `detail` la ly do CUA CONG TEP, khong phai ma tep: mot dong thoi gian van
+      // hanh khong phai cho de liet ke kho tep.
+      this.deny('document.record', 'DOCUMENT_FILE_BINDING_PENDING', {
+        documentId: document.id,
+        binding: binding.reason,
+      });
+      throw TransportDomainError.conflict(
+        'DOCUMENT_FILE_BINDING_PENDING',
+        'Chung tu da ghi nhung chua gan duoc tep — hay gui lai dung lenh cu',
+      );
+    }
+
+    this.deny('document.record', 'DOCUMENT_FILE_BINDING_DENIED', {
+      documentId: document.id,
+      binding: binding.reason,
+    });
+    throw TransportDomainError.denied(
+      'DOCUMENT_FILE_BINDING_DENIED',
+      'Chung tu da ghi nhung nen tang tep tu choi gan tep do',
+    );
   }
 
   /**

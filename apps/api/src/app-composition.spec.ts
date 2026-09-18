@@ -18,6 +18,9 @@ describe('buildAppComposition', () => {
 
     expect(composition.controllers.map((controller) => controller.name)).toEqual([
       'HealthController',
+      // `foundation`: nen tang tep (`#287`) — moi khach deu co tep, nen no dung ngay sau
+      // `/health` va truoc moi capability.
+      'FilesController',
       'OrdersController',
       // Duong quay lai cua worker `sales-handoff-followup` — thuoc `sales-order`.
       'SalesHandoffController',
@@ -46,6 +49,9 @@ describe('buildAppComposition', () => {
 
     expect(controllerNames).toEqual([
       'HealthController',
+      // `foundation`: nen tang tep (`#287`) — moi khach deu co tep, nen no dung ngay sau
+      // `/health` va truoc moi capability.
+      'FilesController',
       'KnowledgeController',
       'CatalogMediaController',
     ]);

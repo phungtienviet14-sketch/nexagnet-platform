@@ -122,6 +122,35 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "expense_claim.submit": {
       "filePath": "apps/api/src/transport/claims/claim.service.ts"
     },
+    "file.activate": {
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
+    "file.attach": {
+      "functionName": "FileService.createLink",
+      "filePath": "apps/api/src/files/file.service.ts",
+      "line": 552
+    },
+    "file.link": {
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
+    "file.quarantine": {
+      "functionName": "FileService.runScanGate",
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
+    "file.read": {
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
+    "file.stage": {
+      "functionName": "FileService.uploadInner",
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
+    "file.upload": {
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
+    "file.withdraw": {
+      "functionName": "FileService.withdraw",
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
     "fuel_document.extract": {
       "functionName": "FuelDocumentService.ingestReceiptImage",
       "filePath": "apps/api/src/transport/fuel/fuel-document.service.ts"
@@ -694,18 +723,10 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts",
       "line": 117
     },
-    "transport.operational_document.read": {
-      "filePath": "apps/api/src/transport/document/documents.controller.ts"
-    },
     "transport.operational_document.record": {
       "functionName": "DocumentsController.record",
       "filePath": "apps/api/src/transport/document/documents.controller.ts",
       "line": 79
-    },
-    "transport.operational_document.withdraw": {
-      "functionName": "DocumentsController.withdraw",
-      "filePath": "apps/api/src/transport/document/documents.controller.ts",
-      "line": 108
     },
     "transport.order.manage": {
       "filePath": "apps/api/src/transport/movement/orders.controller.ts"
@@ -1255,6 +1276,50 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceReadinessService.canUseFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
       "line": 131
+    },
+    "file.activate|FILE_ACTIVATED": {
+      "functionName": "FileService.activate",
+      "filePath": "apps/api/src/files/file.service.ts",
+      "line": 262
+    },
+    "file.link|FILE_LINKED": {
+      "functionName": "FileService.createLink",
+      "filePath": "apps/api/src/files/file.service.ts",
+      "line": 545
+    },
+    "file.link|FILE_LINK_ALREADY_ACTIVE": {
+      "functionName": "FileService.createLink",
+      "filePath": "apps/api/src/files/file.service.ts"
+    },
+    "file.orphan|*": {
+      "functionName": "FilePurgeService.scanOrphans",
+      "filePath": "apps/api/src/files/file-purge.service.ts",
+      "line": 265
+    },
+    "file.purge|*": {
+      "functionName": "FilePurgeService.decide",
+      "filePath": "apps/api/src/files/file-purge.service.ts",
+      "line": 285
+    },
+    "file.quarantine|FILE_SCAN_CLEAN": {
+      "functionName": "FileService.runScanGate",
+      "filePath": "apps/api/src/files/file.service.ts",
+      "line": 217
+    },
+    "file.read|FILE_SERVED": {
+      "functionName": "FileService.read",
+      "filePath": "apps/api/src/files/file.service.ts",
+      "line": 331
+    },
+    "file.stage|FILE_STAGED": {
+      "functionName": "FileService.stage",
+      "filePath": "apps/api/src/files/file.service.ts",
+      "line": 171
+    },
+    "file.withdraw|FILE_WITHDRAWN": {
+      "functionName": "FileService.withdraw",
+      "filePath": "apps/api/src/files/file.service.ts",
+      "line": 658
     },
     "finance.summary|FINANCE_CURRENCY_MIXED": {
       "functionName": "FinanceReadService.summary",

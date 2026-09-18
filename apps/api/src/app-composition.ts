@@ -29,6 +29,8 @@ import { ZaloUserClient } from './channels/zalo-user.client.js';
 import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';
 import { loadFoundationEnv } from './config/foundation-env.js';
+import { FilesController } from './files/files.controller.js';
+import { FilesModule } from './files/files.module.js';
 import { DebugModule } from './debug/debug.module.js';
 import { DecisionLedgerModule } from './decision-ledger/decision-ledger.module.js';
 import { ContentModule } from './content/content.module.js';
@@ -297,6 +299,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // quyet dinh la co that va dung pham vi khach (muc 9 hop dong Issue #98). Chieu phu thuoc chi
   // MOT huong: nguon su that khong biet gi ve so cai — su that ton tai truoc quyet dinh dung no.
   owned('foundation', DecisionLedgerModule),
+  // `foundation`: moi khach deu co tep. `#287` — cai khac nhau giua cac khach la MIEN NAO gan tep
+  // vao cai gi, va dieu do do so dang ky quyen quyet (tuc do cac module mien thuc su duoc nap),
+  // khong do mot co bat/tat o day. Xem khoi chu thich cua `FilesModule`.
+  owned('foundation', FilesModule),
   // VAN TAI — LOI. Mang theo `AuditLogService` cua chinh no vi `transport-core` khong bat buoc
   // keo theo `operations`; xem chu thich trong `transport.module.ts`.
   owned('transport-core', TransportModule),
@@ -366,6 +372,7 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('foundation', HealthController),
+  owned('foundation', FilesController),
   owned('sales-order', OrdersController),
   // Duong QUAY LAI cua worker workflow. Den cung `sales-order` va bien mat cung no: mot khach
   // khong ban hang khong co viec ban giao nao de theo doi.

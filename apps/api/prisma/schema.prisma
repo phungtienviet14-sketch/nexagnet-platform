@@ -5845,3 +5845,128 @@ model TransportOrderRunPlan {
   @@index([vehicleId])
   @@index([businessDate])
 }
+
+// ===========================================================================
+// NEN TANG TEP — `#287`. KHONG THUOC MOT MIEN NAO.
+//
+// Hai bang nay nam o `foundation`: moi khach deu co tep, cung ly le voi bang
+// dau vet va so cai quyet dinh. Khong mot cot nao o day nhac ten mot mien —
+// `businessOwnerType` la mot CHUOI ma mien tu khai, va nen tang khong doc no.
+//
+// RANG BUOC KHONG NAM O DAY, chung nam trong SQL tho cua migration
+// `20260918100000_platform_file`: `prisma migrate dev` khong biet gi ve
+// `CHECK`, ve unique MOT PHAN va ve `TRIGGER`, nen no sinh lenh XOA chung o
+// lan sinh migration ke tiep.
+// ===========================================================================
+
+/// VONG DOI — `#287` P3. `STAGED -> ACTIVE -> WITHDRAWN|QUARANTINED -> PURGED`.
+enum PlatformFileState {
+  STAGED
+  ACTIVE
+  WITHDRAWN
+  QUARANTINED
+  PURGED
+}
+
+/// `NOT_SCANNED` va `FAILED` la HAI dieu khac han: "chua ai nhin" va "da nhin
+/// va khong ket luan duoc". Ca hai deu chan `ACTIVE` khi quet la bat buoc.
+enum PlatformFileScanState {
+  NOT_SCANNED
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
+}
+
+/// `#223`: GCS KHONG phai mac dinh kien truc — no la MOT nha cung cap. `NONE`
+/// dung dau vi mac dinh cua demo/CI la khong luu gi ca.
+enum PlatformFileStorageProvider {
+  NONE
+  LOCAL
+  S3
+  GCS
+}
+
+enum PlatformFileLinkState {
+  ACTIVE
+  WITHDRAWN
+}
+
+/// MOT TEP — danh tinh VAT LY. `#287` P1.
+///
+/// `storageKey` la chi tiet hien thuc RIENG TU: no khong co mat trong DTO cong
+/// khai, khong tuyen HTTP nao nhan no, va khong dong log nao mang no ra ngoai.
+/// Mot dinh vi tho lot ra la mot duong di VONG QUA vong doi — ai cam duoc no
+/// thi doc duoc byte mai mai, ke ca sau khi tep da bi rut hay bi cach ly.
+///
+/// KHONG co cot `tenantId`. `#287` P1 cam *"caller-supplied tenant IDs or
+/// shared-DB multi-tenancy as a side effect"* — mot ban chay phuc vu mot khach,
+/// va Postgres cua ban do la ranh gioi.
+model PlatformFile {
+  id               String                      @id
+  purpose          String                      @db.VarChar(40)
+  /// Ten nguoi dung gui len — du lieu BEN NGOAI, khong bao gio la duong dan.
+  originalFilename String
+  safeFilename     String
+  declaredMimeType String                      @db.VarChar(120)
+  /// Suy tu BYTE DAU TEP. NULL = khong khuon nao khop.
+  detectedMimeType String?                     @db.VarChar(120)
+  byteSize         Int
+  sha256           String                      @db.VarChar(64)
+  storageProvider  PlatformFileStorageProvider
+  /// RIENG TU. Xem khoi chu thich cua model.
+  storageKey       String
+  createdBy        String
+  state            PlatformFileState           @default(STAGED)
+  scanState        PlatformFileScanState       @default(NOT_SCANNED)
+  scannedAt        DateTime?
+  /// Khong duoc don byte truoc moc nay — `#287` P8.
+  retainUntil      DateTime?
+  /// Giu theo lenh phap ly: chan don byte VO THOI HAN.
+  legalHold        Boolean                     @default(false)
+  /// SU TICH lan ghi nhan — mo va khong dinh kieu theo mien (`#287` P1). Nen
+  /// tang KHONG doc truong nao trong day va khong quyet dinh gi tu no.
+  captureMetadata  Json?
+  createdAt        DateTime                    @default(now())
+  activatedAt      DateTime?
+  withdrawnAt      DateTime?
+  withdrawnBy      String?
+  quarantinedAt    DateTime?
+  purgeRequestedAt DateTime?
+  purgedAt         DateTime?
+  purgeAttempts    Int                         @default(0)
+  purgeFailedAt    DateTime?
+  /// Ma loi CO KIEU cua lan don byte hong — de loc, khong phai cau van.
+  purgeFailureCode String?                     @db.VarChar(60)
+  updatedAt        DateTime                    @updatedAt
+
+  links PlatformFileLink[]
+
+  @@index([state, createdAt])
+  @@index([createdBy, state])
+  @@index([sha256])
+  @@index([state, purgeRequestedAt])
+}
+
+/// MOT LIEN KET NGHIEP VU — `#287` P2.
+///
+/// Tach danh tinh VAT LY cua tep khoi Y NGHIA nghiep vu. `businessOwnerType` la
+/// mot CHUOI chu khong enum, va do la co y: nen tang khong duoc biet ten mot
+/// mien nao. Mot ten khong ai dang ky = TU CHOI (`#287` P6, fail closed).
+model PlatformFileLink {
+  id                String                @id @default(cuid())
+  fileId            String
+  file              PlatformFile          @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  businessOwnerType String                @db.VarChar(60)
+  businessOwnerId   String
+  /// Y nghia cua lan gan trong mien do, vd `DELIVERY_RECEIPT`. Nen tang khong doc.
+  purpose           String                @db.VarChar(60)
+  state             PlatformFileLinkState @default(ACTIVE)
+  createdBy         String
+  createdAt         DateTime              @default(now())
+  withdrawnBy       String?
+  withdrawnAt       DateTime?
+
+  @@index([businessOwnerType, businessOwnerId, state])
+  @@index([fileId, state])
+}
