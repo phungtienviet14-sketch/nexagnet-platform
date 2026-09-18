@@ -37,6 +37,19 @@ export const DEVICE_INSTALLATION_ID: UniqueIndexRef = {
 };
 
 /**
+ * CHAN PHAT LAI cua cua nhap telematics: MOT su kien cua MOT nha cung cap chi vao duoc mot lan.
+ *
+ * Phai la mot rang buoc cua KHO chu khong mot cau `if` trong dich vu, dung ly le da ghi o
+ * `ACTIVE_TRACKING_SESSION`: hai lan gui cung mot su kien den cung luc se lot qua CA HAI lan kiem
+ * cua ung dung, va chiec xe se co hai ban dinh vi cho dung mot khoanh khac. Chi muc nay dong khe do.
+ */
+export const TELEMATICS_INGRESS_EVENT: UniqueIndexRef = {
+  indexName: 'TransportTelematicsIngressEvent_provider_event_key',
+  model: 'TransportTelematicsIngressEvent',
+  column: 'externalEventId',
+};
+
+/**
  * Dung LOI CUA KHO ma ban trong bo nho phat ra khi cham mot trong ba unique tren.
  *
  * KHONG phai mot mo phong cho vui. Che do `PERSISTENCE=memory` la mot duong chay that (demo, CI

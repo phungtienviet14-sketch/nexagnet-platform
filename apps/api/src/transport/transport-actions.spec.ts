@@ -184,6 +184,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.commercial_acceptance.read',
       'transport.commercial_acceptance.decide',
       'transport.dispatch.suggest.read',
+      // `TX-12` (#297 Lane T) — NHAP vi tri tu phan cung tren xe. Ma RIENG, khong dung lai ma pham
+      // vi lai xe: neu dung lai, chinh chiec dien thoai dang bi doi chieu se ghi duoc ban ghi cua
+      // nguon dung de doi chieu no.
+      'transport.telematics.observation.ingest',
     ]);
   });
 

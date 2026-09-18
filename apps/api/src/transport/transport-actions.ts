@@ -616,6 +616,26 @@ export const TRANSPORT_ACTIONS = [
    * `transport.location.history.read`. Xem `DispatchController.callerOf()`.
    */
   'transport.dispatch.suggest.read',
+
+  /* --- `TX-12` NGUON VI TRI THU HAI / TELEMATICS (Lane T, Issue #297) --- */
+  /**
+   * NHAP mot ban dinh vi tu PHAN CUNG TREN XE qua mot dau noi trung lap nha cung cap.
+   *
+   * MA MOI, va no CO Y khong dung lai `transport.driver.self.tracking.report`. Ma kia thuoc PHAM VI
+   * LAI XE: cap duong nhap nay qua no se cho phep chinh chiec dien thoai dang bi doi chieu viet ra
+   * ban ghi cua nguon dung de doi chieu no — va luc do `SOURCE_FALLBACK` se bao "dien thoai im
+   * nhung hop GSHT tren xe con bao" trong khi ca hai ban ghi den tu cung mot may.
+   *
+   * `OPERATIONS_ACTIONS` duoc suy ra bang phep tru, nen ma nay tu dong KHONG duoc cap cho `SALE`
+   * (vai as-built cua lai xe) lan `MANAGER`. Do la cau tra loi dung, va no den tu CAU TRUC.
+   *
+   * Ke toan thi bi cat o `ACCOUNTING_DENIED` ben duoi — xem ly le tai do.
+   *
+   * KHONG co ma DOC di kem. Ban dinh vi tu phan cung doc qua dung nhung cong da co:
+   * `transport.tracking.read` cho suc khoe vi tri, `transport.location.history.read` cho toa do
+   * tho. Che them mot ma doc rieng se tao mot duong doc vi tri THU HAI voi mot bang phan quyen khac.
+   */
+  'transport.telematics.observation.ingest',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -755,6 +775,19 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * so minh dang doi soat — tuc sua cau hoi thay vi tra loi no.
    */
   'transport.proof.withdraw',
+  /**
+   * NHAP vi tri tu phan cung tren xe (`#297` T4) — Ke toan DOC duoc suc khoe vi tri, KHONG ghi
+   * duoc mot ban dinh vi nao.
+   *
+   * Cung mot phan cong nhiem vu voi `transport.checkpoint.record` ngay tren, va o day no chat hon:
+   * vi tri xe la can cu de xac nhan mot chuyen da chay, va mot khoan phu cap/cuoc van chuyen dua
+   * tren chuyen do. Cho nguoi DUYET tien viet ra chinh chuoi toa do chung minh chuyen ay la bo
+   * cong duyet.
+   *
+   * Va no la nguon DOI CHIEU CHEO cua chuoi tu dien thoai (`telematics-crosscheck.ts`). Mot nguon
+   * doi chieu ma nguoi doi soat ghi duoc thi khong con doi chieu duoc gi.
+   */
+  'transport.telematics.observation.ingest',
   /**
    * Hang rao duoc cham LUC DOC (`viewsForTrip`), nen them mot hang rao hom nay se doi phan quyet
    * `INSIDE`/`OUTSIDE` cua MOI chung cu cu.

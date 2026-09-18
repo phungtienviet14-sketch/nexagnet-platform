@@ -404,6 +404,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/mcp/server.ts",
       "line": 315
     },
+    "telematics.ingress": {
+      "functionName": "TelematicsIngressService.ingest",
+      "filePath": "apps/api/src/transport/proof/telematics/telematics-ingress.service.ts",
+      "line": 93
+    },
     "tenant.loaded": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -783,6 +788,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.stakeholder.self.vehicle.read": {
       "filePath": "apps/api/src/transport/asset-ownership/stakeholder-vehicles.controller.ts"
+    },
+    "transport.telematics.observation.ingest": {
+      "functionName": "TelematicsIngressController.ingest",
+      "filePath": "apps/api/src/transport/proof/telematics/telematics-ingress.controller.ts",
+      "line": 61
     },
     "transport.toll.account.manage": {
       "filePath": "apps/api/src/transport/toll/toll.controller.ts"
@@ -1708,12 +1718,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
-      "line": 209
+      "line": 216
     },
     "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
-      "line": 230
+      "line": 237
     },
     "receipt_handover.record|*": {
       "filePath": "apps/api/src/transport/document/handover.service.ts"
@@ -1798,6 +1808,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 763
+    },
+    "telematics.ingress|*": {
+      "filePath": "apps/api/src/transport/proof/telematics/telematics-ingress.service.ts"
     },
     "toll_account.link|*": {
       "functionName": "TollAccountService.decide",

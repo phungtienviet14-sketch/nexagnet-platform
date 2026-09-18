@@ -39,11 +39,19 @@ const agedBy = (seconds: number): Date => new Date(NOW.getTime() - seconds * 100
 /** Cong gia — co nha cung cap VA chiec xe co dang ky; khong bao gio tra ve mot ban dinh vi nao. */
 class ConfiguredTelematicsStub extends VehicleTelematicsPort {
   describe(): TelematicsAvailability {
-    return { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' };
+    return {
+      available: true,
+      connectorId: 'dau-noi-kiem-thu',
+      providerName: 'NHA-CUNG-CAP-KIEM-THU',
+    };
   }
 
   describeVehicle(_vehicleId: string): TelematicsAvailability {
-    return { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' };
+    return {
+      available: true,
+      connectorId: 'dau-noi-kiem-thu',
+      providerName: 'NHA-CUNG-CAP-KIEM-THU',
+    };
   }
 
   async fetch(_query: TelematicsQuery): Promise<readonly TelematicsFix[]> {
@@ -67,12 +75,16 @@ class EnrolmentAwareTelematicsStub extends VehicleTelematicsPort {
 
   describe(): TelematicsAvailability {
     this.providerLevelCalls += 1;
-    return { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' };
+    return {
+      available: true,
+      connectorId: 'dau-noi-kiem-thu',
+      providerName: 'NHA-CUNG-CAP-KIEM-THU',
+    };
   }
 
   describeVehicle(vehicleId: string): TelematicsAvailability {
     return this.enrolled.has(vehicleId)
-      ? { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' }
+      ? { available: true, connectorId: 'dau-noi-kiem-thu', providerName: 'NHA-CUNG-CAP-KIEM-THU' }
       : { available: false, reason: 'VEHICLE_NOT_ENROLLED' };
   }
 
@@ -150,6 +162,42 @@ const observe = async (
   });
 };
 
+/**
+ * BAN TU PHAN CUNG TREN XE — qua duong ghi THAT, tuc gan THANG vao chiec xe.
+ *
+ * ============================================================================================
+ * TRUOC `#297` T4, NHUNG BAI DUOI DAY DUNG `observe(session.id, 'TELEMATICS', ...)`
+ * ============================================================================================
+ *
+ * Tuc chung dung mot ban ghi cua PHIEN DIEN THOAI roi dan nhan `TELEMATICS` len. Cac bai van xanh,
+ * va phep cham van dung — nhung thu chung chung minh thi khong phai thu he thong lam duoc: tren
+ * `main` luc do khong mot duong nao ghi noi mot ban `TELEMATICS` that, va duong DUY NHAT co the
+ * ghi ra no la be mat lai xe (`transport.driver.self.tracking.report`), tuc chinh chiec dien thoai
+ * dang bi doi chieu.
+ *
+ * Bay gio chung di qua `appendTelematicsObservation` — cung ham ma `TelematicsIngressService` goi
+ * — nen `SOURCE_FALLBACK` va `ALL_SOURCES_LOST` duoc chung minh tren dung hinh dang du lieu ma san
+ * pham sinh ra: `sessionId === null`, `vehicleId` khac null. Va o Postgres,
+ * `TransportLocationObservation_telematics_subject` lam cho hinh dang CU khong ghi duoc nua.
+ */
+const observeTelematics = async (vehicleId: string, ageSeconds: number, point = HAIPHONG) => {
+  eventSeq += 1;
+  return repository.appendTelematicsObservation({
+    providerId: 'nha-cung-cap-kiem-thu',
+    externalEventId: `fix-${eventSeq}`,
+    vehicleId,
+    latitude: point.latitude,
+    longitude: point.longitude,
+    accuracyMetres: 8,
+    speedMetresPerSecond: null,
+    bearingDegrees: null,
+    capturedAt: agedBy(ageSeconds),
+    receivedAt: agedBy(ageSeconds),
+    clockSkewSeconds: 0,
+    businessDate: BUSINESS_DATE,
+  });
+};
+
 beforeEach(() => {
   repository = new InMemoryTrackingRepository();
   eventSeq = 0;
@@ -207,7 +255,7 @@ describe('ban dinh vi den tu ban moi nhat cua TUNG NGUON', () => {
     const session = await openSession('vehicle-1');
     // Muoi ban dien thoai moi hon ban telematics duy nhat. Neu tang duoi lay "N ban moi nhat" thi
     // ban telematics bi day ra khoi danh sach va mot nguon con song bi bao mat.
-    await observe(session.id, 'TELEMATICS', 120, HAIPHONG);
+    await observeTelematics('vehicle-1', 120);
     for (let index = 0; index < 10; index += 1) {
       await observe(session.id, 'DEVICE_GNSS', 30 + index);
     }
@@ -222,7 +270,7 @@ describe('ban dinh vi den tu ban moi nhat cua TUNG NGUON', () => {
   it('T10.6 — dien thoai mat, hop GSHT con bao -> SOURCE_FALLBACK', async () => {
     const session = await openSession('vehicle-1');
     await observe(session.id, 'DEVICE_GNSS', LOST + 1);
-    await observe(session.id, 'TELEMATICS', 120, HAIPHONG);
+    await observeTelematics('vehicle-1', 120);
 
     const health = await serviceWith(new ConfiguredTelematicsStub()).forVehicle('vehicle-1');
 
@@ -235,7 +283,7 @@ describe('ban dinh vi den tu ban moi nhat cua TUNG NGUON', () => {
   it('T10.7 — dien thoai moi, hop GSHT cu -> dien thoai van la nguon hien tai', async () => {
     const session = await openSession('vehicle-1');
     await observe(session.id, 'DEVICE_GNSS', 60);
-    await observe(session.id, 'TELEMATICS', LOST + 1, HAIPHONG);
+    await observeTelematics('vehicle-1', LOST + 1);
 
     const health = await serviceWith(new ConfiguredTelematicsStub()).forVehicle('vehicle-1');
 
@@ -247,7 +295,7 @@ describe('ban dinh vi den tu ban moi nhat cua TUNG NGUON', () => {
   it('T10.8 — ca hai nguon mat -> ALL_SOURCES_LOST kem bang chung cuoi', async () => {
     const session = await openSession('vehicle-1');
     await observe(session.id, 'DEVICE_GNSS', LOST + 600);
-    await observe(session.id, 'TELEMATICS', LOST + 1, HAIPHONG);
+    await observeTelematics('vehicle-1', LOST + 1);
 
     const health = await serviceWith(new ConfiguredTelematicsStub()).forVehicle('vehicle-1');
 
@@ -395,14 +443,17 @@ describe('ban dinh vi cua PHIEN CU khong tra loi thay cho PHIEN MOI', () => {
     expect(health.ageSeconds).toBe(300);
   });
 
-  it('ban TELEMATICS cua phien cu khong dung len mot SOURCE_FALLBACK gia', async () => {
+  it('ban TELEMATICS nhan TRUOC ky vong khong dung len mot SOURCE_FALLBACK gia', async () => {
     // Ban telematics nay con RAT MOI (120 giay) — thua trong cua so lanh manh. Do chinh la dieu
-    // lam bai nay phan biet duoc: khong chan theo moc phien thi no cham `LIVE` va keo ca ket qua
+    // lam bai nay phan biet duoc: khong chan theo moc ky vong thi no cham `LIVE` va keo ca ket qua
     // thanh `SOURCE_FALLBACK`, tuc man hinh bao *"phan cung tren xe dang bao"* cho mot phien chua
     // nhan duoc gi. Neu de ban nay cu (qua cua so mat) thi ca hai duong deu ra cung ket qua va bai
     // kiem khong chung minh duoc gi.
+    //
+    // Ban tu phan cung KHONG thuoc phien nao ca, nen cua chan duy nhat la MOC THOI GIAN cua ky
+    // vong dang mo — va do dung la luoi ma bai nay kiem.
     const previous = await openSession('vehicle-1', 180);
-    await observe(previous.id, 'TELEMATICS', 120, HAIPHONG);
+    await observeTelematics('vehicle-1', 120);
     await repository.closeSession(previous.id, agedBy(45), 'DRIVER_STOPPED');
     await openSession('vehicle-1', 30);
 
@@ -470,7 +521,7 @@ describe('telematics duoc hoi theo XE, khong theo khach', () => {
   it('xe DA dang ky + ca hai nguon mat -> ALL_SOURCES_LOST (canh bao that van phai ra)', async () => {
     const session = await openSession('vehicle-1', LOST + 600);
     await observe(session.id, 'DEVICE_GNSS', LOST + 600);
-    await observe(session.id, 'TELEMATICS', LOST + 1, HAIPHONG);
+    await observeTelematics('vehicle-1', LOST + 1);
 
     const health = await serviceWith(new EnrolmentAwareTelematicsStub(ENROLLED)).forVehicle(
       'vehicle-1',

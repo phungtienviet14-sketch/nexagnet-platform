@@ -1,5 +1,9 @@
 import { defineDecisionVocabulary } from '../../observability/decision-vocabulary.js';
 import type { LocationHealthReason } from './location-health.js';
+import type {
+  TelematicsIngressAcceptance,
+  TelematicsIngressDenial,
+} from './telematics/telematics-ingress.service.js';
 
 /**
  * TU VUNG QUYET DINH cua `transport-proof` — bam vi tri va chung cu van hanh.
@@ -168,6 +172,22 @@ export type TrackingHistoryReadReason = (typeof TRACKING_HISTORY_READ_REASONS)[n
 export type LocationHealthDecisionReason = LocationHealthReason;
 
 /* ------------------------------------------------------------------ *
+ * telematics.ingress — TelematicsIngressService.ingest()
+ * ------------------------------------------------------------------ */
+/**
+ * DUNG LAI hai union cua chinh dich vu, thay vi go lai mot mang thu ba.
+ *
+ * Cung ly le voi `LocationHealthDecisionReason` ngay tren: hai danh sach song song la cach chac
+ * chan nhat de mot ma moi duoc phat ra ma khong co nhan, va `satisfies Record<...>` se im lang vi
+ * no chi kiem danh sach o day.
+ *
+ * NAM ma tu choi cho NAM duong tu choi khac nhau. Mot cong nghiep vu co N duong tu choi phai phan
+ * biet duoc N ly do — gop chung thanh mot `boolean` thi nguoi dang cam dau noi khong biet minh
+ * phai sua cau hinh, sua ho so xe, hay sua chinh than yeu cau.
+ */
+export type TelematicsIngressDecisionReason = TelematicsIngressAcceptance | TelematicsIngressDenial;
+
+/* ------------------------------------------------------------------ *
  * proof.record — OperationalProofService.record()
  * ------------------------------------------------------------------ */
 export const PROOF_RECORD_REASONS = [
@@ -246,6 +266,7 @@ export type ProofChallengeReason = (typeof PROOF_CHALLENGE_REASONS)[number];
 
 export type TransportProofDecisionReason =
   | LocationHealthDecisionReason
+  | TelematicsIngressDecisionReason
   | ProofRecordReason
   | ProofWithdrawReason
   | ProofChallengeReason
@@ -266,6 +287,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     'tracking.risk_assessed',
     'tracking.history_read',
     'tracking.location_health',
+    'telematics.ingress',
     'geofence.register',
     'geofence.evaluate',
     'proof.record',
@@ -349,6 +371,16 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     NO_OBSERVATION_RECEIVED: `Kỳ vọng mở đã lâu mà chưa hề nhận được bản nào`,
     PHONE_SILENT_TELEMATICS_RECENT: `Điện thoại im, phần cứng trên xe vẫn đang báo`,
     NO_RECENT_OBSERVATION_ANY_SOURCE: `Không nguồn nào còn bản trong cửa sổ mất`,
+
+    TELEMATICS_OBSERVATION_RECORDED: 'Đã ghi một bản định vị từ phần cứng trên xe',
+    TELEMATICS_OBSERVATION_REPLAYED: 'Gửi lại đúng bản cũ — không ghi thêm hàng nào',
+    TELEMATICS_PROVIDER_NOT_CONFIGURED:
+      'Khách chưa khai nhà cung cấp telematics nào — cửa nhập đóng',
+    TELEMATICS_CONNECTOR_MISMATCH:
+      'Đầu nối khai trong yêu cầu không khớp đầu nối đã cấu hình — danh tính đến từ cấu hình',
+    TELEMATICS_VEHICLE_NOT_ENROLLED: 'Chiếc xe này chưa đăng ký thiết bị với nhà cung cấp',
+    TELEMATICS_VEHICLE_NOT_FOUND: 'Không tìm thấy chiếc xe này trong đội xe',
+    TELEMATICS_EVENT_ID_REUSED: 'Một mã sự kiện của nhà cung cấp được dùng lại cho nội dung khác',
 
     HISTORY_READ_GRANTED: 'Được đọc lịch sử toạ độ thô',
     HISTORY_READ_DENIED_NEED_TO_KNOW: 'Vai này chỉ được xem tóm tắt, không xem đường đi chi tiết',

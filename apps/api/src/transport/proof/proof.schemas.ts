@@ -81,6 +81,68 @@ export const closeTrackingSessionSchema = z
   .object({ reason: z.string().min(1).max(200).default('DRIVER_STOPPED') })
   .strict();
 
+/**
+ * BAN DINH VI TU PHAN CUNG TREN XE — `#297` T4.
+ *
+ * ============================================================================================
+ * `vehicleId` XUAT HIEN O DAY, VA DO KHONG MAU THUAN VOI KHOI CHU THICH DAU TEP
+ * ============================================================================================
+ *
+ * Cau o dau tep — *"khong mot lieu do nao nhan `driverId` hay `vehicleId`"* — noi ve BE MAT LAI XE,
+ * va ly do cua no la danh tinh khong duoc den tu than yeu cau. O day khong co danh tinh nao de gia:
+ * mot hop GSHT khong dang nhap, khong co phien, va khong co mot ban phan cong nao de may chu doc ra
+ * chiec xe. Ma xe la thu DUY NHAT noi ban ghi voi the gioi.
+ *
+ * Nen cong that nam o cho khac, va co BA lop (xem `TelematicsIngressService`): khach phai da khai
+ * mot nha cung cap; CHIEC XE do phai duoc dang ky voi nha cung cap; va ma xe phai tro toi mot chiec
+ * xe co that. Mot ma xe bia ra khong di qua duoc lop thu ba, va mot chiec xe co that nhung khong
+ * gan thiet bi khong di qua duoc lop thu hai.
+ *
+ * KHONG co truong `source`. Moi ban vao bang duong nay deu la `TELEMATICS` — do la dinh nghia cua
+ * chinh cai cua nay, va `TransportLocationObservation_telematics_subject` cuong che no o tang luu
+ * tru. Nhan `source` tu nguoi goi se mo lai dung cai lo ma duong dien thoai da dong.
+ *
+ * KHONG co `mockLocationReported`: `Location.isMock` la khai niem cua Android, va mot hop GSHT
+ * khong tra loi cau do.
+ */
+export const ingestTelematicsObservationSchema = z
+  .object({
+    /**
+     * LOI KHANG DINH ve dau noi — KHONG phai danh tinh, va `optional` chinh vi the.
+     *
+     * Danh tinh that den tu cau hinh may chu (`VehicleTelematicsPort.describe()`). Truong nay chi
+     * de mot may khach noi ra minh TUONG minh dang gui thay ai; lech thi lan nhap bi tu choi
+     * (`TELEMATICS_CONNECTOR_MISMATCH`) truoc moi thao tac ghi. Bo trong la hinh dang binh thuong.
+     *
+     * Ten cu `providerId` da bi BO khoi lieu do nay chu khong duoc giu lai cho tuong thich: cung
+     * voi `.strict()` ben duoi, mot may khach con gui truong cu se nhan `400` on ao thay vi im
+     * lang tuong rang no vua chon duoc nguon.
+     */
+    connectorId: z.string().trim().min(1).max(100).optional(),
+    /** Ma su kien cua CHINH nha cung cap — khoa chan phat lai. */
+    externalEventId: z.string().trim().min(1).max(200),
+    vehicleId: z.string().min(1).max(200),
+    latitude: z.number(),
+    longitude: z.number(),
+    accuracyMetres: z.number().nonnegative().nullish(),
+    speedMetresPerSecond: z.number().nonnegative().nullish(),
+    bearingDegrees: z.number().min(0).lt(360).nullish(),
+    /** Dong ho cua HOP GSHT. May chu ghi gio nhan RIENG — xem `TelematicsIngressService`. */
+    recordedAt: z.coerce.date(),
+  })
+  .strict();
+
+/**
+ * Mot LO ban dinh vi tu phan cung — hinh dang cua mot lan nhap ket xuat hoac mot lan day gom tin.
+ *
+ * Gioi han 200 giong duong dien thoai, va co cung ly do: mot lo lon hon bien mot lan gui thanh mot
+ * giao dich dai; nguoi gui chia nho thi tu ho cung co diem tua de thu lai. O day no con thuc te hon
+ * — mot ban ket xuat ca ngay tu bang dieu khien cua nha cung cap phai duoc chia lo du the nao.
+ */
+export const ingestTelematicsObservationBatchSchema = z
+  .object({ observations: z.array(ingestTelematicsObservationSchema).min(1).max(200) })
+  .strict();
+
 export const registerGeofenceSchema = z
   .object({
     label: z.string().min(1).max(200),
@@ -152,5 +214,9 @@ export type RecordProofBody = z.infer<typeof recordProofSchema>;
 export type OpenTrackingSessionBody = z.infer<typeof openTrackingSessionSchema>;
 export type ReportObservationBody = z.infer<typeof reportObservationSchema>;
 export type ReportObservationBatchBody = z.infer<typeof reportObservationBatchSchema>;
+export type IngestTelematicsObservationBody = z.infer<typeof ingestTelematicsObservationSchema>;
+export type IngestTelematicsObservationBatchBody = z.infer<
+  typeof ingestTelematicsObservationBatchSchema
+>;
 export type CloseTrackingSessionBody = z.infer<typeof closeTrackingSessionSchema>;
 export type RegisterGeofenceBody = z.infer<typeof registerGeofenceSchema>;

@@ -28,6 +28,7 @@ import {
 } from './tracking-policy.js';
 import { InMemoryTrackingRepository, TrackingRepository } from './tracking.repository.js';
 import { TrackingService } from './tracking.service.js';
+import { TelematicsIngressService } from './telematics/telematics-ingress.service.js';
 import {
   UnconfiguredVehicleTelematicsAdapter,
   VehicleTelematicsPort,
@@ -108,6 +109,7 @@ import {
     OperationalProofService,
     GeofenceService,
     LocationHealthService,
+    TelematicsIngressService,
   ],
   exports: [
     TrackingService,
@@ -120,6 +122,9 @@ import {
     // (vd `TRANSPORT_PROOF_POLICY`) tiem vao controller do se chet luc khoi dong — da xay ra that.
     GeofenceService,
     LocationHealthService,
+    // `TelematicsIngressController` dang ky o GOC, nen no CHI thay danh sach nay — cung cai bay da
+    // lam chet mot lan deploy o `ProofReviewController`. Xem chu thich ngay tren.
+    TelematicsIngressService,
   ],
 })
 export class TransportProofModule {}

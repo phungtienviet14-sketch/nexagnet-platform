@@ -136,6 +136,7 @@ import { DriverSettlementController } from './transport/driver-settlement/driver
 import { DriverSettlementSelfController } from './transport/driver-settlement/driver-settlement-self.controller.js';
 import { TransportProofModule } from './transport/proof/transport-proof.module.js';
 import { DriverTrackingController } from './transport/proof/driver-tracking.controller.js';
+import { TelematicsIngressController } from './transport/proof/telematics/telematics-ingress.controller.js';
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
@@ -519,6 +520,14 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // BE MAT VAN HANH — HAI tuyen voi HAI quyen khac nhau (tom tat ⟂ duong di tho). Xem khoi chu
   // thich cua controller: gop chung mot quyen la bo mat cong "can-biet" cua lich su vi tri.
   owned('transport-proof', TrackingController),
+  /**
+   * CUA NHAP cua nguon vi tri THU HAI (`#297` T4) — mot duong GHI rieng, voi mot ma quyen rieng.
+   *
+   * Di cung `transport-proof` chu khong `transport-core`: mot khach van tai khong bam vi tri thi
+   * cung khong nhap vi tri tu phan cung, va mo san mot duong ghi vao so bang chung cho ho la mo
+   * mot be mat khong ai dung.
+   */
+  owned('transport-proof', TelematicsIngressController),
   // CHUNG CU VAN HANH CUA CHINH TOI — byte anh di qua `TransportEvidenceService` (`MediaStore`),
   // khong dung kho tep thu hai. Dang ky o goc vi no can dich vu do, giong
   // `DriverFuelEvidenceController`.

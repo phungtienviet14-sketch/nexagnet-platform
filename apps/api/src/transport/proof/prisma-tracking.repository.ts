@@ -11,7 +11,9 @@ import {
   TrackingRepository,
   type AppendObservationInput,
   type AppendRiskFlagInput,
+  type AppendTelematicsObservationInput,
   type CreateTrackingSessionInput,
+  type TelematicsIngressRecord,
   type UpsertDeviceInput,
 } from './tracking.repository.js';
 import { LOCATION_SOURCE_VALUES } from './tracking.types.js';
@@ -127,7 +129,7 @@ export class PrismaTrackingRepository extends TrackingRepository {
    */
   async latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null> {
     const row = await this.prisma.transportLocationObservation.findFirst({
-      where: { session: { vehicleId } },
+      where: observationsOfVehicle(vehicleId),
       orderBy: { receivedAt: 'desc' },
     });
     return row ? toObservation(row) : null;
@@ -155,7 +157,11 @@ export class PrismaTrackingRepository extends TrackingRepository {
         this.prisma.transportLocationObservation.findFirst({
           // `gte` chu khong `gt`: ban dinh vi den DUNG giay phien mo la ban dau tien cua chinh
           // phien do, khong phai tan du cua phien truoc. Ban trong bo nho cuong che cung mot bien.
-          where: { source, session: { vehicleId }, receivedAt: { gte: receivedAtOrAfter } },
+          where: {
+            source,
+            ...observationsOfVehicle(vehicleId),
+            receivedAt: { gte: receivedAtOrAfter },
+          },
           orderBy: { receivedAt: 'desc' },
         }),
       ),
@@ -208,6 +214,72 @@ export class PrismaTrackingRepository extends TrackingRepository {
       orderBy: { capturedAt: 'asc' },
     });
     return rows.map(toObservation);
+  }
+
+  /**
+   * MOT GIAO DICH cho hang bang chung + hang so bien gioi.
+   *
+   * Khong tang `observationCount` cua phien nao — ban nay KHONG thuoc phien nao ca. Do la khac
+   * biet duy nhat ve hinh dang so voi `appendObservation`, va no la ban chat: bo dem do dem so
+   * ban ma MOT CA LAM VIEC da gui.
+   *
+   * `P2002` cua `TransportTelematicsIngressEvent_provider_event_key` KHONG bi bat o day, dung
+   * khuon voi phan con lai cua tep: dich mot va cham thanh mot cau nguoi dung hieu la viec cua
+   * `TelematicsIngressService`, vi chi no biet nguoi goi dang lam gi.
+   */
+  async appendTelematicsObservation(
+    input: AppendTelematicsObservationInput,
+  ): Promise<LocationObservation> {
+    const row = await this.prisma.$transaction(async (transaction) => {
+      const tx = transaction as unknown as PrismaService;
+      const created = await tx.transportLocationObservation.create({
+        data: {
+          vehicleId: input.vehicleId,
+          // Ma su kien cua CHINH nha cung cap — giu nguyen van de doi soat nguoc len he cua ho.
+          clientEventId: input.externalEventId,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          accuracyMetres: input.accuracyMetres,
+          speedMetresPerSecond: input.speedMetresPerSecond,
+          bearingDegrees: input.bearingDegrees,
+          source: 'TELEMATICS',
+          capturedAt: input.capturedAt,
+          receivedAt: input.receivedAt,
+          clockSkewSeconds: input.clockSkewSeconds,
+          businessDate: input.businessDate,
+        },
+      });
+      await tx.transportTelematicsIngressEvent.create({
+        data: {
+          providerId: input.providerId,
+          externalEventId: input.externalEventId,
+          vehicleId: input.vehicleId,
+          observationId: created.id,
+          receivedAt: input.receivedAt,
+        },
+      });
+      return created;
+    });
+    return toObservation(row);
+  }
+
+  async findTelematicsIngress(
+    providerId: string,
+    externalEventId: string,
+  ): Promise<TelematicsIngressRecord | null> {
+    const row = await this.prisma.transportTelematicsIngressEvent.findUnique({
+      where: { providerId_externalEventId: { providerId, externalEventId } },
+    });
+    return row
+      ? {
+          id: row.id,
+          providerId: row.providerId,
+          externalEventId: row.externalEventId,
+          vehicleId: row.vehicleId,
+          observationId: row.observationId,
+          receivedAt: row.receivedAt,
+        }
+      : null;
   }
 
   async appendRiskFlags(inputs: readonly AppendRiskFlagInput[]): Promise<readonly ProofRiskFlag[]> {
@@ -297,6 +369,25 @@ function uniqueViolation(indexName: string, column: string): Error {
   return error;
 }
 
+/**
+ * HAI duong den mot chiec xe, va ca hai deu phai duoc dem — `#297` T4.
+ *
+ * Ban tu dien thoai noi voi xe QUA MOT PHIEN (`session.vehicleId`); ban tu phan cung tren xe mang
+ * thang `vehicleId`. Chi hoi duong thu nhat thi moi ban tu hop GSHT deu vo hinh — va o mot chiec
+ * xe chua mo phien nao, hoac dang giua hai ca lai, ket qua se la "chua he co vi tri" trong khi
+ * phan cung van dang bao ve deu dan.
+ *
+ * Mot HAM chu khong hai cho go tay: hai duong doc (`latestObservationForVehicle` va
+ * `latestObservationPerSourceForVehicle`) phai tra loi cung mot cau hoi ve "thuoc ve xe nao". Lech
+ * nhau se cho ra hai su that tren cung mot man hinh, va ban trong bo nho giu dung khuon nay
+ * (`observationsForVehicle`).
+ */
+const observationsOfVehicle = (
+  vehicleId: string,
+): Prisma.TransportLocationObservationWhereInput => ({
+  OR: [{ vehicleId }, { session: { vehicleId } }],
+});
+
 function toSession(row: PrismaSession): TrackingSession {
   return {
     id: row.id,
@@ -318,6 +409,7 @@ function toObservation(row: PrismaObservation): LocationObservation {
   return {
     id: row.id,
     sessionId: row.sessionId,
+    vehicleId: row.vehicleId,
     clientEventId: row.clientEventId,
     point: { latitude: row.latitude, longitude: row.longitude },
     accuracyMetres: row.accuracyMetres,

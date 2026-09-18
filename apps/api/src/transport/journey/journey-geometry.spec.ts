@@ -27,6 +27,7 @@ const checkpoint = (over: Partial<RunCheckpoint> = {}): RunCheckpoint => ({
 const observation = (over: Partial<LocationObservation> = {}): LocationObservation => ({
   id: 'ob-1',
   sessionId: 'se-1',
+  vehicleId: null,
   clientEventId: 'ev-1',
   point: { latitude: 21.0278, longitude: 105.8342 },
   accuracyMetres: 12,

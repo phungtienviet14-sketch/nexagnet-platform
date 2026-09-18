@@ -35,6 +35,8 @@ describe('transport-proof process boot contract', () => {
       const { TrackingController } = await import('./src/transport/proof/tracking.controller.ts');
       const { DriverProofController } = await import('./src/transport/proof/driver-proof.controller.ts');
       const { ProofReviewController } = await import('./src/transport/proof/proof-review.controller.ts');
+      const { TelematicsIngressController } = await import('./src/transport/proof/telematics/telematics-ingress.controller.ts');
+      const { TelematicsIngressService } = await import('./src/transport/proof/telematics/telematics-ingress.service.ts');
       const { GeofenceService } = await import('./src/transport/proof/geofence.service.ts');
       const { TrackingService } = await import('./src/transport/proof/tracking.service.ts');
       const { OperationalProofService } = await import('./src/transport/proof/operational-proof.service.ts');
@@ -59,6 +61,25 @@ describe('transport-proof process boot contract', () => {
       const health = context.get(LocationHealthService, { strict: false });
       const unwatched = await health.forVehicle('xe-khong-ai-theo-doi');
 
+      // CUA NHAP TELEMATICS phai FAIL-CLOSED trong mot tien trinh THAT (#297 T4.7).
+      //
+      // Mot goi khach khong khai nha cung cap nao la trang thai MAC DINH cua moi khach hom nay, va
+      // no phai TU CHOI chu khong ghi. Bai test don vi chung minh dieu do tren mot ban gia; dong
+      // duoi day chung minh rang day CAM VAO that — adapter mac dinh, tu goi khach that, qua
+      // injector that — cung cho ra dung ma do.
+      //
+      // KHONG dung dau huyen nguoc o day: ca doan script nay la mot template literal.
+      const ingress = context.get(TelematicsIngressService, { strict: false });
+      let ingressReason = 'KHONG BI CHAN';
+      try {
+        await ingress.ingest({
+          providerId: 'boot', externalEventId: 'boot-1', vehicleId: 'xe-khong-ton-tai',
+          latitude: 20.8449, longitude: 106.6881, accuracyMetres: null,
+          speedMetresPerSecond: null, bearingDegrees: null,
+          recordedAt: new Date('2026-09-18T02:00:00.000Z'),
+        });
+      } catch (error) { ingressReason = error.reason ?? error.name; }
+
       // Nguong chinh sach phai SONG trong tien trinh that, khong chi trong bai test don vi.
       let radiusReason = 'KHONG BI CHAN';
       try {
@@ -81,6 +102,9 @@ describe('transport-proof process boot contract', () => {
         tracking: has(TrackingController),
         driverProof: has(DriverProofController),
         proofReview: has(ProofReviewController),
+        telematicsIngressController: has(TelematicsIngressController),
+        telematicsIngressService: has(TelematicsIngressService),
+        ingressReason,
         trackingService: has(TrackingService),
         operationalProof: has(OperationalProofService),
         locationHealth: has(LocationHealthService),
@@ -126,6 +150,10 @@ describe('transport-proof process boot contract', () => {
       driverProof: true,
       // Dong nay la ca ly do bai test ton tai.
       proofReview: true,
+      // `#297` T4 — cua nhap co mat, va no DONG khi chua ai khai mot nha cung cap nao.
+      telematicsIngressController: true,
+      telematicsIngressService: true,
+      ingressReason: 'TELEMATICS_PROVIDER_NOT_CONFIGURED',
       trackingService: true,
       operationalProof: true,
       locationHealth: true,

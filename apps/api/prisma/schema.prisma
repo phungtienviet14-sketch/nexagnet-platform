@@ -871,27 +871,31 @@ model TransportVehicle {
   createdAt                 DateTime                           @default(now())
   updatedAt                 DateTime                           @updatedAt
 
-  driverAssignments  TransportVehicleAssignment[]
-  tripAssignments    TransportTripAssignment[]
+  driverAssignments    TransportVehicleAssignment[]
+  tripAssignments      TransportTripAssignment[]
   /// `TX-04` — phieu do dau va cac dong bang ke da nhan dien duoc ra xe nay.
-  fuelEntries        TransportFuelEntry[]
-  fuelStatementLines TransportFuelStatementLine[]
+  fuelEntries          TransportFuelEntry[]
+  fuelStatementLines   TransportFuelStatementLine[]
   /// `TX-08` — cac quyen loi so huu tren xe nay, KE CA cac ban da dong. Xem cuoi tep.
-  ownershipInterests TransportVehicleOwnershipInterest[]
+  ownershipInterests   TransportVehicleOwnershipInterest[]
   /// `TX-06` — lich bao duong va lenh sua cua xe nay. Chi co mat khi khach bat
   /// `transport-asset-compliance`.
-  maintenancePlans   TransportMaintenancePlan[]
-  workOrders         TransportMaintenanceWorkOrder[]
+  maintenancePlans     TransportMaintenancePlan[]
+  workOrders           TransportMaintenanceWorkOrder[]
   /// R1-B: cac vong chay vat ly cua chinh chiec xe nay.
-  runs               TransportVehicleRun[]
+  runs                 TransportVehicleRun[]
   /// `transport-proof` — cac phien bam vi tri gan voi xe nay. Xe do MAY CHU dien tu ban phan
   /// cong; may khach khong bao gio duoc noi minh dang lai xe nao.
-  trackingSessions   TransportTrackingSession[]
+  trackingSessions     TransportTrackingSession[]
+  /// `transport-proof` (#297) — ban dinh vi gan THANG vao xe, tuc tu phan cung tren xe. Chung
+  /// KHONG di qua mot phien nao: mot hop GSHT bao vi tri luc 2 gio sang khong thuoc ca cua ai.
+  locationObservations TransportLocationObservation[]
+  telematicsIngress    TransportTelematicsIngressEvent[]
   /// `transport-toll` (#269) — cac doan noi voi mot tai khoan giao thong, KE CA cac doan da dong,
   /// va cac dong sao ke ETC da nhan dien duoc ra xe nay. ETC la CONG TY TRA: khong duong nao tu
   /// day di vao so quy lai xe.
-  tollAccountLinks   TransportTollAccountVehicleLink[]
-  tollCandidates     TransportTollTransactionCandidate[]
+  tollAccountLinks     TransportTollAccountVehicleLink[]
+  tollCandidates       TransportTollTransactionCandidate[]
 
   @@index([status])
 }
@@ -4691,13 +4695,30 @@ model TransportProofChallenge {
 /// bao gio duoc dung de tu choi — voi mot hang doi ngoai tuyen, do lech lon gan nhu luon co nghia
 /// "may vua offline bon tieng", va tu choi se lam mat dung nhung ban ghi cua doan duong khong co
 /// song.
+/// HAI HINH DANG CHU THE, va DUNG MOT trong hai tren moi hang (`#297` T4).
+///
+/// `sessionId` = ban tu DIEN THOAI cua mot lai xe, trong mot ca lam viec. `vehicleId` = ban tu
+/// PHAN CUNG gan tren xe, khong thuoc ca cua ai. Hai duong do khong gop duoc: mot hop GSHT bao vi
+/// tri luc 2 gio sang khong thuoc phien cua ai, va ep no vao mot phien se buoc phai bia ra mot lai
+/// xe khong co that.
+///
+/// `TransportLocationObservation_one_subject` (CHECK trong migration) cuong che DUNG MOT. Va
+/// `TransportLocationObservation_telematics_subject` cuong che chieu con lai — `TELEMATICS` khi va
+/// CHI KHI hang gan vao mot chiec xe. Rang buoc thu hai la cai dong duong "mot chiec dien thoai tu
+/// khai minh la phan cung tren xe": duong ghi cua dien thoai luon co `sessionId`, nen no khong ghi
+/// noi mot hang `TELEMATICS` du zod o tang tren co bi ai do noi long.
 model TransportLocationObservation {
-  id                   String                   @id @default(cuid())
-  sessionId            String
+  id                   String                    @id @default(cuid())
+  /// `null` cho ban tu phan cung tren xe — xem khoi chu thich tren.
+  sessionId            String?
   /// `Restrict` chu khong `Cascade`: mot phien co ban dinh vi thi KHONG duoc xoa. Day la bang
   /// bang chung; mot lan xoa dat nham se mang theo ca chuoi.
-  session              TransportTrackingSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
-  /// Khoa idempotency do may khach sinh. Duy nhat TRONG mot phien.
+  session              TransportTrackingSession? @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  /// `null` cho ban tu dien thoai — chiec xe cua no doc qua `session.vehicleId`.
+  vehicleId            String?
+  vehicle              TransportVehicle?         @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  /// Khoa idempotency do NGUON sinh. Duy nhat TRONG mot phien voi ban dien thoai; voi ban phan
+  /// cung thi tinh duy nhat do `TransportTelematicsIngressEvent` giu, xem bang do.
   clientEventId        String
   latitude             Float
   longitude            Float
@@ -4706,24 +4727,64 @@ model TransportLocationObservation {
   bearingDegrees       Float?
   source               TransportLocationSource
   capturedAt           DateTime
-  receivedAt           DateTime                 @default(now())
+  receivedAt           DateTime                  @default(now())
   clockSkewSeconds     Int
   /// `Location.isMock` cua Android. `null` = may khach khong noi gi — mot dieu KHAC voi `false`.
   mockLocationReported Boolean?
-  businessDate         String                   @db.VarChar(10)
-  createdAt            DateTime                 @default(now())
+  businessDate         String                    @db.VarChar(10)
+  createdAt            DateTime                  @default(now())
 
-  riskFlags  TransportProofRiskFlag[]
+  riskFlags         TransportProofRiskFlag[]
   /// Nhieu nhat MOT chung cu dua tren cung mot ban dinh vi (`observationId` la `@unique` ben do).
-  proof      TransportOperationalProof?
+  proof             TransportOperationalProof?
   /// Va nhieu nhat MOT moc van hanh — cung ly le, `observationId` cung la `@unique` ben do.
-  checkpoint TransportRunCheckpoint?
+  checkpoint        TransportRunCheckpoint?
   /// Va nhieu nhat MOT lan nhan viec tai A (`#267` H4) — cung khuon.
-  siteIntake TransportRunSiteIntake?
+  siteIntake        TransportRunSiteIntake?
+  /// Va nhieu nhat MOT lan nhap tu mot nguon telematics — `#297` T4.
+  telematicsIngress TransportTelematicsIngressEvent?
 
   @@unique([sessionId, clientEventId], map: "TransportLocationObservation_session_event_key")
   @@index([sessionId, capturedAt])
+  @@index([vehicleId, receivedAt])
   @@index([businessDate])
+}
+
+/// MOT LAN NHAP tu mot nguon telematics — SO BIEN GIOI, khong phai bang bang chung (`#297` T4).
+///
+/// ============================================================================================
+/// VI SAO DANH TINH CUA NHA CUNG CAP KHONG NAM TRONG `TransportLocationObservation`
+/// ============================================================================================
+///
+/// Bang kia tra loi *"chiec xe da o dau, luc nao"* — mot su that ve THE GIOI. Bang nay tra loi
+/// *"ai da noi dieu do voi he thong, bang ma su kien nao cua ho"* — mot su that ve MOT DUONG
+/// TRUYEN. Tron hai thu se nhet cot mang hinh dang cua tung hang vao dung cai bang ma `#297` T4
+/// doi phai giu sach khoi moi khai niem cua nha cung cap ("no vendor SDK imported into domain").
+///
+/// `@@unique([providerId, externalEventId])` la CHAN PHAT LAI, va no phai o tang DB chu khong o
+/// mot cau `if`: hai lan gui cung mot su kien den cung luc se lot qua ca hai lan kiem cua ung dung.
+/// Cung dung ly le da ghi o `TransportTrackingSession_activeDriver_key`.
+///
+/// `externalEventId` la ma cua CHINH NHA CUNG CAP, luu nguyen van de doi chieu nguoc len he cua ho.
+/// `providerId` la ma khach dat cho mot DAU NOI — hai nha cung cap khac nhau duoc phep dung trung
+/// mot `externalEventId` ma khong ai chan ai.
+model TransportTelematicsIngressEvent {
+  id              String                       @id @default(cuid())
+  /// Dau noi nao da gui. KHONG phai ten thuong mai cua mot hang — xem `vehicle-telematics.port.ts`.
+  providerId      String
+  externalEventId String
+  vehicleId       String
+  vehicle         TransportVehicle             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  /// Hang bang chung ma lan nhap nay da tao ra. `@unique`: mot lan nhap, dung mot ban dinh vi.
+  observationId   String                       @unique
+  observation     TransportLocationObservation @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  /// Dong ho MAY CHU. Dong ho cua nha cung cap nam o `observation.capturedAt`, va hai cai do KHONG
+  /// duoc gop: mot hop GSHT chinh sai gio van phai ghi duoc, kem do lech.
+  receivedAt      DateTime                     @default(now())
+  createdAt       DateTime                     @default(now())
+
+  @@unique([providerId, externalEventId], map: "TransportTelematicsIngressEvent_provider_event_key")
+  @@index([vehicleId, receivedAt])
 }
 
 /// MOT CO RUI RO. Doc ky enum `TransportProofRiskSeverity` o tren truoc khi them ma vao day.
