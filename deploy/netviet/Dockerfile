@@ -30,6 +30,11 @@ ENV NEXT_PUBLIC_API_URL=""
 # Hop dong nay duoc khoa bang apps/web/tenant-runtime.contract.mjs.
 RUN corepack pnpm --filter @netviet/shared --filter @netviet/tenant \
   --filter @netviet/api --filter @netviet/web build
+# Railway Railpack can build the synthetic transport preview directly from source and therefore needs
+# that one demo tenant in its source context. The generic production image must still contain ZERO
+# tenant packs. Remove the entire directory before copying /app into the runtime stage; the final-image
+# isolation contract remains the authority.
+RUN rm -rf tenants
 
 FROM base AS runtime
 ENV NODE_ENV=production
