@@ -54,6 +54,26 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(8 * 60 * 60 * 1_000),
+  // KHOA ORIGIN CHO BAN TRIEN KHAI CO EDGE DUNG TRUOC (Cloudflare Worker, NF-2B-CF).
+  //
+  // Tren VM, Caddy giu :443 nen api/web KHONG he co dia chi cong — khong ai goi thang vao chung
+  // duoc. Tren Northflank thi nguoc lai: muon edge goi duoc, `code.run` phai la cong khai, va luc
+  // do CHINH no cung la mot duong vao Internet di vong qua edge. Northflank co tinh nang chan viec
+  // do (security policy theo header) nhung no nam trong goi tra phi, nen khoa phai nam trong ung
+  // dung. Dat bien nay -> moi request khong mang dung `X-Nexagnet-Edge-Key` bi tu choi 403 TRUOC
+  // khi cham toi route nghiep vu hay phien dang nhap.
+  //
+  // TUY CHON, va do la co y: cac stack chay sau Caddy (ultty-gd1-test...) khong dat bien nay va
+  // phai tiep tuc chay y nguyen. Bat buoc no o production se lam hong dung nhung ban trien khai
+  // von da an toan bang mot co che khac.
+  //
+  // KHONG PHAI `API_KEY`: `API_KEY` la khoa DICH VU-DICH VU cua `InternalServiceGuard` (duong
+  // `internal/*`). Dung chung mot bi mat cho ca hai nghia la edge — thu phai phuc vu trinh duyet —
+  // se cam theo chia khoa mo duong noi bo. Hai vai tro, hai bi mat.
+  EDGE_PROXY_SECRET: z
+    .string()
+    .min(32, 'EDGE_PROXY_SECRET qua ngan — dung chuoi ngau nhien >= 32 ky tu')
+    .optional(),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),

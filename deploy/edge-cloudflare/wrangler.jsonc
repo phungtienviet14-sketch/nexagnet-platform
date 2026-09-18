@@ -1,0 +1,23 @@
+{
+  "name": "nexagnet-dev-edge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-18",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true },
+    "traces": { "enabled": true }
+  }
+  // KHONG co `vars` o day, va do la co y.
+  //
+  // `EDGE_KEY`, `WEB_ORIGIN` va `API_ORIGIN` deu duoc dat bang `wrangler secret put`. Hai hostname
+  // upstream khong phai bi mat mat ma, nhung chung LA chinh hai dia chi ma `EDGE_KEY` sinh ra de
+  // bao ve — viet chung o day nghia la cong bo muc tieu ngay trong tep de bi chep di nhat.
+  //
+  // Dat secret (mot lan, tu may van hanh):
+  //   wrangler secret put EDGE_KEY   --config deploy/edge-cloudflare/wrangler.jsonc
+  //   wrangler secret put WEB_ORIGIN --config deploy/edge-cloudflare/wrangler.jsonc
+  //   wrangler secret put API_ORIGIN --config deploy/edge-cloudflare/wrangler.jsonc
+  // `EDGE_KEY` phai TRUNG voi `EDGE_PROXY_SECRET` cua ca hai service tren Northflank; lech nhau
+  // thi moi request tra 403 va trieu chung se giong het "origin chet".
+}
