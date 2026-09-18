@@ -27,6 +27,18 @@ export interface ProofDriverFacts {
   readonly fullName: string;
 }
 
+/**
+ * DANH TINH cua mot chiec xe, va khong hon.
+ *
+ * Khong tai trong, khong so odo, khong ho so dang kiem: den hom nay khong duong nao trong
+ * `transport-proof` can nhung thu do, va mot cong doc rong hon can thiet la mot cong se bi dung vao
+ * viec khac.
+ */
+export interface ProofVehicleFacts {
+  readonly id: string;
+  readonly registrationPlate: string;
+}
+
 export abstract class TransportProofCoreFacts {
   /** Cau noi phien dang nhap -> ho so lai xe. Danh tinh KHONG bao gio den tu than yeu cau. */
   abstract findDriverByAuthUserId(authUserId: string): Promise<ProofDriverFacts | null>;
@@ -41,6 +53,16 @@ export abstract class TransportProofCoreFacts {
   abstract wasDriverEverAssignedToTrip(tripId: string, driverId: string): Promise<boolean>;
   /** Xe DANG duoc phan cong cho chuyen. `null` khi chua phan cong xe nao. */
   abstract activeVehicleForTrip(tripId: string): Promise<string | null>;
+  /**
+   * Chiec xe nay CO TON TAI trong doi xe cua khach khong — `#297` T4.
+   *
+   * Ton tai vi cua nhap telematics nhan `vehicleId` tu mot DAU NOI chu khong tu mot ban phan cong.
+   * `activeVehicleForTrip` khong tra loi duoc cau nay: mot hop GSHT bao vi tri ca nhung luc chiec
+   * xe khong chay chuyen nao, va doi phai co mot chuyen dang mo se vut di dung nhung ban ghi chung
+   * minh chiec xe dang nam o bai. Khong kiem gi ca thi nguoc lai — mot ma xe go nham se sinh ra mot
+   * chuoi vi tri cho mot chiec xe khong ton tai, va no chi lo ra khi co nguoi mo bang len tim.
+   */
+  abstract findVehicle(vehicleId: string): Promise<ProofVehicleFacts | null>;
 }
 
 @Injectable()
@@ -71,5 +93,10 @@ export class TransportProofCoreFactsAdapter extends TransportProofCoreFacts {
     const history = await this.trips.listAssignments(tripId);
     const active = history.find((assignment) => assignment.effectiveTo === null);
     return active?.vehicleId ?? null;
+  }
+
+  async findVehicle(vehicleId: string): Promise<ProofVehicleFacts | null> {
+    const vehicle = await this.fleet.findVehicle(vehicleId);
+    return vehicle ? { id: vehicle.id, registrationPlate: vehicle.registrationPlate } : null;
   }
 }

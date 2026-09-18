@@ -625,8 +625,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     let currentSessionId = '';
 
     async function cleanup(): Promise<void> {
+      // TRUOC ban dinh vi: `TransportTelematicsIngressEvent.observation` dung `onDelete: Restrict`.
+      await prisma.transportTelematicsIngressEvent.deleteMany({
+        where: { vehicle: { registrationPlate: PLATE } },
+      });
       await prisma.transportLocationObservation.deleteMany({
         where: { session: { trip: { code: TRIP_CODE } } },
+      });
+      // Hang gan THANG vao xe khong di qua mot phien nao, nen bo loc theo chuyen o tren khong cham
+      // toi chung — va `TransportLocationObservation_vehicleId_fkey` la `Restrict`, nen bo sot se
+      // lam lan xoa xe that bai va de lai fixture ban cho moi lan chay sau.
+      await prisma.transportLocationObservation.deleteMany({
+        where: { vehicle: { registrationPlate: PLATE } },
       });
       await prisma.transportTrackingSession.deleteMany({ where: { trip: { code: TRIP_CODE } } });
       const trip = await trips.findByCode(TRIP_CODE);
@@ -657,6 +667,30 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         receivedAt,
         clockSkewSeconds: 0,
         mockLocationReported: false,
+        businessDate: BUSINESS_DATE,
+      });
+
+    /**
+     * Ban tu PHAN CUNG TREN XE — gan thang vao xe, khong qua phien nao.
+     *
+     * Duong nay khac han `observe` o tren, va tren Postgres su khac nhau do la CUONG CHE duoc:
+     * `TransportLocationObservation_telematics_subject` lam cho mot hang `TELEMATICS` co `sessionId`
+     * KHONG ghi duoc nua. Truoc `#297` T4 bo bai nay dung `observe(..., 'TELEMATICS', ...)` — tuc
+     * mot ban ghi cua phien dien thoai duoc dan nhan phan cung.
+     */
+    const observeTelematics = (externalEventId: string, receivedAt: Date) =>
+      tracking.appendTelematicsObservation({
+        providerId: 'itlheal-dau-noi',
+        externalEventId,
+        vehicleId,
+        latitude: 20.8449,
+        longitude: 106.6881,
+        accuracyMetres: 8,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        capturedAt: receivedAt,
+        receivedAt,
+        clockSkewSeconds: 0,
         businessDate: BUSINESS_DATE,
       });
 
@@ -758,12 +792,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         'DEVICE_GNSS',
         new Date('2026-09-07T03:10:00Z'),
       );
-      await observe(
-        currentSessionId,
-        'itlheal-moi-tele',
-        'TELEMATICS',
-        new Date('2026-09-07T03:05:00Z'),
-      );
+      await observeTelematics('itlheal-moi-tele', new Date('2026-09-07T03:05:00Z'));
 
       const samples = await tracking.latestObservationPerSourceForVehicle(
         vehicleId,

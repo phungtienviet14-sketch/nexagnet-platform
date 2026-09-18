@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { recordProofSchema, reportObservationSchema } from './proof.schemas.js';
+import {
+  ingestTelematicsObservationBatchSchema,
+  ingestTelematicsObservationSchema,
+  recordProofSchema,
+  reportObservationSchema,
+} from './proof.schemas.js';
 
 /**
  * PROOF-080 — bien vao cua chung cu, va mot bay cua multipart.
@@ -87,5 +92,87 @@ describe('nguon tu khai cua ung dung lai xe — #297 T3', () => {
 
   it('mot nguon khong thuoc bang cung bi tu choi', () => {
     expect(reportObservationSchema.safeParse({ ...base, source: 'HOP_GSHT' }).success).toBe(false);
+  });
+});
+
+/**
+ * PROOF-082 — bien vao cua CUA NHAP TELEMATICS (`#297` T4).
+ *
+ * Cai dang duoc khoa o day la nhung truong KHONG co mat. Mot lieu do nhan `source` se mo lai dung
+ * cai lo ma duong dien thoai da dong: bat ky ai ghi duoc vao cua nay se chon duoc nguon cho ban
+ * ghi cua minh, va "nguon doc lap thu hai" tro thanh mot cau noi suong.
+ */
+describe('Lieu do cua nhap telematics — PROOF-082', () => {
+  const base = {
+    providerId: 'dau-noi-kiem-thu',
+    externalEventId: 'evt-1',
+    vehicleId: 'vehicle-1',
+    latitude: 20.8449,
+    longitude: 106.6881,
+    recordedAt: '2026-09-18T02:00:00.000Z',
+  };
+
+  it('than yeu cau toi thieu la hop le', () => {
+    expect(ingestTelematicsObservationSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('`source` KHONG duoc nhan — moi ban vao bang duong nay deu la `TELEMATICS`', () => {
+    // `.strict()` bien mot truong thua thanh `400` on ao thay vi mot truong bi bo qua im lang. O
+    // day dieu do quan trong hon binh thuong: mot may khach gui `source` phai duoc bao la sai, chu
+    // khong duoc de tuong rang no da co tac dung.
+    expect(
+      ingestTelematicsObservationSchema.safeParse({ ...base, source: 'DEVICE_GNSS' }).success,
+    ).toBe(false);
+  });
+
+  it('`sessionId` KHONG duoc nhan — ban tu phan cung khong thuoc ca cua ai', () => {
+    expect(
+      ingestTelematicsObservationSchema.safeParse({ ...base, sessionId: 'se-1' }).success,
+    ).toBe(false);
+  });
+
+  it('`mockLocationReported` KHONG duoc nhan — mot hop GSHT khong tra loi cau do', () => {
+    expect(
+      ingestTelematicsObservationSchema.safeParse({ ...base, mockLocationReported: false }).success,
+    ).toBe(false);
+  });
+
+  it('`receivedAt` KHONG duoc nhan — gio nhan la su that cua MAY CHU', () => {
+    // Neu nguoi goi dat duoc `receivedAt` thi ho viet lai duoc chinh cai moc ma phep cham suc khoe
+    // dung de do su im lang — tuc tat duoc mot canh bao "mat GPS" bang mot truong trong than yeu cau.
+    expect(
+      ingestTelematicsObservationSchema.safeParse({
+        ...base,
+        receivedAt: '2026-09-18T02:00:00.000Z',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('ba truong danh tinh deu BAT BUOC', () => {
+    for (const field of ['providerId', 'externalEventId', 'vehicleId'] as const) {
+      const { [field]: _removed, ...without } = base;
+      expect(ingestTelematicsObservationSchema.safeParse(without).success, field).toBe(false);
+    }
+  });
+
+  it('chuoi rong khong phai mot danh tinh', () => {
+    expect(ingestTelematicsObservationSchema.safeParse({ ...base, providerId: '  ' }).success).toBe(
+      false,
+    );
+  });
+
+  it('lo rong bi tu choi — mot lan gui khong noi gi la mot loi cua nguoi goi', () => {
+    expect(ingestTelematicsObservationBatchSchema.safeParse({ observations: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it('lo qua 200 ban bi tu choi', () => {
+    const observations = Array.from({ length: 201 }, (_unused, index) => ({
+      ...base,
+      externalEventId: `evt-${index}`,
+    }));
+
+    expect(ingestTelematicsObservationBatchSchema.safeParse({ observations }).success).toBe(false);
   });
 });

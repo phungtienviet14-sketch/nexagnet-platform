@@ -240,3 +240,28 @@ nội suy cho liền mạch (`apps/api/src/transport/proof/location-health.ts`).
 
 Trước khi có đủ 1–6, mọi câu _"ứng dụng chạy nền được"_ trong tài liệu hay báo cáo phải viết là
 **RESEARCHED / NOT DEVICE-PROVEN**, và §6 ở trên vẫn nguyên giá trị.
+
+### 7.5 Lối 4 đã mở tới đâu — **đường phần mềm xong, thiết bị thật chưa** (`#297 T4`, 18/09/2026)
+
+Cửa nhập trung lập nhà cung cấp đã dựng: `TelematicsIngressService` +
+`POST /transport/telematics/observations` + mã quyền riêng
+`transport.telematics.observation.ingest`. Bản được nhận nằm trong chính `LocationObservation` với
+`sessionId = NULL` + `vehicleId`; danh tính lần nhập ở `TransportTelematicsIngressEvent`. Chi tiết
+hợp đồng: [transport-domain-contract.md §13](transport-domain-contract.md).
+
+**Hai câu phải đọc tách nhau, và đừng bao giờ gộp:**
+
+| Câu hỏi                                                         | Trả lời                                                                                                                                                                                |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hệ thống **nhận và lưu** được vị trí từ một nguồn độc lập chưa? | **RỒI.** Có đường ghi, có chặn phát lại, có ba cổng fail-closed, có ràng buộc DB, có bài kiểm trên Postgres thật                                                                       |
+| Có một **hộp GSHT thật** nào đang bắn về chưa?                  | **CHƯA — `NOT PROVEN`.** Chưa hãng nào ở VN công bố API cho khách (đo 08/09/2026); chưa có vendor/device/export access từ chủ sở hữu. Mọi bằng chứng tới nay là **tổng hợp, tất định** |
+
+Điều đã đổi về **bản chất**, không phải về số lượng bài kiểm: trước lần đi này, mọi bài chứng minh
+`SOURCE_FALLBACK` đều dùng một bản ghi của **phiên điện thoại** rồi dán nhãn `TELEMATICS` lên. Các
+bài vẫn xanh và phép chấm vẫn đúng — nhưng thứ chúng chứng minh thì hệ thống chưa làm được: đường
+duy nhất ghi ra một bản `TELEMATICS` lúc đó là bề mặt lái xe, tức **chính chiếc điện thoại đang bị
+đối chiếu**. Nay `TransportLocationObservation_telematics_subject` làm hình dạng cũ **không ghi được
+nữa**, nên hai nguồn là hai nguồn.
+
+Cái **chưa** đổi: không một hộp nào có thật ở đầu kia. Lối 4 vẫn là một phụ thuộc **thương mại**,
+và §7.4 vẫn nguyên giá trị cho Lối 2/3.

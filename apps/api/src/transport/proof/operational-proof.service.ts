@@ -164,7 +164,14 @@ export class OperationalProofService {
     // Ban dinh vi phai thuoc ve CHINH lai xe dang lap chung cu. Khong co cong nay thi mot lai xe
     // tro duoc chung cu cua minh vao mot ban dinh vi cua dong nghiep — tuc muon vi tri cua nguoi
     // khac lam bang chung cho chinh minh.
-    const session = await this.tracking.findSession(observation.sessionId);
+    //
+    // `sessionId === null` = ban den tu PHAN CUNG TREN XE (`#297` T4), va no khong thuoc ve lai xe
+    // NAO — nen no roi vao dung nhanh tu choi nay. Do la cau tra loi dung: mot hop GSHT chung minh
+    // chiec XE o dau, no khong chung minh mot NGUOI da dung o do bam nut giao hang.
+    const session =
+      observation.sessionId === null
+        ? null
+        : await this.tracking.findSession(observation.sessionId);
     if (!session || session.driverId !== driver.id) {
       this.deny('PROOF_OBSERVATION_NOT_OWNED', {
         observationId: observation.id,
