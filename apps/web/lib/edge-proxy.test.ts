@@ -44,16 +44,49 @@ describe('evaluateWebEdgeProxyRequest', () => {
   });
 });
 
+describe('a secret that is set but unusable fails CLOSED', () => {
+  // Mot origin cong khai IM LANG mo toang te hon mot service chet ON AO. Neu nguoi van hanh go
+  // `EDGE_PROXY_SECRET=` tren service web (con API thi dat dung), web phai TU CHOI, khong duoc
+  // am tham tro lai che do khong khoa.
+  it('rejects every request when the value is blank or whitespace', () => {
+    for (const raw of ['', '   ', '\t\n']) {
+      expect(evaluateWebEdgeProxyRequest(raw, SECRET)).toEqual({
+        allowed: false,
+        reason: 'EDGE_SECRET_MISCONFIGURED',
+      });
+    }
+  });
+
+  it('rejects every request when the value is shorter than the API minimum', () => {
+    // Ben API zod `.min(32)` lam tien trinh chet luc khoi dong. Web khong co tang do nen phai tu
+    // kiem cung mot con so, neu khong hai service se khac nhau ve "the nao la khoa hop le".
+    expect(evaluateWebEdgeProxyRequest('e'.repeat(31), 'e'.repeat(31)).reason).toBe(
+      'EDGE_SECRET_MISCONFIGURED',
+    );
+    expect(evaluateWebEdgeProxyRequest('e'.repeat(32), 'e'.repeat(32)).reason).toBe(
+      'EDGE_KEY_MATCH',
+    );
+  });
+
+  it('still treats a genuinely unset variable as "no lock here"', () => {
+    // Day la hop dong voi stack sau Caddy: khong co origin cong khai nen khong can khoa.
+    expect(evaluateWebEdgeProxyRequest(undefined, null)).toEqual({
+      allowed: true,
+      reason: 'EDGE_GUARD_DISABLED',
+    });
+  });
+});
+
 describe('readEdgeProxySecret', () => {
   it('reads the secret from the environment at call time', () => {
     expect(readEdgeProxySecret({ EDGE_PROXY_SECRET: SECRET })).toBe(SECRET);
   });
 
-  it('treats an unset or blank value as "guard off", not as a secret', () => {
-    // Mot chuoi trang la cach mot bien bi dat nham thanh rong. Coi no la bi mat that thi khoa se
-    // so sanh voi '' va tu choi tat ca — web chet ma khong ai hieu vi sao.
-    for (const env of [{}, { EDGE_PROXY_SECRET: '' }, { EDGE_PROXY_SECRET: '   ' }]) {
-      expect(readEdgeProxySecret(env)).toBeUndefined();
-    }
+  it('returns a blank value verbatim instead of erasing it to undefined', () => {
+    // Neu ham nay nuot mat su khac biet giua "chua dat" va "dat rong" thi tang tren khong con
+    // co hoi fail-closed — dung cai hong ma bo test ngay ben tren dang giu.
+    expect(readEdgeProxySecret({ EDGE_PROXY_SECRET: '' })).toBe('');
+    expect(readEdgeProxySecret({ EDGE_PROXY_SECRET: '   ' })).toBe('   ');
+    expect(readEdgeProxySecret({})).toBeUndefined();
   });
 });

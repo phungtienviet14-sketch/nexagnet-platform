@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import {
   EDGE_PROXY_HEADER,
+  EDGE_PROXY_MIN_SECRET_LENGTH,
   evaluateWebEdgeProxyRequest,
   readEdgeProxySecret,
 } from './lib/edge-proxy';
@@ -29,6 +30,13 @@ export function middleware(request: NextRequest): NextResponse {
     request.headers.get(EDGE_PROXY_HEADER),
   );
   if (decision.allowed) return NextResponse.next();
+  if (decision.reason === 'EDGE_SECRET_MISCONFIGURED') {
+    // Cau hinh hong thi phai ON AO. Khong co gia tri nao duoc in ra — chi noi ra van de va dieu
+    // kien de sua, du de nguoi truc khong phai doan tai sao ca site tra 403.
+    console.error(
+      `[edge-proxy] EDGE_PROXY_SECRET duoc dat nhung khong dung duoc (rong hoac ngan hon ${EDGE_PROXY_MIN_SECRET_LENGTH} ky tu). Dang tu choi MOI request. Bo han bien nay neu ban trien khai khong co origin cong khai.`,
+    );
+  }
   // Than phan hoi khong noi gi ve khoa, ve header can co, hay ve viec co mot edge dung truoc.
   // Nguoi do khoa khong hoc duoc gi tu 403 nay ngoai "khong vao duoc".
   return new NextResponse('Forbidden', {

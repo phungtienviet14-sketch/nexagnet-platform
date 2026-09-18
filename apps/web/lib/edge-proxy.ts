@@ -14,7 +14,14 @@ import { createHash, timingSafeEqual } from 'node:crypto';
  */
 export const EDGE_PROXY_HEADER = 'x-nexagnet-edge-key';
 
-export type WebEdgeProxyReason = 'EDGE_GUARD_DISABLED' | 'EDGE_KEY_MATCH' | 'EDGE_KEY_REJECTED';
+/**
+ * Ben API, `EDGE_PROXY_SECRET` di qua zod `.min(32)` nen mot gia tri rong hay qua ngan lam tien
+ * trinh CHET NGAY luc khoi dong. Ben web khong co tang do, nen phai tu kiem — cung mot con so.
+ */
+export const EDGE_PROXY_MIN_SECRET_LENGTH = 32;
+
+export type WebEdgeProxyReason =
+  'EDGE_GUARD_DISABLED' | 'EDGE_KEY_MATCH' | 'EDGE_KEY_REJECTED' | 'EDGE_SECRET_MISCONFIGURED';
 
 export interface WebEdgeProxyDecision {
   readonly allowed: boolean;
@@ -22,15 +29,29 @@ export interface WebEdgeProxyDecision {
 }
 
 /**
- * Gop "thieu" va "sai" vao mot ly do duy nhat. Ben API tach hai ly do de nguoi truc doc log biet
- * edge dang gui nham khoa hay khong gui gi ca; ben web khong co nhu cau do, va it nhanh re hon
- * thi it cho de doc lech hon.
+ * PHAN BIET "khong dat" VOI "dat nham". Day la cho ban dau lam SAI.
+ *
+ * Ban dau mot chuoi rong bi coi nhu chua dat -> khoa TAT. Ly do luc do: coi chuoi rong la bi mat
+ * that thi moi request deu 403 va "web chet ma khong ai hieu vi sao". Nhung danh doi do dat nham
+ * huong: mot origin cong khai IM LANG mo toang te hon mot service chet ON AO. Nguoi van hanh go
+ * `EDGE_PROXY_SECRET=` tren service web (con API thi dat dung) se khong thay mot dau hieu nao.
+ *
+ * Nay: `undefined` = CO Y khong khoa (stack sau Caddy, khong co origin cong khai) -> cho qua.
+ * Dat nhung rong / toan trang / ngan hon 32 = CAU HINH HONG -> tu choi TAT CA, va log mot dong noi
+ * thang ra van de. Fail-closed, va khong con im lang.
+ *
+ * Gop "thieu khoa" va "sai khoa" lam mot ly do: ben API tach hai de nguoi truc biet edge gui nham
+ * khoa hay khong gui gi; ben web khong co nhu cau do.
  */
 export function evaluateWebEdgeProxyRequest(
-  secret: string | undefined,
+  rawSecret: string | undefined,
   providedKey: string | null | undefined,
 ): WebEdgeProxyDecision {
-  if (!secret) return { allowed: true, reason: 'EDGE_GUARD_DISABLED' };
+  if (rawSecret === undefined) return { allowed: true, reason: 'EDGE_GUARD_DISABLED' };
+  const secret = rawSecret.trim();
+  if (secret.length < EDGE_PROXY_MIN_SECRET_LENGTH) {
+    return { allowed: false, reason: 'EDGE_SECRET_MISCONFIGURED' };
+  }
   if (typeof providedKey === 'string' && matchesSecret(providedKey, secret)) {
     return { allowed: true, reason: 'EDGE_KEY_MATCH' };
   }
@@ -63,6 +84,8 @@ function matchesSecret(provided: string, expected: string): boolean {
 export function readEdgeProxySecret(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string | undefined {
-  const value = env.EDGE_PROXY_SECRET?.trim();
-  return value ? value : undefined;
+  // Tra ve NGUYEN VAN, khong ep chuoi rong thanh `undefined`. Viec phan biet "chua dat" voi
+  // "dat nham" thuoc ve `evaluateWebEdgeProxyRequest`; nuot mat su khac biet ngay tai day chinh
+  // la cai lam khoa im lang tat khi ai do go `EDGE_PROXY_SECRET=`.
+  return env.EDGE_PROXY_SECRET;
 }
