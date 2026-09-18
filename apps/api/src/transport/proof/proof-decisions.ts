@@ -376,6 +376,8 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     TELEMATICS_OBSERVATION_REPLAYED: 'Gửi lại đúng bản cũ — không ghi thêm hàng nào',
     TELEMATICS_PROVIDER_NOT_CONFIGURED:
       'Khách chưa khai nhà cung cấp telematics nào — cửa nhập đóng',
+    TELEMATICS_CONNECTOR_MISMATCH:
+      'Đầu nối khai trong yêu cầu không khớp đầu nối đã cấu hình — danh tính đến từ cấu hình',
     TELEMATICS_VEHICLE_NOT_ENROLLED: 'Chiếc xe này chưa đăng ký thiết bị với nhà cung cấp',
     TELEMATICS_VEHICLE_NOT_FOUND: 'Không tìm thấy chiếc xe này trong đội xe',
     TELEMATICS_EVENT_ID_REUSED: 'Một mã sự kiện của nhà cung cấp được dùng lại cho nội dung khác',

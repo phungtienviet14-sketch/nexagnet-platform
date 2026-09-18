@@ -66,13 +66,22 @@ export interface AppendObservationInput {
  * KHAC `AppendObservationInput` o ba diem, va ca ba deu la ban chat chu khong hinh thuc:
  *
  *   · chu the la CHIEC XE, khong phai mot phien. Ban nay khong thuoc ca lam viec cua ai;
- *   · khoa chan phat lai la `(providerId, externalEventId)` — do NHA CUNG CAP cap, khong do mot
- *     may khach sinh ra. `clientEventId` cua hang bang chung mang chinh `externalEventId` de mot
+ *   · khoa chan phat lai la `(providerId, externalEventId)`, va KHONG nua nao cua no den tu than
+ *     yeu cau: `providerId` la danh tinh dau noi do CAU HINH MAY CHU cap
+ *     (`VehicleTelematicsPort.describe().connectorId`), `externalEventId` do NHA CUNG CAP cap.
+ *     Neu mot may khach dat duoc nua dau, no tu cap cho minh mot danh tinh moi va phat lai bao
+ *     nhieu lan tuy y. `clientEventId` cua hang bang chung mang chinh `externalEventId` de mot
  *     nguoi doi soat doc nguoc len he cua ho duoc;
  *   · khong co `mockLocationReported`. `Location.isMock` la mot khai niem cua Android; mot hop
  *     GSHT khong co no, va dien mot `false` vao day se bia ra mot cau tra loi chua ai hoi.
  */
 export interface AppendTelematicsObservationInput {
+  /**
+   * DANH TINH DAU NOI, da suy ra tu cau hinh may chu — khong bao gio la mot truong cua than yeu cau.
+   *
+   * Ten giu nguyen `providerId` de trung voi cot duoi Postgres. Nguoi goi duy nhat hop le la
+   * `TelematicsIngressService`, va no dien vao day `describe().connectorId`.
+   */
   readonly providerId: string;
   readonly externalEventId: string;
   readonly vehicleId: string;
@@ -213,7 +222,12 @@ export abstract class TrackingRepository {
   abstract appendTelematicsObservation(
     input: AppendTelematicsObservationInput,
   ): Promise<LocationObservation>;
-  /** Lan nhap da co cho `(providerId, externalEventId)`, neu co. Dau vao cua phep chan phat lai. */
+  /**
+   * Lan nhap da co cho `(providerId, externalEventId)`, neu co. Dau vao cua phep chan phat lai.
+   *
+   * `providerId` o day la danh tinh DA SUY RA. Goi ham nay bang mot chuoi lay tu than yeu cau se
+   * hoi mot cau khac han cau dang can hoi.
+   */
   abstract findTelematicsIngress(
     providerId: string,
     externalEventId: string,

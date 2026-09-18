@@ -67,7 +67,7 @@ export class TelematicsIngressController {
       for (const observation of parsed.data.observations) {
         accepted.push(
           await this.ingress.ingest({
-            providerId: observation.providerId,
+            declaredConnectorId: observation.connectorId ?? null,
             externalEventId: observation.externalEventId,
             vehicleId: observation.vehicleId,
             latitude: observation.latitude,

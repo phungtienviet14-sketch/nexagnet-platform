@@ -60,8 +60,26 @@ export type TelematicsUnavailableReason =
   /** Co nha cung cap, co xe, nhung khong goi duoc — mang, xac thuc, hoac hang dang hong. */
   | 'PROVIDER_UNREACHABLE';
 
+/**
+ * HAI ten cho mot nha cung cap, va viec tach chung ra la mot TINH CHAT AN TOAN.
+ *
+ * `connectorId` la DANH TINH. No do CAU HINH cua may chu cap, no on dinh, va no la thu duy nhat
+ * duoc phep di vao khoa chan phat lai va vao hang so bien gioi. `providerName` la TEN DE DOC cho
+ * nguoi — ten thuong mai cua mot hang doi khi hop dong doi, khi hang doi nhan dien, khi khach go
+ * lai cho de nhin — nen no KHONG BAO GIO duoc dung lam danh tinh.
+ *
+ * Tron hai cai lam mot thi phep chan phat lai bam vao mot chuoi CO THE DOI: ngay ai do sua ten
+ * hien thi, moi ma su kien cu bong nhien "chua tung thay", va ca lich su nhap lai duoc mot lan nua
+ * duoi mot danh tinh moi. Do la mot duong phat lai mo ra tu mot thao tac trong hoan toan vo hai.
+ */
 export type TelematicsAvailability =
-  | { readonly available: true; readonly providerName: string }
+  | {
+      readonly available: true;
+      /** DANH TINH — do cau hinh may chu cap. KHONG BAO GIO doc tu than yeu cau. */
+      readonly connectorId: string;
+      /** TEN DE DOC. Doi duoc, nen khong duoc dung lam danh tinh. */
+      readonly providerName: string;
+    }
   | { readonly available: false; readonly reason: TelematicsUnavailableReason };
 
 /**

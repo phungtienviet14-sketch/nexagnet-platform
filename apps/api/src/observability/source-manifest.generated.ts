@@ -378,7 +378,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "telematics.ingress": {
       "functionName": "TelematicsIngressService.ingest",
       "filePath": "apps/api/src/transport/proof/telematics/telematics-ingress.service.ts",
-      "line": 86
+      "line": 93
     },
     "tenant.loaded": {
       "functionName": "evaluateOperationalReadiness",

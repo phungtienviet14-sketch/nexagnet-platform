@@ -101,10 +101,14 @@ describe('nguon tu khai cua ung dung lai xe — #297 T3', () => {
  * Cai dang duoc khoa o day la nhung truong KHONG co mat. Mot lieu do nhan `source` se mo lai dung
  * cai lo ma duong dien thoai da dong: bat ky ai ghi duoc vao cua nay se chon duoc nguon cho ban
  * ghi cua minh, va "nguon doc lap thu hai" tro thanh mot cau noi suong.
+ *
+ * `providerId` DA ROI khoi danh sach vi dung ly le do. No tung la mot truong BAT BUOC o day, va
+ * chinh no la nua dau cua khoa chan phat lai — tuc nguoi goi tu dat duoc danh tinh nguon cho minh.
+ * Gio danh tinh den tu cau hinh may chu, va thu duy nhat con lai tren day la mot LOI KHANG DINH
+ * khong bat buoc (`connectorId`) phai khop thi lan nhap moi di tiep.
  */
 describe('Lieu do cua nhap telematics — PROOF-082', () => {
   const base = {
-    providerId: 'dau-noi-kiem-thu',
     externalEventId: 'evt-1',
     vehicleId: 'vehicle-1',
     latitude: 20.8449,
@@ -148,17 +152,37 @@ describe('Lieu do cua nhap telematics — PROOF-082', () => {
     ).toBe(false);
   });
 
-  it('ba truong danh tinh deu BAT BUOC', () => {
-    for (const field of ['providerId', 'externalEventId', 'vehicleId'] as const) {
+  it('HAI truong danh tinh con lai deu BAT BUOC', () => {
+    for (const field of ['externalEventId', 'vehicleId'] as const) {
       const { [field]: _removed, ...without } = base;
       expect(ingestTelematicsObservationSchema.safeParse(without).success, field).toBe(false);
     }
   });
 
+  it('`providerId` KHONG duoc nhan nua — danh tinh nguon khong den tu than yeu cau', () => {
+    // Bai nay la cai duy nhat ngan truong cu quay lai im lang. Neu ai do them `providerId` vao
+    // lieu do cho "tuong thich nguoc", ho phai xoa bai nay truoc — va luc do viec dang lam se hien
+    // ra dung ten cua no: tra lai cho nguoi goi quyen chon danh tinh cua chinh nguon.
+    expect(
+      ingestTelematicsObservationSchema.safeParse({ ...base, providerId: 'dau-noi-cua-toi' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('`connectorId` la TUY CHON — bo trong la hinh dang binh thuong', () => {
+    // May chu tu biet minh dang cam vao dau noi nao. Bat buoc khai lai se bien mot phep doi chieu
+    // thanh mot nghi thuc, va mot nghi thuc thi nguoi ta chep gia tri chu khong kiem tra no.
+    expect(ingestTelematicsObservationSchema.safeParse(base).success).toBe(true);
+    expect(
+      ingestTelematicsObservationSchema.safeParse({ ...base, connectorId: 'dau-noi-kiem-thu' })
+        .success,
+    ).toBe(true);
+  });
+
   it('chuoi rong khong phai mot danh tinh', () => {
-    expect(ingestTelematicsObservationSchema.safeParse({ ...base, providerId: '  ' }).success).toBe(
-      false,
-    );
+    expect(
+      ingestTelematicsObservationSchema.safeParse({ ...base, connectorId: '  ' }).success,
+    ).toBe(false);
   });
 
   it('lo rong bi tu choi — mot lan gui khong noi gi la mot loi cua nguoi goi', () => {

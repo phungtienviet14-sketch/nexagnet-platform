@@ -597,11 +597,21 @@ chọn mode trong allowlist — đúng khuôn `ChannelAdapter`/`ErpPort` đang c
 > xe này có một nguồn thứ hai không"* là **một** câu hỏi — hai câu trả lời khác nhau cho cùng câu
 > đó là cách chắc chắn nhất để một hệ thống có hai sự thật.
 >
-> Chiều đẩy **fail closed**: chưa khai nhà cung cấp, xe chưa đăng ký thiết bị, hoặc mã xe không trỏ
-> tới xe nào ⇒ từ chối, mỗi đường một mã lý do riêng. Bản ghi được nhận nằm trong chính
-> `LocationObservation` với `sessionId = NULL` + `vehicleId` — **không** có kho vị trí thứ hai.
-> Danh tính lần nhập (`providerId`, `externalEventId`) nằm ở bảng riêng
-> `TransportTelematicsIngressEvent`, để bảng bằng chứng không mang hình dạng của một hãng nào.
+> Chiều đẩy **fail closed**: chưa khai nhà cung cấp, đầu nối khai trong yêu cầu không khớp đầu nối
+> đã cấu hình, xe chưa đăng ký thiết bị, hoặc mã xe không trỏ tới xe nào ⇒ từ chối, mỗi đường một
+> mã lý do riêng. Bản ghi được nhận nằm trong chính `LocationObservation` với `sessionId = NULL` +
+> `vehicleId` — **không** có kho vị trí thứ hai. Danh tính lần nhập (`providerId`,
+> `externalEventId`) nằm ở bảng riêng `TransportTelematicsIngressEvent`, để bảng bằng chứng không
+> mang hình dạng của một hãng nào.
+>
+> **Danh tính nguồn đến từ cấu hình, không từ thân yêu cầu (sửa sau review độc lập 18/09/2026).**
+> `providerId` được ghi xuống là `VehicleTelematicsPort.describe().connectorId` — một mã **ổn
+> định** do cấu hình máy chủ cấp, tách hẳn khỏi `providerName` (tên hiển thị, đổi được, **không**
+> bao giờ là danh tính). Liệu đồ công khai **không còn** trường `providerId`; nó chỉ nhận một
+> `connectorId` **tuỳ chọn** như một _lời khẳng định_, và lệch thì từ chối
+> (`TELEMATICS_CONNECTOR_MISMATCH`) **trước mọi thao tác ghi**. Lý do rất cụ thể: nếu người gọi đặt
+> được nửa đầu của khoá chặn phát lại, họ tự cấp cho mình một danh tính mới và gửi lại cùng một
+> `externalEventId` bao nhiêu lần tuỳ ý — sổ bằng chứng phình lên mà không lớp nào kêu.
 >
 > Hai `CHECK` trong `20260918100000_transport_telematics_ingress` là thứ **duy nhất** cưỡng chế được
 > rằng một bản ghi của điện thoại không tự khai mình là phần cứng trên xe. Mọi lớp còn lại — zod, mã

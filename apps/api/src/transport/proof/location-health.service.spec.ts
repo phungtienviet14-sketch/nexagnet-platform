@@ -39,11 +39,19 @@ const agedBy = (seconds: number): Date => new Date(NOW.getTime() - seconds * 100
 /** Cong gia — co nha cung cap VA chiec xe co dang ky; khong bao gio tra ve mot ban dinh vi nao. */
 class ConfiguredTelematicsStub extends VehicleTelematicsPort {
   describe(): TelematicsAvailability {
-    return { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' };
+    return {
+      available: true,
+      connectorId: 'dau-noi-kiem-thu',
+      providerName: 'NHA-CUNG-CAP-KIEM-THU',
+    };
   }
 
   describeVehicle(_vehicleId: string): TelematicsAvailability {
-    return { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' };
+    return {
+      available: true,
+      connectorId: 'dau-noi-kiem-thu',
+      providerName: 'NHA-CUNG-CAP-KIEM-THU',
+    };
   }
 
   async fetch(_query: TelematicsQuery): Promise<readonly TelematicsFix[]> {
@@ -67,12 +75,16 @@ class EnrolmentAwareTelematicsStub extends VehicleTelematicsPort {
 
   describe(): TelematicsAvailability {
     this.providerLevelCalls += 1;
-    return { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' };
+    return {
+      available: true,
+      connectorId: 'dau-noi-kiem-thu',
+      providerName: 'NHA-CUNG-CAP-KIEM-THU',
+    };
   }
 
   describeVehicle(vehicleId: string): TelematicsAvailability {
     return this.enrolled.has(vehicleId)
-      ? { available: true, providerName: 'NHA-CUNG-CAP-KIEM-THU' }
+      ? { available: true, connectorId: 'dau-noi-kiem-thu', providerName: 'NHA-CUNG-CAP-KIEM-THU' }
       : { available: false, reason: 'VEHICLE_NOT_ENROLLED' };
   }
 

@@ -249,11 +249,16 @@ Cửa nhập trung lập nhà cung cấp đã dựng: `TelematicsIngressService`
 `sessionId = NULL` + `vehicleId`; danh tính lần nhập ở `TransportTelematicsIngressEvent`. Chi tiết
 hợp đồng: [transport-domain-contract.md §13](transport-domain-contract.md).
 
+Danh tính đầu nối trong khoá chặn phát lại **do cấu hình máy chủ cấp**
+(`VehicleTelematicsPort.describe().connectorId`), không do thân yêu cầu chọn — xem ô cảnh báo ở
+§13 của hợp đồng. Điều đó **không** làm `REAL_DEVICE_PROOF` nhích lên một chút nào: nó đóng một
+đường phát lại trong phần mềm, còn câu hỏi "có hộp thật không" vẫn nguyên ở bảng dưới.
+
 **Hai câu phải đọc tách nhau, và đừng bao giờ gộp:**
 
 | Câu hỏi                                                         | Trả lời                                                                                                                                                                                |
 | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hệ thống **nhận và lưu** được vị trí từ một nguồn độc lập chưa? | **RỒI.** Có đường ghi, có chặn phát lại, có ba cổng fail-closed, có ràng buộc DB, có bài kiểm trên Postgres thật                                                                       |
+| Hệ thống **nhận và lưu** được vị trí từ một nguồn độc lập chưa? | **RỒI.** Có đường ghi, có chặn phát lại **neo vào danh tính do cấu hình cấp**, có bốn cổng fail-closed, có ràng buộc DB, có bài kiểm trên Postgres thật                                |
 | Có một **hộp GSHT thật** nào đang bắn về chưa?                  | **CHƯA — `NOT PROVEN`.** Chưa hãng nào ở VN công bố API cho khách (đo 08/09/2026); chưa có vendor/device/export access từ chủ sở hữu. Mọi bằng chứng tới nay là **tổng hợp, tất định** |
 
 Điều đã đổi về **bản chất**, không phải về số lượng bài kiểm: trước lần đi này, mọi bài chứng minh

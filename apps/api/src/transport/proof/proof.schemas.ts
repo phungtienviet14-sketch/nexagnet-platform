@@ -107,8 +107,18 @@ export const closeTrackingSessionSchema = z
  */
 export const ingestTelematicsObservationSchema = z
   .object({
-    /** Ma khach dat cho mot DAU NOI. Khong phai ten thuong mai cua mot hang. */
-    providerId: z.string().trim().min(1).max(100),
+    /**
+     * LOI KHANG DINH ve dau noi — KHONG phai danh tinh, va `optional` chinh vi the.
+     *
+     * Danh tinh that den tu cau hinh may chu (`VehicleTelematicsPort.describe()`). Truong nay chi
+     * de mot may khach noi ra minh TUONG minh dang gui thay ai; lech thi lan nhap bi tu choi
+     * (`TELEMATICS_CONNECTOR_MISMATCH`) truoc moi thao tac ghi. Bo trong la hinh dang binh thuong.
+     *
+     * Ten cu `providerId` da bi BO khoi lieu do nay chu khong duoc giu lai cho tuong thich: cung
+     * voi `.strict()` ben duoi, mot may khach con gui truong cu se nhan `400` on ao thay vi im
+     * lang tuong rang no vua chon duoc nguon.
+     */
+    connectorId: z.string().trim().min(1).max(100).optional(),
     /** Ma su kien cua CHINH nha cung cap — khoa chan phat lai. */
     externalEventId: z.string().trim().min(1).max(200),
     vehicleId: z.string().min(1).max(200),
