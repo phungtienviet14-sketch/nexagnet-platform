@@ -7,6 +7,7 @@ import type { IngestObservationCommand } from './tracking.types.js';
 import {
   TransportProofCoreFacts,
   type ProofDriverFacts,
+  type ProofVehicleFacts,
   type ProofTripFacts,
 } from './transport-proof-facts.port.js';
 
@@ -42,6 +43,15 @@ class FakeCoreFacts extends TransportProofCoreFacts {
 
   async activeVehicleForTrip(tripId: string): Promise<string | null> {
     return this.vehicles.get(tripId) ?? null;
+  }
+
+  /**
+   * Khong bai nao trong tep nay di qua cua nhap telematics, nen ban gia tra `null` — tuc "khong
+   * tim thay chiec xe nao". Fail-closed la mac dinh dung cho mot ban gia: neu mot duong moi lang le
+   * bat dau goi ham nay, no se bi TU CHOI chu khong duoc cho qua bang mot cau tra loi bia.
+   */
+  async findVehicle(): Promise<ProofVehicleFacts | null> {
+    return null;
   }
 }
 

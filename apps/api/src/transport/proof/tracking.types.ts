@@ -140,8 +140,18 @@ export interface TrackingSession {
 
 export interface LocationObservation {
   readonly id: string;
-  readonly sessionId: string;
-  /** Khoa idempotency do may khach sinh. Duy nhat TRONG mot phien. */
+  /**
+   * PHIEN cua mot lai xe — `null` khi ban nay den tu PHAN CUNG tren xe (`#297` T4).
+   *
+   * Mot hop GSHT bao vi tri luc 2 gio sang khong thuoc ca cua ai, va ep no vao mot phien se buoc
+   * phai bia ra mot lai xe khong co that. Nen dung mot trong hai truong nay khac `null`, khong bao
+   * gio ca hai va khong bao gio khong cai nao — `TransportLocationObservation_one_subject` cuong
+   * che dieu do o tang luu tru.
+   */
+  readonly sessionId: string | null;
+  /** CHIEC XE, khi ban nay den thang tu phan cung. `null` cho ban tu dien thoai. */
+  readonly vehicleId: string | null;
+  /** Khoa idempotency do NGUON sinh. Duy nhat TRONG mot phien voi ban tu dien thoai. */
   readonly clientEventId: string;
   readonly point: GeoPoint;
   readonly accuracyMetres: number | null;

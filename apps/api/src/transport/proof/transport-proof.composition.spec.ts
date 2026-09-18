@@ -16,6 +16,7 @@ describe('composition cua transport-proof — PROOF-040', () => {
     expect(names).toContain('TrackingController');
     expect(names).toContain('DriverProofController');
     expect(names).toContain('ProofReviewController');
+    expect(names).toContain('TelematicsIngressController');
   });
 
   it('KHONG co mat o mot khach van tai chi bat `transport-core`', () => {
@@ -24,6 +25,9 @@ describe('composition cua transport-proof — PROOF-040', () => {
     expect(names).not.toContain('TrackingController');
     expect(names).not.toContain('DriverProofController');
     expect(names).not.toContain('ProofReviewController');
+    // Mot khach van tai KHONG bam vi tri cung khong nhap vi tri tu phan cung: mo san mot duong ghi
+    // vao so bang chung cho ho la mo mot be mat khong ai dung.
+    expect(names).not.toContain('TelematicsIngressController');
   });
 
   it('KHONG co mat o mot khach khong dung van tai', () => {
@@ -66,5 +70,37 @@ describe('Cong can-biet cua lich su vi tri — PROOF-041', () => {
 
   it('MANAGER van khong duoc cap gi — quy uoc cu, khong doi', () => {
     expect(actionsForRole('MANAGER')).toHaveLength(0);
+  });
+});
+
+/**
+ * PROOF-042 — CONG QUYEN cua cua nhap telematics (`#297` T4/T9).
+ *
+ * Bo bai nay la ban dich sang ma cua mot cau trong `#297`: nguon vi tri thu hai phai DOC LAP voi
+ * chiec dien thoai. Doc lap khong phai mot tinh chat cua ma nguon — no la mot tinh chat cua BANG
+ * PHAN QUYEN. Neu lai xe ghi duoc vao duong nay thi hai chuoi toa do lai den tu cung mot may, va
+ * ca `SOURCE_FALLBACK` lan phep doi chieu cheo deu tro thanh lo.
+ */
+describe('Cong quyen cua cua nhap telematics — PROOF-042', () => {
+  const INGEST = 'transport.telematics.observation.ingest';
+
+  it('lai xe (cho giu tam `SALE`) KHONG ghi duoc vao nguon thu hai', () => {
+    // Neu bai nay do vi ai do "gop cho tien" vao pham vi lai xe, thi cai mat khong phai mot ma
+    // quyen — cai mat la ly do ton tai cua ca nguon telematics.
+    expect(actionsForRole('SALE')).not.toContain(INGEST);
+  });
+
+  it('ke toan DOC duoc suc khoe vi tri nhung KHONG ghi duoc mot ban dinh vi nao', () => {
+    expect(actionsForRole('ACCOUNTING')).toContain('transport.tracking.read');
+    // Nguoi DUYET tien khong duoc viet ra can cu chung minh chuyen ma ho sap duyet.
+    expect(actionsForRole('ACCOUNTING')).not.toContain(INGEST);
+  });
+
+  it('ADMIN ghi duoc — neu khong thi khong ai cam duoc mot dau noi vao', () => {
+    expect(actionsForRole('ADMIN')).toContain(INGEST);
+  });
+
+  it('MANAGER van khong duoc cap gi', () => {
+    expect(actionsForRole('MANAGER')).not.toContain(INGEST);
   });
 });

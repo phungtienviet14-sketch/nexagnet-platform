@@ -100,7 +100,14 @@ export interface VehicleCurrentLocation {
   readonly freshness: LocationFreshness;
   readonly accuracyGrade: AccuracyGrade;
   readonly source: LocationSource;
-  readonly sessionId: string;
+  /**
+   * `null` khi ban dinh vi den tu PHAN CUNG TREN XE — no khong thuoc ca lam viec cua ai (`#297` T4).
+   *
+   * Giu truong nay thay vi bo di: `source` noi ban nay den tu dau, con `sessionId` noi no den tu
+   * CA LAM VIEC NAO — va khi co, do la duong lan ra lai xe dang cam may. Mot `null` o day la mot
+   * cau tra loi that ("khong ca nao ca"), khong phai mot khoang thieu.
+   */
+  readonly sessionId: string | null;
 }
 
 export type VehicleCurrentUnknownReason =

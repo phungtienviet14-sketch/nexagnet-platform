@@ -165,6 +165,13 @@ export class TransportSiteIntakeLocationFactsAdapter extends TransportSiteIntake
   async findObservation(observationId: string): Promise<SiteIntakeObservationFacts | null> {
     const observation = await this.tracking.findObservationById(observationId);
     if (!observation) return null;
+    /*
+     * `sessionId === null` = ban den tu PHAN CUNG TREN XE, khong tu dien thoai cua ai (`#297` T4).
+     * Mot ban nhu the KHONG BAO GIO la chung cu hien truong cua mot con nguoi: no chung minh chiec
+     * XE o dau, khong chung minh NGUOI nao dung o do bam mot nut. Cho no di tiep se cho phep gan
+     * mot toa do cua hop GSHT lam bang chung "toi da den noi".
+     */
+    if (observation.sessionId === null) return null;
     const session = await this.tracking.findSession(observation.sessionId);
     if (!session) return null;
     return {

@@ -4,6 +4,7 @@ import {
   ACTIVE_TRACKING_SESSION,
   DEVICE_INSTALLATION_ID,
   OBSERVATION_CLIENT_EVENT,
+  TELEMATICS_INGRESS_EVENT,
   storageUniqueViolation,
 } from './proof-storage-conflict.js';
 import type {
@@ -28,7 +29,8 @@ import type {
  *
  *   1. moi lai xe co toi da MOT phien `ACTIVE`;
  *   2. `(sessionId, clientEventId)` la duy nhat — chan phat lai;
- *   3. `installationId` duy nhat toan he — mot ma cai dat thuoc ve dung mot lai xe.
+ *   3. `installationId` duy nhat toan he — mot ma cai dat thuoc ve dung mot lai xe;
+ *   4. `(providerId, externalEventId)` duy nhat — chan phat lai o cua nhap telematics (`#297` T4).
  */
 
 export interface CreateTrackingSessionInput {
@@ -56,6 +58,54 @@ export interface AppendObservationInput {
   readonly clockSkewSeconds: number;
   readonly mockLocationReported: boolean | null;
   readonly businessDate: BusinessDate;
+}
+
+/**
+ * MOT BAN DINH VI TU PHAN CUNG TREN XE, kem danh tinh cua lan nhap — `#297` T4.
+ *
+ * KHAC `AppendObservationInput` o ba diem, va ca ba deu la ban chat chu khong hinh thuc:
+ *
+ *   · chu the la CHIEC XE, khong phai mot phien. Ban nay khong thuoc ca lam viec cua ai;
+ *   · khoa chan phat lai la `(providerId, externalEventId)`, va KHONG nua nao cua no den tu than
+ *     yeu cau: `providerId` la danh tinh dau noi do CAU HINH MAY CHU cap
+ *     (`VehicleTelematicsPort.describe().connectorId`), `externalEventId` do NHA CUNG CAP cap.
+ *     Neu mot may khach dat duoc nua dau, no tu cap cho minh mot danh tinh moi va phat lai bao
+ *     nhieu lan tuy y. `clientEventId` cua hang bang chung mang chinh `externalEventId` de mot
+ *     nguoi doi soat doc nguoc len he cua ho duoc;
+ *   · khong co `mockLocationReported`. `Location.isMock` la mot khai niem cua Android; mot hop
+ *     GSHT khong co no, va dien mot `false` vao day se bia ra mot cau tra loi chua ai hoi.
+ */
+export interface AppendTelematicsObservationInput {
+  /**
+   * DANH TINH DAU NOI, da suy ra tu cau hinh may chu — khong bao gio la mot truong cua than yeu cau.
+   *
+   * Ten giu nguyen `providerId` de trung voi cot duoi Postgres. Nguoi goi duy nhat hop le la
+   * `TelematicsIngressService`, va no dien vao day `describe().connectorId`.
+   */
+  readonly providerId: string;
+  readonly externalEventId: string;
+  readonly vehicleId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMetres: number | null;
+  readonly speedMetresPerSecond: number | null;
+  readonly bearingDegrees: number | null;
+  /** Dong ho cua NHA CUNG CAP. Khong phai su that. */
+  readonly capturedAt: Date;
+  /** Dong ho MAY CHU. Day moi la su that. */
+  readonly receivedAt: Date;
+  readonly clockSkewSeconds: number;
+  readonly businessDate: BusinessDate;
+}
+
+/** Mot hang cua so bien gioi — tro toi ban dinh vi ma lan nhap do da tao ra. */
+export interface TelematicsIngressRecord {
+  readonly id: string;
+  readonly providerId: string;
+  readonly externalEventId: string;
+  readonly vehicleId: string;
+  readonly observationId: string;
+  readonly receivedAt: Date;
 }
 
 export interface AppendRiskFlagInput {
@@ -161,6 +211,28 @@ export abstract class TrackingRepository {
   abstract appendObservation(input: AppendObservationInput): Promise<LocationObservation>;
   abstract listObservations(sessionId: string): Promise<readonly LocationObservation[]>;
 
+  /**
+   * GHI mot ban dinh vi tu phan cung + hang so bien gioi cua no — MOT GIAO DICH, khong hai.
+   *
+   * Tach lam hai lan ghi se de lai mot trong hai hinh dang hong, va ca hai deu im lang: mot ban
+   * dinh vi khong co danh tinh nguon (khong ai truy nguoc len he cua nha cung cap duoc, va lan gui
+   * lai ke tiep se ghi them mot hang nua), hoac mot hang so bien gioi tro vao mot ban dinh vi khong
+   * ton tai. Nem `storageUniqueViolation(TELEMATICS_INGRESS_EVENT)` khi su kien do DA duoc nhap.
+   */
+  abstract appendTelematicsObservation(
+    input: AppendTelematicsObservationInput,
+  ): Promise<LocationObservation>;
+  /**
+   * Lan nhap da co cho `(providerId, externalEventId)`, neu co. Dau vao cua phep chan phat lai.
+   *
+   * `providerId` o day la danh tinh DA SUY RA. Goi ham nay bang mot chuoi lay tu than yeu cau se
+   * hoi mot cau khac han cau dang can hoi.
+   */
+  abstract findTelematicsIngress(
+    providerId: string,
+    externalEventId: string,
+  ): Promise<TelematicsIngressRecord | null>;
+
   abstract appendRiskFlags(
     inputs: readonly AppendRiskFlagInput[],
   ): Promise<readonly ProofRiskFlag[]>;
@@ -175,6 +247,7 @@ export class InMemoryTrackingRepository extends TrackingRepository {
   private readonly observations = new Map<string, LocationObservation>();
   private readonly riskFlags = new Map<string, ProofRiskFlag>();
   private readonly devices = new Map<string, DeviceInstallation>();
+  private readonly telematicsIngress = new Map<string, TelematicsIngressRecord>();
 
   async createSession(input: CreateTrackingSessionInput): Promise<TrackingSession> {
     // Bat bien 1, cuong che o day y nhu chi muc mot phan duoi Postgres.
@@ -258,17 +331,30 @@ export class InMemoryTrackingRepository extends TrackingRepository {
     return forSession.at(-1) ?? null;
   }
 
-  async latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null> {
+  /**
+   * HAI duong den mot chiec xe, va ca hai deu phai duoc dem — `#297` T4.
+   *
+   * Mot ban tu dien thoai noi voi xe QUA MOT PHIEN; mot ban tu phan cung mang thang `vehicleId`.
+   * Chi hoi duong thu nhat thi moi ban tu hop GSHT deu vo hinh, va o mot chiec xe chua bao gio mo
+   * phien nao — hoac dang giua hai ca lai — ket qua se la "chua he co vi tri" trong khi phan cung
+   * tren xe van dang bao ve deu dan.
+   */
+  private observationsForVehicle(vehicleId: string): readonly LocationObservation[] {
     const sessionIds = new Set(
       [...this.sessions.values()]
         .filter((session) => session.vehicleId === vehicleId)
         .map((session) => session.id),
     );
-    if (sessionIds.size === 0) return null;
+    return [...this.observations.values()].filter(
+      (observation) =>
+        observation.vehicleId === vehicleId ||
+        (observation.sessionId !== null && sessionIds.has(observation.sessionId)),
+    );
+  }
 
+  async latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null> {
     let latest: LocationObservation | null = null;
-    for (const observation of this.observations.values()) {
-      if (!sessionIds.has(observation.sessionId)) continue;
+    for (const observation of this.observationsForVehicle(vehicleId)) {
       if (latest === null || observation.receivedAt.getTime() > latest.receivedAt.getTime()) {
         latest = observation;
       }
@@ -280,17 +366,9 @@ export class InMemoryTrackingRepository extends TrackingRepository {
     vehicleId: string,
     receivedAtOrAfter: Date,
   ): Promise<readonly LocationObservation[]> {
-    const sessionIds = new Set(
-      [...this.sessions.values()]
-        .filter((session) => session.vehicleId === vehicleId)
-        .map((session) => session.id),
-    );
-    if (sessionIds.size === 0) return [];
-
     const floor = receivedAtOrAfter.getTime();
     const newest = new Map<LocationSource, LocationObservation>();
-    for (const observation of this.observations.values()) {
-      if (!sessionIds.has(observation.sessionId)) continue;
+    for (const observation of this.observationsForVehicle(vehicleId)) {
       // Cung mot bien `>=` ma Postgres dung (`gte`). Lech mot dau bang o day la mot bai kiem xanh
       // o che do nay va do o che do kia — dung thu khong ai lan ra duoc.
       if (observation.receivedAt.getTime() < floor) continue;
@@ -314,6 +392,9 @@ export class InMemoryTrackingRepository extends TrackingRepository {
     const observation: LocationObservation = {
       id: randomUUID(),
       sessionId: input.sessionId,
+      // Bat bien `TransportLocationObservation_one_subject`: duong dien thoai gan vao PHIEN, nen
+      // cot xe o day luon rong. Chiec xe doc qua `session.vehicleId`.
+      vehicleId: null,
       clientEventId: input.clientEventId,
       point: { latitude: input.latitude, longitude: input.longitude },
       accuracyMetres: input.accuracyMetres,
@@ -342,6 +423,60 @@ export class InMemoryTrackingRepository extends TrackingRepository {
     return [...this.observations.values()]
       .filter((observation) => observation.sessionId === sessionId)
       .sort((a, b) => a.capturedAt.getTime() - b.capturedAt.getTime());
+  }
+
+  async appendTelematicsObservation(
+    input: AppendTelematicsObservationInput,
+  ): Promise<LocationObservation> {
+    // Cung bat bien ma `TransportTelematicsIngressEvent_provider_event_key` cuong che duoi Postgres.
+    if (await this.findTelematicsIngress(input.providerId, input.externalEventId)) {
+      throw storageUniqueViolation(TELEMATICS_INGRESS_EVENT);
+    }
+    const observation: LocationObservation = {
+      id: randomUUID(),
+      // Bat bien `TransportLocationObservation_one_subject` o chieu con lai: khong phien nao ca.
+      sessionId: null,
+      vehicleId: input.vehicleId,
+      // Ma su kien cua CHINH nha cung cap, giu nguyen van de doi soat nguoc len he cua ho duoc.
+      clientEventId: input.externalEventId,
+      point: { latitude: input.latitude, longitude: input.longitude },
+      accuracyMetres: input.accuracyMetres,
+      speedMetresPerSecond: input.speedMetresPerSecond,
+      bearingDegrees: input.bearingDegrees,
+      // Bat bien `TransportLocationObservation_telematics_subject`: gan vao xe <=> `TELEMATICS`.
+      source: 'TELEMATICS',
+      capturedAt: input.capturedAt,
+      receivedAt: input.receivedAt,
+      clockSkewSeconds: input.clockSkewSeconds,
+      // `Location.isMock` la khai niem cua Android. Mot hop GSHT khong tra loi cau do, va `false`
+      // se la mot cau tra loi bia — `null` moi dung.
+      mockLocationReported: null,
+      businessDate: input.businessDate,
+    };
+    this.observations.set(observation.id, observation);
+
+    const ingress: TelematicsIngressRecord = {
+      id: randomUUID(),
+      providerId: input.providerId,
+      externalEventId: input.externalEventId,
+      vehicleId: input.vehicleId,
+      observationId: observation.id,
+      receivedAt: input.receivedAt,
+    };
+    this.telematicsIngress.set(ingress.id, ingress);
+    return observation;
+  }
+
+  async findTelematicsIngress(
+    providerId: string,
+    externalEventId: string,
+  ): Promise<TelematicsIngressRecord | null> {
+    for (const record of this.telematicsIngress.values()) {
+      if (record.providerId === providerId && record.externalEventId === externalEventId) {
+        return record;
+      }
+    }
+    return null;
   }
 
   async appendRiskFlags(inputs: readonly AppendRiskFlagInput[]): Promise<readonly ProofRiskFlag[]> {

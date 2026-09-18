@@ -81,6 +81,11 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
       // no khop hay khong; rut mot chung cu, va doi ban kinh mot hang rao (duoc cham LUC DOC, nen
       // no doi phan quyet cua ca lich su), la sua chinh ho so dang duoc doi soat.
       'transport.proof.withdraw',
+      // Issue #297 Lane T — Ke toan DOC duoc suc khoe vi tri nhung KHONG ghi duoc mot ban dinh vi
+      // nao tu phan cung. Vi tri xe la can cu cua chinh khoan tien ho sap duyet, va no la nguon
+      // DOI CHIEU CHEO cua chuoi tu dien thoai — mot nguon doi chieu ma nguoi doi soat ghi duoc thi
+      // khong con doi chieu duoc gi.
+      'transport.telematics.observation.ingest',
       'transport.geofence.manage',
     ]);
     for (const action of denied) {

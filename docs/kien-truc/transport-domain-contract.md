@@ -582,7 +582,7 @@ Ràng buộc dữ liệu của `transport-driver` (VT-083, VT-101):
 | Port | Trách nhiệm | Trạng thái | Adapter |
 |---|---|---|---|
 | `FuelStatementSourcePort` | Đọc bảng kê cây xăng thành dòng đã chuẩn hoá | Demo: CSV/Excel (`GD-07`) | Excel / CSV / API cây xăng |
-| `VehicleTelematicsPort` | Vị trí/hành trình xe **từ hộp GSHT trên xe** | **as-built** (#235 B5) — cổng + `crossCheckTracks`. Hiện thực duy nhất là `UnconfiguredVehicleTelematicsAdapter`: nó **nói ra** rằng chưa có nhà cung cấp, không trả mảng rỗng | GSHT vendor / CSV / nhập tay — **chưa hãng nào công bố API cho khách**, đo 08/09/2026 |
+| `VehicleTelematicsPort` | Vị trí/hành trình xe **từ hộp GSHT trên xe** | **as-built** (#235 B5, #297 T4) — cổng + `crossCheckTracks` + **cửa nhập** `TelematicsIngressService`. Hiện thực duy nhất là `UnconfiguredVehicleTelematicsAdapter`: nó **nói ra** rằng chưa có nhà cung cấp, không trả mảng rỗng | GSHT vendor / CSV / nhập tay — **chưa hãng nào công bố API cho khách**, đo 08/09/2026 |
 | `AccountingExportPort` | Đẩy công nợ/bút toán sang phần mềm kế toán | Ngoài v1 | MISA / ERP |
 | `EInvoicePort` | Hóa đơn điện tử | Ngoài v1 — `GD-16` | — |
 | `MediaStore` *(đã có)* | Lưu ảnh phiếu/chứng từ | **as-built** | none / local / S3-compatible |
@@ -590,6 +590,38 @@ Ràng buộc dữ liệu của `transport-driver` (VT-083, VT-101):
 
 **Luật:** code miền **không** import SDK nhà cung cấp. Mọi adapter được tenant allowlist rồi env
 chọn mode trong allowlist — đúng khuôn `ChannelAdapter`/`ErpPort` đang chạy.
+
+> **Cửa nhập telematics (#297 T4, 18/09/2026).** `VehicleTelematicsPort` có hai chiều, và chúng
+> khác nhau về bản chất: `fetch()` là chiều **kéo**, `TelematicsIngressService.ingest()` là chiều
+> **đẩy** (webhook / nhập bản kết xuất). Cả hai đi qua cùng một cổng vì câu hỏi *"khách này / chiếc
+> xe này có một nguồn thứ hai không"* là **một** câu hỏi — hai câu trả lời khác nhau cho cùng câu
+> đó là cách chắc chắn nhất để một hệ thống có hai sự thật.
+>
+> Chiều đẩy **fail closed**: chưa khai nhà cung cấp, đầu nối khai trong yêu cầu không khớp đầu nối
+> đã cấu hình, xe chưa đăng ký thiết bị, hoặc mã xe không trỏ tới xe nào ⇒ từ chối, mỗi đường một
+> mã lý do riêng. Bản ghi được nhận nằm trong chính `LocationObservation` với `sessionId = NULL` +
+> `vehicleId` — **không** có kho vị trí thứ hai. Danh tính lần nhập (`providerId`,
+> `externalEventId`) nằm ở bảng riêng `TransportTelematicsIngressEvent`, để bảng bằng chứng không
+> mang hình dạng của một hãng nào.
+>
+> **Danh tính nguồn đến từ cấu hình, không từ thân yêu cầu (sửa sau review độc lập 18/09/2026).**
+> `providerId` được ghi xuống là `VehicleTelematicsPort.describe().connectorId` — một mã **ổn
+> định** do cấu hình máy chủ cấp, tách hẳn khỏi `providerName` (tên hiển thị, đổi được, **không**
+> bao giờ là danh tính). Liệu đồ công khai **không còn** trường `providerId`; nó chỉ nhận một
+> `connectorId` **tuỳ chọn** như một _lời khẳng định_, và lệch thì từ chối
+> (`TELEMATICS_CONNECTOR_MISMATCH`) **trước mọi thao tác ghi**. Lý do rất cụ thể: nếu người gọi đặt
+> được nửa đầu của khoá chặn phát lại, họ tự cấp cho mình một danh tính mới và gửi lại cùng một
+> `externalEventId` bao nhiêu lần tuỳ ý — sổ bằng chứng phình lên mà không lớp nào kêu.
+>
+> Hai `CHECK` trong `20260918100000_transport_telematics_ingress` là thứ **duy nhất** cưỡng chế được
+> rằng một bản ghi của điện thoại không tự khai mình là phần cứng trên xe. Mọi lớp còn lại — zod, mã
+> quyền, dịch vụ — đều là mã nguồn, và mã nguồn thì sửa được trong một PR về việc khác.
+>
+> **Giới hạn thật, không giấu:** nền tảng hôm nay chưa có loại danh tính "máy gọi máy" (không khoá
+> API, không OAuth client credentials), nên đầu nối chạy dưới một phiên có quyền vận hành
+> (`transport.telematics.observation.ingest`, **không** cấp cho lái xe và **không** cấp cho kế
+> toán). Khi cắm một nhà cung cấp thật, câu hỏi danh tính máy-gọi-máy phải được trả lời ở **tầng nền
+> tảng**, một lần, cho mọi miền — không phải bằng một đường xác thực thứ hai trong miền vận tải.
 
 > `MediaStore` hôm nay phục vụ **ảnh khách gửi qua kênh chat**. Ảnh phiếu dầu có yêu cầu khác:
 > vòng đời bằng chứng, trạng thái quét, liên kết tới chứng từ nghiệp vụ, retention. Dùng lại được

@@ -230,6 +230,14 @@ export const TRANSPORT_ACTIONS = [
   'transport.commercial_acceptance.decide',
   /* --- `TX-11` DIEU XE (Lane M, Issue #277) — chi doc; duong ghi dung `transport.run.manage` --- */
   'transport.dispatch.suggest.read',
+
+  /* --- `TX-12` NGUON VI TRI THU HAI / TELEMATICS (Lane T, Issue #297) --- */
+  /**
+   * NHAP vi tri tu PHAN CUNG TREN XE. CO Y khong dung lai `transport.driver.self.tracking.report`:
+   * ma kia thuoc pham vi lai xe, va cap duong nhap nay qua no se cho chinh chiec dien thoai dang bi
+   * doi chieu viet ra ban ghi cua nguon dung de doi chieu no. Chep nguyen tu API.
+   */
+  'transport.telematics.observation.ingest',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -316,6 +324,12 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * go bo mot muc khoi chinh ho so minh dang doi soat.
    */
   'transport.proof.withdraw',
+  /**
+   * NHAP vi tri tu phan cung tren xe (`#297` T4) — Ke toan DOC duoc suc khoe vi tri, KHONG ghi
+   * duoc mot ban dinh vi nao. Vi tri xe la can cu cua chinh khoan tien ho sap duyet, va no la nguon
+   * DOI CHIEU CHEO cua chuoi tu dien thoai. Chep nguyen tu API.
+   */
+  'transport.telematics.observation.ingest',
   /**
    * Hang rao duoc cham LUC DOC, nen them mot hang rao hom nay doi phan quyet cua MOI chung cu cu.
    * Quyen do thuoc van hanh, khong thuoc nguoi dang doi soat chinh nhung lan giao do.
