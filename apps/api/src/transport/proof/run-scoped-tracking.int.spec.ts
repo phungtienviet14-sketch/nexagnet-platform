@@ -82,6 +82,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     let vehicleId = '';
     let runId = '';
     let legId = '';
+    /**
+     * CHANG THU HAI, va no ton tai vi mot ly do CU THE.
+     *
+     * `evaluateCheckpoint()` chan `CHECKPOINT_ALREADY_RECORDED` TRUOC khi cong so huu ban dinh vi
+     * duoc hoi toi. Nen neu bai doi chung am chay tren cung chang voi chuoi thanh cong, no se
+     * nhan mot lan tu choi HOAN TOAN DUNG nhung SAI CHO — va cai no dinh do (lai xe A khong muon
+     * duoc vi tri cua lai xe B) khong he duoc do. Mot chang rieng giu cho cong so huu la cong DUY
+     * NHAT con lai tren duong di.
+     */
+    let otherLegId = '';
     let tripId = '';
 
     /**
@@ -102,7 +112,25 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         OR: [{ runId: { in: runIds } }, { trip: { code: TRIP_CODE } }],
       };
 
-      await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+      /*
+       * MOC la APPEND-ONLY o tang DB (`transport_run_checkpoint_append_only`, `#243` F1): mot
+       * dong thoi gian ma xoa duoc thi khong con chung minh dieu gi. Khoa ngoai cua no lai la
+       * `Restrict`, nen khong co duong `CASCADE` nao — va lan don dep BUOC PHAI tat trigger mot
+       * cach tuong minh. Thao tac nay chi xay ra o day, trong mot bai IT, va duoc bat lai ngay o
+       * `finally`. Cung khuon voi `transport-site-intake.int.spec.ts`.
+       */
+      if (runIds.length > 0) {
+        await prisma.$executeRawUnsafe(
+          'ALTER TABLE "TransportRunCheckpoint" DISABLE TRIGGER "transport_run_checkpoint_append_only"',
+        );
+        try {
+          await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+        } finally {
+          await prisma.$executeRawUnsafe(
+            'ALTER TABLE "TransportRunCheckpoint" ENABLE TRIGGER "transport_run_checkpoint_append_only"',
+          );
+        }
+      }
       await prisma.transportProofRiskFlag.deleteMany({
         where: { observation: { session: ownSession } },
       });
@@ -161,6 +189,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         destinationLabel: 'Hai Phong',
         businessDate: BUSINESS_DATE,
       });
+      const otherLeg = await movement.createLeg({
+        runId: run.id,
+        sequence: 2,
+        kind: 'LOADED',
+        orderId: null,
+        originLabel: 'Hai Phong',
+        destinationLabel: 'Nam Dinh',
+        businessDate: BUSINESS_DATE,
+      });
       // Ban phan cong la SU THAT duy nhat noi mot con nguoi voi mot vong chay. Thieu buoc nay thi
       // moi bai duoi day deu do voi `DRIVER_NOT_ASSIGNED_TO_RUN` — va do se la loi cua fixture.
       await movement.assignRun(run.id, {
@@ -181,6 +218,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       vehicleId = vehicle.id;
       runId = run.id;
       legId = leg.id;
+      otherLegId = otherLeg.id;
       tripId = trip.id;
     });
 
@@ -425,12 +463,24 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         mockLocationReported: false,
       });
 
+      // Hai moc dan duong TREN CHANG THU HAI, de `DELIVERY_ARRIVAL` o do con di toi duoc cong so
+      // huu thay vi dung lai o `CHECKPOINT_ALREADY_RECORDED`.
+      for (const type of ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE'] as const) {
+        await checkpoints.recordAsDriver({
+          type,
+          runId,
+          legId: otherLegId,
+          authUserId: AUTH_A,
+          clientEventId: `${PREFIX}-OTHER-${type}`,
+        });
+      }
+
       // Lai xe A muon vi tri cua lai xe B lam bang chung "toi da den noi". Khong duong nao.
       await expect(
         checkpoints.recordAsDriver({
           type: 'DELIVERY_ARRIVAL',
           runId,
-          legId,
+          legId: otherLegId,
           authUserId: AUTH_A,
           observationId: foreignObservation.id,
           clientEventId: `${PREFIX}-ARRIVAL-FOREIGN`,
