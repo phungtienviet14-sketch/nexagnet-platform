@@ -11,6 +11,7 @@ import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterpart
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 import { settlementDocumentFingerprint } from '../settlement/settlement-documents.js';
 import { PrismaSettlementRepository } from '../settlement/prisma-settlement.repository.js';
+import { SettlementOrderCompletionGateAdapter } from '../settlement/settlement-order-completion.port.js';
 import {
   customerPaymentAllocationFingerprint,
   customerPaymentFingerprint,
@@ -19,6 +20,7 @@ import {
 } from './customer-ar-documents.js';
 import { CustomerArReadService } from './customer-ar-read.service.js';
 import { cleanupCustomerArFixtures } from './customer-ar-test-cleanup.js';
+import { CustomerArService } from './customer-ar.service.js';
 import { PrismaCustomerArRepository } from './prisma-customer-ar.repository.js';
 describe.runIf(process.env.RUN_PRISMA_IT === '1')(
   'Customer reconciliation, receivable va payment tren Postgres — Issue #292',
@@ -744,6 +746,64 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
           reconciliation: null,
           outstandingAmount: 2_000_000,
         }),
+      );
+    });
+
+    it('CustomerArService ghi payment/allocation that qua Prisma — actor cua phien khong duoc ro ri thanh cot (#327)', async () => {
+      // Duong SAN PHAM that la controller -> CustomerArService -> PrismaCustomerArRepository.
+      // MOI bai o tren goi THANG repository voi mot command da dung kieu, nen khong bai nao di qua
+      // service — va chinh service moi la noi truong "actor" cua phien bi spread vao command.
+      // Do luc chay 19/09/2026 tren Railway preview: POST /transport/customer-ar/payments -> 500
+      // PrismaClientValidationError: Unknown argument "actor" — ca partial lan prepayment.
+      const service = new CustomerArService(
+        repository,
+        settlement,
+        new SettlementOrderCompletionGateAdapter(acceptance),
+      );
+      const order = await completedOrder(8_000_000);
+      const receivable = await confirm(order, 8_000_000, `${PREFIX}-svc-r1`);
+
+      const received = await service.recordPayment({
+        customerId: state.customerId,
+        amount: 3_000_000,
+        receivedAt: new Date('2026-09-09T04:00:00.000Z'),
+        businessDate: BUSINESS_DATE,
+        externalRef: `${PREFIX}-svc-bank`,
+        sourceId: `${PREFIX}-svc-pay`,
+        actor: ACTOR,
+      });
+      expect(received.replayed).toBe(false);
+      expect(
+        await prisma.transportCustomerPayment.findUnique({ where: { id: received.payment.id } }),
+      ).toMatchObject({ recordedBy: ACTOR, amount: BigInt(3_000_000) });
+
+      const allocated = await service.allocatePayment({
+        paymentId: received.payment.id,
+        documentId: receivable.reconciliation.settlementDocumentId,
+        amount: 3_000_000,
+        businessDate: BUSINESS_DATE,
+        sourceId: `${PREFIX}-svc-alloc`,
+        actor: ACTOR,
+      });
+      expect(allocated.replayed).toBe(false);
+      expect(await repository.paymentBalance(received.payment.id)).toMatchObject({
+        allocatedAmount: 3_000_000,
+        unallocatedAmount: 0,
+      });
+
+      // Doi chung am. Neu mot ngay nao do "actor" thanh cot that, hai khang dinh tren van xanh MA
+      // KHONG con chung minh gi. Dong nay khoa su that rang "actor" KHONG phai cot cua bang.
+      const forged = {
+        data: {
+          customerId: state.customerId, amount: BigInt(1), currencyCode: 'VND',
+          receivedAt: new Date('2026-09-09T05:00:00.000Z'), businessDate: BUSINESS_DATE,
+          externalRef: `${PREFIX}-svc-forged`, note: null, recordedBy: ACTOR,
+          sourceContext: 'IT_FORGED_ACTOR', sourceId: `${PREFIX}-svc-forged`,
+          sourceFingerprint: `${PREFIX}-svc-forged`, actor: ACTOR,
+        },
+      } as unknown as Parameters<typeof prisma.transportCustomerPayment.create>[0];
+      await expect(prisma.transportCustomerPayment.create(forged)).rejects.toThrow(
+        /Unknown argument .actor./,
       );
     });
   },

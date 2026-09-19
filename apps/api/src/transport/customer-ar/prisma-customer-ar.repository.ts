@@ -303,7 +303,12 @@ export class PrismaCustomerArRepository extends CustomerArRepository {
       await this.assertPeriodWritable(tx, command.businessDate);
       const customer = await model(tx, 'transportCustomer').findUnique({ where: { id: command.customerId } });
       if (!customer) throw TransportDomainError.notFound('CUSTOMER_AR_CUSTOMER_NOT_FOUND', 'Khong thay khach hang cua payment');
-      const row = await model(tx, 'transportCustomerPayment').create({ data: { ...command, amount: toStoredAmount(command.amount) } });
+      const row = await model(tx, 'transportCustomerPayment').create({ data: {
+        customerId: command.customerId, amount: toStoredAmount(command.amount), currencyCode: command.currencyCode,
+        receivedAt: command.receivedAt, businessDate: command.businessDate, externalRef: command.externalRef,
+        note: command.note, recordedBy: command.recordedBy, sourceContext: command.sourceContext,
+        sourceId: command.sourceId, sourceFingerprint: command.sourceFingerprint,
+      }});
       return { payment: toPayment(row), replayed: false };
     });
   }
@@ -333,7 +338,12 @@ export class PrismaCustomerArRepository extends CustomerArRepository {
       const allocated = legacyRows.reduce((sum: number, row: any) => sum + amount(row.amount), 0) + allocationBalance(chainRows.map((row: any) => ({ kind: row.kind, amount: amount(row.amount) })));
       const gross = reconciliationGross(documentRows.map((row: any) => amount(row.signedAmount)));
       if (allocated + command.amount > gross) throw TransportDomainError.denied('CUSTOMER_PAYMENT_ALLOCATION_EXCEEDS_OUTSTANDING', 'Phan bo vuot cong no con lai');
-      const row = await model(tx, 'transportCustomerPaymentAllocation').create({ data: { ...command, kind: 'APPLY', amount: toStoredAmount(command.amount), reversesId: null } });
+      const row = await model(tx, 'transportCustomerPaymentAllocation').create({ data: {
+        paymentId: command.paymentId, documentId: command.documentId, kind: 'APPLY',
+        amount: toStoredAmount(command.amount), businessDate: command.businessDate, reversesId: null,
+        sourceContext: command.sourceContext, sourceId: command.sourceId,
+        sourceFingerprint: command.sourceFingerprint, note: command.note, recordedBy: command.recordedBy,
+      }});
       return { allocation: toAllocation(row), replayed: false };
     });
   }
