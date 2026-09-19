@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "slug": "e2e-transport-toll",
+  "identity": {
+    "displayName": "Doanh nghiệp vận tải đã bật ETC",
+    "shortName": "VT-ETC"
+  },
+  "branding": {
+    "productName": "Vận hành vận tải",
+    "installName": "VT-ETC — Vận hành vận tải",
+    "pageTitle": "Vận hành vận tải",
+    "pageDescription": "Gói khách kiểm thử: nghiệp vụ phí đường bộ (ETC) đã bật và KHÔNG bị chặn.",
+    "themeColor": "#1f4e5f",
+    "backgroundColor": "#f7f5f1",
+    "monogram": "VT",
+    "composerPlaceholder": "Không dùng ở bề mặt vận tải"
+  },
+  "experience": "transport-operations",
+  "capabilities": [
+    "transport-core",
+    "transport-costing",
+    "transport-fuel",
+    "transport-settlement",
+    "transport-asset-compliance",
+    "transport-workforce",
+    "transport-proof",
+    "transport-checkpoint",
+    "transport-site-intake",
+    "transport-toll",
+    "transport-acceptance"
+  ],
+  "policies": {
+    "transportCore": {
+      "timeZone": "Asia/Ho_Chi_Minh"
+    },
+    "readiness": {
+      "blockedCapabilities": []
+    }
+  },
+  "integrations": {},
+  "bootstrap": {},
+  "smoke": null
+}

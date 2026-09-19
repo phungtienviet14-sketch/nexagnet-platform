@@ -74,7 +74,7 @@ export function DispatchView(): React.ReactElement {
     {
       key: 'empty',
       header: 'Km rỗng thêm',
-      render: (row: DispatchCandidateRow) => row.emptyKm,
+      render: (row: DispatchCandidateRow) => <span>Chặng chạy rỗng · {row.emptyKm}</span>,
       isNumeric: true,
     },
     { key: 'eta', header: 'Đến điểm lấy', render: (row: DispatchCandidateRow) => row.pickupEta },
@@ -150,7 +150,7 @@ export function DispatchView(): React.ReactElement {
           <h2>Khách này chạy chế độ mỗi đơn một vòng chạy</h2>
           <p className="tx-note">
             Mỗi đơn đi một vòng chạy riêng, nên không có bảng đề nghị ghép đơn vào xe đang chạy. Đơn
-            vẫn được giao xe theo cách hiện tại ở màn hình Chuyến.
+            được tạo, xem trước kế hoạch và giao xe ngay tại màn hình Đơn hàng &amp; vòng chạy.
           </p>
           <p className="tx-note">
             Muốn bật bảng đề nghị điều xe, đổi cấu hình <code>transportPlanning.runGrouping</code>{' '}

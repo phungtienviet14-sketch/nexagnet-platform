@@ -1,5 +1,6 @@
 'use client';
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
@@ -16,12 +17,14 @@ import {
   useVehicles,
 } from '../hooks/useTransportWorkspace';
 import type {
+  RunPlanProposal,
   RunLeg,
   TransportOrder,
   TransportOrderStatus,
   VehicleRun,
   VehicleRunStatus,
 } from '../transport-types';
+import { newCorrelationKey, transportApi } from '../transport-api';
 
 /**
  * DON HANG & VONG CHAY — man hinh LAY DON LAM TRUNG TAM (#274 / #276 L8).
@@ -117,6 +120,7 @@ const ratio = (value: number | null): string =>
   value === null ? 'chưa đủ dữ liệu' : `${(value * 100).toFixed(1)}%`;
 
 export function MovementView() {
+  const queryClient = useQueryClient();
   const navigation = useNavigationInput();
   const orders = toSectionQuery(useTransportOrders(navigation));
   const runs = toSectionQuery(useVehicleRuns(navigation));
@@ -129,6 +133,41 @@ export function MovementView() {
   const [openRunId, setOpenRunId] = useState<string | null>(null);
   const runDetail = toSectionQuery(useVehicleRunDetail(navigation, openRunId));
   const movement = toSectionQuery(useRunMovement(navigation, openRunId));
+  const [preview, setPreview] = useState<RunPlanProposal | null>(null);
+  const [planKey, setPlanKey] = useState<string | null>(null);
+  const [planSuccess, setPlanSuccess] = useState<string | null>(null);
+
+  const createOrder = useMutation({
+    mutationFn: (input: Parameters<typeof transportApi.movement.createOrder>[0]) =>
+      transportApi.movement.createOrder(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['transport', 'orders'] });
+    },
+  });
+  const previewPlan = useMutation({
+    mutationFn: (input: { orderId: string; vehicleId: string }) =>
+      transportApi.planning.preview(input.orderId, { vehicleId: input.vehicleId }),
+    onSuccess: (proposal) => {
+      setPreview(proposal);
+      setPlanKey(newCorrelationKey());
+    },
+  });
+  const commitPlan = useMutation({
+    mutationFn: (input: { orderId: string; vehicleId: string; idempotencyKey: string }) =>
+      transportApi.planning.commit(input.orderId, {
+        vehicleId: input.vehicleId,
+        idempotencyKey: input.idempotencyKey,
+      }),
+    onSuccess: (_, input) => {
+      const order = orders.data?.find((entry) => entry.id === input.orderId);
+      const vehicle = vehicles.data?.find((entry) => entry.id === input.vehicleId);
+      setPlanSuccess(
+        `Đã giao đơn ${order?.code ?? input.orderId} cho xe ${vehicle?.registrationPlate ?? 'đã chọn'}`,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['transport', 'orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['transport', 'runs'] });
+    },
+  });
 
   if (orders.isBlocked) {
     return (
@@ -164,6 +203,43 @@ export function MovementView() {
         title="Đơn hàng & vòng chạy"
         summary="Nghiệp vụ đi từ ĐƠN. Vòng chạy và chặng do hệ thống lập và tự đóng — không ai phải bấm tạo hay đóng vòng chạy."
       />
+
+      <form
+        className="tx-panel tx-filters"
+        aria-label="Tạo đơn hàng"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          createOrder.mutate({
+            code: String(data.get('code') ?? ''),
+            originLabel: String(data.get('originLabel') ?? ''),
+            destinationLabel: String(data.get('destinationLabel') ?? ''),
+            businessDate: String(data.get('businessDate') ?? ''),
+          });
+        }}
+      >
+        <h2>Tạo đơn mới</h2>
+        <label className="tx-field">
+          <span>Mã đơn</span>
+          <input name="code" required />
+        </label>
+        <label className="tx-field">
+          <span>Điểm lấy hàng</span>
+          <input name="originLabel" required />
+        </label>
+        <label className="tx-field">
+          <span>Điểm giao hàng</span>
+          <input name="destinationLabel" required />
+        </label>
+        <label className="tx-field">
+          <span>Ngày vận hành</span>
+          <input name="businessDate" type="date" required />
+        </label>
+        <button className="tx-btn" type="submit" disabled={createOrder.isPending}>
+          Tạo đơn
+        </button>
+      </form>
+      {createOrder.isError ? <ErrorState message={(createOrder.error as Error).message} /> : null}
 
       <DataTable<TransportOrder>
         caption="Nghĩa vụ thương mại"
@@ -205,6 +281,81 @@ export function MovementView() {
 
       {openOrderId !== null && orderLegs.data !== undefined && (
         <>
+          {(() => {
+            const selected = orders.data?.find((entry) => entry.id === openOrderId);
+            if (selected === undefined || activePlan !== null) return null;
+            return (
+              <form
+                className="tx-panel tx-filters"
+                aria-label={`Lập kế hoạch và giao xe cho đơn ${selected.code}`}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const data = new FormData(event.currentTarget);
+                  setPlanSuccess(null);
+                  previewPlan.mutate({
+                    orderId: selected.id,
+                    vehicleId: String(data.get('vehicleId') ?? ''),
+                  });
+                }}
+              >
+                <h2>Lập kế hoạch từ đơn</h2>
+                <label className="tx-field">
+                  <span>Xe</span>
+                  <select name="vehicleId" required defaultValue="">
+                    <option value="">— Chọn xe —</option>
+                    {(vehicles.data ?? []).map((vehicle) => (
+                      <option key={vehicle.id} value={vehicle.id}>
+                        {vehicle.registrationPlate}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="tx-btn" type="submit" disabled={previewPlan.isPending}>
+                  Xem kế hoạch
+                </button>
+              </form>
+            );
+          })()}
+          {previewPlan.isError ? (
+            <ErrorState message={(previewPlan.error as Error).message} />
+          ) : null}
+          {preview !== null && planKey !== null && openOrderId === preview.orderId ? (
+            <section
+              className="tx-panel"
+              role="region"
+              aria-label={`Kế hoạch vận chuyển cho đơn ${orderCodeOf(openOrderId)}`}
+            >
+              <h2>Kế hoạch vận chuyển</h2>
+              <ul className="tx-notes">
+                {preview.legs.map((leg) => (
+                  <li key={`${leg.sequence}-${leg.kind}`}>
+                    <strong>{leg.kind === 'EMPTY' ? 'Chặng chạy rỗng' : 'Chặng có hàng'}</strong> ·{' '}
+                    {leg.originLabel} → {leg.destinationLabel} · {km(leg.plannedDistanceKm)}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="tx-btn"
+                disabled={commitPlan.isPending}
+                onClick={() =>
+                  commitPlan.mutate({
+                    orderId: preview.orderId,
+                    vehicleId: preview.vehicleId,
+                    idempotencyKey: planKey,
+                  })
+                }
+              >
+                Xác nhận kế hoạch và giao xe
+              </button>
+            </section>
+          ) : null}
+          {commitPlan.isError ? <ErrorState message={(commitPlan.error as Error).message} /> : null}
+          {planSuccess === null ? null : (
+            <p className="tx-note" role="status">
+              {planSuccess}
+            </p>
+          )}
           {activePlan !== null && (
             <MetricCard
               label="Vòng chạy đang phục vụ đơn"

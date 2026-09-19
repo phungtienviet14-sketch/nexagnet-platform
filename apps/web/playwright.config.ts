@@ -26,8 +26,13 @@ export default defineConfig({
    * khai mot experience. Bo bai do nam o `e2e/transport/` va chay bang
    * `playwright.transport.config.ts`, TUAN TU sau bo nay (xem script `test:e2e`): chay song song
    * hai `next dev` trong cung thu muc se dung vao nhau o `.next`, dung nhu ghi chu tren.
+   *
+   * `e2e/transport-toll/` la be mat thu BA: cung experience van tai, nhung tren mot goi khach
+   * BAT ETC (`playwright.transport-toll.config.ts`). No phai duoc ke RIENG o day — glob
+   * `transport/**` KHONG khop `transport-toll/...`, nen thieu dong nay thi bo ETC se chay nham
+   * duoi may chu b2b va do vi mot ly do khong dinh gi den ETC.
    */
-  testIgnore: 'transport/**',
+  testIgnore: ['transport/**', 'transport-toll/**'],
   fullyParallel: false,
   retries: 0,
   reporter: 'line',

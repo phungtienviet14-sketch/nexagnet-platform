@@ -5,9 +5,23 @@ import { MANAGER_HAS_NO_TRANSPORT_SCOPE } from '../../experiences/transport-oper
 /**
  * `#314` — BE MAT ETC tren TRINH DUYET THAT, API gia CO TRANG THAI.
  *
- * May chu Next la that (goi `transport-preview`), API ETC la mot bo mock giu trang thai: mot lan
- * quyet / noi xe / khai tai khoan doi du lieu that su, nen lan doc sau thay ket qua moi. Moi bai
- * con doc CHINH THAN YEU CAU di tren duong mang — mot nut bam duoc chua chung minh no gui dung dieu.
+ * May chu Next la that, va no boot tren goi khach `e2e/fixtures/tenant-transport-toll` — mot goi
+ * KHAI RO rang ETC duoc bat va `readiness.blockedCapabilities` RONG.
+ *
+ * Truoc day bo nay chay tren `tenants/transport-preview`. Lane W dua `transport-toll` vao danh
+ * sach chan cua goi do vi dot UAT dau tien cua chu so huu CO Y khong co ETC — mot quyet dinh
+ * nghiep vu, khong phai loi. Tu luc do moi bai o day chet o dung mot cho: muc dieu huong bi an,
+ * nen `openToll()` khong tim thay tieu de. Bat lai ETC trong ban xem truoc, hay bo/lam yeu cac
+ * bai nay, deu la doi mot trong hai thu dang duoc bao ve. Tach ra mot goi BAT ETC giu duoc ca
+ * hai: pham vi UAT cua chu khong doi, va tinh nang van co bang chung day du.
+ *
+ * `playwright.transport-toll.config.ts` boot may chu nay. Hai dau duoc khoa lai o
+ * `experiences/transport-operations/__tests__/first-uat-etc-readiness.contract.spec.ts`: goi that
+ * PHAI con chan ETC, goi fixture PHAI bat ETC — ben nao troi thi vitest do trong vai giay.
+ *
+ * API ETC la mot bo mock giu trang thai: mot lan quyet / noi xe / khai tai khoan doi du lieu that
+ * su, nen lan doc sau thay ket qua moi. Moi bai con doc CHINH THAN YEU CAU di tren duong mang —
+ * mot nut bam duoc chua chung minh no gui dung dieu.
  *
  * Bo mock KHONG dung dau gach cheo nguoc nao: cong cu ghi tep cua lane nay tung giai ma mot chuoi
  * thoat thanh ky tu that. Cac duong dan duoc so bang chuoi va `new RegExp('...')`.

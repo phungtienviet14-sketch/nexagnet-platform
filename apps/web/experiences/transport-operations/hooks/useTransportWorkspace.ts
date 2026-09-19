@@ -32,7 +32,14 @@ export function useNavigationInput(): NavigationInput {
   const tenant = useTenantRuntime();
   const { user } = useAuth();
   const role = user?.role ?? null;
-  return useMemo(() => ({ capabilities: tenant.capabilities, role }), [tenant.capabilities, role]);
+  return useMemo(
+    () => ({
+      capabilities: tenant.capabilities,
+      role,
+      blockedCapabilityKeys: tenant.readiness.blockedCapabilities.map((entry) => entry.key),
+    }),
+    [tenant.capabilities, tenant.readiness.blockedCapabilities, role],
+  );
 }
 
 export const TRANSPORT_QUERY_KEYS = {

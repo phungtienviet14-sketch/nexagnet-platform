@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/SectionState
 import { newCorrelationKey, transportApi } from '../transport-api';
 import type { DriverFieldAction } from '../transport-types';
 import { toFieldScreen, type FieldLegCard } from '../workspace/driver-field';
+import { toOperationalDocumentInput } from '../workspace/file-evidence';
 
 /**
  * MAN HINH HIEN TRUONG cua lai xe — `#279` O9.
@@ -38,6 +39,7 @@ export function DriverFieldWork() {
   const queryClient = useQueryClient();
   const [failure, setFailure] = useState<string | null>(null);
   const eventKeys = useRef(new Map<string, string>());
+  const uploadedFileIds = useRef(new Map<string, string>());
 
   const work = useQuery({
     queryKey: ['transport', 'me', 'field-work'],
@@ -56,6 +58,7 @@ export function DriverFieldWork() {
     mutationFn: async (input: {
       readonly card: FieldLegCard;
       readonly action: DriverFieldAction;
+      readonly file?: File;
     }) => {
       const { card, action } = input;
       const clientEventId = keyFor(`${card.legId}:${action.label}`);
@@ -78,19 +81,21 @@ export function DriverFieldWork() {
         });
       }
       if (action.kind === 'DOCUMENT' && action.documentType !== undefined) {
-        /*
-         * `EXTERNAL_PHYSICAL` la duong DUY NHAT di duoc hom nay: `#287` Nen tang Tep chua vao
-         * `main`, nen cong tep tra `UNAVAILABLE` cho moi ma. Khi `#287` duoc chap nhan, mot o chon
-         * tep xuat hien o day va `basis` doi sang `DIGITAL_FILE`.
-         */
-        return transportApi.me.recordDocument({
-          type: action.documentType,
-          runId: card.runId,
-          legId: card.legId,
-          basis: 'EXTERNAL_PHYSICAL',
-          externalNote: `${action.label} — bản giấy lái xe đang giữ`,
-          clientEventId,
-        });
+        if (input.file === undefined) throw new Error('Chọn ảnh hoặc PDF trước khi ghi chứng từ.');
+        const fileSlot = `${card.legId}:${action.label}:${input.file.name}:${input.file.size}:${input.file.lastModified}`;
+        const heldFileId = uploadedFileIds.current.get(fileSlot);
+        const fileId =
+          heldFileId ?? (await transportApi.files.uploadOperationalDocument(input.file)).id;
+        uploadedFileIds.current.set(fileSlot, fileId);
+        return transportApi.me.recordDocument(
+          toOperationalDocumentInput({
+            fileId,
+            type: action.documentType,
+            runId: card.runId,
+            legId: card.legId,
+            clientEventId: keyFor(fileSlot),
+          }),
+        );
       }
       if (action.kind === 'RECEIPT_HANDOVER' && card.orderId !== null) {
         return transportApi.me.recordReceiptHandover({
@@ -134,7 +139,9 @@ export function DriverFieldWork() {
         <FieldLeg
           card={model.current}
           pending={act.isPending}
-          onAct={(action) => act.mutate({ card: model.current as FieldLegCard, action })}
+          onAct={(action, file) =>
+            act.mutate({ card: model.current as FieldLegCard, action, file })
+          }
         />
       )}
 
@@ -167,8 +174,9 @@ function FieldLeg({
 }: {
   readonly card: FieldLegCard;
   readonly pending: boolean;
-  readonly onAct: (action: DriverFieldAction) => void;
+  readonly onAct: (action: DriverFieldAction, file?: File) => void;
 }) {
+  const [documentFiles, setDocumentFiles] = useState<ReadonlyMap<string, File>>(new Map());
   return (
     <section
       className="tx-driver__card"
@@ -210,19 +218,37 @@ function FieldLeg({
       )}
 
       <div className="tx-driver__actions">
-        {card.actions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            className="tx-btn tx-btn--go tx-btn--wide"
-            disabled={pending}
-            data-testid="field-action"
-            onClick={() => onAct(action)}
-          >
-            {action.label}
-            {action.requiresLocation ? ' (cần vị trí)' : ''}
-          </button>
-        ))}
+        {card.actions.map((action) => {
+          const file = documentFiles.get(action.label);
+          return (
+            <div key={action.label}>
+              {action.kind === 'DOCUMENT' ? (
+                <label className="tx-field">
+                  <span>Tệp cho {action.label}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    onChange={(event) => {
+                      const selected = event.target.files?.[0];
+                      if (selected === undefined) return;
+                      setDocumentFiles((held) => new Map(held).set(action.label, selected));
+                    }}
+                  />
+                </label>
+              ) : null}
+              <button
+                type="button"
+                className="tx-btn tx-btn--go tx-btn--wide"
+                disabled={pending || (action.kind === 'DOCUMENT' && file === undefined)}
+                data-testid="field-action"
+                onClick={() => onAct(action, file)}
+              >
+                {action.label}
+                {action.requiresLocation ? ' (cần vị trí)' : ''}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
