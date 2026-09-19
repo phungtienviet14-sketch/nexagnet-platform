@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/SectionState
 import { newCorrelationKey, transportApi } from '../transport-api';
 import type { DriverFieldAction } from '../transport-types';
 import { toFieldScreen, type FieldLegCard } from '../workspace/driver-field';
+import { ensureLocationProof, type LocationProofSlot } from './driver-location';
 
 /**
  * MAN HINH HIEN TRUONG cua lai xe — `#279` O9.
@@ -31,13 +32,30 @@ import { toFieldScreen, type FieldLegCard } from '../workspace/driver-field';
  * goi lai se bien mot lan mat song thanh hai moc — va mot moc thua tren dong thoi gian la mot con
  * so sai trong ho so duyet phu cap.
  *
- * `eventKeys` giu khoa theo TUNG NUT (`legId` + nhan), nen hai nut khac nhau khong dung chung mot
- * khoa, va mot nut bam lai ba lan van chi la mot su kien.
+ * `eventKeys` giu khoa theo TUNG NUT, nen hai nut khac nhau khong dung chung mot khoa, va mot nut
+ * bam lai ba lan van chi la mot su kien.
+ *
+ * KHOA CUA MOT NUT la `legId` + `kind` + MA NGHIEP VU (`checkpointType`/`documentType`), khong
+ * phai `legId` + NHAN. Nhan la chuoi hien thi: hai viec khac han nhau tren cung mot chang co the
+ * mang cung mot nhan sau mot lan doi chu o may chu, va luc do hai nut se dung CHUNG mot khoa —
+ * viec thu hai se bi phat lai thanh ket qua cua viec thu nhat, va khong ai thay gi bat thuong.
+ *
+ * ============================================================================================
+ * NUT "CAN VI TRI" LA MOT CHUOI BON BUOC, KHONG PHAI MOT LAN GOI
+ * ============================================================================================
+ *
+ * Xem `driver-location.ts`. Ba buoc dau (doc GPS -> mo/dung lai phien theo `runId` -> gui ban dinh
+ * vi) chay TRUOC buoc ghi moc, va khong buoc nao trong ba buoc do duoc lam lai o lan bam thu hai.
+ * Neu trinh duyet khong cho vi tri, chuoi dung ngay tu buoc 1 va KHONG mot yeu cau ghi moc nao
+ * duoc gui — mot moc "toi da den noi" khong co gi chung minh la dung thu ma chinh sach nay sinh
+ * ra de chan.
  */
 export function DriverFieldWork() {
   const queryClient = useQueryClient();
   const [failure, setFailure] = useState<string | null>(null);
   const eventKeys = useRef(new Map<string, string>());
+  /** Chung cu vi tri DA LAM cho tung nut — giu qua moi lan render va moi lan bam lai. */
+  const locationProofs = useRef(new Map<string, LocationProofSlot>());
 
   const work = useQuery({
     queryKey: ['transport', 'me', 'field-work'],
@@ -52,19 +70,45 @@ export function DriverFieldWork() {
     return created;
   };
 
+  /**
+   * DANH TINH CUA MOT NUT — ma nghiep vu, khong phai nhan hien thi.
+   *
+   * Xem khoi chu thich dau tep: hai nut mang cung mot nhan phai van la hai khoa.
+   */
+  const slotOf = (card: FieldLegCard, action: DriverFieldAction): string =>
+    `${card.legId}:${action.kind}:${action.checkpointType ?? action.documentType ?? action.label}`;
+
+  const proofSlotFor = (slot: string): LocationProofSlot => {
+    const existing = locationProofs.current.get(slot);
+    if (existing !== undefined) return existing;
+    const created: LocationProofSlot = { observationEventId: newCorrelationKey() };
+    locationProofs.current.set(slot, created);
+    return created;
+  };
+
   const act = useMutation({
     mutationFn: async (input: {
       readonly card: FieldLegCard;
       readonly action: DriverFieldAction;
     }) => {
       const { card, action } = input;
-      const clientEventId = keyFor(`${card.legId}:${action.label}`);
+      const slot = slotOf(card, action);
+      const clientEventId = keyFor(slot);
 
       if (action.kind === 'CHECKPOINT' && action.checkpointType !== undefined) {
+        /*
+         * Ba buoc dau chay TRUOC, va mot loi o day dung chuoi lai — khong mot yeu cau ghi moc nao
+         * duoc gui di. Thong bao cua `LocationUnavailableError` noi ro la MOC CHUA DUOC GHI, de
+         * lai xe biet minh con phai bam lai chu khong bo di.
+         */
+        const observationId = action.requiresLocation
+          ? await ensureLocationProof(card.runId, proofSlotFor(slot))
+          : undefined;
         return transportApi.me.recordCheckpoint({
           type: action.checkpointType,
           runId: card.runId,
           legId: card.legId,
+          ...(observationId === undefined ? {} : { observationId }),
           clientEventId,
         });
       }

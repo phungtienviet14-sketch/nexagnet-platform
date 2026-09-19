@@ -105,3 +105,65 @@ describe('Rang buoc tang luu tru cua transport-proof — PROOF-030', () => {
     expect(MIGRATION).not.toMatch(/RENAME/);
   });
 });
+
+/**
+ * PROOF-031 — CHU THE THU HAI cua mot phien, o tang SQL tho (`#327`).
+ *
+ * Mot `describe` rieng va mot tep migration rieng, khong noi them vao khoi tren: hai lan di tru la
+ * hai su kien khac nhau trong lich su, va mot bai doc nham tep se xanh vi mot rang buoc o tep kia.
+ *
+ * Ly do ton tai cua ca muc nay giong het khoi dau tep: `prisma migrate dev` khong biet gi ve
+ * `CHECK`, nen mot lan sinh lai lieu do se de nghi XOA rang buoc duoi day. Bai nay lam viec do
+ * thanh mot lan do, chu khong phai mot lan merge im lang.
+ */
+const RUN_SUBJECT_MIGRATION = readFileSync(
+  fileURLToPath(
+    new URL(
+      '../../../prisma/migrations/20260919140000_transport_tracking_session_run_subject/migration.sql',
+      import.meta.url,
+    ),
+  ),
+  'utf8',
+);
+
+describe('Chu the cua phien bam vi tri — tang luu tru — PROOF-031', () => {
+  it('`tripId` da thanh TUY CHON — neu khong, phien theo vong chay phai dien mot chuyen gia', () => {
+    expect(RUN_SUBJECT_MIGRATION).toMatch(
+      /ALTER TABLE "TransportTrackingSession" ALTER COLUMN "tripId" DROP NOT NULL/,
+    );
+  });
+
+  it('`runId` co that, va no tro toi BANG VONG CHAY — khong phai mot chuoi tu do', () => {
+    expect(RUN_SUBJECT_MIGRATION).toContain(
+      'ALTER TABLE "TransportTrackingSession" ADD COLUMN "runId" TEXT',
+    );
+    expect(RUN_SUBJECT_MIGRATION).toMatch(
+      /"TransportTrackingSession_runId_fkey"[\s\S]{0,160}REFERENCES "TransportVehicleRun"\("id"\)/,
+    );
+  });
+
+  it('DUNG MOT CHU THE — `num_nonnulls` = 1, khong phai mot cap `if` o tang ung dung', () => {
+    expect(RUN_SUBJECT_MIGRATION).toContain('"TransportTrackingSession_one_subject"');
+    expect(RUN_SUBJECT_MIGRATION).toMatch(
+      /TransportTrackingSession_one_subject"[\s\S]{0,120}CHECK \(num_nonnulls\("tripId", "runId"\) = 1\)/,
+    );
+  });
+
+  it('doc "cac phien cua vong chay nay" co chi muc — khong quet ca bang bang chung', () => {
+    expect(RUN_SUBJECT_MIGRATION).toContain(
+      'CREATE INDEX "TransportTrackingSession_runId_idx" ON "TransportTrackingSession"("runId")',
+    );
+  });
+
+  /**
+   * RANG BUOC CU PHAI CON NGUYEN.
+   *
+   * Lan di tru nay cham vao dung bang ma `TransportTrackingSession_activeDriver_key` dang bao ve.
+   * Neu no lo sinh kem mot lenh xoa chi muc do — dung cai ma `prisma migrate diff` hay lam — thi
+   * mot lai xe se mo duoc hai phien cung luc, va khong mot bai kiem hanh vi nao o tang tren do.
+   */
+  it('khong lan di tru nao o day go mat rang buoc da co', () => {
+    expect(RUN_SUBJECT_MIGRATION).not.toMatch(/DROP\s+INDEX/i);
+    expect(RUN_SUBJECT_MIGRATION).not.toMatch(/DROP\s+CONSTRAINT/i);
+  });
+});

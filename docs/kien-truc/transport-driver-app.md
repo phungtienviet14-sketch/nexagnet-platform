@@ -124,6 +124,22 @@ Giao hàng                   -> vị trí hiện tại + ảnh chụp TRONG ứn
 Kết thúc ca                 -> POST .../sessions/:id/close
 ```
 
+**Chủ thể của một phiên là `tripId` HOẶC `runId`, đúng một** (`#327`). Luồng Order-first sinh
+`TransportVehicleRun` chứ không sinh `TransportTrip`, nên một lái xe trên một vòng chạy thật không
+mở nổi phiên theo `tripId` — và do đó không ghi nổi `DELIVERY_ARRIVAL`, một mốc mà chính sách
+(`#232` D-08) **bắt buộc** kèm vị trí. Liệu đồ của `POST /transport/me/tracking/sessions` vì thế là
+một union hai nhánh, mỗi nhánh `.strict()`: gửi cả hai khoá là `400`, gửi không khoá nào cũng là
+`400`. Ở tầng lưu trữ, `TransportTrackingSession_one_subject` (`num_nonnulls("tripId","runId") = 1`)
+là lưới sau cùng. Cả hai nhánh đều **không** nhận `driverId` hay `vehicleId`: danh tính đến từ
+phiên đăng nhập, và chiếc xe do máy chủ đọc — từ bản phân công chuyến, hoặc từ chính
+`TransportVehicleRun.vehicleId`.
+
+**Bản web hiện tại đã đi đúng chuỗi đó** (`FieldScreen.tsx` + `driver-location.ts`): một nút "cần
+vị trí" chạy `geolocation -> mở/dùng lại phiên theo runId -> gửi bản định vị -> lấy observationId
+-> ghi mốc`. Từ chối quyền vị trí **không** ghi mốc và hiện một câu lỗi nói rõ mốc chưa được ghi.
+Ứng dụng native khi làm phải giữ đúng thứ tự này — một `recordCheckpoint` không kèm `observationId`
+luôn bị máy chủ trả `CHECKPOINT_LOCATION_REQUIRED`.
+
 **Hàng đợi ngoại tuyến** trên `expo-sqlite`: mỗi sự kiện mang một `clientEventId` do máy khách
 sinh; gửi lại đúng nội dung trả về bản cũ, gửi lại **khác** nội dung là một va chạm ồn ào. Máy chủ
 đã cưỡng chế điều đó bằng chỉ mục, nên ứng dụng chỉ cần **không xoá hàng khỏi hàng đợi trước khi

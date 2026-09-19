@@ -41,6 +41,18 @@ export const TRACKING_SESSION_OPEN_REASONS = [
   'DRIVER_NOT_ASSIGNED_TO_TRIP',
   /** Chuyen da o trang thai ket thuc — khong con gi de bam. */
   'TRIP_NOT_ACTIVE',
+  /** Vong chay khong ton tai — `#327`, chu the thu hai cua mot phien. */
+  'RUN_NOT_FOUND',
+  /**
+   * Lai xe nay chua tung cam vong chay do.
+   *
+   * Cong SONG SINH cua `DRIVER_NOT_ASSIGNED_TO_TRIP`, khong phai mot ban sao: hai chu the khac
+   * nhau doc hai bang phan cong khac nhau, va gop chung thanh mot ma se lam mot lan tu choi
+   * khong con noi duoc no tu choi tren truc nao.
+   */
+  'DRIVER_NOT_ASSIGNED_TO_RUN',
+  /** Vong chay da `COMPLETED`/`CANCELLED` — khong con gi de bam. */
+  'RUN_NOT_ACTIVE',
   /**
    * Lai xe dang co MOT phien khac mo tren mot chuyen khac.
    *
@@ -301,6 +313,9 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     TRIP_NOT_FOUND: 'Không tìm thấy chuyến',
     DRIVER_NOT_ASSIGNED_TO_TRIP: 'Lái xe chưa từng được phân công vào chuyến này',
     TRIP_NOT_ACTIVE: 'Chuyến đã kết thúc — không còn gì để bám',
+    RUN_NOT_FOUND: 'Không tìm thấy vòng chạy',
+    DRIVER_NOT_ASSIGNED_TO_RUN: 'Lái xe chưa từng được phân công vào vòng chạy này',
+    RUN_NOT_ACTIVE: 'Vòng chạy đã kết thúc — không còn gì để bám',
     DRIVER_HAS_ANOTHER_OPEN_SESSION: 'Lái xe đang có một phiên khác mở trên chuyến khác',
     DEVICE_BOUND_TO_ANOTHER_DRIVER: 'Mã cài đặt ứng dụng này đã gắn với một lái xe khác',
     DEVICE_REVOKED: 'Mã cài đặt ứng dụng đã bị thu hồi',

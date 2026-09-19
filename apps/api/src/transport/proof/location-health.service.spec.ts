@@ -131,6 +131,7 @@ const openSession = async (
   repository.createSession({
     driverId,
     tripId: 'trip-1',
+    runId: null,
     vehicleId,
     deviceInstallationId: null,
     businessDate: BUSINESS_DATE,

@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FleetRepository } from '../fleet/fleet.repository.js';
+import { MovementRepository } from '../movement/movement.repository.js';
+import type { VehicleRunStatus } from '../movement/movement.types.js';
 import type { TripStatus } from '../trips/trip-lifecycle.js';
 import { TripRepository } from '../trips/trip.repository.js';
 
@@ -28,6 +30,23 @@ export interface ProofDriverFacts {
 }
 
 /**
+ * VONG CHAY, nhin tu `transport-proof` — `#327`.
+ *
+ * `vehicleId` nam NGAY TRONG kieu nay chu khong o mot ham `activeVehicleForRun()` rieng, va do la
+ * mot khac biet co ban voi duong chuyen: `TransportVehicleRun.vehicleId` la MOT COT BAT BUOC cua
+ * chinh vong chay (mot vong chay LA vong chay cua mot chiec xe cu the), trong khi xe cua mot
+ * chuyen song o bang phan cong va doi theo thoi gian. Tach ra thanh mot lan doc thu hai se mo mot
+ * khe giua hai lan doc — va mot phien co the duoc ghi voi chiec xe cua mot vong chay khac.
+ */
+export interface ProofRunFacts {
+  readonly id: string;
+  readonly code: string;
+  readonly status: VehicleRunStatus;
+  /** Do MAY CHU doc tu chinh vong chay. Duong "may khach tu khai xe" khong ton tai. */
+  readonly vehicleId: string;
+}
+
+/**
  * DANH TINH cua mot chiec xe, va khong hon.
  *
  * Khong tai trong, khong so odo, khong ho so dang kiem: den hom nay khong duong nao trong
@@ -53,6 +72,19 @@ export abstract class TransportProofCoreFacts {
   abstract wasDriverEverAssignedToTrip(tripId: string, driverId: string): Promise<boolean>;
   /** Xe DANG duoc phan cong cho chuyen. `null` khi chua phan cong xe nao. */
   abstract activeVehicleForTrip(tripId: string): Promise<string | null>;
+  abstract findRun(runId: string): Promise<ProofRunFacts | null>;
+  /**
+   * Lai xe nay CO TUNG cam vong chay do khong — ke ca ban phan cong da dong lai.
+   *
+   * "Tung", khong phai "dang", dung ly le da ghi cho `wasDriverEverAssignedToTrip`: mot nguoi bi
+   * thay ca van phai ghi duoc moc cua doan ho da chay. Doc "dang" se lam moi ban dinh vi cua
+   * nguoi lai dau tien thanh khong ghi duoc ngay khi nguoi thu hai nhan xe.
+   *
+   * Day la cung mot su that ma `TransportCheckpointCoreFacts.wasDriverEverAssignedToRun` doc —
+   * CO Y: neu hai mien doc hai bang khac nhau thi mot lai xe co the mo duoc phien ma khong ghi
+   * duoc moc, hoac nguoc lai, va khong cai nao tu lo ra.
+   */
+  abstract wasDriverEverAssignedToRun(runId: string, driverId: string): Promise<boolean>;
   /**
    * Chiec xe nay CO TON TAI trong doi xe cua khach khong — `#297` T4.
    *
@@ -70,6 +102,7 @@ export class TransportProofCoreFactsAdapter extends TransportProofCoreFacts {
   constructor(
     private readonly trips: TripRepository,
     private readonly fleet: FleetRepository,
+    private readonly movement: MovementRepository,
   ) {
     super();
   }
@@ -93,6 +126,18 @@ export class TransportProofCoreFactsAdapter extends TransportProofCoreFacts {
     const history = await this.trips.listAssignments(tripId);
     const active = history.find((assignment) => assignment.effectiveTo === null);
     return active?.vehicleId ?? null;
+  }
+
+  async findRun(runId: string): Promise<ProofRunFacts | null> {
+    const run = await this.movement.findRun(runId);
+    return run
+      ? { id: run.id, code: run.code, status: run.status, vehicleId: run.vehicleId }
+      : null;
+  }
+
+  async wasDriverEverAssignedToRun(runId: string, driverId: string): Promise<boolean> {
+    const history = await this.movement.listRunAssignments(runId);
+    return history.some((assignment) => assignment.driverId === driverId);
   }
 
   async findVehicle(vehicleId: string): Promise<ProofVehicleFacts | null> {

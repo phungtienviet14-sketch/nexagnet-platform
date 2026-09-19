@@ -110,7 +110,12 @@ export class LocationHealthService {
      * vi tri cho nhung chiec xe khong ai theo doi.
      */
     const expectation: TrackingExpectation | null = session
-      ? { tripId: session.tripId, sessionId: session.id, since: session.startedAt }
+      ? {
+          tripId: session.tripId,
+          runId: session.runId,
+          sessionId: session.id,
+          since: session.startedAt,
+        }
       : null;
 
     /*

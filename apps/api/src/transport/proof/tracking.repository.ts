@@ -5,6 +5,8 @@ import {
   DEVICE_INSTALLATION_ID,
   OBSERVATION_CLIENT_EVENT,
   TELEMATICS_INGRESS_EVENT,
+  TRACKING_SESSION_ONE_SUBJECT,
+  storageCheckViolation,
   storageUniqueViolation,
 } from './proof-storage-conflict.js';
 import type {
@@ -30,13 +32,24 @@ import type {
  *   1. moi lai xe co toi da MOT phien `ACTIVE`;
  *   2. `(sessionId, clientEventId)` la duy nhat — chan phat lai;
  *   3. `installationId` duy nhat toan he — mot ma cai dat thuoc ve dung mot lai xe;
- *   4. `(providerId, externalEventId)` duy nhat — chan phat lai o cua nhap telematics (`#297` T4).
+ *   4. `(providerId, externalEventId)` duy nhat — chan phat lai o cua nhap telematics (`#297` T4);
+ *   5. mot phien co DUNG MOT chu the — chuyen hoac vong chay, khong ca hai, khong khong cai nao
+ *      (`#327`).
  */
 
 export interface CreateTrackingSessionInput {
   readonly driverId: string;
-  readonly tripId: string;
-  /** Do may chu giai tu ban phan cong. Nguoi goi KHONG duoc truyen vao. */
+  /**
+   * CHU THE — dung MOT trong hai khac `null` (`#327`).
+   *
+   * Hinh dang o day co Y la "hai cot nullable" chu khong phai union `TrackingSubjectRef` cua tang
+   * mien: kho la noi PHAT HIEN mot hinh dang sai, khong phai noi lam no khong go ra duoc. Ban
+   * trong bo nho tu choi hai-hoac-khong y nhu `CHECK` cua Postgres, nen mot duong ghi moi mo ra
+   * ve sau se do o CA HAI che do luu tru thay vi chi o mot.
+   */
+  readonly tripId: string | null;
+  readonly runId: string | null;
+  /** Do may chu giai tu ban phan cong hoac tu vong chay. Nguoi goi KHONG duoc truyen vao. */
   readonly vehicleId: string | null;
   readonly deviceInstallationId: string | null;
   readonly businessDate: BusinessDate;
@@ -148,6 +161,8 @@ export abstract class TrackingRepository {
     endedReason: string,
   ): Promise<TrackingSession>;
   abstract listSessionsForTrip(tripId: string): Promise<readonly TrackingSession[]>;
+  /** Doi xung voi `listSessionsForTrip`, cho chu the VONG CHAY (`#327`). */
+  abstract listSessionsForRun(runId: string): Promise<readonly TrackingSession[]>;
   abstract listSessionsForDriver(driverId: string): Promise<readonly TrackingSession[]>;
 
   abstract findObservationByEventId(
@@ -250,6 +265,10 @@ export class InMemoryTrackingRepository extends TrackingRepository {
   private readonly telematicsIngress = new Map<string, TelematicsIngressRecord>();
 
   async createSession(input: CreateTrackingSessionInput): Promise<TrackingSession> {
+    // Bat bien 5, cuong che o day y nhu `CHECK` duoi Postgres: DUNG MOT chu the.
+    if ((input.tripId === null) === (input.runId === null)) {
+      throw storageCheckViolation(TRACKING_SESSION_ONE_SUBJECT);
+    }
     // Bat bien 1, cuong che o day y nhu chi muc mot phan duoi Postgres.
     if (await this.findActiveSessionForDriver(input.driverId)) {
       throw storageUniqueViolation(ACTIVE_TRACKING_SESSION);
@@ -258,6 +277,7 @@ export class InMemoryTrackingRepository extends TrackingRepository {
       id: randomUUID(),
       driverId: input.driverId,
       tripId: input.tripId,
+      runId: input.runId,
       vehicleId: input.vehicleId,
       deviceInstallationId: input.deviceInstallationId,
       status: 'ACTIVE',
@@ -305,6 +325,12 @@ export class InMemoryTrackingRepository extends TrackingRepository {
   async listSessionsForTrip(tripId: string): Promise<readonly TrackingSession[]> {
     return [...this.sessions.values()]
       .filter((session) => session.tripId === tripId)
+      .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+  }
+
+  async listSessionsForRun(runId: string): Promise<readonly TrackingSession[]> {
+    return [...this.sessions.values()]
+      .filter((session) => session.runId === runId)
       .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
   }
 

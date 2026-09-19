@@ -7,6 +7,7 @@ import type { IngestObservationCommand } from './tracking.types.js';
 import {
   TransportProofCoreFacts,
   type ProofDriverFacts,
+  type ProofRunFacts,
   type ProofVehicleFacts,
   type ProofTripFacts,
 } from './transport-proof-facts.port.js';
@@ -28,6 +29,8 @@ class FakeCoreFacts extends TransportProofCoreFacts {
   readonly trips = new Map<string, ProofTripFacts>();
   readonly assignments = new Map<string, Set<string>>();
   readonly vehicles = new Map<string, string | null>();
+  readonly runs = new Map<string, ProofRunFacts>();
+  readonly runAssignments = new Map<string, Set<string>>();
 
   async findDriverByAuthUserId(authUserId: string): Promise<ProofDriverFacts | null> {
     return this.drivers.get(authUserId) ?? null;
@@ -43,6 +46,14 @@ class FakeCoreFacts extends TransportProofCoreFacts {
 
   async activeVehicleForTrip(tripId: string): Promise<string | null> {
     return this.vehicles.get(tripId) ?? null;
+  }
+
+  async findRun(runId: string): Promise<ProofRunFacts | null> {
+    return this.runs.get(runId) ?? null;
+  }
+
+  async wasDriverEverAssignedToRun(runId: string, driverId: string): Promise<boolean> {
+    return this.runAssignments.get(runId)?.has(driverId) ?? false;
   }
 
   /**
@@ -352,5 +363,201 @@ describe('Bam vi tri — loi khong tim thay — PROOF-021', () => {
       kind: 'NOT_FOUND',
       reason: 'SESSION_NOT_FOUND',
     });
+  });
+});
+
+/**
+ * PROOF-022 — PHIEN BAM VI TRI THEO VONG CHAY (`#327` `ARCHITECTURE_DECISION_2026_09_19`).
+ *
+ * ==============================================================================================
+ * VI SAO MUC NAY TON TAI
+ * ==============================================================================================
+ *
+ * Luong Order-first cua Lane W sinh `TransportVehicleRun`, khong sinh `TransportTrip`. Truoc ban
+ * nay, duong tu bao vi tri cua lai xe chi mo duoc phien theo `tripId` — nen mot lai xe that, tren
+ * mot vong chay that, KHONG lam duoc ban dinh vi nao, va do do khong ghi noi `DELIVERY_ARRIVAL`
+ * (moc bat buoc kem vi tri theo `#232` D-08). O kin do la ca ly do cua mien nay.
+ *
+ * BA DIEU PHAI GIU NGUYEN, va moi bai duoi day do dung mot trong ba:
+ *
+ *   1. danh tinh van CHI den tu phien — khong lenh nao nhan `driverId`;
+ *   2. XE van do MAY CHU giai — o day tu `TransportVehicleRun.vehicleId`, thu ma ke hoach dat;
+ *   3. vong chay phai la vong chay CUA CHINH HO — `wasDriverEverAssignedToRun` la cong, va vai
+ *      `SALE` khong the la cong vi hai lai xe khac nhau cung mang dung vai do.
+ */
+describe('Bam vi tri theo VONG CHAY — DOI KHANG — PROOF-022', () => {
+  let repository: InMemoryTrackingRepository;
+  let facts: FakeCoreFacts;
+  let service: TrackingService;
+
+  beforeEach(() => {
+    repository = new InMemoryTrackingRepository();
+    facts = new FakeCoreFacts();
+    facts.drivers.set('user-a', { id: 'driver-a', fullName: 'Lai xe A' });
+    facts.drivers.set('user-b', { id: 'driver-b', fullName: 'Lai xe B' });
+    facts.runs.set('run-a', {
+      id: 'run-a',
+      code: 'VC-001',
+      status: 'ACTIVE',
+      vehicleId: 'vehicle-run-a',
+    });
+    facts.runs.set('run-b', {
+      id: 'run-b',
+      code: 'VC-002',
+      status: 'PLANNED',
+      vehicleId: 'vehicle-run-b',
+    });
+    facts.runs.set('run-done', {
+      id: 'run-done',
+      code: 'VC-099',
+      status: 'COMPLETED',
+      vehicleId: 'vehicle-run-c',
+    });
+    facts.runAssignments.set('run-a', new Set(['driver-a']));
+    facts.runAssignments.set('run-b', new Set(['driver-b']));
+    facts.runAssignments.set('run-done', new Set(['driver-a']));
+    facts.trips.set('trip-a', { id: 'trip-a', code: 'HN-HP-01', status: 'IN_TRANSIT' });
+    facts.assignments.set('trip-a', new Set(['driver-a']));
+    facts.vehicles.set('trip-a', 'vehicle-1');
+
+    service = new TrackingService(
+      repository,
+      facts,
+      { timeZone: 'Asia/Ho_Chi_Minh' },
+      DEFAULT_TRANSPORT_PROOF_POLICY,
+      undefined,
+      () => T0,
+    );
+  });
+
+  const openRunA = () =>
+    service.openSession({ authUserId: 'user-a', runId: 'run-a', device: null });
+
+  it('mo phien tren vong chay cua chinh minh thi duoc, va XE do MAY CHU dien tu vong chay', async () => {
+    const session = await openRunA();
+    expect(session.driverId).toBe('driver-a');
+    expect(session.runId).toBe('run-a');
+    // CHU THE la vong chay, va KHONG mot chuyen nao bi bia ra de lam cho dua.
+    expect(session.tripId).toBeNull();
+    // Diem 2: khong lenh nao nhan `vehicleId`; no den tu `TransportVehicleRun.vehicleId`.
+    expect(session.vehicleId).toBe('vehicle-run-a');
+    expect(session.status).toBe('ACTIVE');
+  });
+
+  it('LAI XE A KHONG mo duoc phien tren vong chay cua LAI XE B', async () => {
+    await expect(
+      service.openSession({ authUserId: 'user-a', runId: 'run-b', device: null }),
+    ).rejects.toMatchObject({ reason: 'DRIVER_NOT_ASSIGNED_TO_RUN', kind: 'DENIED' });
+  });
+
+  it('vong chay khong ton tai thi NOT_FOUND, khong phai DENIED', async () => {
+    await expect(
+      service.openSession({ authUserId: 'user-a', runId: 'khong-co', device: null }),
+    ).rejects.toMatchObject({ reason: 'RUN_NOT_FOUND', kind: 'NOT_FOUND' });
+  });
+
+  it('vong chay DA DONG khong mo phien duoc — khong con gi de bam', async () => {
+    await expect(
+      service.openSession({ authUserId: 'user-a', runId: 'run-done', device: null }),
+    ).rejects.toMatchObject({ reason: 'RUN_NOT_ACTIVE', kind: 'CONFLICT' });
+  });
+
+  it('mo LAI tren dung vong chay do tra ve ban cu — ung dung khoi dong lai khong phai mot loi', async () => {
+    const first = await openRunA();
+    const again = await openRunA();
+    expect(again.id).toBe(first.id);
+  });
+
+  it('dang mo tren vong chay nay thi KHONG mo duoc tren mot chuyen khac', async () => {
+    await openRunA();
+    await expect(
+      service.openSession({ authUserId: 'user-a', tripId: 'trip-a', device: null }),
+    ).rejects.toMatchObject({ reason: 'DRIVER_HAS_ANOTHER_OPEN_SESSION', kind: 'CONFLICT' });
+  });
+
+  it('ban dinh vi van BUOC PHAI thuoc mot phien cua chinh lai xe do', async () => {
+    const session = await openRunA();
+    await expect(
+      service.ingest({
+        authUserId: 'user-b',
+        sessionId: session.id,
+        clientEventId: 'evt-x',
+        latitude: HANOI.latitude,
+        longitude: HANOI.longitude,
+        accuracyMetres: 8,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source: 'DEVICE_FUSED',
+        capturedAt: T0,
+        mockLocationReported: false,
+      }),
+    ).rejects.toMatchObject({ reason: 'SESSION_NOT_OWNED', kind: 'DENIED' });
+  });
+
+  it('tom tat noi ra CHU THE that: dung mot trong hai khoa, khong bia chuyen', async () => {
+    await openRunA();
+    const summaries = await service.summariesForDriver('user-a');
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.runId).toBe('run-a');
+    expect(summaries[0]?.tripId).toBeNull();
+  });
+
+  it('duong CU khong doi: phien theo chuyen van mo duoc va van khong mang `runId`', async () => {
+    const session = await service.openSession({
+      authUserId: 'user-a',
+      tripId: 'trip-a',
+      device: null,
+    });
+    expect(session.tripId).toBe('trip-a');
+    expect(session.runId).toBeNull();
+    expect(session.vehicleId).toBe('vehicle-1');
+  });
+});
+
+/**
+ * PROOF-023 — DUNG MOT CHU THE, o ban kho TRONG BO NHO (`#327`).
+ *
+ * Postgres cuong che dieu nay bang `TransportTrackingSession_one_subject`, va bo
+ * `run-scoped-tracking.int.spec.ts` do chinh rang buoc do tren DB that. Bai duoi day do BAN TRONG
+ * BO NHO — mot duong chay THAT (`PERSISTENCE=memory`: demo, CI khong co DB), khong phai mot ban gia
+ * cho test cho qua.
+ *
+ * Neu ban trong bo nho khong tu choi, thi mot lan ghi sai se XANH o che do nay va DO o che do kia,
+ * va khong ai biet ben nao dang noi that.
+ */
+describe('Mot phien MOT chu the — ban trong bo nho — PROOF-023', () => {
+  const base = {
+    driverId: 'driver-a',
+    vehicleId: null,
+    deviceInstallationId: null,
+    businessDate: '2026-09-07' as const,
+    startedAt: T0,
+    openedBy: 'test',
+  };
+
+  it('HAI chu the bi tu choi — hai duong doc co the mau thuan, va khong ai biet cai nao that', async () => {
+    const repository = new InMemoryTrackingRepository();
+    await expect(
+      repository.createSession({ ...base, tripId: 'trip-a', runId: 'run-a' }),
+    ).rejects.toThrow(/TransportTrackingSession_one_subject/);
+  });
+
+  it('KHONG chu the nao cung bi tu choi — mot chuoi toa do mo coi khong ghi duoc', async () => {
+    const repository = new InMemoryTrackingRepository();
+    await expect(repository.createSession({ ...base, tripId: null, runId: null })).rejects.toThrow(
+      /TransportTrackingSession_one_subject/,
+    );
+  });
+
+  it('dung mot chu the thi ghi duoc — ca hai chieu', async () => {
+    const byTrip = new InMemoryTrackingRepository();
+    const trip = await byTrip.createSession({ ...base, tripId: 'trip-a', runId: null });
+    expect(trip.tripId).toBe('trip-a');
+    expect(trip.runId).toBeNull();
+
+    const byRun = new InMemoryTrackingRepository();
+    const run = await byRun.createSession({ ...base, tripId: null, runId: 'run-a' });
+    expect(run.runId).toBe('run-a');
+    expect(run.tripId).toBeNull();
   });
 });
