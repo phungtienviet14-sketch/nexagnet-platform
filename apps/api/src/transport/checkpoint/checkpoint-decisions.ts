@@ -39,6 +39,15 @@ export const CHECKPOINT_RECORD_REASONS = [
   'CHECKPOINT_OBSERVATION_NOT_FOUND',
   /** Ban dinh vi khong thuoc ve lai xe dang ghi moc — muon vi tri nguoi khac lam bang chung. */
   'CHECKPOINT_OBSERVATION_NOT_OWNED',
+  /**
+   * Ban dinh vi thuoc phien cua MOT VONG CHAY KHAC — `#327`.
+   *
+   * Ma RIENG, khong gop vao `CHECKPOINT_OBSERVATION_NOT_OWNED`: hai lan tu choi noi ve hai chuyen
+   * hoan toan khac nhau. Cai kia la "vi tri cua NGUOI khac"; cai nay la vi tri cua CHINH nguoi do
+   * nhung o mot CHUYEN VIEC khac — va gop lai se lam mot lai xe that doc duoc mot cau giai thich
+   * sai, con van hanh mat kha nang dem rieng hai hinh dang nay trong so quyet dinh.
+   */
+  'CHECKPOINT_OBSERVATION_NOT_FOR_RUN',
   'CHECKPOINT_OBSERVATION_ALREADY_USED',
 ] as const;
 export type CheckpointRecordReason = (typeof CHECKPOINT_RECORD_REASONS)[number];
@@ -64,6 +73,7 @@ export const TRANSPORT_CHECKPOINT_DECISIONS = defineDecisionVocabulary({
     CHECKPOINT_LOCATION_REQUIRED: 'Loai moc nay bat buoc co vi tri hien tai',
     CHECKPOINT_OBSERVATION_NOT_FOUND: 'Khong tim thay ban dinh vi cho moc nay',
     CHECKPOINT_OBSERVATION_NOT_OWNED: 'Ban dinh vi do khong thuoc ve ban',
+    CHECKPOINT_OBSERVATION_NOT_FOR_RUN: 'Ban dinh vi do thuoc mot vong chay khac',
     CHECKPOINT_OBSERVATION_ALREADY_USED: 'Ban dinh vi do da duoc dung cho mot moc khac',
   } satisfies Record<TransportCheckpointDecisionReason, string>,
 });

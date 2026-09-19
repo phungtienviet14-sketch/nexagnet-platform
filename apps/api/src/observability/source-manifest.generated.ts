@@ -433,12 +433,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.history_read": {
       "functionName": "TrackingService.trackForSession",
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
-      "line": 290
+      "line": 454
     },
     "tracking.location_health": {
       "functionName": "LocationHealthService.forVehicle",
       "filePath": "apps/api/src/transport/proof/location-health.service.ts",
-      "line": 97
+      "line": 107
     },
     "tracking.observation_ingest": {
       "filePath": "apps/api/src/transport/proof/tracking.service.ts"
@@ -446,7 +446,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.risk_assessed": {
       "functionName": "TrackingService.recordRisk",
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
-      "line": 368
+      "line": 533
     },
     "tracking.session_close": {
       "functionName": "TrackingService.closeSession",
@@ -615,7 +615,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.self.tracking.report": {
       "functionName": "DriverTrackingController.report",
       "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts",
-      "line": 90
+      "line": 100
     },
     "transport.driver.self.tracking.start": {
       "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts"
@@ -623,7 +623,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.self.tracking.stop": {
       "functionName": "DriverTrackingController.closeSession",
       "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts",
-      "line": 127
+      "line": 137
     },
     "transport.driver.self.trip.read": {
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts"
@@ -1820,12 +1820,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.location_health|*": {
       "functionName": "LocationHealthService.compute",
       "filePath": "apps/api/src/transport/proof/location-health.service.ts",
-      "line": 147
+      "line": 175
     },
     "tracking.risk_assessed|*": {
       "functionName": "TrackingService.recordRisk",
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
-      "line": 383
+      "line": 548
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",

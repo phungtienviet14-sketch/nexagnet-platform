@@ -116,6 +116,17 @@ describe('CheckpointService', () => {
     core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2' });
     core.assignments.set('run_1', ['drv_a']);
     core.assignments.set('run_2', ['drv_b']);
+    /*
+     * VONG CHAY THU BA, va CUNG MOT LAI XE cam no — `#327`, blocker 1 cua ban soat doc lap.
+     *
+     * `run_2` khong dung duoc cho viec nay: no thuoc mot lai xe KHAC, nen mot phep kiem chi doc so
+     * huu lai xe cung se tu choi, va bai kiem se xanh ma khong cham toi cai no dinh do. Hinh dang
+     * PHAI do la: mot nguoi cam hai vong chay, va bang chung cua vong chay nay khong duoc tinh cho
+     * vong chay kia.
+     */
+    core.runs.set('run_3', { id: 'run_3', code: 'VC-003', status: 'ACTIVE' });
+    core.legs.set('leg_3', { id: 'leg_3', runId: 'run_3' });
+    core.assignments.set('run_3', ['drv_a']);
 
     service = new CheckpointService(
       repository,
@@ -207,11 +218,27 @@ describe('CheckpointService', () => {
         id: 'obs_a',
         capturedAt: new Date('2026-09-07T14:00:00Z'),
         driverId: 'drv_a',
+        runId: 'run_1',
       });
       location.observations.set('obs_b', {
         id: 'obs_b',
         capturedAt: new Date('2026-09-07T14:00:00Z'),
         driverId: 'drv_b',
+        runId: 'run_1',
+      });
+      // CUNG lai xe, KHAC vong chay — hinh dang ma cong moi phai chan.
+      location.observations.set('obs_run3', {
+        id: 'obs_run3',
+        capturedAt: new Date('2026-09-07T14:00:00Z'),
+        driverId: 'drv_a',
+        runId: 'run_3',
+      });
+      // Phien theo CHUYEN: khong co vong chay nao. Duong cu, va no phai di qua y nhu truoc.
+      location.observations.set('obs_trip', {
+        id: 'obs_trip',
+        capturedAt: new Date('2026-09-07T14:00:00Z'),
+        driverId: 'drv_a',
+        runId: null,
       });
     });
 
@@ -279,6 +306,49 @@ describe('CheckpointService', () => {
       expect(reason).toBe('CHECKPOINT_OBSERVATION_ALREADY_USED');
     });
 
+    /**
+     * BAI TRUNG TAM THU HAI — bang chung cua VONG CHAY NAY, khong cua vong chay kia (`#327`).
+     *
+     * Cong so huu lai xe mot minh KHONG du ke tu khi phien bam vi tri co chu the thu hai: mot
+     * nguoi cam hai vong chay trong cung mot ngay se co hai phien hop le lan luot, va khong gi
+     * ngan ho dua `observationId` cua vong chay da chay xong vao moc `DELIVERY_ARRIVAL` cua vong
+     * chay dang chay. Toa do that, lai xe that, thoi diem that — va no chung minh ho da den mot
+     * noi KHAC.
+     */
+    it('ban dinh vi cua VONG CHAY KHAC bi tu choi — du cung mot lai xe', async () => {
+      await reachDelivery();
+      const reason = await reasonOf(
+        service.recordAsDriver({
+          type: 'DELIVERY_ARRIVAL',
+          runId: 'run_1',
+          legId: 'leg_1',
+          authUserId: 'u.binh',
+          observationId: 'obs_run3',
+          clientEventId: 'evt_3',
+        }),
+      );
+      expect(reason).toBe('CHECKPOINT_OBSERVATION_NOT_FOR_RUN');
+      expect(await repository.listForLeg('leg_1')).toHaveLength(2);
+    });
+
+    /**
+     * DUONG CU KHONG BI CHAN. Mot ban dinh vi cua phien theo CHUYEN khong co vong chay nao de doi
+     * chieu, va doi no bang `command.runId` se lam moi moc cua luong chuyen truyen thong hong ngay
+     * — mot buoc lui ma khong mot blocker nao yeu cau.
+     */
+    it('ban dinh vi cua phien theo CHUYEN van dung duoc — khong mot buoc lui nao', async () => {
+      await reachDelivery();
+      const arrival = await service.recordAsDriver({
+        type: 'DELIVERY_ARRIVAL',
+        runId: 'run_1',
+        legId: 'leg_1',
+        authUserId: 'u.binh',
+        observationId: 'obs_trip',
+        clientEventId: 'evt_3',
+      });
+      expect(arrival.observationId).toBe('obs_trip');
+    });
+
     it('ban dinh vi khong ton tai thi bi tu choi', async () => {
       await reachDelivery();
       const reason = await reasonOf(
@@ -305,6 +375,7 @@ describe('CheckpointService', () => {
         id: 'obs_a',
         capturedAt: new Date('2026-09-06T23:00:00Z'),
         driverId: 'drv_a',
+        runId: 'run_1',
       });
       await arriveAtPickup('evt_1');
       await service.recordAsDriver({
@@ -348,6 +419,7 @@ describe('CheckpointService', () => {
         id: 'obs_a',
         capturedAt: now,
         driverId: 'drv_a',
+        runId: 'run_1',
       });
       await service.recordAsOperator({
         type: 'ASSIGNED',

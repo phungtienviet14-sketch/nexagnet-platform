@@ -110,6 +110,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Cua nhap telematics (Postgres
     const session = await tracking.createSession({
       driverId: driver.id,
       tripId: trip.id,
+      runId: null,
       vehicleId,
       deviceInstallationId: null,
       businessDate: BUSINESS_DATE,

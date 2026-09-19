@@ -58,6 +58,49 @@ export const TELEMATICS_INGRESS_EVENT: UniqueIndexRef = {
  * Phat ra dung hinh dang `P2002` giu cho `isUniqueViolationOn` la duong DUY NHAT ca hai che do di
  * qua.
  */
+/**
+ * MOT `CHECK` CUA COT, nhin tu ma nguon — `#327`.
+ *
+ * Kieu RIENG, khong dung lai `UniqueIndexRef`: mot `CHECK` va mot chi muc duy nhat that bai bang
+ * hai ma loi khac han nhau duoi Postgres (`23514` vs `23505`, `P2002` vs khong), va gop hai khai
+ * niem vao mot kieu se de ai do goi `isUniqueViolationOn` cho mot `CHECK` roi tuong la no da kiem.
+ */
+export interface CheckConstraintRef {
+  readonly constraintName: string;
+  readonly model: string;
+}
+
+/**
+ * MOT PHIEN, MOT CHU THE — chuyen HOAC vong chay, khong ca hai va khong khong cai nao.
+ *
+ * Vi sao phai la mot rang buoc cua KHO: hai cot nullable khong tu noi ra rang chung loai tru nhau.
+ * Khong co `CHECK`, ba hinh dang sai deu ghi duoc va khong cai nao tu lo ra — mot phien khong gan
+ * vao viec gi (bang chung mo coi), mot phien gan vao CA HAI (hai chu the co the mau thuan, va luc
+ * do khong ai biet duong doc nao noi that), va ca hai chi lo ra khi co nguoi mo bang len tim.
+ */
+export const TRACKING_SESSION_ONE_SUBJECT: CheckConstraintRef = {
+  constraintName: 'TransportTrackingSession_one_subject',
+  model: 'TransportTrackingSession',
+};
+
+/**
+ * Dung LOI CUA KHO ma ban trong bo nho phat ra khi cham mot `CHECK`.
+ *
+ * Cung ly le voi `storageUniqueViolation` ngay duoi: che do `PERSISTENCE=memory` la mot duong chay
+ * that, va neu no bao that bai bang mot hinh dang KHAC voi Postgres thi mot bai kiem se xanh o che
+ * do nay va do o che do kia. Van ban lay dung khuon cau cua Postgres (`SQLSTATE 23514`).
+ */
+export function storageCheckViolation(check: CheckConstraintRef): Error {
+  const error = new Error(
+    `new row for relation "${check.model}" violates check constraint "${check.constraintName}"`,
+  );
+  Object.assign(error, {
+    code: '23514',
+    meta: { modelName: check.model, constraint: check.constraintName },
+  });
+  return error;
+}
+
 export function storageUniqueViolation(index: UniqueIndexRef): Error {
   const error = new Error(`Unique constraint failed on the index: ${index.indexName}`);
   Object.assign(error, {
