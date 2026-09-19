@@ -14,6 +14,12 @@ import type {
   IngestFuelReceiptImageInput,
 } from './fuel-review-types';
 import type {
+  CustomerArSummaryView,
+  CustomerReconciliationBatchView,
+  PendingArOrder,
+} from './workspace/customer-ar';
+import type { LocationHealthView } from './workspace/location-health';
+import type {
   ApByCounterpartyRow,
   ArAgingReport,
   BusinessDate,
@@ -51,6 +57,7 @@ import type {
   MaintenanceTriggerKind,
   MaintenanceWorkOrder,
   OperationalAlertFeed,
+  OperationalDocumentView,
   OrderCompletionBasis,
   OrderCompletionDetail,
   OrderCompletionOutcome,
@@ -664,6 +671,116 @@ export interface TollReviewInput {
  * ------------------------------------------------------------------ */
 
 export const transportApi = {
+  files: {
+    uploadOperationalDocument: (
+      file: File,
+    ): Promise<{
+      readonly id: string;
+      readonly filename: string;
+      readonly contentType: string;
+      readonly byteSize: number;
+      readonly state: string;
+    }> => {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('purpose', 'OPERATIONAL_DOCUMENT');
+      return sendForm('/files', form);
+    },
+  },
+  customerAr: {
+    pending: (
+      customerId?: string | null,
+    ): Promise<{ readonly orders: readonly PendingArOrder[] }> =>
+      get(`/transport/customer-ar/pending${toQuery({ customerId })}`),
+    batches: (
+      customerId?: string | null,
+    ): Promise<{ readonly batches: readonly CustomerReconciliationBatchView[] }> =>
+      get(`/transport/customer-ar/batches${toQuery({ customerId })}`),
+    summary: (asOf: string, customerId?: string | null): Promise<CustomerArSummaryView> =>
+      get(`/transport/customer-ar/summary${toQuery({ asOf, customerId })}`),
+    confirmOrder: (
+      orderId: string,
+      input: {
+        confirmedAmount: number;
+        currencyCode: string;
+        businessDate: string;
+        differenceReason?: string | null;
+        confirmationReference?: string | null;
+        evidenceRefs?: readonly string[];
+        idempotencyKey: string;
+      },
+    ): Promise<unknown> =>
+      send(
+        'POST',
+        `/transport/customer-ar/orders/${encodeURIComponent(orderId)}/confirmations`,
+        input,
+      ),
+    createBatch: (input: {
+      customerId: string;
+      orderIds: readonly string[];
+      currencyCode: string;
+      periodStart?: string | null;
+      periodEnd?: string | null;
+      reference?: string | null;
+      note?: string | null;
+      idempotencyKey: string;
+    }): Promise<unknown> => send('POST', '/transport/customer-ar/batches', input),
+    resolveBatch: (
+      batchId: string,
+      input: {
+        decisions: readonly (
+          | {
+              lineId: string;
+              action: 'CONFIRM';
+              confirmedAmount: number;
+              businessDate: string;
+              differenceReason?: string | null;
+              confirmationReference?: string | null;
+              evidenceRefs?: readonly string[];
+            }
+          | { lineId: string; action: 'DEFER'; reason: string }
+        )[];
+        idempotencyKey: string;
+      },
+    ): Promise<unknown> =>
+      send(
+        'POST',
+        `/transport/customer-ar/batches/${encodeURIComponent(batchId)}/resolutions`,
+        input,
+      ),
+    recordPayment: (input: {
+      customerId: string;
+      amount: number;
+      currencyCode: string;
+      receivedAt: string;
+      businessDate: string;
+      externalRef?: string | null;
+      note?: string | null;
+      idempotencyKey: string;
+    }): Promise<{
+      readonly payment: { readonly id: string };
+      readonly replayed: boolean;
+    }> => send('POST', '/transport/customer-ar/payments', input),
+    allocatePayment: (
+      paymentId: string,
+      input: {
+        documentId: string;
+        amount: number;
+        businessDate: string;
+        note?: string | null;
+        idempotencyKey: string;
+      },
+    ): Promise<unknown> =>
+      send(
+        'POST',
+        `/transport/customer-ar/payments/${encodeURIComponent(paymentId)}/allocations`,
+        input,
+      ),
+  },
+  operationalDocuments: {
+    forOrder: (orderId: string): Promise<readonly OperationalDocumentView[]> =>
+      get(`/transport/orders/${encodeURIComponent(orderId)}/documents`),
+  },
   trips: {
     /** KHONG phan trang, KHONG bo loc, KHONG tim kiem — tra ve toan bo bang. */
     list: (): Promise<readonly Trip[]> => get('/transport/trips'),
@@ -776,6 +893,8 @@ export const transportApi = {
   fleet: {
     vehicles: (): Promise<readonly Vehicle[]> => get('/transport/vehicles'),
     vehicle: (id: string): Promise<Vehicle> => get(`/transport/vehicles/${encodeURIComponent(id)}`),
+    locationHealth: (id: string): Promise<LocationHealthView> =>
+      get(`/transport/vehicles/${encodeURIComponent(id)}/location-health`),
     createVehicle: (input: CreateVehicleInput): Promise<Vehicle> =>
       send('POST', '/transport/vehicles', input),
     updateVehicle: (id: string, input: UpdateVehicleInput): Promise<Vehicle> =>

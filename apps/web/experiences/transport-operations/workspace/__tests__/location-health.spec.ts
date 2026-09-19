@@ -7,9 +7,7 @@ import {
 
 const OBSERVED_AT = '2026-09-18T14:00:00.000Z';
 
-const source = (
-  overrides: Partial<SourceFamilyHealthView> = {},
-): SourceFamilyHealthView => ({
+const source = (overrides: Partial<SourceFamilyHealthView> = {}): SourceFamilyHealthView => ({
   family: 'PHONE',
   status: 'LIVE',
   source: 'DEVICE_GNSS',

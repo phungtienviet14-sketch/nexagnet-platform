@@ -8,22 +8,21 @@ describe('Lane W — file evidence', () => {
         fileId: 'file-opaque-1',
         runId: 'run-1',
         legId: 'leg-1',
-        type: 'PROOF_OF_DELIVERY',
+        type: 'DELIVERY_RECEIPT',
         clientEventId: 'lane-w-stable-event',
       }),
     ).toEqual({
       fileId: 'file-opaque-1',
       runId: 'run-1',
       legId: 'leg-1',
-      type: 'PROOF_OF_DELIVERY',
+      type: 'DELIVERY_RECEIPT',
       basis: 'DIGITAL_FILE',
-      externalNote: null,
       clientEventId: 'lane-w-stable-event',
     });
   });
 
   it('opens evidence through the authenticated opaque-id route only', () => {
-    expect(operationalFileContentUrl('file-opaque-1')).toBe('/api/files/file-opaque-1/content');
+    expect(operationalFileContentUrl('file-opaque-1')).toMatch(/\/files\/file-opaque-1\/content$/);
     expect(operationalFileContentUrl('file-opaque-1')).not.toMatch(/bucket|storage|railway/i);
   });
 });

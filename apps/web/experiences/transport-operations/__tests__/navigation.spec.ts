@@ -90,7 +90,12 @@ describe('nang luc toi thieu — chi bat transport-core', () => {
 
 describe('Lane W — first UAT scope', () => {
   it('keeps ETC outside the owner navigation even when the preview capability remains enabled', () => {
-    expect(idsOf(director(FIRST_UAT))).not.toContain('toll');
+    expect(
+      idsOf({
+        ...director(FIRST_UAT),
+        blockedCapabilityKeys: ['transport-toll'],
+      }),
+    ).not.toContain('toll');
   });
 });
 

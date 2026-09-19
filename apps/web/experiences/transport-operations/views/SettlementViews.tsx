@@ -28,6 +28,7 @@ import {
   toSettlementDirectory,
 } from '../workspace/settlement';
 import { businessTodayIn } from './business-today';
+import { CustomerArWorkspace } from './CustomerArWorkspace';
 
 /**
  * `TX-05` tren man hinh — BA muc, MOT nguon.
@@ -76,6 +77,8 @@ export function SettlementView() {
         title="Công nợ & quyết toán"
         summary="Năm dòng tiền giữ riêng: khách hàng, nhà xe, nguồn đơn, cây xăng, lái xe."
       />
+
+      <CustomerArWorkspace />
 
       {/*
         MOC `asOf` la mot O NHAP, khong phai mot mac dinh im lang. May chu bat buoc tham so nay

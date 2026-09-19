@@ -121,5 +121,7 @@ describe('Lane W — accounting owner view', () => {
 
     expect(model.currencyGroups.map((group) => group.currencyCode)).toEqual(['USD', 'VND']);
     expect(model.combinedTotalsAllowed).toBe(false);
+    expect(model.pendingAmountLabel).toBeNull();
+    expect(model.officialAmountLabel).toBeNull();
   });
 });

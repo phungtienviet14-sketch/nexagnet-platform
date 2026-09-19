@@ -145,7 +145,11 @@ const proposal = (orderId: string) => ({
   ],
 });
 
-async function mockOwner(page: Page, grouping: Grouping, initialOrders: OrderRow[]): Promise<OwnerMock> {
+async function mockOwner(
+  page: Page,
+  grouping: Grouping,
+  initialOrders: OrderRow[],
+): Promise<OwnerMock> {
   const state: OwnerMock = {
     orders: [...initialOrders],
     createBodies: [],
@@ -187,7 +191,9 @@ async function mockOwner(page: Page, grouping: Grouping, initialOrders: OrderRow
       originLabel: String(body.originLabel),
       destinationLabel: String(body.destinationLabel),
       cargoDescription:
-        typeof body.cargoDescription === 'string' ? body.cargoDescription : created.cargoDescription,
+        typeof body.cargoDescription === 'string'
+          ? body.cargoDescription
+          : created.cargoDescription,
     };
     state.orders.push(hydrated);
     return json(route, hydrated, 201);
@@ -246,7 +252,10 @@ test.describe('Lane W — duong order-first cua chu doanh nghiep', () => {
     const state = await mockOwner(page, 'ONE_ORDER_PER_RUN', []);
     const legacyNavigations: string[] = [];
     page.on('framenavigated', (frame) => {
-      if (frame === page.mainFrame() && new URL(frame.url()).searchParams.get('section') === 'trips') {
+      if (
+        frame === page.mainFrame() &&
+        new URL(frame.url()).searchParams.get('section') === 'trips'
+      ) {
         legacyNavigations.push(frame.url());
       }
     });
@@ -310,9 +319,7 @@ test.describe('Lane W — duong order-first cua chu doanh nghiep', () => {
   test('MULTI: de nghi noi ro current/next-free va EMPTY connector; chi gan sau khi boss bam', async ({
     page,
   }) => {
-    const state = await mockOwner(page, 'MULTI_ORDER_RUN', [
-      order('ord-multi-b', 'W-MULTI-B'),
-    ]);
+    const state = await mockOwner(page, 'MULTI_ORDER_RUN', [order('ord-multi-b', 'W-MULTI-B')]);
 
     await page.goto('/?section=dispatch');
     await page.getByRole('combobox', { name: 'Đơn hàng' }).selectOption('ord-multi-b');
