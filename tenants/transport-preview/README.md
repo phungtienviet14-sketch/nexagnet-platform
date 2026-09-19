@@ -94,8 +94,19 @@ ai nhập thử là một biểu mẫu chưa chắc nhập được.
 
 `transport-core` · `transport-costing` · `transport-fuel` · `transport-settlement` ·
 `transport-asset-compliance` · `transport-workforce` — cả sáu, và từ T7D (#170) **cả sáu đều có
-đường dữ liệu thật**. `readiness.blockedCapabilities` nay rỗng vì không còn nghiệp vụ nào bị chặn;
-trước đây nó liệt kê bốn mục đang chờ #168/#169/#170.
+đường dữ liệu thật**.
+
+`readiness.blockedCapabilities` hiện liệt kê **đúng một** mục: `transport-toll` — **Phí đường bộ
+(ETC)**. Đó là một quyết định **phạm vi**, không phải một nghiệp vụ hỏng: đợt UAT đầu tiên của
+chủ sở hữu cố ý không có ETC, nên mục điều hướng bị ẩn ở chính gói sẽ được triển khai.
+
+Bản thân ETC **vẫn được chứng minh đầy đủ**, chỉ là ở nơi khác:
+`apps/web/e2e/transport-toll/` chạy trên gói `apps/web/e2e/fixtures/tenant-transport-toll` — một
+gói khai rõ ETC được bật và không chặn gì — qua `apps/web/playwright.transport-toll.config.ts`.
+Hai đầu bị khoá lại bởi
+`apps/web/experiences/transport-operations/__tests__/first-uat-etc-readiness.contract.spec.ts`:
+gói này phải còn chặn ETC, gói fixture phải bật ETC. Bỏ mục chặn ở đây là **mở lại ETC cho đợt
+UAT đầu tiên** — hãy hỏi chủ sở hữu trước, đừng sửa để cho test xanh.
 
 Không bật `knowledge`, `messaging`, `sales-order`: bề mặt vận tải không cần, và bật thừa là mở một
 đường ghi PII sang LLM mà việc này không cần đến.
@@ -104,4 +115,6 @@ Không bật `knowledge`, `messaging`, `sales-order`: bề mặt vận tải kh�
 
 Khi một gói khách vận tải **thật** vào repo và không còn ai cần một môi trường tham chiếu. Xoá thư
 mục này, gỡ slug khỏi `TRANSPORT_PREVIEW_TENANTS`, và trỏ
-`apps/web/playwright.transport.config.ts` sang gói kế nhiệm.
+`apps/web/playwright.transport.config.ts` sang gói kế nhiệm. Lúc đó hãy đọc lại
+`first-uat-etc-readiness.contract.spec.ts`: nó đối chiếu gói này với gói fixture ETC, nên gói kế
+nhiệm phải thế chỗ ở cả hai vế.
