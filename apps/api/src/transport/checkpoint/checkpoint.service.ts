@@ -228,6 +228,44 @@ export class CheckpointService {
           'Ban dinh vi do khong thuoc ve ban',
         );
       }
+      /*
+       * ...VA PHAI LA BANG CHUNG CUA CHINH VONG CHAY NAY — `#327`.
+       *
+       * ==========================================================================================
+       * VI SAO SO HUU LAI XE MOT MINH KHONG CON DU
+       * ==========================================================================================
+       *
+       * Truoc khi phien bam vi tri co chu the thu hai, moi ban dinh vi deu den tu mot phien theo
+       * CHUYEN, va cau hoi "ban nay thuoc vong chay nao" khong co cau tra loi — nen cong duy nhat
+       * dung duoc la so huu lai xe. Tu `#327`, mot phien CO chu the la vong chay, va mot nguoi
+       * binh thuong cam hai vong chay trong mot ngay. Hinh dang nay vi the tro nen kha di:
+       *
+       *     lai xe A -> ban dinh vi tren vong chay A -> `DELIVERY_ARRIVAL` cua vong chay B
+       *
+       * Toa do that, nguoi that, gio that — va no chung minh ho da den mot noi KHAC. Cong so huu
+       * lai xe cho no di qua vi ca hai ve deu la A.
+       *
+       * ==========================================================================================
+       * `runId === null` DI TIEP, VA DO LA MOT QUYET DINH
+       * ==========================================================================================
+       *
+       * Ban dinh vi cua mot phien theo CHUYEN khong co vong chay nao de doi chieu. Doi no bang
+       * `command.runId` se khong phai la mot cong chat hon — no se la mot lan chan mu lam moc cua
+       * luong chuyen truyen thong hong ngay lap tuc. Chi RANG BUOC nhung gi co su that de rang
+       * buoc; phan con lai van do cong so huu lai xe o tren giu.
+       */
+      if (observation.runId !== null && observation.runId !== command.runId) {
+        this.deny('CHECKPOINT_OBSERVATION_NOT_FOR_RUN', {
+          observationId: observation.id,
+          observationRunId: observation.runId,
+          runId: command.runId,
+          driverId,
+        });
+        throw TransportDomainError.denied(
+          'CHECKPOINT_OBSERVATION_NOT_FOR_RUN',
+          'Ban dinh vi do thuoc mot vong chay khac — bat dinh vi tren dung vong chay nay roi bam lai',
+        );
+      }
       observationId = observation.id;
       capturedAt = observation.capturedAt;
     }

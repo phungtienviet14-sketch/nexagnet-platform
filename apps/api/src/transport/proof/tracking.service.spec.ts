@@ -413,7 +413,21 @@ describe('Bam vi tri theo VONG CHAY — DOI KHANG — PROOF-022', () => {
       status: 'COMPLETED',
       vehicleId: 'vehicle-run-c',
     });
+    /*
+     * VONG CHAY THU HAI CUA CHINH LAI XE A — mot ca lam viec that co nhieu hon mot vong chay.
+     *
+     * `run-b` khong dung duoc cho cac bai vong doi ben duoi: no thuoc lai xe B, nen moi lan tu
+     * choi deu co the la `DRIVER_NOT_ASSIGNED_TO_RUN` va bai kiem se xanh ma chua cham toi thu no
+     * dinh do.
+     */
+    facts.runs.set('run-a2', {
+      id: 'run-a2',
+      code: 'VC-003',
+      status: 'ACTIVE',
+      vehicleId: 'vehicle-run-a2',
+    });
     facts.runAssignments.set('run-a', new Set(['driver-a']));
+    facts.runAssignments.set('run-a2', new Set(['driver-a']));
     facts.runAssignments.set('run-b', new Set(['driver-b']));
     facts.runAssignments.set('run-done', new Set(['driver-a']));
     facts.trips.set('trip-a', { id: 'trip-a', code: 'HN-HP-01', status: 'IN_TRANSIT' });
@@ -473,6 +487,89 @@ describe('Bam vi tri theo VONG CHAY — DOI KHANG — PROOF-022', () => {
     await expect(
       service.openSession({ authUserId: 'user-a', tripId: 'trip-a', device: null }),
     ).rejects.toMatchObject({ reason: 'DRIVER_HAS_ANOTHER_OPEN_SESSION', kind: 'CONFLICT' });
+  });
+
+  /**
+   * VONG DOI CUA MOT PHIEN THEO VONG CHAY — `#327`, blocker 2 cua ban soat doc lap.
+   *
+   * ============================================================================================
+   * VONG CHAY LA CHU SO HUU VONG DOI, KHONG PHAI MAN HINH LAI XE
+   * ============================================================================================
+   *
+   * Man hinh hien truong MO phien mot cach ngam (lai xe cham "da den noi", ung dung tu di ba buoc
+   * vi tri). Khong co nut "dung bam vi tri" nao, va se khong nen co: mot nut nhu the bat lai xe
+   * phai nho don dep mot thu ho khong biet minh da tao ra.
+   *
+   * Nen chu the moi la nguoi giu vong doi: MOT PHIEN THEO VONG CHAY KHONG SONG LAU HON VONG CHAY
+   * CUA NO. Khi vong chay ve `COMPLETED`/`CANCELLED`, phien do het hieu luc — va dieu do duoc THI
+   * HANH o dung noi no co hau qua, chu khong doi mot dieu hanh vien vao don tay.
+   *
+   * Khong lam the thi `TransportTrackingSession_activeDriver_key` (mot phien ACTIVE moi lai xe) se
+   * bien mot vong chay da xong hom qua thanh mot cai khoa tren vong chay hom nay.
+   */
+  describe('vong chay da ket thuc khong giu duoc phien cua no', () => {
+    it('lai xe chay xong vong chay A thi mo duoc phien tren vong chay B NGAY, khong can ai don tay', async () => {
+      const first = await openRunA();
+
+      // Vong chay A ve trang thai cuoi — dung duong ma san pham that di: mot lan dong vong chay.
+      facts.runs.set('run-a', {
+        id: 'run-a',
+        code: 'VC-001',
+        status: 'COMPLETED',
+        vehicleId: 'vehicle-run-a',
+      });
+
+      const second = await service.openSession({
+        authUserId: 'user-a',
+        runId: 'run-a2',
+        device: null,
+      });
+
+      expect(second.id).not.toBe(first.id);
+      expect(second.runId).toBe('run-a2');
+      expect(second.status).toBe('ACTIVE');
+
+      // Va phien cu KHONG con ACTIVE — no da het hieu luc cung voi chu the cua no.
+      const stale = await repository.findSession(first.id);
+      expect(stale?.status).not.toBe('ACTIVE');
+      expect(stale?.endedReason).toBe('RUN_TERMINAL');
+    });
+
+    it('vong chay bi HUY cung ket thuc phien cua no', async () => {
+      const first = await openRunA();
+      facts.runs.set('run-a', {
+        id: 'run-a',
+        code: 'VC-001',
+        status: 'CANCELLED',
+        vehicleId: 'vehicle-run-a',
+      });
+
+      await service.openSession({ authUserId: 'user-a', runId: 'run-a2', device: null });
+
+      expect((await repository.findSession(first.id))?.status).not.toBe('ACTIVE');
+    });
+
+    /**
+     * CONG KHONG BI NOI LONG. Vong chay A VAN DANG CHAY thi phien cua no van la mot phien that, va
+     * mo mot phien thu hai tren vong chay khac van la mot mo ta cua mot thu khong co that.
+     */
+    it('vong chay A CON DANG CHAY thi van tu choi — khong phai mot duong vong moi', async () => {
+      await openRunA();
+      await expect(
+        service.openSession({ authUserId: 'user-a', runId: 'run-a2', device: null }),
+      ).rejects.toMatchObject({ reason: 'DRIVER_HAS_ANOTHER_OPEN_SESSION', kind: 'CONFLICT' });
+    });
+
+    /**
+     * DUONG CHUYEN KHONG BI CHAM TOI. Mot phien theo CHUYEN khong co vong chay de hoi, nen no giu
+     * nguyen hanh vi cu — ke ca khi chuyen do da `DELIVERED`.
+     */
+    it('phien theo CHUYEN giu nguyen ngu nghia cu — van chan phien thu hai', async () => {
+      await service.openSession({ authUserId: 'user-a', tripId: 'trip-a', device: null });
+      await expect(
+        service.openSession({ authUserId: 'user-a', runId: 'run-a2', device: null }),
+      ).rejects.toMatchObject({ reason: 'DRIVER_HAS_ANOTHER_OPEN_SESSION', kind: 'CONFLICT' });
+    });
   });
 
   it('ban dinh vi van BUOC PHAI thuoc mot phien cua chinh lai xe do', async () => {

@@ -59,6 +59,14 @@ export interface CheckpointObservationFacts {
   readonly capturedAt: Date;
   /** Lai xe so huu phien chua ban dinh vi nay. */
   readonly driverId: string;
+  /**
+   * VONG CHAY la chu the cua phien chua ban dinh vi nay — `null` khi phien do bam theo mot CHUYEN.
+   *
+   * Truong nay BAT BUOC (`string | null`, khong phai `runId?`) vi cung mot le voi `driverId`: mot
+   * cong chi chan duoc khi su that di toi duoc cho no dung. De tuy chon thi mot ban gia trong bai
+   * kiem — hoac mot adapter thu hai viet sau nay — se quen dien, va phep kiem im lang cho qua.
+   */
+  readonly runId: string | null;
 }
 
 export abstract class TransportCheckpointLocationFacts {
@@ -117,6 +125,10 @@ export class TransportCheckpointLocationFactsAdapter extends TransportCheckpoint
       id: observation.id,
       capturedAt: observation.capturedAt,
       driverId: session.driverId,
+      // CHU THE cua phien, phoi ra y nhu no duoc luu. Khong dien mot `runId` suy ra tu dau khac:
+      // ban dinh vi cua mot phien theo CHUYEN thuc su khong co vong chay nao, va noi doi o day se
+      // lam cong o `CheckpointService` chan nham mot duong hop le.
+      runId: session.runId,
     };
   }
 }

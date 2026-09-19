@@ -10,7 +10,9 @@ import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 import { MovementRunWriteGuard } from '../movement/run-write-guard.port.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { LocationHealthService } from './location-health.service.js';
 import { PrismaTrackingRepository } from './prisma-tracking.repository.js';
+import { UnconfiguredVehicleTelematicsAdapter } from './telematics/vehicle-telematics.port.js';
 import { DEFAULT_TRANSPORT_PROOF_POLICY } from './tracking-policy.js';
 import { TrackingService } from './tracking.service.js';
 import { TransportProofCoreFactsAdapter } from './transport-proof-facts.port.js';
@@ -44,7 +46,16 @@ import { TransportProofCoreFactsAdapter } from './transport-proof-facts.port.js'
 
 const PREFIX = 'ITRSTK';
 const PLATE = `${PREFIX}-0001`;
+const PLATE_B = `${PREFIX}-0002`;
 const RUN_CODE = `${PREFIX}-VC-1`;
+/**
+ * VONG CHAY THU HAI CUA CHINH LAI XE A — mot ca lam viec that co nhieu hon mot vong chay.
+ *
+ * Hai bai o cuoi tep can dung hinh dang nay va khong hinh dang nao khac: mot NGUOI cam hai vong
+ * chay. Mot vong chay cua lai xe B se lam moi lan tu choi co the la `DRIVER_NOT_ASSIGNED`, va bai
+ * kiem se xanh ma chua cham toi cai no dinh do.
+ */
+const RUN_CODE_B = `${PREFIX}-VC-2`;
 const TRIP_CODE = `${PREFIX}-CH-1`;
 const DRIVER_PHONE_A = '0955ITRSTKA';
 const DRIVER_PHONE_B = '0955ITRSTKB';
@@ -63,10 +74,23 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const trips = new PrismaTripRepository(prisma);
     const checkpointRepo = new PrismaCheckpointRepository(prisma);
 
+    const proofCore = new TransportProofCoreFactsAdapter(trips, fleet, movement);
     const trackingService = new TrackingService(
       tracking,
-      new TransportProofCoreFactsAdapter(trips, fleet, movement),
+      proofCore,
       { timeZone: 'Asia/Ho_Chi_Minh' },
+      DEFAULT_TRANSPORT_PROOF_POLICY,
+    );
+    /*
+     * PHEP CHAM SUC KHOE tren DUNG bo phan that — cung kho, cung cong su that.
+     *
+     * Cong telematics de o ban "chua khai": khong bai nao o day noi ve phan cung tren xe, va mot
+     * ban gia "da khai" se keo `ALL_SOURCES_LOST` vao mot phep do khong hoi ve no.
+     */
+    const health = new LocationHealthService(
+      tracking,
+      new UnconfiguredVehicleTelematicsAdapter(),
+      proofCore,
       DEFAULT_TRANSPORT_PROOF_POLICY,
     );
     const checkpoints = new CheckpointService(
@@ -93,6 +117,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
      */
     let otherLegId = '';
     let tripId = '';
+    let runBId = '';
+    let legBId = '';
+    let vehicleBId = '';
 
     /**
      * Don dep theo THU TU AN TOAN VE KHOA NGOAI.
@@ -104,7 +131,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
      */
     async function cleanup(): Promise<void> {
       const runs = await prisma.transportVehicleRun.findMany({
-        where: { code: RUN_CODE },
+        where: { code: { in: [RUN_CODE, RUN_CODE_B] } },
         select: { id: true },
       });
       const runIds = runs.map((row) => row.id);
@@ -148,7 +175,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         await prisma.transportTripAssignment.deleteMany({ where: { tripId: trip.id } });
         await prisma.transportTrip.deleteMany({ where: { code: TRIP_CODE } });
       }
-      await prisma.transportVehicle.deleteMany({ where: { registrationPlate: PLATE } });
+      await prisma.transportVehicle.deleteMany({
+        where: { registrationPlate: { in: [PLATE, PLATE_B] } },
+      });
       await prisma.transportDriver.deleteMany({
         where: { phone: { in: [DRIVER_PHONE_A, DRIVER_PHONE_B] } },
       });
@@ -205,6 +234,30 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         effectiveFrom: new Date('2026-09-19T01:00:00Z'),
         assignedBy: PREFIX,
       });
+      const vehicleB = await fleet.createVehicle({
+        registrationPlate: PLATE_B,
+        vehicleClass: 'Dau keo',
+      });
+      const runB = await movement.createRun({
+        code: RUN_CODE_B,
+        vehicleId: vehicleB.id,
+        businessDate: BUSINESS_DATE,
+      });
+      const legB = await movement.createLeg({
+        runId: runB.id,
+        sequence: 1,
+        kind: 'LOADED',
+        orderId: null,
+        originLabel: 'Ha Noi',
+        destinationLabel: 'Ninh Binh',
+        businessDate: BUSINESS_DATE,
+      });
+      // CUNG mot lai xe cam ca hai vong chay — xem chu thich o `RUN_CODE_B`.
+      await movement.assignRun(runB.id, {
+        driverId: a.id,
+        effectiveFrom: new Date('2026-09-19T01:00:00Z'),
+        assignedBy: PREFIX,
+      });
       const trip = await trips.create({
         code: TRIP_CODE,
         kind: 'OWN_DIRECT',
@@ -220,6 +273,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       legId = leg.id;
       otherLegId = otherLeg.id;
       tripId = trip.id;
+      runBId = runB.id;
+      legBId = legB.id;
+      vehicleBId = vehicleB.id;
     });
 
     afterAll(async () => {
@@ -488,6 +544,180 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       ).rejects.toMatchObject({ reason: 'CHECKPOINT_OBSERVATION_NOT_OWNED', kind: 'DENIED' });
 
       await closeAnyOpenSession(driverB);
+    });
+
+    /* ---------------------------------------------------------------- *
+     * 5. BANG CHUNG CUA VONG CHAY NAY, KHONG CUA VONG CHAY KIA
+     * ---------------------------------------------------------------- */
+
+    /**
+     * CUNG MOT LAI XE, HAI VONG CHAY — hinh dang ma cong so huu lai xe KHONG chan duoc.
+     *
+     * Bai ngay tren do "vi tri cua NGUOI khac". Bai nay do mot thu khac han: vi tri cua CHINH
+     * nguoi do, that tung centimet, nhung chup o mot CHUYEN VIEC khac. Ke tu khi mot phien co chu
+     * the la vong chay, mot nguoi cam hai vong chay trong ngay co du hai ban dinh vi hop le — va
+     * khong gi ngan ho dua ban cua vong chay kia vao moc `DELIVERY_ARRIVAL` dang bam, tuc chung
+     * minh ho dang o mot noi ho khong o.
+     */
+    it('ban dinh vi cua VONG CHAY A khong chung minh duoc `DELIVERY_ARRIVAL` cua VONG CHAY B', async () => {
+      await closeAnyOpenSession(driverA);
+      const onRunA = await trackingService.openSession({
+        authUserId: AUTH_A,
+        runId,
+        device: null,
+      });
+      const observationOnRunA = await trackingService.ingest({
+        authUserId: AUTH_A,
+        sessionId: onRunA.id,
+        clientEventId: `${PREFIX}-obs-cross-run`,
+        latitude: HANOI.latitude,
+        longitude: HANOI.longitude,
+        accuracyMetres: 11,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source: 'DEVICE_FUSED',
+        capturedAt: new Date('2026-09-19T05:00:00Z'),
+        mockLocationReported: false,
+      });
+
+      // Hai moc dan duong tren chang cua VONG CHAY B, de `DELIVERY_ARRIVAL` o do di toi duoc cong
+      // ban dinh vi thay vi dung lai o `CHECKPOINT_PREDECESSOR_MISSING`.
+      for (const type of ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE'] as const) {
+        await checkpoints.recordAsDriver({
+          type,
+          runId: runBId,
+          legId: legBId,
+          authUserId: AUTH_A,
+          clientEventId: `${PREFIX}-B-${type}`,
+        });
+      }
+
+      await expect(
+        checkpoints.recordAsDriver({
+          type: 'DELIVERY_ARRIVAL',
+          runId: runBId,
+          legId: legBId,
+          authUserId: AUTH_A,
+          observationId: observationOnRunA.id,
+          clientEventId: `${PREFIX}-B-ARRIVAL-CROSS`,
+        }),
+      ).rejects.toMatchObject({ reason: 'CHECKPOINT_OBSERVATION_NOT_FOR_RUN', kind: 'DENIED' });
+
+      await expect(
+        checkpoints.recordAsDriver({
+          type: 'DELIVERY_ACCEPTED',
+          runId: runBId,
+          legId: legBId,
+          authUserId: AUTH_A,
+          observationId: observationOnRunA.id,
+          clientEventId: `${PREFIX}-B-ACCEPTED-CROSS`,
+        }),
+      ).rejects.toMatchObject({ reason: 'CHECKPOINT_OBSERVATION_NOT_FOR_RUN', kind: 'DENIED' });
+
+      // Khong mot moc nao duoc ghi tu hai lan tren.
+      const onLegB = await checkpointRepo.listForLeg(legBId);
+      expect(onLegB.map((row) => row.type)).toEqual(['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE']);
+
+      /*
+       * DOI CHUNG DUONG. Thieu doan nay thi hai lan tu choi o tren co the den tu bat ky thu gi
+       * khac tren duong di, va bai kiem se "xanh" trong khi cong that chua bao gio duoc cham toi.
+       * Cung lai xe, cung moc, cung chang: chi doi MOT thu la vong chay cua ban dinh vi.
+       */
+      await closeAnyOpenSession(driverA);
+      const onRunB = await trackingService.openSession({
+        authUserId: AUTH_A,
+        runId: runBId,
+        device: null,
+      });
+      expect(onRunB.vehicleId).toBe(vehicleBId);
+      const observationOnRunB = await trackingService.ingest({
+        authUserId: AUTH_A,
+        sessionId: onRunB.id,
+        clientEventId: `${PREFIX}-obs-run-b`,
+        latitude: HANOI.latitude + 0.0005,
+        longitude: HANOI.longitude + 0.0005,
+        accuracyMetres: 10,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source: 'DEVICE_FUSED',
+        capturedAt: new Date('2026-09-19T05:10:00Z'),
+        mockLocationReported: false,
+      });
+      const arrivalOnB = await checkpoints.recordAsDriver({
+        type: 'DELIVERY_ARRIVAL',
+        runId: runBId,
+        legId: legBId,
+        authUserId: AUTH_A,
+        observationId: observationOnRunB.id,
+        clientEventId: `${PREFIX}-B-ARRIVAL`,
+      });
+      expect(arrivalOnB.observationId).toBe(observationOnRunB.id);
+    });
+
+    /* ---------------------------------------------------------------- *
+     * 6. VONG DOI: phien khong song lau hon vong chay cua no
+     * ---------------------------------------------------------------- */
+
+    /**
+     * MOT CA LAM VIEC THAT, tren DB that.
+     *
+     * Man hinh hien truong mo phien mot cach NGAM va khong co nut dung. Neu phien cua vong chay
+     * vua xong o lai `ACTIVE`, hai thu hong cung luc, va ca hai deu im lang:
+     *
+     *   · `TransportTrackingSession_activeDriver_key` chi cho MOT phien ACTIVE moi lai xe — nen
+     *     lai xe bam moc cua vong chay ke tiep va nhan `DRIVER_HAS_ANOTHER_OPEN_SESSION`;
+     *   · phep cham suc khoe van doi vi tri cua mot chiec xe khong con chay chuyen nao.
+     *
+     * Bai nay di het ca hai, va KHONG co mot lan dieu hanh nao don tay o giua.
+     */
+    it('vong chay ve trang thai cuoi: het ky vong suc khoe, va lai xe mo duoc phien ke tiep NGAY', async () => {
+      await closeAnyOpenSession(driverA);
+      const onRunA = await trackingService.openSession({
+        authUserId: AUTH_A,
+        runId,
+        device: null,
+      });
+      await trackingService.ingest({
+        authUserId: AUTH_A,
+        sessionId: onRunA.id,
+        clientEventId: `${PREFIX}-obs-lifecycle`,
+        latitude: HANOI.latitude,
+        longitude: HANOI.longitude,
+        accuracyMetres: 9,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source: 'DEVICE_FUSED',
+        capturedAt: new Date('2026-09-19T06:00:00Z'),
+        mockLocationReported: false,
+      });
+
+      // TRUOC: vong chay con chay, nen CO mot ky vong that — khong phai `NOT_TRACKED`.
+      expect((await health.forVehicle(vehicleId)).status).not.toBe('NOT_TRACKED');
+
+      // Vong chay A ket thuc. Dung buoc chuyen ma san pham that ghi ra, khong mot duong rieng nao.
+      await movement.setRunStatus(runId, 'COMPLETED', new Date('2026-09-19T07:00:00Z'));
+
+      // SAU: khong con ky vong nao — va phien van chua bi ai dong. Phep cham la mot phep DOC.
+      expect((await health.forVehicle(vehicleId)).status).toBe('NOT_TRACKED');
+      expect((await tracking.findSession(onRunA.id))?.status).toBe('ACTIVE');
+
+      // Va lai xe mo duoc phien tren vong chay ke tiep NGAY, khong ai dong tay vao gi.
+      const onRunB = await trackingService.openSession({
+        authUserId: AUTH_A,
+        runId: runBId,
+        device: null,
+      });
+      expect(onRunB.id).not.toBe(onRunA.id);
+      expect(onRunB.runId).toBe(runBId);
+      expect(onRunB.status).toBe('ACTIVE');
+
+      // Phien cu da duoc dong THAT — mot hang `ACTIVE` con lai van chiem cho khoa mot phan — va no
+      // noi ro vi sao no dong.
+      const stale = await tracking.findSession(onRunA.id);
+      expect(stale?.status).not.toBe('ACTIVE');
+      expect(stale?.endedReason).toBe('RUN_TERMINAL');
+
+      await closeAnyOpenSession(driverA);
     });
   },
 );

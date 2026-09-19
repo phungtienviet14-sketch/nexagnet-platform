@@ -10,7 +10,9 @@ import {
 import { TRANSPORT_PROOF_DECISIONS } from './proof-decisions.js';
 import { VehicleTelematicsPort } from './telematics/vehicle-telematics.port.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
+import { findEndedRunSubject } from './run-subject-lifecycle.js';
 import { TrackingRepository } from './tracking.repository.js';
+import { TransportProofCoreFacts } from './transport-proof-facts.port.js';
 
 /**
  * SUC KHOE VI TRI cua mot chiec xe, lap tu su that DA GHI — `#297 T5`.
@@ -62,6 +64,14 @@ export class LocationHealthService {
      * voi `source: 'TELEMATICS'`), nen tep nay khong goi ra ngoai mang.
      */
     private readonly telematics: VehicleTelematicsPort,
+    /**
+     * CUA SO sang `transport-core`, dung o day de tra loi DUNG MOT cau — `#327`.
+     *
+     * *"Vong chay chu the cua phien nay con dang chay khong?"* Mot phien theo vong chay khong song
+     * lau hon vong chay cua no; xem `findEndedRunSubject()`. Cong nay KHONG CO ham ghi nao, nen
+     * phep cham suc khoe van la mot phep doc thuan tuy.
+     */
+    private readonly core: TransportProofCoreFacts,
     @Inject(TRANSPORT_PROOF_POLICY) private readonly policy: TransportProofPolicy,
     @Optional() private readonly telemetry?: TelemetryService,
     @Optional() @Inject(TRANSPORT_CLOCK) private readonly clock?: () => Date,
@@ -109,14 +119,27 @@ export class LocationHealthService {
      * qua di. Bo qua o day cho ra dung cung mot cau tra loi, re hon, va khong mo mot nang luc doc
      * vi tri cho nhung chiec xe khong ai theo doi.
      */
-    const expectation: TrackingExpectation | null = session
-      ? {
-          tripId: session.tripId,
-          runId: session.runId,
-          sessionId: session.id,
-          since: session.startedAt,
-        }
-      : null;
+    /*
+     * ...VA MOT PHIEN CUA VONG CHAY DA KET THUC KHONG CON LA MOT KY VONG — `#327`.
+     *
+     * Hang du lieu van la `ACTIVE`, va do la mot hinh dang THAT: man hinh hien truong mo phien mot
+     * cach ngam va khong co nut dung, nen phien cua vong chay vua chay xong o lai cho toi lan lai
+     * xe do mo phien ke tiep. Doc `ACTIVE` mot cach thuan tuy se bien mot chiec xe dang dau bai
+     * thanh mot bao dong `LOST` vinh vien — thu day nguoi nhin ra khoi bang dieu hanh.
+     *
+     * KHONG ghi gi o day. Day la duong DOC; lan don dep that nam o `TrackingService.openSession()`,
+     * tai dung cho phien cu co hau qua. Ca hai hoi CUNG MOT ham de hai ben khong bao gio lech.
+     */
+    const ended = session ? await findEndedRunSubject(this.core, session) : null;
+    const expectation: TrackingExpectation | null =
+      session && ended === null
+        ? {
+            tripId: session.tripId,
+            runId: session.runId,
+            sessionId: session.id,
+            since: session.startedAt,
+          }
+        : null;
 
     /*
      * CUA SO = KY VONG. Ban dinh vi nhan TRUOC khi phien nay mo thuoc ve mot ky vong DA DONG, va no

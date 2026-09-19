@@ -119,7 +119,12 @@ describe('WaitingSessionService — WT-020', () => {
         clientEventId: `e.${type}`,
       });
     }
-    location.observations.set('obs_1', { id: 'obs_1', capturedAt: now, driverId: 'drv_a' });
+    location.observations.set('obs_1', {
+      id: 'obs_1',
+      capturedAt: now,
+      driverId: 'drv_a',
+      runId: 'run_1',
+    });
     const arrival = await checkpointService.recordAsDriver({
       type: 'DELIVERY_ARRIVAL',
       runId: 'run_1',
@@ -136,6 +141,7 @@ describe('WaitingSessionService — WT-020', () => {
       id: clientEventId,
       capturedAt: now,
       driverId: 'drv_a',
+      runId: 'run_1',
     });
     await checkpointService.recordAsDriver({
       type: 'DELIVERY_ACCEPTED',
@@ -332,7 +338,12 @@ describe('WaitingSessionService — WT-020', () => {
       undefined,
       () => now,
     );
-    location.observations.set('obs_acc', { id: 'obs_acc', capturedAt: now, driverId: 'drv_a' });
+    location.observations.set('obs_acc', {
+      id: 'obs_acc',
+      capturedAt: now,
+      driverId: 'drv_a',
+      runId: 'run_1',
+    });
     await withoutBridge.recordAsDriver({
       type: 'DELIVERY_ACCEPTED',
       runId: 'run_1',

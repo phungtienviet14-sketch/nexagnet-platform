@@ -60,6 +60,14 @@ export const TRACKING_SESSION_OPEN_REASONS = [
    * mot thu khong co that, va he thong khong biet cai nao — nen no tu choi thay vi doan.
    */
   'DRIVER_HAS_ANOTHER_OPEN_SESSION',
+  /**
+   * Phien cu cua mot VONG CHAY DA KET THUC vua duoc dong de nhuong duong — `#327`.
+   *
+   * Mot ket qua CHO PHEP, khong phai mot loi: no la dau vet cua mot buoc don dep tat dinh, va no
+   * PHAI de lai dau vet. Khong ghi thi mot phien bien mat giua hai lan doc so, va nguoi doi chieu
+   * ve sau khong co cach nao noi duoc no da dong vi lai xe bam, vi het gio, hay vi vong chay xong.
+   */
+  'STALE_RUN_SESSION_CLOSED',
   /** Ma cai dat ung dung nay da duoc gan cho mot lai xe KHAC. */
   'DEVICE_BOUND_TO_ANOTHER_DRIVER',
   /** Ma cai dat da bi thu hoi. */
@@ -317,6 +325,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     DRIVER_NOT_ASSIGNED_TO_RUN: 'Lái xe chưa từng được phân công vào vòng chạy này',
     RUN_NOT_ACTIVE: 'Vòng chạy đã kết thúc — không còn gì để bám',
     DRIVER_HAS_ANOTHER_OPEN_SESSION: 'Lái xe đang có một phiên khác mở trên chuyến khác',
+    STALE_RUN_SESSION_CLOSED: 'Đã đóng phiên cũ của một vòng chạy đã kết thúc',
     DEVICE_BOUND_TO_ANOTHER_DRIVER: 'Mã cài đặt ứng dụng này đã gắn với một lái xe khác',
     DEVICE_REVOKED: 'Mã cài đặt ứng dụng đã bị thu hồi',
 

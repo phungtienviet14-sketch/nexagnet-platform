@@ -13,6 +13,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_PROOF_DECISIONS } from './proof-decisions.js';
 import { ACTIVE_TRACKING_SESSION, DEVICE_INSTALLATION_ID } from './proof-storage-conflict.js';
 import { assessObservationRisk, clockSkewSeconds } from './risk-assessment.js';
+import { findEndedRunSubject } from './run-subject-lifecycle.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
 import { TrackingRepository, type AppendRiskFlagInput } from './tracking.repository.js';
 import type {
@@ -37,6 +38,16 @@ interface ResolvedTrackingSubject {
   readonly runId: string | null;
   readonly vehicleId: string | null;
 }
+
+/**
+ * LY DO KET THUC khi chu the — vong chay — da het, chu khong phai khi nguoi dung bam dung.
+ *
+ * Mot HANG SO chu khong mot chuoi go tai cho: gia tri nay di vao `TrackingSession.endedReason`,
+ * tuc vao so nghiep vu, va no la thu duy nhat phan biet "lai xe da bam ket thuc ca" voi "he thong
+ * don mot phien cua vong chay da xong". Hai cau do dan toi hai ket luan khac nhau khi co nguoi doi
+ * chieu mot ngay lam viec.
+ */
+export const RUN_TERMINAL_SESSION_END_REASON = 'RUN_TERMINAL';
 import { TransportProofCoreFacts, type ProofDriverFacts } from './transport-proof-facts.port.js';
 
 /**
@@ -90,7 +101,9 @@ export class TrackingService {
       });
       return open;
     }
-    if (open) {
+    // Phien cu con GIU CHO hay khong la cau hoi cua CHU THE cua no, khong cua nguoi dang goi. Xem
+    // `releaseIfSubjectEnded()`.
+    if (open && !(await this.releaseIfSubjectEnded(open))) {
       this.deny('tracking.session_open', 'DRIVER_HAS_ANOTHER_OPEN_SESSION', {
         openSessionId: open.id,
         openTripId: open.tripId,
@@ -250,6 +263,57 @@ export class TrackingService {
    */
   private isSameSubject(session: TrackingSession, subject: ResolvedTrackingSubject): boolean {
     return session.tripId === subject.tripId && session.runId === subject.runId;
+  }
+
+  /**
+   * MOT PHIEN THEO VONG CHAY KHONG SONG LAU HON VONG CHAY CUA NO — `#327`.
+   *
+   * ============================================================================================
+   * VI SAO CAN MOT VONG DOI, VA VI SAO NO KHONG THE LA MOT NUT TREN MAN HINH
+   * ============================================================================================
+   *
+   * Man hinh hien truong MO phien mot cach NGAM: lai xe cham "toi da den noi", va ung dung tu di
+   * ba buoc vi tri. Khong co nut "dung bam vi tri", va them mot nut nhu the cung khong sua duoc
+   * gi — no bat lai xe nho don dep mot thu ho khong biet minh da tao ra, va lan dau ai do quen se
+   * de lai dung trang thai ma ta dang tranh.
+   *
+   * Ma trang thai do KHONG vo hai: `TransportTrackingSession_activeDriver_key` chi cho MOT phien
+   * ACTIVE moi lai xe. Mot phien con mo cua vong chay hom qua vi the la mot CAI KHOA tren vong
+   * chay hom nay — lai xe bam "da den noi" va nhan `DRIVER_HAS_ANOTHER_OPEN_SESSION`, dung o kin
+   * ma `#327` sinh ra de dong.
+   *
+   * ============================================================================================
+   * CHU THE GIU VONG DOI, VA NO DUOC HOI TAI CHO
+   * ============================================================================================
+   *
+   * Khong co mot ban sao trang thai thu hai nao duoc nuoi o day: cau "phien nay con hieu luc
+   * khong" duoc tra loi bang cach doc trang thai vong chay tai dung luc no co hau qua. Mot co
+   * duoc day tu phia dong vong chay se phai dung bo voi MOI duong lam mot vong chay ket thuc (dong
+   * binh thuong, huy, luot quet), va lan dau mot duong moi quen goi thi he thong lai ke ho — lan
+   * nay im lang hon, vi hang du lieu trong VAN co ve dung.
+   *
+   * Ban ghi duoc DONG THAT (khong chi bo qua): mot hang ACTIVE con lai se tiep tuc chiem cho khoa
+   * mot phan o Postgres.
+   *
+   * Tra ve `true` khi phien cu vua duoc nhuong duong.
+   */
+  private async releaseIfSubjectEnded(open: TrackingSession): Promise<boolean> {
+    const ended = await findEndedRunSubject(this.core, open);
+    if (ended === null) return false;
+
+    const closed = await this.repository.closeSession(
+      open.id,
+      this.now(),
+      RUN_TERMINAL_SESSION_END_REASON,
+    );
+    this.allow('tracking.session_open', 'STALE_RUN_SESSION_CLOSED', {
+      sessionId: closed.id,
+      runId: ended.runId,
+      runStatus: ended.status,
+      driverId: open.driverId,
+      observationCount: closed.observationCount,
+    });
+    return true;
   }
 
   /* ------------------------------------------------------------------ *
