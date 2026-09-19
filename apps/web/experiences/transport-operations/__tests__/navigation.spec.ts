@@ -30,6 +30,8 @@ const FULL: readonly CapabilityId[] = [
   'transport-settlement',
 ];
 
+const FIRST_UAT: readonly CapabilityId[] = [...FULL, 'transport-toll'];
+
 /**
  * Hai ma cua T6 — CO THAT trong `CapabilityId` tu khi PR #152 vao `main`. Truoc day bo test nay
  * phai `as unknown as` de dien lai mot tinh huong tuong lai; nay khong con phai, va do chinh la
@@ -83,6 +85,12 @@ describe('nang luc toi thieu — chi bat transport-core', () => {
     expect(visible).toContain('driver-fund');
     expect(visible).toContain('fuel');
     expect(visible).not.toContain('settlement');
+  });
+});
+
+describe('Lane W — first UAT scope', () => {
+  it('keeps ETC outside the owner navigation even when the preview capability remains enabled', () => {
+    expect(idsOf(director(FIRST_UAT))).not.toContain('toll');
   });
 });
 
