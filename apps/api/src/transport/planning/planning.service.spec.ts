@@ -103,7 +103,35 @@ describe('PlanningService — vong chay do he thong quan (#276 Lane L)', () => {
     planning = build(planningPolicy('ONE_ORDER_PER_RUN'));
   });
 
-  const aVehicle = (plate = '29C-11111') =>
+  /** Mot lai xe dang lam viec. Tach rieng de bai kiem gan tay duoc khi can. */
+  const aDriver = (fullName = 'Lai xe mau', phone = '0900000001') =>
+    fleet.createDriver({
+      fullName,
+      phone,
+      licenceClass: 'FC',
+      licenceExpiry: '2030-01-01',
+    });
+
+  /**
+   * MOT CHIEC XE DIEU DUOC — co nghia la co nguoi cam no.
+   *
+   * Fixture nay co y KHONG tra ve mot chiec xe tran: ke tu khi `commit()` doi dung mot lai xe dang
+   * phu trach, mot chiec xe khong co ai la mot chiec xe KHONG giao viec duoc. De fixture tra ve xe
+   * tran roi di gan tay o tung bai se lam phan lon bai kiem noi ve mot trang thai khong ton tai
+   * trong mot doi xe that.
+   */
+  const aVehicle = async (plate = '29C-11111') => {
+    const vehicle = await fleet.createVehicle({
+      registrationPlate: plate,
+      vehicleClass: 'Đầu kéo',
+    });
+    const driver = await aDriver(`Lai xe ${plate}`, `090${plate.replace(/\D/g, '').slice(0, 7)}`);
+    await fleet.assignDriverToVehicle(vehicle.id, driver.id, now);
+    return vehicle;
+  };
+
+  /** Chiec xe tran — chi dung cho cac bai do chinh duong tu choi khi thieu lai xe. */
+  const aVehicleWithoutDriver = (plate = '29C-99999') =>
     fleet.createVehicle({ registrationPlate: plate, vehicleClass: 'Đầu kéo' });
 
   const anOrder = (code: string, origin: string, destination: string) =>
@@ -635,5 +663,117 @@ describe('PlanningService — vong chay do he thong quan (#276 Lane L)', () => {
     const outcome = await planning.settleRunClosure(run.id);
     expect(outcome.closed).toBe(true);
     expect(outcome.verdict.trigger).toBe('IDLE_TIMEOUT');
+  });
+
+  /* ---------------------------------------------------------------- *
+   * GIAO XE PHAI GIAO CA NGUOI
+   *
+   * Hoi quy cua mot loi do duoc bang tay tren ban xem truoc: giao dien bao "Da giao don ... cho xe
+   * ..." va vong chay co that, nhung lai xe cua chiec xe do khong thay gi ca. Nguyen nhan la
+   * `commit()` mo vong chay ma khong ghi mot hang `TransportRunAssignment` nao, trong khi
+   * `listOpenRunsForDriver()` loc DUNG bang hang do.
+   * ---------------------------------------------------------------- */
+
+  it('giao xe thi vong chay thuoc ve dung lai xe dang cam chiec xe do', async () => {
+    const vehicle = await fleet.createVehicle({
+      registrationPlate: '29H-152.44',
+      vehicleClass: 'Tải 5 tấn',
+    });
+    const binh = await aDriver('Nguyễn Văn Bình', '0901120301');
+    await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+    const order = await anOrder('ORD-ASSIGN-1', 'Kho Hà Nội', 'Hải Phòng');
+
+    const { run } = await planning.commit(
+      order.id,
+      { vehicleId: vehicle.id, idempotencyKey: 'assign-1' },
+      ACTOR,
+    );
+
+    const assignments = await movement.runAssignmentHistory(run.id);
+    const active = assignments.filter((entry) => entry.effectiveTo === null);
+    expect(active).toHaveLength(1);
+    expect(active[0]?.driverId).toBe(binh.id);
+  });
+
+  it('lai xe do MO duoc vong chay, lai xe khac KHONG thay no', async () => {
+    const vehicle = await fleet.createVehicle({
+      registrationPlate: '29H-152.44',
+      vehicleClass: 'Tải 5 tấn',
+    });
+    const binh = await aDriver('Nguyễn Văn Bình', '0901120301');
+    const hung = await aDriver('Trần Quốc Hùng', '0901120302');
+    await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+    const order = await anOrder('ORD-ASSIGN-2', 'Kho Hà Nội', 'Hải Phòng');
+
+    const { run } = await planning.commit(
+      order.id,
+      { vehicleId: vehicle.id, idempotencyKey: 'assign-2' },
+      ACTOR,
+    );
+
+    // Dung truy van ma man hinh Hien truong cua lai xe dung, khong phai mot truy van tuong duong.
+    const mine = await movementRepo.listOpenRunsForDriver(binh.id);
+    expect(mine.map((entry) => entry.id)).toContain(run.id);
+
+    const others = await movementRepo.listOpenRunsForDriver(hung.id);
+    expect(others.map((entry) => entry.id)).not.toContain(run.id);
+  });
+
+  it('gui lai cung khoa chong lap KHONG sinh ban phan cong thu hai', async () => {
+    const vehicle = await aVehicle('29H-152.44');
+    const order = await anOrder('ORD-ASSIGN-3', 'Kho Hà Nội', 'Hải Phòng');
+    const command = { vehicleId: vehicle.id, idempotencyKey: 'assign-3' };
+
+    const first = await planning.commit(order.id, command, ACTOR);
+    const second = await planning.commit(order.id, command, ACTOR);
+
+    expect(second.replayed).toBe(true);
+    expect(second.run.id).toBe(first.run.id);
+    expect(await movement.runAssignmentHistory(first.run.id)).toHaveLength(1);
+  });
+
+  it('xe chua co lai xe phu trach: tu choi, va KHONG de lai vong chay mo coi', async () => {
+    const vehicle = await aVehicleWithoutDriver();
+    const order = await anOrder('ORD-ASSIGN-4', 'Kho Hà Nội', 'Hải Phòng');
+
+    const reason = await reasonOf(() =>
+      planning.commit(order.id, { vehicleId: vehicle.id, idempotencyKey: 'assign-4' }, ACTOR),
+    );
+    expect(reason).toBe('PLAN_VEHICLE_DRIVER_MISSING');
+
+    // Diem cot loi cua bai nay: tu choi PHAI xay ra TRUOC moi lan ghi. Mot vong chay sot lai o day
+    // chinh la cai loi ma ban va nay di sua.
+    expect(await movement.latestRunForVehicle(vehicle.id)).toBeNull();
+    expect(await plans.findActiveForOrder(order.id)).toBeNull();
+  });
+
+  it('xe co hai ban phan cong hieu luc: tu choi bang mot ma RIENG, khong gop vao "thieu"', async () => {
+    const vehicle = await aVehicleWithoutDriver();
+    const binh = await aDriver('Nguyễn Văn Bình', '0901120301');
+    const hung = await aDriver('Trần Quốc Hùng', '0901120302');
+    await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+
+    /*
+     * Hai ban phan cong CUNG hieu luc khong dung duoc bang API cua kho: `assignDriverToVehicle()`
+     * dong ban cu truoc khi mo ban moi, dung nhu Postgres cuong che. Nen o day dung mot ban de len
+     * doc — khong phai de "cho bai kiem xanh", ma de tra loi: NEU bang du lieu roi vao trang thai
+     * ma rang buoc dang ngan, tang mien co tu bao ve khong? Cau tra loi phai la co, vi rang buoc
+     * co the bi go bang mot migration, va vi kho trong bo nho khong he co no.
+     */
+    const readAssignments = fleet.activeDriverAssignmentsForVehicle.bind(fleet);
+    fleet.activeDriverAssignmentsForVehicle = async (id: string) => {
+      const rows = await readAssignments(id);
+      const [only] = rows;
+      if (id !== vehicle.id || only === undefined) return rows;
+      return [only, { ...only, id: `${only.id}-song-song`, driverId: hung.id }];
+    };
+
+    const order = await anOrder('ORD-ASSIGN-5', 'Kho Hà Nội', 'Hải Phòng');
+
+    const reason = await reasonOf(() =>
+      planning.commit(order.id, { vehicleId: vehicle.id, idempotencyKey: 'assign-5' }, ACTOR),
+    );
+    expect(reason).toBe('PLAN_VEHICLE_DRIVER_AMBIGUOUS');
+    expect(await movement.latestRunForVehicle(vehicle.id)).toBeNull();
   });
 });

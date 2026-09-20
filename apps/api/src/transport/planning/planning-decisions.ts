@@ -44,6 +44,21 @@ export const PLAN_COMMIT_REASONS = [
    * that thay vi doan — cung khuon voi `SITE_INTAKE_CREATE_IN_FLIGHT`.
    */
   'PLAN_COMMIT_IN_FLIGHT',
+  /**
+   * Chiec xe duoc chon khong co lai xe nao dang phu trach.
+   *
+   * Giao xe ma khong biet ai cam vo lang se sinh mot vong chay MO COI: no ton tai, no hien tren
+   * bang dieu hanh, nhung `listOpenRunsForDriver()` khong tra no ve cho ai ca — khong lai xe nao
+   * mo duoc chang cua no. Tu choi TAI DAY dat dung, vi luc nay chua co hang nao duoc ghi.
+   */
+  'PLAN_VEHICLE_DRIVER_MISSING',
+  /**
+   * Chiec xe dang co TU HAI ban phan cong lai xe hieu luc tro len.
+   *
+   * Chon bua mot nguoi se gan viec cho nguoi khong cam chuyen do. Cung ly le voi `DEPOT_AMBIGUOUS`:
+   * khi du lieu nen mo ho thi noi that, khong doan.
+   */
+  'PLAN_VEHICLE_DRIVER_AMBIGUOUS',
 ] as const;
 export type PlanCommitReason = (typeof PLAN_COMMIT_REASONS)[number];
 
@@ -156,6 +171,10 @@ export const TRANSPORT_PLANNING_DECISIONS = defineDecisionVocabulary({
     PLAN_ORDER_CANCELLED: 'Don da huy, khong lap ke hoach duoc',
     PLAN_ORDER_FULFILLED: 'Don da hoan thanh, khong lap ke hoach duoc',
     PLAN_COMMIT_IN_FLIGHT: 'Lan bam nay dang duoc xu ly — thu lai sau mot lat',
+    PLAN_VEHICLE_DRIVER_MISSING:
+      'Xe nay chua co lai xe phu trach — gan lai xe cho xe roi giao don lai',
+    PLAN_VEHICLE_DRIVER_AMBIGUOUS:
+      'Xe nay dang co nhieu lai xe phu trach — dong bot ban phan cong cu roi giao don lai',
     PLAN_CANCELLED: 'Da huy ke hoach va cac chang chua chay cua no',
     PLAN_CANCEL_ALREADY_CANCELLED: 'Ke hoach da huy tu truoc',
     PLAN_CANCEL_LEG_COMPLETED: 'Chang co hang cua ke hoach nay da chay xong, khong go nguoc duoc',

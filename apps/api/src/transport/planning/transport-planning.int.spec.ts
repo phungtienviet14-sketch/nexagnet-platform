@@ -107,6 +107,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const tripIds = tripRows.map((trip) => trip.id);
       await prisma.transportTripAssignment.deleteMany({ where: { tripId: { in: tripIds } } });
       await prisma.transportTrip.deleteMany({ where: { id: { in: tripIds } } });
+      // TRUOC khi xoa xe: khoa ngoai cua ban phan cong lai xe tro vao ca xe lan lai xe, nen bo
+      // sot dong nay se lam lan don sau do that bai voi mot loi trong khong lien quan gi toi no.
+      await prisma.transportVehicleAssignment.deleteMany({
+        where: { vehicleId: { in: vehicleIds } },
+      });
       await prisma.transportVehicle.deleteMany({ where: { id: { in: vehicleIds } } });
       await prisma.transportDriver.deleteMany({ where: { phone: { startsWith: '0955PL' } } });
     }
@@ -120,11 +125,27 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     let suffix = 0;
     const nextCode = (label: string): string => `${CODE_PREFIX}-${label}-${++suffix}`;
 
-    const aVehicle = () =>
-      fleet.createVehicle({
+    /**
+     * MOT CHIEC XE DIEU DUOC — nghia la co nguoi cam no.
+     *
+     * `commit()` doi dung mot lai xe dang phu trach truoc khi mo vong chay. So dien thoai giu tien
+     * to `0955PL` de `cleanup()` o tren don duoc; ban phan cong cung phai duoc don, neu khong khoa
+     * ngoai se chan lan xoa xe.
+     */
+    const aVehicle = async () => {
+      const vehicle = await fleet.createVehicle({
         registrationPlate: `${PLATE_PREFIX}-${++suffix}`,
         vehicleClass: 'Dau keo',
       });
+      const driver = await fleet.createDriver({
+        fullName: `${CODE_PREFIX} Lai xe ${suffix}`,
+        phone: `0955PL${suffix}`,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+      });
+      await fleet.assignDriverToVehicle(vehicle.id, driver.id, new Date());
+      return vehicle;
+    };
 
     const anOrder = (origin: string, destination: string) =>
       movement.createOrder(

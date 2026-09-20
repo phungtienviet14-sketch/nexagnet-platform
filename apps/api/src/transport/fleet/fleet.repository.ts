@@ -130,6 +130,21 @@ export abstract class FleetRepository {
    * duoc ghi vao vong chay sap tao. Mot ban phan cong da dong khong tra loi duoc cau do.
    */
   abstract activeVehicleForDriver(driverId: string): Promise<string | null>;
+  /**
+   * LAI XE dang phu trach mot xe — chieu nguoc cua `activeVehicleForDriver`.
+   *
+   * Tra ve MOT MANG chu khong phai mot ban ghi, va do khong phai su thieu dut khoat: lap ke hoach
+   * phai PHAN BIET duoc "xe khong co ai cam" voi "xe dang co hai ban phan cong hieu luc". Hai tinh
+   * huong do dan toi hai cau tra loi khac nhau cho nguoi dieu hanh, nen gop ca hai vao `null` se
+   * lam mat dung cai ho can biet. Cung ly le voi `DEPOT_AMBIGUOUS`.
+   *
+   * Unique mot phan `TransportVehicleAssignment_activeVehicle_key` khien truong hop hai ban hieu
+   * luc KHONG xay ra duoc tren Postgres. Duong doc nay van dem, vi kho trong bo nho khong co rang
+   * buoc do, va vi mot bat bien chi thuc su duoc bao ve khi co nguoi doc no.
+   */
+  abstract activeDriverAssignmentsForVehicle(
+    vehicleId: string,
+  ): Promise<readonly VehicleDriverAssignment[]>;
 
   abstract createCustomer(input: CreateCustomerInput): Promise<TransportCustomer>;
   abstract updateCustomer(
@@ -287,6 +302,14 @@ export class InMemoryFleetRepository extends FleetRepository {
       (entry) => entry.driverId === driverId && entry.effectiveTo === null,
     );
     return active?.vehicleId ?? null;
+  }
+
+  async activeDriverAssignmentsForVehicle(
+    vehicleId: string,
+  ): Promise<readonly VehicleDriverAssignment[]> {
+    return this.vehicleDriverAssignments.filter(
+      (entry) => entry.vehicleId === vehicleId && entry.effectiveTo === null,
+    );
   }
 
   async createCustomer(input: CreateCustomerInput): Promise<TransportCustomer> {
