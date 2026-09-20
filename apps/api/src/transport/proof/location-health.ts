@@ -206,7 +206,15 @@ export interface LocationHealthPolicy {
  * sang va chet ngay tu dau.
  */
 export interface TrackingExpectation {
-  readonly tripId: string;
+  /**
+   * CHU THE ma phien dang mo bam theo — dung MOT trong hai khac `null` (`#327`).
+   *
+   * Hai truong chu khong mot: phep cham suc khoe khong dung den chung de tinh (`since` moi la thu
+   * quyet dinh), nhung chung di vao nhat ky chan doan — va mot `tripId` bia ra cho mot phien theo
+   * vong chay se lam nguoi doc nhat ky di tim mot chuyen khong ton tai.
+   */
+  readonly tripId: string | null;
+  readonly runId: string | null;
   readonly sessionId: string | null;
   /** Tu luc nao he thong BAT DAU cho vi tri cua chiec xe nay. Dong ho MAY CHU. */
   readonly since: Date;

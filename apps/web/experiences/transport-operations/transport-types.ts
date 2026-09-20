@@ -2762,6 +2762,50 @@ export interface RecordCheckpointInput {
   readonly note?: string;
 }
 
+/**
+ * PHIEN BAM VI TRI, nhin tu man hinh lai xe — `#327`.
+ *
+ * Mot trong hai khoa khac `null`, khong bao gio ca hai: may chu cuong che dieu do bang
+ * `TransportTrackingSession_one_subject`. Man hinh chi doc `id`.
+ */
+export interface DriverTrackingSession {
+  readonly id: string;
+  readonly tripId: string | null;
+  readonly runId: string | null;
+  readonly status: 'ACTIVE' | 'CLOSED' | 'EXPIRED';
+}
+
+/**
+ * CHU THE ma man hinh xin mo phien theo. Union, khong phai hai truong tuy chon: mot than yeu cau
+ * mang ca hai khoa bi may chu tra `400`, nen hinh dang o day phai chan no tu luc bien dich.
+ */
+export type OpenTrackingSessionInput = { readonly runId: string } | { readonly tripId: string };
+
+/**
+ * MOT BAN DINH VI do TRINH DUYET doc duoc.
+ *
+ * `source` chi nhan ba gia tri cua THIET BI. `TELEMATICS` khong vao duoc bang duong nay — mot
+ * chiec dien thoai tu khai minh la phan cung tren xe se pha huy chinh phep doi chieu cheo ma hai
+ * nguon sinh ra de phuc vu.
+ */
+export interface ReportObservationInput {
+  readonly clientEventId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMetres?: number | null;
+  readonly speedMetresPerSecond?: number | null;
+  readonly bearingDegrees?: number | null;
+  readonly source: 'DEVICE_GNSS' | 'DEVICE_FUSED' | 'DEVICE_NETWORK';
+  readonly capturedAt: string;
+  readonly mockLocationReported?: boolean | null;
+}
+
+export interface DriverLocationObservation {
+  readonly id: string;
+  readonly sessionId: string | null;
+  readonly clientEventId: string;
+}
+
 export interface StartWaitingInput {
   readonly runId: string;
   readonly legId: string;

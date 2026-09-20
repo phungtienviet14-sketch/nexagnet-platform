@@ -36,7 +36,8 @@ import type {
  * nhanh `if` trong controller van hanh. Ba dieu duoc bao dam bang CAU TRUC:
  *
  *   1. **khong route nao o day nhan `:driverId`** — danh tinh chi den tu phien;
- *   2. **khong lieu do nao nhan `vehicleId`** — xe do may chu doc tu ban phan cong;
+ *   2. **khong lieu do nao nhan `vehicleId`** — xe do may chu doc tu ban phan cong (duong chuyen)
+ *      hoac tu chinh vong chay (duong Order-first, `#327`);
  *   3. pham vi "phien cua chinh toi" duoc chot bang QUYEN SO HUU trong `TrackingService`, khong
  *      bang vai `SALE` — hai lai xe khac nhau van cung mot vai, nen vai khong the la cong.
  *
@@ -58,10 +59,19 @@ export class DriverTrackingController {
     const authUserId = requireAuthUserId(request);
     const parsed = openTrackingSessionSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(firstIssue(parsed.error));
+    /*
+     * CHU THE di thang tu lieu do vao lenh — `#327`.
+     *
+     * `openTrackingSessionSchema` la mot union hai nhanh, moi nhanh `.strict()`, nen o day chi con
+     * DUNG MOT trong hai khoa ton tai. Khong co cau `if` nao chon giup, va khong co cho nao de mot
+     * lan sua sau nay len mot thu tu uu tien giua hai khoa.
+     */
+    const subject =
+      'runId' in parsed.data ? { runId: parsed.data.runId } : { tripId: parsed.data.tripId };
     return this.guard(() =>
       this.tracking.openSession({
         authUserId,
-        tripId: parsed.data.tripId,
+        ...subject,
         device: parsed.data.device ?? null,
       }),
     );

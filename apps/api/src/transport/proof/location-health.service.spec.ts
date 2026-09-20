@@ -15,6 +15,13 @@ import {
 } from './tracking-policy.js';
 import { InMemoryTrackingRepository } from './tracking.repository.js';
 import type { LocationSource } from './tracking.types.js';
+import {
+  TransportProofCoreFacts,
+  type ProofDriverFacts,
+  type ProofRunFacts,
+  type ProofTripFacts,
+  type ProofVehicleFacts,
+} from './transport-proof-facts.port.js';
 
 /**
  * `#297 T10.5-T10.10` o TANG DICH VU — lap dau vao tu su that DA GHI.
@@ -108,13 +115,49 @@ class ThrowingTelematicsStub extends VehicleTelematicsPort {
   }
 }
 
+/**
+ * CUA SO sang `transport-core` — o day chi de tra loi MOT cau: vong chay chu the cua mot phien con
+ * dang chay khong.
+ *
+ * Moi ham khac tra ve `null`, tuc "khong tim thay". Fail-closed la mac dinh dung cho mot ban gia:
+ * neu mot duong moi lang le bat dau hoi mot cau khac, no se KHONG duoc tra loi bang mot su that
+ * bia ra.
+ */
+class FakeCoreFacts extends TransportProofCoreFacts {
+  readonly runs = new Map<string, ProofRunFacts>();
+
+  async findDriverByAuthUserId(): Promise<ProofDriverFacts | null> {
+    return null;
+  }
+  async findTrip(): Promise<ProofTripFacts | null> {
+    return null;
+  }
+  async wasDriverEverAssignedToTrip(): Promise<boolean> {
+    return false;
+  }
+  async activeVehicleForTrip(): Promise<string | null> {
+    return null;
+  }
+  async findRun(runId: string): Promise<ProofRunFacts | null> {
+    return this.runs.get(runId) ?? null;
+  }
+  async wasDriverEverAssignedToRun(): Promise<boolean> {
+    return false;
+  }
+  async findVehicle(): Promise<ProofVehicleFacts | null> {
+    return null;
+  }
+}
+
 let repository: InMemoryTrackingRepository;
+let core: FakeCoreFacts;
 let eventSeq = 0;
 
 const serviceWith = (telematics: VehicleTelematicsPort): LocationHealthService =>
   new LocationHealthService(
     repository,
     telematics,
+    core,
     DEFAULT_TRANSPORT_PROOF_POLICY,
     undefined,
     () => NOW,
@@ -131,6 +174,7 @@ const openSession = async (
   repository.createSession({
     driverId,
     tripId: 'trip-1',
+    runId: null,
     vehicleId,
     deviceInstallationId: null,
     businessDate: BUSINESS_DATE,
@@ -200,6 +244,7 @@ const observeTelematics = async (vehicleId: string, ageSeconds: number, point = 
 
 beforeEach(() => {
   repository = new InMemoryTrackingRepository();
+  core = new FakeCoreFacts();
   eventSeq = 0;
 });
 
@@ -221,6 +266,72 @@ describe('ky vong den tu PHIEN, khong tu than yeu cau', () => {
     // Lai xe da bam "ket thuc". Khong con ai doi vi tri chiec xe do, nen bao "mat GPS" la sai.
     expect(health.status).toBe('NOT_TRACKED');
     expect(health.lastKnown).toBeNull();
+  });
+
+  /**
+   * VONG CHAY DA KET THUC KHONG CON LA MOT KY VONG — `#327`, blocker 2 cua ban soat doc lap.
+   *
+   * Phien theo vong chay duoc man hinh hien truong mo NGAM va khong co nut dung. Neu mot vong chay
+   * da `COMPLETED`/`CANCELLED` van de lai mot phien ACTIVE, bang dieu hanh se doi vi tri cua mot
+   * chiec xe khong con chay chuyen nao — va cho ra mot bao dong `LOST` vinh vien ma khong ai sua
+   * duoc bang cach lam dung viec cua minh. Bao dong nhu the day nguoi nhin ra khoi bang.
+   */
+  const openRunSession = async (vehicleId: string, runId: string, startedSecondsAgo = 3_600) =>
+    repository.createSession({
+      driverId: 'driver-run',
+      tripId: null,
+      runId,
+      vehicleId,
+      deviceInstallationId: null,
+      businessDate: BUSINESS_DATE,
+      startedAt: agedBy(startedSecondsAgo),
+      openedBy: 'driver-run',
+    });
+
+  it('phien cua mot VONG CHAY DA XONG khong con la ky vong -> NOT_TRACKED, khong phai LOST', async () => {
+    core.runs.set('run-xong', {
+      id: 'run-xong',
+      code: 'VC-001',
+      status: 'COMPLETED',
+      vehicleId: 'vehicle-1',
+    });
+    const session = await openRunSession('vehicle-1', 'run-xong');
+    await observe(session.id, 'DEVICE_GNSS', LOST + 1);
+
+    const health = await service().forVehicle('vehicle-1');
+
+    expect(health.status).toBe('NOT_TRACKED');
+    expect(health.reason).toBe('TRACKING_NOT_EXPECTED');
+    expect(health.lastKnown).toBeNull();
+  });
+
+  it('vong chay bi HUY cung khong con la ky vong', async () => {
+    core.runs.set('run-huy', {
+      id: 'run-huy',
+      code: 'VC-002',
+      status: 'CANCELLED',
+      vehicleId: 'vehicle-1',
+    });
+    const session = await openRunSession('vehicle-1', 'run-huy');
+    await observe(session.id, 'DEVICE_GNSS', LOST + 1);
+
+    expect((await service().forVehicle('vehicle-1')).status).toBe('NOT_TRACKED');
+  });
+
+  /**
+   * CONG KHONG BI NOI LONG: vong chay CON DANG CHAY thi im lang VAN la mot bao dong that.
+   */
+  it('vong chay DANG CHAY ma im lang qua nguong thi VAN la LOST', async () => {
+    core.runs.set('run-dang-chay', {
+      id: 'run-dang-chay',
+      code: 'VC-003',
+      status: 'ACTIVE',
+      vehicleId: 'vehicle-1',
+    });
+    const session = await openRunSession('vehicle-1', 'run-dang-chay');
+    await observe(session.id, 'DEVICE_GNSS', LOST + 1);
+
+    expect((await service().forVehicle('vehicle-1')).status).toBe('LOST');
   });
 
   it('phien cua mot CHIEC XE KHAC khong mo ky vong cho xe nay', async () => {

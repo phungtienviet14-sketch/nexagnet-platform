@@ -14,20 +14,36 @@ import { z } from 'zod';
  * khong duoc de tuong rang no da co tac dung.
  */
 
-export const openTrackingSessionSchema = z
+const trackingDeviceSchema = z
   .object({
-    tripId: z.string().min(1),
-    device: z
-      .object({
-        installationId: z.string().min(1).max(200),
-        platform: z.enum(['ANDROID', 'IOS', 'WEB']),
-        appVersion: z.string().min(1).max(50),
-        integrityVerdict: z.enum(['UNKNOWN', 'UNVERIFIED', 'BASIC', 'STRONG']).optional(),
-      })
-      .strict()
-      .nullish(),
+    installationId: z.string().min(1).max(200),
+    platform: z.enum(['ANDROID', 'IOS', 'WEB']),
+    appVersion: z.string().min(1).max(50),
+    integrityVerdict: z.enum(['UNKNOWN', 'UNVERIFIED', 'BASIC', 'STRONG']).optional(),
   })
   .strict();
+
+/**
+ * CHU THE cua mot phien: `tripId` HOAC `runId`, dung MOT — `#327`.
+ *
+ * ============================================================================================
+ * MOT UNION HAI NHANH, KHONG PHAI MOT OBJECT VOI HAI TRUONG TUY CHON
+ * ============================================================================================
+ *
+ * `z.object({ tripId: optional, runId: optional }).refine(dung-mot)` cho ra CUNG mot tap gia tri
+ * hop le, nhung `.strict()` cua no khong con chan duoc gi: hai nhanh rieng, moi nhanh `.strict()`,
+ * khien `{ tripId, runId }` truot CA HAI nhanh va tra `400` — thay vi lot vao mot `refine` ma ai
+ * do co the noi long sau nay de "cho de".
+ *
+ * Va ca hai nhanh deu KHONG nhan `vehicleId` hay `driverId`, dung nhu khoi chu thich dau tep noi.
+ * Do la phep kiem that su quan trong o day: mot may khach gui `runId` kem `vehicleId` dang co gan
+ * chuoi toa do cua minh vao mot chiec xe no tu chon, va no phai bi bao la sai chu khong duoc bo
+ * qua im lang.
+ */
+export const openTrackingSessionSchema = z.union([
+  z.object({ tripId: z.string().min(1), device: trackingDeviceSchema.nullish() }).strict(),
+  z.object({ runId: z.string().min(1), device: trackingDeviceSchema.nullish() }).strict(),
+]);
 
 /**
  * `latitude`/`longitude` la `number` o day va `unknown` o tang mien — CO Y.

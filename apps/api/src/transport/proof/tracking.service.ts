@@ -13,6 +13,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_PROOF_DECISIONS } from './proof-decisions.js';
 import { ACTIVE_TRACKING_SESSION, DEVICE_INSTALLATION_ID } from './proof-storage-conflict.js';
 import { assessObservationRisk, clockSkewSeconds } from './risk-assessment.js';
+import { findEndedRunSubject, type EndedRunSubject } from './run-subject-lifecycle.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
 import { TrackingRepository, type AppendRiskFlagInput } from './tracking.repository.js';
 import type {
@@ -24,7 +25,30 @@ import type {
   TrackingSession,
   TrackingSummaryView,
 } from './tracking.types.js';
-import { TransportProofCoreFacts } from './transport-proof-facts.port.js';
+
+/**
+ * CHU THE DA GIAI, kem chiec xe ma may chu doc ra cho no.
+ *
+ * DUNG MOT trong `tripId`/`runId` khac `null`. Kieu nay khong noi ra dieu do bang cau truc (no la
+ * mot ban ghi noi bo, khong phai mot bien vao), nhung hai ham duy nhat dung ra no deu tra ve dung
+ * mot khoa, va `CHECK` cua kho la luoi sau cung.
+ */
+interface ResolvedTrackingSubject {
+  readonly tripId: string | null;
+  readonly runId: string | null;
+  readonly vehicleId: string | null;
+}
+
+/**
+ * LY DO KET THUC khi chu the — vong chay — da het, chu khong phai khi nguoi dung bam dung.
+ *
+ * Mot HANG SO chu khong mot chuoi go tai cho: gia tri nay di vao `TrackingSession.endedReason`,
+ * tuc vao so nghiep vu, va no la thu duy nhat phan biet "lai xe da bam ket thuc ca" voi "he thong
+ * don mot phien cua vong chay da xong". Hai cau do dan toi hai ket luan khac nhau khi co nguoi doi
+ * chieu mot ngay lam viec.
+ */
+export const RUN_TERMINAL_SESSION_END_REASON = 'RUN_TERMINAL';
+import { TransportProofCoreFacts, type ProofDriverFacts } from './transport-proof-facts.port.js';
 
 /**
  * BAM VI TRI — dich vu.
@@ -37,8 +61,12 @@ import { TransportProofCoreFacts } from './transport-proof-facts.port.js';
  *   2. **Xe do MAY CHU giai.** `vehicleId` khong ton tai trong bat ky lenh nao; no duoc doc tu ban
  *      phan cong dang hieu luc cua chuyen. Neu de may khach gui, mot lai xe gan duoc mot chuoi toa
  *      do bat ky vao mot chiec xe bat ky.
- *   3. **Chuyen phai la chuyen CUA CHINH HO.** `wasDriverEverAssignedToTrip` la cong; vai `SALE`
- *      khong the la cong, vi hai lai xe khac nhau cung mang dung vai do.
+ *   3. **Chu the phai la chu the CUA CHINH HO.** `wasDriverEverAssignedToTrip` (chuyen) va
+ *      `wasDriverEverAssignedToRun` (vong chay) la cong; vai `SALE` khong the la cong, vi hai lai
+ *      xe khac nhau cung mang dung vai do.
+ *
+ * MOT PHIEN CO HAI CHU THE CO THE (`#327`): mot CHUYEN (duong cu) hoac mot VONG CHAY (duong
+ * Order-first), dung mot. Xem `TrackingSubjectRef` va `resolveSubject()` ben duoi.
  *
  * VA MOT DIEU KHONG BAO GIO XAY RA O DAY: khong mot co rui ro nao sinh ra cong no, tru luong hay
  * ket luan gian lan (#232 D-02). Chung duoc GHI canh ban ghi, va dung o do.
@@ -60,14 +88,104 @@ export class TrackingService {
 
   async openSession(command: OpenTrackingSessionCommand): Promise<TrackingSession> {
     const driver = await this.requireDriver(command.authUserId, 'tracking.session_open');
+    const subject = await this.resolveSubject(command, driver);
 
-    const trip = await this.core.findTrip(command.tripId);
-    if (!trip) {
-      this.deny('tracking.session_open', 'TRIP_NOT_FOUND', { tripId: command.tripId });
-      throw TransportDomainError.notFound(
-        'TRIP_NOT_FOUND',
-        `Khong tim thay chuyen ${command.tripId}`,
+    // Phien dang mo TREN DUNG chu the nay -> tra lai ban cu. Day la duong chay binh thuong cua mot
+    // ung dung vua khoi dong lai, khong phai mot loi.
+    const open = await this.repository.findActiveSessionForDriver(driver.id);
+    if (open && this.isSameSubject(open, subject)) {
+      this.allow('tracking.session_open', 'SESSION_ALREADY_OPEN', {
+        sessionId: open.id,
+        tripId: subject.tripId,
+        runId: subject.runId,
+      });
+      return open;
+    }
+    // Phien cu con GIU CHO hay khong la cau hoi cua CHU THE cua no, khong cua nguoi dang goi. Xem
+    // `releaseIfSubjectEnded()`.
+    if (open && (await this.releaseIfSubjectEnded(open, 'tracking.session_open')) === null) {
+      this.deny('tracking.session_open', 'DRIVER_HAS_ANOTHER_OPEN_SESSION', {
+        openSessionId: open.id,
+        openTripId: open.tripId,
+        openRunId: open.runId,
+        requestedTripId: subject.tripId,
+        requestedRunId: subject.runId,
+      });
+      throw TransportDomainError.conflict(
+        'DRIVER_HAS_ANOTHER_OPEN_SESSION',
+        'Lai xe dang co mot phien mo tren mot chu the khac — dong phien do truoc',
       );
+    }
+
+    const deviceInstallationId = await this.bindDevice(command, driver.id);
+    const now = this.now();
+
+    try {
+      const session = await this.repository.createSession({
+        driverId: driver.id,
+        tripId: subject.tripId,
+        runId: subject.runId,
+        // Diem 2 cua khoi chu thich dau tep: xe den tu may chu, khong tu than yeu cau.
+        vehicleId: subject.vehicleId,
+        deviceInstallationId,
+        businessDate: toBusinessDate(now, this.corePolicy.timeZone),
+        startedAt: now,
+        openedBy: command.authUserId,
+      });
+      this.allow('tracking.session_open', 'SESSION_OPENED', {
+        sessionId: session.id,
+        tripId: subject.tripId,
+        runId: subject.runId,
+        driverId: driver.id,
+      });
+      return session;
+    } catch (error) {
+      // Cuoc dua: hai thiet bi mo phien cung luc. Ca hai lot qua phep kiem o tren; chi muc mot
+      // phan duoi Postgres chan mot trong hai. Dich ra dung cau ma nguoi dung hieu.
+      if (isUniqueViolationOn(error, ACTIVE_TRACKING_SESSION)) {
+        this.deny('tracking.session_open', 'DRIVER_HAS_ANOTHER_OPEN_SESSION', {
+          driverId: driver.id,
+        });
+        throw TransportDomainError.conflict(
+          'DRIVER_HAS_ANOTHER_OPEN_SESSION',
+          'Lai xe vua mo mot phien khac tu mot thiet bi khac',
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * CHU THE DA GIAI — `#327`.
+   *
+   * ============================================================================================
+   * HAI NHANH, VA CHUNG KHONG DUOC GOP
+   * ============================================================================================
+   *
+   * Gop hai nhanh thanh mot ham nhan `subjectId` + `subjectKind` se lam hai phep kiem so huu
+   * (`wasDriverEverAssignedToTrip` / `wasDriverEverAssignedToRun`) thanh hai nhanh `if` ben trong
+   * mot duong duy nhat — va mot nhanh `if` thi co ngay bi mot lan sua sau nay dao dieu kien. Tach
+   * ra thi moi nhanh CO DAY DU cong cua no, va khong nhanh nao co duong vong.
+   *
+   * Ket qua tra ve luon co DUNG MOT trong hai khoa khac `null`: `TrackingSubjectRef` o tang kieu
+   * va `CHECK` o tang kho chan hai dau con lai.
+   */
+  private async resolveSubject(
+    command: OpenTrackingSessionCommand,
+    driver: ProofDriverFacts,
+  ): Promise<ResolvedTrackingSubject> {
+    if (command.runId !== undefined) return this.resolveRunSubject(command.runId, driver);
+    return this.resolveTripSubject(command.tripId, driver);
+  }
+
+  private async resolveTripSubject(
+    tripId: string,
+    driver: ProofDriverFacts,
+  ): Promise<ResolvedTrackingSubject> {
+    const trip = await this.core.findTrip(tripId);
+    if (!trip) {
+      this.deny('tracking.session_open', 'TRIP_NOT_FOUND', { tripId });
+      throw TransportDomainError.notFound('TRIP_NOT_FOUND', `Khong tim thay chuyen ${tripId}`);
     }
     if (
       trip.status === 'DELIVERED' ||
@@ -93,63 +211,115 @@ export class TrackingService {
         `Lai xe ${driver.fullName} chua tung duoc phan cong vao chuyen ${trip.code}`,
       );
     }
+    return {
+      tripId: trip.id,
+      runId: null,
+      vehicleId: await this.core.activeVehicleForTrip(trip.id),
+    };
+  }
 
-    // Phien dang mo TREN DUNG chuyen nay -> tra lai ban cu. Day la duong chay binh thuong cua mot
-    // ung dung vua khoi dong lai, khong phai mot loi.
-    const open = await this.repository.findActiveSessionForDriver(driver.id);
-    if (open?.tripId === trip.id) {
-      this.allow('tracking.session_open', 'SESSION_ALREADY_OPEN', {
-        sessionId: open.id,
-        tripId: trip.id,
-      });
-      return open;
+  /**
+   * NHANH VONG CHAY — duong cua luong Order-first.
+   *
+   * Xe KHONG doc qua mot lan goi thu hai: no la mot cot bat buoc cua chinh vong chay
+   * (`ProofRunFacts.vehicleId`), nen mot lan doc cho ca hai su that. Hai lan doc se mo mot khe ma
+   * qua do phien co the mang chiec xe cua mot vong chay khac.
+   */
+  private async resolveRunSubject(
+    runId: string,
+    driver: ProofDriverFacts,
+  ): Promise<ResolvedTrackingSubject> {
+    const run = await this.core.findRun(runId);
+    if (!run) {
+      this.deny('tracking.session_open', 'RUN_NOT_FOUND', { runId });
+      throw TransportDomainError.notFound('RUN_NOT_FOUND', `Khong tim thay vong chay ${runId}`);
     }
-    if (open) {
-      this.deny('tracking.session_open', 'DRIVER_HAS_ANOTHER_OPEN_SESSION', {
-        openSessionId: open.id,
-        openTripId: open.tripId,
-        requestedTripId: trip.id,
-      });
+    if (run.status === 'COMPLETED' || run.status === 'CANCELLED') {
+      this.deny('tracking.session_open', 'RUN_NOT_ACTIVE', { runId: run.id, status: run.status });
       throw TransportDomainError.conflict(
-        'DRIVER_HAS_ANOTHER_OPEN_SESSION',
-        'Lai xe dang co mot phien mo tren chuyen khac — dong phien do truoc',
+        'RUN_NOT_ACTIVE',
+        `Vong chay ${run.code} da o trang thai ${run.status} — khong con gi de bam`,
       );
     }
-
-    const deviceInstallationId = await this.bindDevice(command, driver.id);
-    const now = this.now();
-
-    try {
-      const session = await this.repository.createSession({
-        driverId: driver.id,
-        tripId: trip.id,
-        // Diem 2 cua khoi chu thich dau tep: xe den tu ban phan cong, khong tu than yeu cau.
-        vehicleId: await this.core.activeVehicleForTrip(trip.id),
-        deviceInstallationId,
-        businessDate: toBusinessDate(now, this.corePolicy.timeZone),
-        startedAt: now,
-        openedBy: command.authUserId,
-      });
-      this.allow('tracking.session_open', 'SESSION_OPENED', {
-        sessionId: session.id,
-        tripId: trip.id,
+    if (!(await this.core.wasDriverEverAssignedToRun(run.id, driver.id))) {
+      this.deny('tracking.session_open', 'DRIVER_NOT_ASSIGNED_TO_RUN', {
+        runId: run.id,
         driverId: driver.id,
       });
-      return session;
-    } catch (error) {
-      // Cuoc dua: hai thiet bi mo phien cung luc. Ca hai lot qua phep kiem o tren; chi muc mot
-      // phan duoi Postgres chan mot trong hai. Dich ra dung cau ma nguoi dung hieu.
-      if (isUniqueViolationOn(error, ACTIVE_TRACKING_SESSION)) {
-        this.deny('tracking.session_open', 'DRIVER_HAS_ANOTHER_OPEN_SESSION', {
-          driverId: driver.id,
-        });
-        throw TransportDomainError.conflict(
-          'DRIVER_HAS_ANOTHER_OPEN_SESSION',
-          'Lai xe vua mo mot phien khac tu mot thiet bi khac',
-        );
-      }
-      throw error;
+      throw TransportDomainError.denied(
+        'DRIVER_NOT_ASSIGNED_TO_RUN',
+        `Lai xe ${driver.fullName} chua tung duoc phan cong vao vong chay ${run.code}`,
+      );
     }
+    return { tripId: null, runId: run.id, vehicleId: run.vehicleId };
+  }
+
+  /**
+   * "Dung phien nay dang mo" — so tren CA HAI khoa, khong tren mot.
+   *
+   * So mot khoa thoi se cho ra mot cau tra loi sai im lang: mot phien theo chuyen va mot yeu cau
+   * theo vong chay deu mang `null` o dung mot ben, va `null === null` se bien hai chu the khac han
+   * nhau thanh "cung mot phien".
+   */
+  private isSameSubject(session: TrackingSession, subject: ResolvedTrackingSubject): boolean {
+    return session.tripId === subject.tripId && session.runId === subject.runId;
+  }
+
+  /**
+   * MOT PHIEN THEO VONG CHAY KHONG SONG LAU HON VONG CHAY CUA NO — `#327`.
+   *
+   * ============================================================================================
+   * VI SAO CAN MOT VONG DOI, VA VI SAO NO KHONG THE LA MOT NUT TREN MAN HINH
+   * ============================================================================================
+   *
+   * Man hinh hien truong MO phien mot cach NGAM: lai xe cham "toi da den noi", va ung dung tu di
+   * ba buoc vi tri. Khong co nut "dung bam vi tri", va them mot nut nhu the cung khong sua duoc
+   * gi — no bat lai xe nho don dep mot thu ho khong biet minh da tao ra, va lan dau ai do quen se
+   * de lai dung trang thai ma ta dang tranh.
+   *
+   * Ma trang thai do KHONG vo hai: `TransportTrackingSession_activeDriver_key` chi cho MOT phien
+   * ACTIVE moi lai xe. Mot phien con mo cua vong chay hom qua vi the la mot CAI KHOA tren vong
+   * chay hom nay — lai xe bam "da den noi" va nhan `DRIVER_HAS_ANOTHER_OPEN_SESSION`, dung o kin
+   * ma `#327` sinh ra de dong.
+   *
+   * ============================================================================================
+   * CHU THE GIU VONG DOI, VA NO DUOC HOI TAI CHO
+   * ============================================================================================
+   *
+   * Khong co mot ban sao trang thai thu hai nao duoc nuoi o day: cau "phien nay con hieu luc
+   * khong" duoc tra loi bang cach doc trang thai vong chay tai dung luc no co hau qua. Mot co
+   * duoc day tu phia dong vong chay se phai dung bo voi MOI duong lam mot vong chay ket thuc (dong
+   * binh thuong, huy, luot quet), va lan dau mot duong moi quen goi thi he thong lai ke ho — lan
+   * nay im lang hon, vi hang du lieu trong VAN co ve dung.
+   *
+   * Ban ghi duoc DONG THAT (khong chi bo qua): mot hang ACTIVE con lai se tiep tuc chiem cho khoa
+   * mot phan o Postgres.
+   *
+   * Tra ve `true` khi phien cu vua duoc nhuong duong.
+   */
+  private async releaseIfSubjectEnded(
+    open: TrackingSession,
+    point: 'tracking.session_open' | 'tracking.observation_ingest',
+  ): Promise<EndedRunSubject | null> {
+    const ended = await findEndedRunSubject(this.core, open);
+    if (ended === null) return null;
+
+    const closed = await this.repository.closeSession(
+      open.id,
+      this.now(),
+      RUN_TERMINAL_SESSION_END_REASON,
+    );
+    // Diem quyet dinh do NGUOI GOI truyen vao, vi cung mot buoc don dep xay ra o hai ranh gioi
+    // nghiep vu khac nhau — mo mot phien moi, va chan mot lan ghi. Ghi ca hai vao mot diem se lam
+    // mot luot doc so khong con noi duoc phien do dong luc lai xe bat dau ca hay luc ho bam nut.
+    this.allow(point, 'STALE_RUN_SESSION_CLOSED', {
+      sessionId: closed.id,
+      runId: ended.runId,
+      runStatus: ended.status,
+      driverId: open.driverId,
+      observationCount: closed.observationCount,
+    });
+    return ended;
   }
 
   /* ------------------------------------------------------------------ *
@@ -213,6 +383,44 @@ export class TrackingService {
       throw TransportDomainError.conflict(
         'SESSION_NOT_ACTIVE',
         'Phien da dong — khong nhan them ban dinh vi',
+      );
+    }
+
+    /*
+     * RANH GIOI GHI cua vong doi suy-tu-chu-the — `#327`.
+     *
+     * ============================================================================================
+     * VI SAO PHEP KIEM NAY PHAI CO MAT O DAY, CHU KHONG CHI O `openSession`
+     * ============================================================================================
+     *
+     * Duoi vong doi nay, hang phien cua mot vong chay da xong VAN o `ACTIVE` cho toi lan don dep ke
+     * tiep — co y, va chap nhan duoc o duong DOC vi `LocationHealthService` da bo qua no. Nhung
+     * duong GHI thi khac han: mot `session.status` con `ACTIVE` se cho ban dinh vi tiep tuc chay
+     * vao mot vong chay da dong, va luc do phien THAT SU song lau hon chu the cua no — dung o cho
+     * nguy hiem nhat. Toa do ghi vao mot vong chay da ket thuc khong con mot cau nghiep vu nao doc
+     * duoc: no khong thuoc chuyen viec nao, va khong ai doi no.
+     *
+     * Dat SAU phep kiem `status`, khong truoc: mot phien da dong tu truoc tra loi bang
+     * `SESSION_NOT_ACTIVE` va khong duoc dong lan thu hai — lan dong thu hai se ghi de `endedAt`
+     * va `endedReason` cua lan dau, tuc xoa mat ly do that su.
+     *
+     * Dat TRUOC `parseGeoPoint` va truoc phep tra khoa phat lai: mot lan gui lai vao vong chay da
+     * dong cung la mot lan ghi, va no phai dung o dung cho nay.
+     *
+     * Cung `findEndedRunSubject()` ma `openSession()` va `LocationHealthService` hoi. Mot dinh
+     * nghia, ba cho — xem `run-subject-lifecycle.ts`.
+     */
+    const ended = await this.releaseIfSubjectEnded(session, 'tracking.observation_ingest');
+    if (ended !== null) {
+      this.deny('tracking.observation_ingest', 'SESSION_SUBJECT_ENDED', {
+        sessionId: session.id,
+        runId: ended.runId,
+        runStatus: ended.status,
+        driverId: driver.id,
+      });
+      throw TransportDomainError.conflict(
+        'SESSION_SUBJECT_ENDED',
+        'Vong chay cua phien nay da ket thuc — khong nhan them ban dinh vi',
       );
     }
 
@@ -319,6 +527,7 @@ export class TrackingService {
     return {
       sessionId: session.id,
       tripId: session.tripId,
+      runId: session.runId,
       driverId: session.driverId,
       status: session.status,
       businessDate: session.businessDate,

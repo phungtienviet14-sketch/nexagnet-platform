@@ -122,11 +122,33 @@ export interface DeviceInstallation {
   readonly revokedAt: Date | null;
 }
 
+/**
+ * CHU THE cua mot phien bam vi tri — mot CHUYEN hoac mot VONG CHAY, dung MOT (`#327`).
+ *
+ * Hai khoa, khong mot khoa "da nang": mot `subjectId: string` kem `subjectKind` se cho ra mot cot
+ * khong noi duoc voi bang nao bang khoa ngoai, va lan xoa nham dau tien se de lai mot phien tro
+ * vao hu khong. Hai cot nullable + mot `CHECK` `num_nonnulls(...) = 1` giu ca hai dieu: moi phien
+ * co dung mot chu the, va chu the do co that.
+ *
+ * Vi sao CAN chu the thu hai: luong Order-first cua Lane W sinh `TransportVehicleRun` chu khong
+ * sinh `TransportTrip`. Truoc `#327`, mot lai xe tren mot vong chay that khong mo noi phien, nen
+ * khong lam noi ban dinh vi, nen khong ghi noi `DELIVERY_ARRIVAL` — mot moc ma chinh sach
+ * (`#232` D-08) BAT BUOC kem vi tri. Bia mot `TransportTrip` chi de lam cho dua se keo mot thuc
+ * the cu tro lai duong chay moi; noi long chinh sach se bo mat bang chung o dung doan no dang gia
+ * nhat. Nen: mo rong chu the.
+ */
+export type TrackingSubjectRef =
+  | { readonly tripId: string; readonly runId?: undefined }
+  | { readonly runId: string; readonly tripId?: undefined };
+
 export interface TrackingSession {
   readonly id: string;
   readonly driverId: string;
-  readonly tripId: string;
-  /** Do MAY CHU giai tu ban phan cong chuyen. KHONG BAO GIO lay tu than yeu cau. */
+  /** CHUYEN — `null` khi phien nay bam theo mot VONG CHAY. Xem `TrackingSubjectRef`. */
+  readonly tripId: string | null;
+  /** VONG CHAY — `null` khi phien nay bam theo mot CHUYEN. Dung mot trong hai khac `null`. */
+  readonly runId: string | null;
+  /** Do MAY CHU giai tu ban phan cong chuyen, hoac tu chinh vong chay. KHONG tu than yeu cau. */
   readonly vehicleId: string | null;
   readonly deviceInstallationId: string | null;
   readonly status: TrackingSessionStatus;
@@ -183,16 +205,22 @@ export interface ProofRiskFlag {
  * LENH
  * ------------------------------------------------------------------ */
 
-export interface OpenTrackingSessionCommand {
+/**
+ * `TrackingSubjectRef` giao voi phan con lai, KHONG phai mot truong `subject` long nhau.
+ *
+ * Giao nhu the thi `{ authUserId, tripId, runId }` la mot LOI BIEN DICH, chu khong phai mot hinh
+ * dang hop le ma dich vu phai nho tu choi. Va moi cho goi cu (`{ authUserId, tripId, device }`)
+ * van bien dich nguyen ven — duong chuyen khong bi cham toi.
+ */
+export type OpenTrackingSessionCommand = TrackingSubjectRef & {
   readonly authUserId: string;
-  readonly tripId: string;
   readonly device: {
     readonly installationId: string;
     readonly platform: DevicePlatform;
     readonly appVersion: string;
     readonly integrityVerdict?: DeviceIntegrityVerdict;
   } | null;
-}
+};
 
 export interface IngestObservationCommand {
   readonly authUserId: string;
@@ -221,7 +249,14 @@ export interface IngestObservationCommand {
  */
 export interface TrackingSummaryView {
   readonly sessionId: string;
-  readonly tripId: string;
+  /**
+   * CHU THE, phoi ra dung nhu no duoc luu: mot trong hai khac `null`, khong bao gio ca hai.
+   *
+   * KHONG dien mot `tripId` bia ra cho phien theo vong chay. Mot khung nhin noi doi ve chu the se
+   * lam moi phep doi chieu ve sau tro toi mot chuyen khong ton tai.
+   */
+  readonly tripId: string | null;
+  readonly runId: string | null;
   readonly driverId: string;
   readonly status: TrackingSessionStatus;
   readonly businessDate: string;

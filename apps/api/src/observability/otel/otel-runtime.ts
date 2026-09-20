@@ -83,8 +83,9 @@ export function startOtel(config: OtelRuntimeConfig = readOtelConfig()): boolean
    */
   if (config.releaseSource === 'conflict') {
     console.warn(
-      '[otel] release.json va RELEASE_GIT_SHA LECH NHAU — span se mang release=unknown. ' +
-        'Kiem lai lan deploy gan nhat truoc khi tin vao bat ky permalink nao.',
+      '[otel] release.json va SHA doc tu moi truong LECH NHAU — span se mang release=unknown. ' +
+        'Kiem lai lan deploy gan nhat truoc khi tin vao bat ky permalink nao. ' +
+        'Ten bien da tra loi nam trong dong `Danh tinh release XUNG DOT` cua telemetry noi bo.',
     );
   }
 

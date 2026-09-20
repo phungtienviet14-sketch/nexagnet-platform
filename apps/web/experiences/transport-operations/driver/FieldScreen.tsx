@@ -7,6 +7,7 @@ import { newCorrelationKey, transportApi } from '../transport-api';
 import type { DriverFieldAction } from '../transport-types';
 import { toFieldScreen, type FieldLegCard } from '../workspace/driver-field';
 import { toOperationalDocumentInput } from '../workspace/file-evidence';
+import { ensureLocationProof, type LocationProofSlot } from './driver-location';
 
 /**
  * MAN HINH HIEN TRUONG cua lai xe — `#279` O9.
@@ -32,13 +33,52 @@ import { toOperationalDocumentInput } from '../workspace/file-evidence';
  * goi lai se bien mot lan mat song thanh hai moc — va mot moc thua tren dong thoi gian la mot con
  * so sai trong ho so duyet phu cap.
  *
- * `eventKeys` giu khoa theo TUNG NUT (`legId` + nhan), nen hai nut khac nhau khong dung chung mot
- * khoa, va mot nut bam lai ba lan van chi la mot su kien.
+ * `eventKeys` giu khoa theo TUNG NUT, nen hai nut khac nhau khong dung chung mot khoa, va mot nut
+ * bam lai ba lan van chi la mot su kien.
+ *
+ * KHOA CUA MOT NUT la `legId` + `kind` + MA NGHIEP VU (`checkpointType`/`documentType`), khong
+ * phai `legId` + NHAN. Nhan la chuoi hien thi: hai viec khac han nhau tren cung mot chang co the
+ * mang cung mot nhan sau mot lan doi chu o may chu, va luc do hai nut se dung CHUNG mot khoa —
+ * viec thu hai se bi phat lai thanh ket qua cua viec thu nhat, va khong ai thay gi bat thuong.
+ *
+ * ============================================================================================
+ * NUT "CAN VI TRI" LA MOT CHUOI BON BUOC, KHONG PHAI MOT LAN GOI
+ * ============================================================================================
+ *
+ * Xem `driver-location.ts`. Ba buoc dau (doc GPS -> mo/dung lai phien theo `runId` -> gui ban dinh
+ * vi) chay TRUOC buoc ghi moc, va khong buoc nao trong ba buoc do duoc lam lai o lan bam thu hai.
+ * Neu trinh duyet khong cho vi tri, chuoi dung ngay tu buoc 1 va KHONG mot yeu cau ghi moc nao
+ * duoc gui — mot moc "toi da den noi" khong co gi chung minh la dung thu ma chinh sach nay sinh
+ * ra de chan.
+ *
+ * ============================================================================================
+ * MOT TEP DA TAI LEN KHONG TAI LEN LAN THU HAI
+ * ============================================================================================
+ *
+ * Nut chung tu di qua Nen tang Tep (`#287`): tai tep len truoc, roi ghi chung tu voi
+ * `basis: DIGITAL_FILE`. Khoa cua mot lan tai la DANH TINH NUT (`slotOf`) cong DANH TINH TEP (ten
+ * + kich thuoc + lan sua cuoi), khong phai nhan hien thi — cung mot ly do voi `eventKeys` o tren.
+ * Bam lai sau mot loi ghi chung tu dung lai `fileId` da co; chon sang tep khac thi la mot lan tai
+ * moi va mot khoa moi.
  */
+
+/**
+ * DANH TINH CUA MOT NUT — ma nghiep vu, khong phai nhan hien thi.
+ *
+ * Xem khoi chu thich dau tep: hai nut mang cung mot nhan phai van la hai khoa. Ham nay o TAM TEP
+ * chu khong trong than component, vi o chon tep ben duoi phai giu tep theo DUNG danh tinh nay —
+ * giu theo nhan se cho hai nut cung nhan dung chung mot tep.
+ */
+const slotOf = (card: FieldLegCard, action: DriverFieldAction): string =>
+  `${card.legId}:${action.kind}:${action.checkpointType ?? action.documentType ?? action.label}`;
+
 export function DriverFieldWork() {
   const queryClient = useQueryClient();
   const [failure, setFailure] = useState<string | null>(null);
   const eventKeys = useRef(new Map<string, string>());
+  /** Chung cu vi tri DA LAM cho tung nut — giu qua moi lan render va moi lan bam lai. */
+  const locationProofs = useRef(new Map<string, LocationProofSlot>());
+  /** Tep DA TAI LEN cho tung nut + tung tep — bam lai khong tai len mot ban thu hai. */
   const uploadedFileIds = useRef(new Map<string, string>());
 
   const work = useQuery({
@@ -54,6 +94,14 @@ export function DriverFieldWork() {
     return created;
   };
 
+  const proofSlotFor = (slot: string): LocationProofSlot => {
+    const existing = locationProofs.current.get(slot);
+    if (existing !== undefined) return existing;
+    const created: LocationProofSlot = { observationEventId: newCorrelationKey() };
+    locationProofs.current.set(slot, created);
+    return created;
+  };
+
   const act = useMutation({
     mutationFn: async (input: {
       readonly card: FieldLegCard;
@@ -61,13 +109,23 @@ export function DriverFieldWork() {
       readonly file?: File;
     }) => {
       const { card, action } = input;
-      const clientEventId = keyFor(`${card.legId}:${action.label}`);
+      const slot = slotOf(card, action);
+      const clientEventId = keyFor(slot);
 
       if (action.kind === 'CHECKPOINT' && action.checkpointType !== undefined) {
+        /*
+         * Ba buoc dau chay TRUOC, va mot loi o day dung chuoi lai — khong mot yeu cau ghi moc nao
+         * duoc gui di. Thong bao cua `LocationUnavailableError` noi ro la MOC CHUA DUOC GHI, de
+         * lai xe biet minh con phai bam lai chu khong bo di.
+         */
+        const observationId = action.requiresLocation
+          ? await ensureLocationProof(card.runId, proofSlotFor(slot))
+          : undefined;
         return transportApi.me.recordCheckpoint({
           type: action.checkpointType,
           runId: card.runId,
           legId: card.legId,
+          ...(observationId === undefined ? {} : { observationId }),
           clientEventId,
         });
       }
@@ -82,7 +140,7 @@ export function DriverFieldWork() {
       }
       if (action.kind === 'DOCUMENT' && action.documentType !== undefined) {
         if (input.file === undefined) throw new Error('Chọn ảnh hoặc PDF trước khi ghi chứng từ.');
-        const fileSlot = `${card.legId}:${action.label}:${input.file.name}:${input.file.size}:${input.file.lastModified}`;
+        const fileSlot = `${slot}:${input.file.name}:${input.file.size}:${input.file.lastModified}`;
         const heldFileId = uploadedFileIds.current.get(fileSlot);
         const fileId =
           heldFileId ?? (await transportApi.files.uploadOperationalDocument(input.file)).id;
@@ -219,9 +277,10 @@ function FieldLeg({
 
       <div className="tx-driver__actions">
         {card.actions.map((action) => {
-          const file = documentFiles.get(action.label);
+          const slot = slotOf(card, action);
+          const file = documentFiles.get(slot);
           return (
-            <div key={action.label}>
+            <div key={slot}>
               {action.kind === 'DOCUMENT' ? (
                 <label className="tx-field">
                   <span>Tệp cho {action.label}</span>
@@ -231,7 +290,7 @@ function FieldLeg({
                     onChange={(event) => {
                       const selected = event.target.files?.[0];
                       if (selected === undefined) return;
-                      setDocumentFiles((held) => new Map(held).set(action.label, selected));
+                      setDocumentFiles((held) => new Map(held).set(slot, selected));
                     }}
                   />
                 </label>

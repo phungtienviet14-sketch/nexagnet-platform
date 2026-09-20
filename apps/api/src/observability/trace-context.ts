@@ -37,12 +37,29 @@ import { randomBytes } from 'node:crypto';
  *   · `conflict` — ca hai nguon cung tra loi, va tra loi KHAC NHAU. Khong ben nao duoc chon.
  *   · `none`     — khong nguon nao biet. Trang thai BINH THUONG khi chay local/CI.
  */
-export type ReleaseIdentitySource = 'manifest' | 'env' | 'conflict' | 'none';
+export type ReleaseIdentitySource = 'manifest' | 'railway' | 'env' | 'conflict' | 'none';
+
+/**
+ * Bien moi truong nao da tra loi. HAI thu khac nhau ve BAN CHAT, nen chung khong duoc mang chung
+ * mot ten:
+ *
+ *   · `railway` — `RAILWAY_GIT_COMMIT_SHA`, do CHINH NEN TANG dat cho tung deployment. Khong ai
+ *     go tay duoc no, va no doi theo moi lan deploy;
+ *   · `env` — `RELEASE_GIT_SHA`, mot bien NGUOI dat. Dat mot lan roi quen la trang thai binh
+ *     thuong cua no, va do la cach no tro thanh mot cau tra loi CU.
+ */
+export type ReleaseEnvSource = Extract<ReleaseIdentitySource, 'railway' | 'env'>;
 
 /** Hai gia tri dang tranh nhau, giu lai de nguoi truc doc duoc ma khong phai SSH len VM. */
 export interface ReleaseIdentityMismatch {
   readonly manifestGitSha: string;
   readonly envGitSha: string;
+  /**
+   * BIEN NAO da noi `envGitSha`. Truong BAT BUOC: mot dong bao loi ghi "RELEASE_GIT_SHA=…" trong
+   * khi gia tri that ra den tu `RAILWAY_GIT_COMMIT_SHA` se cu nguoi truc di sua dung cai bien
+   * khong lien quan.
+   */
+  readonly envSource: ReleaseEnvSource;
 }
 
 export interface ReleaseIdentity {

@@ -111,6 +111,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Bat bien luu tru cua transpor
     tracking.createSession({
       driverId,
       tripId,
+      runId: null,
       vehicleId: null,
       deviceInstallationId: null,
       businessDate: '2026-09-07',
@@ -381,6 +382,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const session = await tracking.createSession({
         driverId,
         tripId,
+        runId: null,
         vehicleId: null,
         deviceInstallationId: null,
         businessDate: '2026-09-07',
@@ -721,6 +723,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const previous = await tracking.createSession({
         driverId,
         tripId,
+        runId: null,
         vehicleId,
         deviceInstallationId: null,
         businessDate: BUSINESS_DATE,
@@ -734,6 +737,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const current = await tracking.createSession({
         driverId,
         tripId,
+        runId: null,
         vehicleId,
         deviceInstallationId: null,
         businessDate: BUSINESS_DATE,

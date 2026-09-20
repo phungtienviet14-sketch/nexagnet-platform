@@ -26,6 +26,10 @@ import type {
   ClosedFundPeriod,
   ConfirmSiteIntakeInput,
   RecordCheckpointInput,
+  DriverTrackingSession,
+  OpenTrackingSessionInput,
+  ReportObservationInput,
+  DriverLocationObservation,
   RecordDocumentInput,
   StartWaitingInput,
   ClosedReconciliationResult,
@@ -1235,6 +1239,38 @@ export const transportApi = {
      */
     recordCheckpoint: (input: RecordCheckpointInput): Promise<unknown> =>
       send('POST', '/transport/me/checkpoints', input),
+    /**
+     * BAM VI TRI — hai duong, va ca hai la DUONG CUA CHINH LAI XE (`#327`).
+     *
+     * ==========================================================================================
+     * KHONG MOT `driverId` HAY `vehicleId` NAO O DAY
+     * ==========================================================================================
+     *
+     * Danh tinh den tu phien dang nhap; chiec xe do MAY CHU doc tu vong chay (hoac tu ban phan
+     * cong chuyen). Neu hai truong do di qua duoc bien nay, mot lai xe gan duoc chuoi toa do cua
+     * minh vao ten dong nghiep hoac vao mot chiec xe bat ky — va khong lop kiem quyen nao ben tren
+     * bat duoc, vi nguoi goi VAN dang dung quyen cua chinh ho.
+     *
+     * `openTrackingSession` la IDEMPOTENT o may chu: goi lai tren dung chu the do tra ve DUNG
+     * phien cu. Nen man hinh khong phai nho trang thai phien qua cac lan tai lai — no cu goi.
+     */
+    openTrackingSession: (input: OpenTrackingSessionInput): Promise<DriverTrackingSession> =>
+      send('POST', '/transport/me/tracking/sessions', input),
+    /**
+     * MOT LO, va `clientEventId` den tu TANG GOI.
+     *
+     * May chu tra ve mot mang CUNG DO DAI voi dau vao, theo thu tu — nen mot lan gui lai mot phan
+     * la an toan: ban da co tra ve ban cu (cung `id`), ban moi duoc ghi.
+     */
+    reportObservations: (
+      sessionId: string,
+      observations: readonly ReportObservationInput[],
+    ): Promise<readonly DriverLocationObservation[]> =>
+      send(
+        'POST',
+        `/transport/me/tracking/sessions/${encodeURIComponent(sessionId)}/observations`,
+        { observations },
+      ),
     startWaiting: (input: StartWaitingInput): Promise<unknown> =>
       send('POST', '/transport/me/waiting-sessions', input),
     recordDocument: (input: RecordDocumentInput): Promise<unknown> =>
