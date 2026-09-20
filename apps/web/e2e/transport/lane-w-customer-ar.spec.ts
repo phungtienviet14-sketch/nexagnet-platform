@@ -441,6 +441,12 @@ test.describe('Lane W — tu don go tay den tien da phan bo', () => {
     await expect(pendingTable.getByRole('row').filter({ hasText: 'W-LEGACY-01' })).toHaveCount(0);
 
     /* --- 4. XAC NHAN DOI SOAT: chon don bang MA DON --- */
+    /*
+     * Bon o nhap cua man nay nam trong bon NGAN DONG SAN (`CommandPanel`), xep theo thu tu nghiep
+     * vu 1→4. Nguoi mo man hinh de XEM cong no khong phai cuon qua chung nua, nen moi buoc go vao
+     * bat dau bang mot lan mo ngan — dung nhu tren man `Bảo dưỡng` va `Nhiên liệu`.
+     */
+    await page.getByRole('button', { name: 'Chốt một đơn' }).click();
     const confirmForm = page.getByRole('form', { name: 'Xác nhận đối soát trực tiếp' });
     await confirmForm.getByLabel('Đơn chờ đối soát').selectOption({ label: 'W-AR-UI-01' });
     await confirmForm.getByLabel('Số tiền xác nhận').fill('5000000');
@@ -453,6 +459,7 @@ test.describe('Lane W — tu don go tay den tien da phan bo', () => {
     expect(state.confirmBodies[0]?.body).toMatchObject({ confirmedAmount: 5_000_000 });
 
     /* --- 5. GHI NHAN TIEN: chon khach bang TEN --- */
+    await page.getByRole('button', { name: 'Nhập tiền về' }).click();
     const paymentForm = page.getByRole('form', { name: 'Ghi nhận thanh toán hoặc trả trước' });
     await expect(paymentForm.getByLabel('Mã khách hàng')).toHaveCount(0);
     await paymentForm.getByLabel('Khách hàng').selectOption({ label: 'Công ty Nam Phong' });
@@ -472,6 +479,12 @@ test.describe('Lane W — tu don go tay den tien da phan bo', () => {
     });
 
     /* --- 6. PHAN BO: chon tien va chon khoan phai thu bang chu, khong go mot ID nao --- */
+    /*
+     * Ngan 4 KHONG phai bam mo — no tu mo ngay sau khi ghi nhan tien. Buoc 3 luon keo theo buoc 4,
+     * va man hinh da chon san khoan vua ghi (khang dinh ngay duoi); de lua chon do sau mot cai nut
+     * dong thi khong ai nhin thay no. Bai nay do CHINH dieu do.
+     */
+    await expect(page.getByRole('button', { name: 'Gắn tiền vào nợ' })).toHaveCount(0);
     const allocateForm = page.getByRole('form', { name: 'Phân bổ thanh toán' });
     await expect(allocateForm.getByLabel('Mã thanh toán')).toHaveCount(0);
     await expect(allocateForm.getByLabel('Mã chứng từ phải thu')).toHaveCount(0);
