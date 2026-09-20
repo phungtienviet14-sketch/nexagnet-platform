@@ -98,7 +98,13 @@
       "perKmVnd": 1200
     },
     "readiness": {
-      "blockedCapabilities": [],
+      "blockedCapabilities": [
+        {
+          "key": "transport-toll",
+          "label": "Phí đường bộ (ETC)",
+          "reason": "Ngoài phạm vi UAT đầu tiên theo quyết định của chủ sở hữu."
+        }
+      ],
       "demoTenant": true
     }
   },

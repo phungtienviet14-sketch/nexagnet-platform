@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/SectionState
 import { newCorrelationKey, transportApi } from '../transport-api';
 import type { DriverFieldAction } from '../transport-types';
 import { toFieldScreen, type FieldLegCard } from '../workspace/driver-field';
+import { toOperationalDocumentInput } from '../workspace/file-evidence';
 import { ensureLocationProof, type LocationProofSlot } from './driver-location';
 
 /**
@@ -49,13 +50,36 @@ import { ensureLocationProof, type LocationProofSlot } from './driver-location';
  * Neu trinh duyet khong cho vi tri, chuoi dung ngay tu buoc 1 va KHONG mot yeu cau ghi moc nao
  * duoc gui — mot moc "toi da den noi" khong co gi chung minh la dung thu ma chinh sach nay sinh
  * ra de chan.
+ *
+ * ============================================================================================
+ * MOT TEP DA TAI LEN KHONG TAI LEN LAN THU HAI
+ * ============================================================================================
+ *
+ * Nut chung tu di qua Nen tang Tep (`#287`): tai tep len truoc, roi ghi chung tu voi
+ * `basis: DIGITAL_FILE`. Khoa cua mot lan tai la DANH TINH NUT (`slotOf`) cong DANH TINH TEP (ten
+ * + kich thuoc + lan sua cuoi), khong phai nhan hien thi — cung mot ly do voi `eventKeys` o tren.
+ * Bam lai sau mot loi ghi chung tu dung lai `fileId` da co; chon sang tep khac thi la mot lan tai
+ * moi va mot khoa moi.
  */
+
+/**
+ * DANH TINH CUA MOT NUT — ma nghiep vu, khong phai nhan hien thi.
+ *
+ * Xem khoi chu thich dau tep: hai nut mang cung mot nhan phai van la hai khoa. Ham nay o TAM TEP
+ * chu khong trong than component, vi o chon tep ben duoi phai giu tep theo DUNG danh tinh nay —
+ * giu theo nhan se cho hai nut cung nhan dung chung mot tep.
+ */
+const slotOf = (card: FieldLegCard, action: DriverFieldAction): string =>
+  `${card.legId}:${action.kind}:${action.checkpointType ?? action.documentType ?? action.label}`;
+
 export function DriverFieldWork() {
   const queryClient = useQueryClient();
   const [failure, setFailure] = useState<string | null>(null);
   const eventKeys = useRef(new Map<string, string>());
   /** Chung cu vi tri DA LAM cho tung nut — giu qua moi lan render va moi lan bam lai. */
   const locationProofs = useRef(new Map<string, LocationProofSlot>());
+  /** Tep DA TAI LEN cho tung nut + tung tep — bam lai khong tai len mot ban thu hai. */
+  const uploadedFileIds = useRef(new Map<string, string>());
 
   const work = useQuery({
     queryKey: ['transport', 'me', 'field-work'],
@@ -70,14 +94,6 @@ export function DriverFieldWork() {
     return created;
   };
 
-  /**
-   * DANH TINH CUA MOT NUT — ma nghiep vu, khong phai nhan hien thi.
-   *
-   * Xem khoi chu thich dau tep: hai nut mang cung mot nhan phai van la hai khoa.
-   */
-  const slotOf = (card: FieldLegCard, action: DriverFieldAction): string =>
-    `${card.legId}:${action.kind}:${action.checkpointType ?? action.documentType ?? action.label}`;
-
   const proofSlotFor = (slot: string): LocationProofSlot => {
     const existing = locationProofs.current.get(slot);
     if (existing !== undefined) return existing;
@@ -90,6 +106,7 @@ export function DriverFieldWork() {
     mutationFn: async (input: {
       readonly card: FieldLegCard;
       readonly action: DriverFieldAction;
+      readonly file?: File;
     }) => {
       const { card, action } = input;
       const slot = slotOf(card, action);
@@ -122,19 +139,21 @@ export function DriverFieldWork() {
         });
       }
       if (action.kind === 'DOCUMENT' && action.documentType !== undefined) {
-        /*
-         * `EXTERNAL_PHYSICAL` la duong DUY NHAT di duoc hom nay: `#287` Nen tang Tep chua vao
-         * `main`, nen cong tep tra `UNAVAILABLE` cho moi ma. Khi `#287` duoc chap nhan, mot o chon
-         * tep xuat hien o day va `basis` doi sang `DIGITAL_FILE`.
-         */
-        return transportApi.me.recordDocument({
-          type: action.documentType,
-          runId: card.runId,
-          legId: card.legId,
-          basis: 'EXTERNAL_PHYSICAL',
-          externalNote: `${action.label} — bản giấy lái xe đang giữ`,
-          clientEventId,
-        });
+        if (input.file === undefined) throw new Error('Chọn ảnh hoặc PDF trước khi ghi chứng từ.');
+        const fileSlot = `${slot}:${input.file.name}:${input.file.size}:${input.file.lastModified}`;
+        const heldFileId = uploadedFileIds.current.get(fileSlot);
+        const fileId =
+          heldFileId ?? (await transportApi.files.uploadOperationalDocument(input.file)).id;
+        uploadedFileIds.current.set(fileSlot, fileId);
+        return transportApi.me.recordDocument(
+          toOperationalDocumentInput({
+            fileId,
+            type: action.documentType,
+            runId: card.runId,
+            legId: card.legId,
+            clientEventId: keyFor(fileSlot),
+          }),
+        );
       }
       if (action.kind === 'RECEIPT_HANDOVER' && card.orderId !== null) {
         return transportApi.me.recordReceiptHandover({
@@ -178,7 +197,9 @@ export function DriverFieldWork() {
         <FieldLeg
           card={model.current}
           pending={act.isPending}
-          onAct={(action) => act.mutate({ card: model.current as FieldLegCard, action })}
+          onAct={(action, file) =>
+            act.mutate({ card: model.current as FieldLegCard, action, file })
+          }
         />
       )}
 
@@ -211,8 +232,9 @@ function FieldLeg({
 }: {
   readonly card: FieldLegCard;
   readonly pending: boolean;
-  readonly onAct: (action: DriverFieldAction) => void;
+  readonly onAct: (action: DriverFieldAction, file?: File) => void;
 }) {
+  const [documentFiles, setDocumentFiles] = useState<ReadonlyMap<string, File>>(new Map());
   return (
     <section
       className="tx-driver__card"
@@ -254,19 +276,38 @@ function FieldLeg({
       )}
 
       <div className="tx-driver__actions">
-        {card.actions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            className="tx-btn tx-btn--go tx-btn--wide"
-            disabled={pending}
-            data-testid="field-action"
-            onClick={() => onAct(action)}
-          >
-            {action.label}
-            {action.requiresLocation ? ' (cần vị trí)' : ''}
-          </button>
-        ))}
+        {card.actions.map((action) => {
+          const slot = slotOf(card, action);
+          const file = documentFiles.get(slot);
+          return (
+            <div key={slot}>
+              {action.kind === 'DOCUMENT' ? (
+                <label className="tx-field">
+                  <span>Tệp cho {action.label}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    onChange={(event) => {
+                      const selected = event.target.files?.[0];
+                      if (selected === undefined) return;
+                      setDocumentFiles((held) => new Map(held).set(slot, selected));
+                    }}
+                  />
+                </label>
+              ) : null}
+              <button
+                type="button"
+                className="tx-btn tx-btn--go tx-btn--wide"
+                disabled={pending || (action.kind === 'DOCUMENT' && file === undefined)}
+                data-testid="field-action"
+                onClick={() => onAct(action, file)}
+              >
+                {action.label}
+                {action.requiresLocation ? ' (cần vị trí)' : ''}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

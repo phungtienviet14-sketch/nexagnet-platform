@@ -465,6 +465,7 @@ const DEFAULT_DRIVER_SCREEN: DriverScreenId = 'home';
 export interface NavigationInput {
   readonly capabilities: readonly CapabilityId[];
   readonly role: AuthRole | null;
+  readonly blockedCapabilityKeys?: readonly string[];
 }
 
 const capabilitiesSatisfied = (
@@ -477,6 +478,9 @@ const capabilitiesSatisfied = (
 
 export const isSectionEnabled = (section: TransportSection, input: NavigationInput): boolean =>
   capabilitiesSatisfied(section.requiredCapabilities, input.capabilities) &&
+  !section.requiredCapabilities.some((capability) =>
+    input.blockedCapabilityKeys?.includes(capability),
+  ) &&
   canPerform(input.role, section.requiredAction);
 
 export const findSection = (id: string): TransportSection | undefined =>

@@ -13,11 +13,13 @@ import {
 } from '../hooks/useTransportWorkspace';
 import { transportApi } from '../transport-api';
 import type {
+  OperationalDocumentView,
   OrderCompletionDetail,
   OrderCompletionOutcome,
   OrderCompletionRow,
   OrderCompletionState,
 } from '../transport-types';
+import { operationalFileContentUrl } from '../workspace/file-evidence';
 
 /**
  * KET THUC DON — cong ma `#275` K4 doi phai co.
@@ -111,6 +113,8 @@ export function OrderCompletionView() {
   const [isBusy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [history, setHistory] = useState<OrderCompletionDetail | null>(null);
+  const [documents, setDocuments] = useState<readonly OperationalDocumentView[]>([]);
+  const [selectedEvidence, setSelectedEvidence] = useState<readonly string[]>([]);
   /**
    * BO LOC nam TRONG BO NHO, khong phai mot tham so truy van.
    *
@@ -122,6 +126,8 @@ export function OrderCompletionView() {
   const closeDialog = () => {
     setPending(null);
     setNote('');
+    setDocuments([]);
+    setSelectedEvidence([]);
   };
 
   /**
@@ -134,6 +140,12 @@ export function OrderCompletionView() {
    */
   const openDialog = (row: OrderCompletionRow, outcome: OrderCompletionOutcome) => {
     setFailure(null);
+    void transportApi.operationalDocuments
+      .forOrder(row.orderId)
+      .then((items) => setDocuments(items.filter((item) => item.status === 'ACTIVE')))
+      .catch((error: unknown) =>
+        setFailure(error instanceof Error ? error.message : 'Không đọc được chứng từ của đơn.'),
+      );
     if (row.acceptanceId === null) {
       setPending({ row, outcome, supersedesId: null, idempotencyKey: newIdempotencyKey() });
       return;
@@ -163,15 +175,10 @@ export function OrderCompletionView() {
       .decide(pending.row.orderId, {
         outcome: pending.outcome,
         reasonCode: REASON_CODE[pending.outcome],
-        /*
-         * Can cu BAN GIAY. Duong `DOCUMENT` doi mot khoa chung tu THUOC ve don nay, va nguon chung
-         * tu van hanh (Lane O/P) chua vao `main` — nen hom nay man hinh khong co gi de tro toi, va
-         * bia ra mot khoa se bi may chu tu choi bang `ACCEPTANCE_EVIDENCE_NOT_FOR_ORDER`. Khi nguon
-         * do vao, o day them mot o chon chung tu; luat mien khong phai doi.
-         */
-        basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
-        evidenceRefs: [],
-        externalNote: note.trim(),
+        /* Chung tu so duoc doc tu chinh Order; khong cho client tu nhap mot ma cua don khac. */
+        basis: selectedEvidence.length > 0 ? 'DOCUMENT' : 'EXTERNAL_PHYSICAL_CONFIRMATION',
+        evidenceRefs: selectedEvidence,
+        externalNote: selectedEvidence.length > 0 ? null : note.trim(),
         supersedesId: pending.supersedesId,
         idempotencyKey: pending.idempotencyKey,
       })
@@ -352,6 +359,46 @@ export function OrderCompletionView() {
         />
       )}
 
+      {pending === null || documents.length === 0 ? null : (
+        <section className="tx-panel" aria-label={`Chứng từ của đơn ${pending.row.orderCode}`}>
+          <h2>Chứng từ số của đơn</h2>
+          <p className="tx-note">
+            Chọn đúng chứng từ làm căn cứ. Tệp mở qua mã đục, không lộ đường dẫn kho.
+          </p>
+          <ul className="tx-notes">
+            {documents.map((document) => (
+              <li key={document.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selectedEvidence.includes(document.id)}
+                    onChange={(event) =>
+                      setSelectedEvidence((held) =>
+                        event.target.checked
+                          ? [...held, document.id]
+                          : held.filter((id) => id !== document.id),
+                      )
+                    }
+                  />{' '}
+                  {document.label ?? document.type} · {localTime(document.receivedAt)}
+                </label>{' '}
+                {document.fileId === null ? (
+                  <span>Bản giấy</span>
+                ) : (
+                  <a
+                    href={operationalFileContentUrl(document.fileId)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Mở tệp bằng chứng
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <ConfirmAction
         open={pending !== null}
         title={
@@ -363,7 +410,7 @@ export function OrderCompletionView() {
             : null
         }
         confirmLabel={pending === null ? '' : ACTION_LABEL[pending.outcome]}
-        reasonLabel="Bên B đã nhận / xác nhận gì"
+        reasonLabel={selectedEvidence.length > 0 ? undefined : 'Bên B đã nhận / xác nhận gì'}
         reason={note}
         onReasonChange={setNote}
         onConfirm={confirm}

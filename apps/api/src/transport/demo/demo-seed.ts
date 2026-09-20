@@ -70,6 +70,7 @@ export const DEMO_DRIVER_PASSWORD_ENV = 'TRANSPORT_DEMO_DRIVER_PASSWORD';
  */
 export const DEMO_STAFF_PERSONAS = [
   { login: 'ke-toan', name: 'Kế toán mẫu', role: 'ACCOUNTING' },
+  { login: 'giam-doc', name: 'Giám đốc mẫu', role: 'ADMIN' },
 ] as const;
 
 export interface DemoSeedOptions {
@@ -273,7 +274,8 @@ async function wipeCustomerArDemoHistory(
     }
 
     const customerDocuments = await tx.transportSettlementDocument.findMany({
-      where: { flow: 'CUSTOMER_FREIGHT' }, select: { id: true },
+      where: { flow: 'CUSTOMER_FREIGHT' },
+      select: { id: true },
     });
     const documentIds = customerDocuments.map((row) => row.id);
     const results = await Promise.all([
@@ -296,9 +298,12 @@ async function wipeCustomerArDemoHistory(
       await tx.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
     }
     const keys = [
-      'transportCustomerPaymentAllocation', 'transportCustomerPayment',
-      'transportCustomerReconciliation', 'transportCustomerReconciliationBatchLine',
-      'transportCustomerReconciliationBatch', 'transportSettlementAllocation',
+      'transportCustomerPaymentAllocation',
+      'transportCustomerPayment',
+      'transportCustomerReconciliation',
+      'transportCustomerReconciliationBatchLine',
+      'transportCustomerReconciliationBatch',
+      'transportSettlementAllocation',
     ] as const;
     const deleted: Record<string, number> = {};
     results.forEach((result, index) => {
@@ -1206,7 +1211,8 @@ async function writePlan(
           },
         });
         await tx.transportCommercialAcceptance.update({
-          where: { id: acceptance.id }, data: { latestDecisionId: decision.id },
+          where: { id: acceptance.id },
+          data: { latestDecisionId: decision.id },
         });
         bump('commercialAcceptances');
         bump('commercialAcceptanceDecisions');

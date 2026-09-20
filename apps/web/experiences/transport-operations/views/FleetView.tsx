@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { DataTable, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
@@ -19,6 +20,8 @@ import {
   type DriverRow,
   type VehicleRow,
 } from '../workspace/fleet';
+import { transportApi } from '../transport-api';
+import { toLocationHealthPresentation } from '../workspace/location-health';
 
 /**
  * Man DOI XE & LAI XE.
@@ -41,6 +44,12 @@ export function FleetView() {
   const vehicles = toSectionQuery(useVehicles(navigation));
   const drivers = toSectionQuery(useDrivers(navigation));
   const [tab, setTab] = useState<FleetTab>('vehicles');
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const locationHealth = useQuery({
+    queryKey: ['transport', 'vehicles', selectedVehicleId, 'location-health'],
+    queryFn: () => transportApi.fleet.locationHealth(selectedVehicleId ?? ''),
+    enabled: selectedVehicleId !== null,
+  });
   const today = useMemo(todayBusinessDate, []);
 
   if (!hasOperationsScope(navigation.role)) {
@@ -98,6 +107,9 @@ export function FleetView() {
                 caption="Danh sách xe"
                 rows={vehicleRows}
                 rowKey={(row) => row.registrationPlate}
+                selectedKey={selectedVehicleId}
+                onSelect={(row) => setSelectedVehicleId(row.id)}
+                onShowAll={() => setSelectedVehicleId(null)}
                 columns={[
                   {
                     key: 'plate',
@@ -125,6 +137,47 @@ export function FleetView() {
                   },
                 ]}
               />
+              {locationHealth.isLoading ? <LoadingState label="Đang đọc sức khoẻ vị trí…" /> : null}
+              {locationHealth.isError ? (
+                <ErrorState message={(locationHealth.error as Error).message} />
+              ) : null}
+              {locationHealth.data === undefined
+                ? null
+                : (() => {
+                    const health = toLocationHealthPresentation(locationHealth.data);
+                    return (
+                      <section className="tx-panel" aria-label="Sức khoẻ vị trí xe">
+                        <h2>Sức khoẻ vị trí</h2>
+                        <p>
+                          <StatusBadge label={health.statusLabel} tone={health.statusTone} />
+                        </p>
+                        <p className="tx-note">{health.realDeviceProofLabel}</p>
+                        <ul className="tx-notes">
+                          {health.sources.map((source) => (
+                            <li key={source.family}>
+                              <strong>{source.label}</strong> —{' '}
+                              <StatusBadge label={source.statusLabel} tone={source.tone} />
+                              {source.ageSeconds === null
+                                ? ''
+                                : ` · nhận cách đây ${source.ageSeconds.toLocaleString('vi-VN')} giây`}
+                            </li>
+                          ))}
+                        </ul>
+                        {health.currentLocation === null ? null : (
+                          <p className="tx-note">
+                            Vị trí hiện tại · {health.currentLocation.sourceLabel} ·{' '}
+                            {health.currentLocation.observedAt}
+                          </p>
+                        )}
+                        {health.lastKnownLocation === null ? null : (
+                          <p className="tx-note tx-note--warn">
+                            Vị trí cuối cùng · {health.lastKnownLocation.sourceLabel} ·{' '}
+                            {health.lastKnownLocation.observedAt}
+                          </p>
+                        )}
+                      </section>
+                    );
+                  })()}
               <p className="tx-note">{VEHICLE_STATUS_NOTE}</p>
               <p className="tx-note">{NO_FLEET_WIDE_ASSIGNMENT_NOTE}</p>
             </>

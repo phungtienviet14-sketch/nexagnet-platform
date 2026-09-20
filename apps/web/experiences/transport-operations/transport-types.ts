@@ -2678,6 +2678,20 @@ export interface DriverFieldAction {
 export type OperationalDocumentType =
   'GATE_PASS' | 'LOADING_SLIP' | 'WEIGH_TICKET' | 'DELIVERY_RECEIPT' | 'OTHER';
 
+export interface OperationalDocumentView {
+  readonly id: string;
+  readonly type: OperationalDocumentType;
+  readonly runId: string;
+  readonly legId: string | null;
+  readonly orderId: string | null;
+  readonly basis: 'DIGITAL_FILE' | 'EXTERNAL_PHYSICAL';
+  readonly fileId: string | null;
+  readonly externalNote: string | null;
+  readonly label: string | null;
+  readonly status: 'ACTIVE' | 'WITHDRAWN';
+  readonly receivedAt: string;
+}
+
 /*
  * `RunCheckpointType` va `RunLegPhase` DA duoc khai o phan `#243` cua tep nay (moc van hanh va
  * dong thoi gian). Khai lai o day se la ban sao THU HAI cua cung mot tu vung, va hai ban se lech
