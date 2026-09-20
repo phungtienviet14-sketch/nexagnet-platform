@@ -603,20 +603,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         }),
       ).rejects.toMatchObject({ reason: 'CHECKPOINT_OBSERVATION_NOT_FOR_RUN', kind: 'DENIED' });
 
-      await expect(
-        checkpoints.recordAsDriver({
-          type: 'DELIVERY_ACCEPTED',
-          runId: runBId,
-          legId: legBId,
-          authUserId: AUTH_A,
-          observationId: observationOnRunA.id,
-          clientEventId: `${PREFIX}-B-ACCEPTED-CROSS`,
-        }),
-      ).rejects.toMatchObject({ reason: 'CHECKPOINT_OBSERVATION_NOT_FOR_RUN', kind: 'DENIED' });
-
-      // Khong mot moc nao duoc ghi tu hai lan tren.
+      // Khong mot moc nao duoc ghi tu lan tren. Khong khang dinh THU TU: `listForLeg` sap theo
+      // `receivedAt`, va hai lan ghi trong cung mot mili giay se cho mot thu tu khong xac dinh.
       const onLegB = await checkpointRepo.listForLeg(legBId);
-      expect(onLegB.map((row) => row.type)).toEqual(['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE']);
+      expect(onLegB).toHaveLength(2);
+      expect(onLegB.some((row) => row.type.startsWith('DELIVERY_'))).toBe(false);
 
       /*
        * DOI CHUNG DUONG. Thieu doan nay thi hai lan tu choi o tren co the den tu bat ky thu gi
@@ -652,6 +643,29 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         clientEventId: `${PREFIX}-B-ARRIVAL`,
       });
       expect(arrivalOnB.observationId).toBe(observationOnRunB.id);
+
+      /*
+       * VA MOC THU HAI — `DELIVERY_ACCEPTED`, cung bat buoc kem vi tri (`#232` D-08).
+       *
+       * No phai do o DAY chu khong o tren, va do khong phai chuyen sap xep: `evaluateCheckpoint()`
+       * hoi `CHECKPOINT_PREDECESSOR_MISSING` TRUOC khi cong ban dinh vi duoc cham toi. Dat lan nay
+       * truoc khi `DELIVERY_ARRIVAL` ton tai thi no se do voi mot ly do hoan toan dung nhung SAI
+       * CHO — va cai no dinh chung minh khong he duoc kiem. Cung mot bay ma khoi chu thich o
+       * `otherLegId` da ghi lai mot lan.
+       */
+      await expect(
+        checkpoints.recordAsDriver({
+          type: 'DELIVERY_ACCEPTED',
+          runId: runBId,
+          legId: legBId,
+          authUserId: AUTH_A,
+          observationId: observationOnRunA.id,
+          clientEventId: `${PREFIX}-B-ACCEPTED-CROSS`,
+        }),
+      ).rejects.toMatchObject({ reason: 'CHECKPOINT_OBSERVATION_NOT_FOR_RUN', kind: 'DENIED' });
+      expect(
+        (await checkpointRepo.listForLeg(legBId)).some((row) => row.type === 'DELIVERY_ACCEPTED'),
+      ).toBe(false);
     });
 
     /* ---------------------------------------------------------------- *
