@@ -73,14 +73,58 @@ export interface ResolvedReleaseSha {
 }
 
 /**
- * HAI NGUON LECH NHAU THI KHONG CHON BEN NAO. Day la diem khac ban truoc 26/08/2026: khi do
+ * BIEN NEN TANG TU KHAI COMMIT NO VUA BUILD.
+ *
+ * Railway dat bien nay cho MOI deployment bat nguon tu GitHub, dang SHA DAY DU 40 ky tu, va theo
+ * tai lieu cua ho bien duoc bom vao CA hai pha — "the build process for each service deployment"
+ * VA "the running service deployment". Nen doc no LUC CHAY la du: khong can `ARG` trong
+ * Dockerfile (`ARG` chi bat buoc khi muon dung bien trong LUC BUILD).
+ *
+ * VI SAO PHAI CO NGUON NAY (do that 20/09/2026, `nexagnet-transport-preview`):
+ * Tren PaaS khong co tang deploy cua ta, nen khong co `release.json`, va cung khong co ai ghi
+ * `RELEASE_GIT_SHA` theo TUNG lan deploy. Bien do bi dat TAY mot lan roi nam yen trong khi code
+ * chay tiep: deployment chay commit `e857a01…` van bao `release: "da19533c10ef"`. Mot nhan sai
+ * im lang nhu vay lam moi span/decision het dung duoc de tra loi "chay tren ban nao" — tuc pha
+ * dung dieu ma tang danh tinh release ton tai de bao dam.
+ *
+ * @see https://docs.railway.com/reference/variables
+ */
+const PLATFORM_GIT_SHA_ENV = 'RAILWAY_GIT_COMMIT_SHA';
+
+/**
+ * Thu tu tin cay khi nhieu nguon cung tra loi. Nguon dung TRUOC duoc lay ten cho `source` khi tat
+ * ca dong y, nen mot dong log `(manifest)` van co nghia ke ca luc bien moi truong tinh co trung.
+ */
+const CLAIM_ORDER = ['manifest', 'env', 'platform'] as const;
+
+type ClaimSource = (typeof CLAIM_ORDER)[number];
+
+/** Nguon -> ten truong trong `mismatch`. Khai MOT lan, de hai cho khong troi khoi nhau. */
+const MISMATCH_FIELD: Readonly<Record<ClaimSource, keyof ReleaseIdentityMismatch>> = {
+  manifest: 'manifestGitSha',
+  env: 'envGitSha',
+  platform: 'platformGitSha',
+};
+
+/**
+ * NHIEU NGUON LECH NHAU THI KHONG CHON BEN NAO. Day la diem khac ban truoc 26/08/2026: khi do
  * manifest lang le thang, nen mot manifest cu (con lai tu lan deploy truoc) se lam man hinh chan
- * doan tro permalink toi COMMIT SAI — te hon han mot dau "khong biet". Ba tinh huong that co the
- * dan toi lech:
+ * doan tro permalink toi COMMIT SAI — te hon han mot dau "khong biet". Bon tinh huong that dan
+ * toi lech:
  *   · manifest ghi hong, ban cu con lai tren dia;
  *   · container KHONG duoc tao lai nen giu bien cu, trong khi manifest da la ban moi;
- *   · co nguoi sua tep bang tay tren VM.
- * Ba tinh huong, cung mot ket luan: KHONG BIET, va noi to ra rang co hai gia tri dang tranh nhau.
+ *   · co nguoi sua tep bang tay tren VM;
+ *   · tren PaaS, `RELEASE_GIT_SHA` dat TAY mot lan roi nam yen trong khi nen tang van build
+ *     commit moi o moi lan deploy (do that 20/09/2026, `nexagnet-transport-preview`).
+ *
+ * Bon tinh huong, cung mot ket luan: KHONG BIET, va noi to ra rang co nhieu gia tri dang tranh
+ * nhau.
+ *
+ * VI SAO KHONG LANG LE UU TIEN NEN TANG — ke ca khi no gan nhu chac chan dung hon mot bien dat
+ * tay: im lang chon mot ben CHINH LA loi ma doan nay ton tai de khong lap lai. Mot bien dat tay
+ * lech khoi commit that la MOT SU CO CAU HINH, va cach chua no la GO BIEN DO DI, khong phai de
+ * code doan sau lung nguoi van hanh. Go xong thi `platform` la nguon duy nhat, va cau tra loi
+ * tu dung o MOI lan deploy ma khong ai phai nho dong vao gi.
  *
  * CONG CUNG NAM O TANG DEPLOY (`ROLLOUT` trong `deploy-stack.sh`), khong o day. Mot tien trinh
  * khong duoc chet vi chua biet minh chay commit nao — quan sat khong bao gio duoc tro thanh dieu
@@ -90,19 +134,27 @@ export function resolveReleaseSha(
   manifest: ReleaseManifest | null,
   env: NodeJS.ProcessEnv,
 ): ResolvedReleaseSha {
-  const fromManifest = asGitSha(manifest?.gitSha);
-  const fromEnv = asGitSha(env.RELEASE_GIT_SHA);
+  const answers: Readonly<Record<ClaimSource, string | undefined>> = {
+    manifest: asGitSha(manifest?.gitSha),
+    env: asGitSha(env.RELEASE_GIT_SHA),
+    platform: asGitSha(env[PLATFORM_GIT_SHA_ENV]),
+  };
 
-  if (fromManifest && fromEnv && fromManifest !== fromEnv) {
-    return {
-      gitSha: UNKNOWN_RELEASE,
-      source: 'conflict',
-      mismatch: { manifestGitSha: fromManifest, envGitSha: fromEnv },
-    };
+  const claims = CLAIM_ORDER.flatMap((source) => {
+    const gitSha = answers[source];
+    return gitSha ? [{ source, gitSha }] : [];
+  });
+
+  const first = claims[0];
+  if (!first) return { gitSha: UNKNOWN_RELEASE, source: 'none' };
+
+  if (new Set(claims.map((claim) => claim.gitSha)).size > 1) {
+    const mismatch: { -readonly [K in keyof ReleaseIdentityMismatch]: string } = {};
+    for (const claim of claims) mismatch[MISMATCH_FIELD[claim.source]] = claim.gitSha;
+    return { gitSha: UNKNOWN_RELEASE, source: 'conflict', mismatch };
   }
-  if (fromManifest) return { gitSha: fromManifest, source: 'manifest' };
-  if (fromEnv) return { gitSha: fromEnv, source: 'env' };
-  return { gitSha: UNKNOWN_RELEASE, source: 'none' };
+
+  return { gitSha: first.gitSha, source: first.source };
 }
 
 /**

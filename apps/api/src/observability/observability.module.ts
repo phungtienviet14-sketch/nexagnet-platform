@@ -102,13 +102,26 @@ import { privacyModeFor } from './telemetry-redaction.js';
             (bridge ? ' + otlp' : ''),
         );
         if (release.source === 'conflict') {
-          // HAI NGUON, HAI CAU TRA LOI. Khong ben nao duoc chon (xem `resolveGitSha`), nen o day
-          // chi con viec noi to. Cong CUNG nam o `deploy-stack.sh`: mot lan deploy roi vao trang
-          // thai nay do voi ma `RELEASE_IDENTITY_MISMATCH`, khong phai mot loi suc khoe chung.
+          // NHIEU NGUON, NHIEU CAU TRA LOI. Khong ben nao duoc chon (xem `resolveReleaseSha`),
+          // nen o day chi con viec noi to. Cong CUNG nam o `deploy-stack.sh`: mot lan deploy roi
+          // vao trang thai nay do voi ma `RELEASE_IDENTITY_MISMATCH`, khong phai mot loi suc
+          // khoe chung.
+          //
+          // LIET KE DUNG NHUNG NGUON CO TRA LOI, khong in mot khuon cung: tren PaaS cap dau dau
+          // la `RELEASE_GIT_SHA` dat tay doi dau `RAILWAY_GIT_COMMIT_SHA`, khong co manifest nao
+          // trong do. In `manifest=undefined` o nhung ca ay chi lam nguoi truc di sai huong.
+          const claims = [
+            ['release.json', release.mismatch?.manifestGitSha],
+            ['RELEASE_GIT_SHA', release.mismatch?.envGitSha],
+            ['RAILWAY_GIT_COMMIT_SHA', release.mismatch?.platformGitSha],
+          ]
+            .filter(([, sha]) => sha)
+            .map(([name, sha]) => `${name}=${sha}`)
+            .join(' ');
           logger.error(
-            `Danh tinh release XUNG DOT: manifest=${release.mismatch?.manifestGitSha} ` +
-              `RELEASE_GIT_SHA=${release.mismatch?.envGitSha}. Trace se khong neo vao release nao ` +
-              'cho toi khi hai nguon thong nhat — mot permalink tro toi commit sai te hon khong co.',
+            `Danh tinh release XUNG DOT: ${claims}. Trace se khong neo vao release nao cho toi ` +
+              'khi cac nguon thong nhat — mot permalink tro toi commit sai te hon khong co. Neu ' +
+              'mot trong so do la bien DAT TAY tren PaaS: go bien do di, dung sua gia tri cua no.',
           );
         } else if (release.gitSha === 'unknown') {
           // KHONG phai loi khi chay local. TREN STACK thi day la trieu chung that: `release.json`

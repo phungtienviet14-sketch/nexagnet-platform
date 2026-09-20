@@ -75,16 +75,21 @@ export function startOtel(config: OtelRuntimeConfig = readOtelConfig()): boolean
   });
 
   /*
-   * `conflict` = manifest va bien moi truong khong dong y nhau ve commit dang chay. Loi giai da
-   * tra `unknown` (fail-safe, khong doan), nhung im lang thi khong du: day la mot SU CO TRIEN
-   * KHAI that — manifest cu con lai, container khong duoc tao lai, hoac co nguoi sua tep tren VM.
+   * `conflict` = cac nguon danh tinh khong dong y nhau ve commit dang chay. Loi giai da tra
+   * `unknown` (fail-safe, khong doan), nhung im lang thi khong du: day la mot SU CO TRIEN KHAI
+   * that — manifest cu con lai, container khong duoc tao lai, co nguoi sua tep tren VM, hoac
+   * `RELEASE_GIT_SHA` duoc dat TAY tren PaaS roi nam yen trong khi nen tang van build commit moi.
    * Keu to mot lan luc khoi dong; KHONG nem, vi quan sat khong duoc tro thanh dieu kien de nghiep
    * vu chay.
+   *
+   * KHONG in gia tri o day: preload chay truoc logger, va duong canonical
+   * (`observability.module.ts`) da liet ke dung nhung nguon CO tra loi kem SHA cua tung nguon.
    */
   if (config.releaseSource === 'conflict') {
     console.warn(
-      '[otel] release.json va RELEASE_GIT_SHA LECH NHAU — span se mang release=unknown. ' +
-        'Kiem lai lan deploy gan nhat truoc khi tin vao bat ky permalink nao.',
+      '[otel] Cac nguon danh tinh release LECH NHAU (release.json / RELEASE_GIT_SHA / ' +
+        'RAILWAY_GIT_COMMIT_SHA) — span se mang release=unknown. Kiem lai lan deploy gan nhat ' +
+        'truoc khi tin vao bat ky permalink nao.',
     );
   }
 
@@ -106,7 +111,7 @@ export function startOtel(config: OtelRuntimeConfig = readOtelConfig()): boolean
   const processor = new SpanNoiseFilter(
     new PrivacySpanProcessor(
       new BatchSpanProcessor(exporter, {
-      // Mot luot tin ~8-18 span. Hang doi 2048 chiu duoc ca tram luot don trong luc backend chet.
+        // Mot luot tin ~8-18 span. Hang doi 2048 chiu duoc ca tram luot don trong luc backend chet.
         maxQueueSize: 2048,
         maxExportBatchSize: 512,
         scheduledDelayMillis: 2_000,

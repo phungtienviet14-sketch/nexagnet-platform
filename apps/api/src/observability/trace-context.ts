@@ -34,15 +34,26 @@ import { randomBytes } from 'node:crypto';
  *   · `manifest` — `release.json` do tang deploy ghi va mount vao container. CANONICAL.
  *   · `env`      — `RELEASE_GIT_SHA`. DU PHONG: cho stack chua mount manifest, va cho duong
  *                  goi tay tren VM.
- *   · `conflict` — ca hai nguon cung tra loi, va tra loi KHAC NHAU. Khong ben nao duoc chon.
+ *   · `platform` — nen PaaS tu khai commit no vua build (`RAILWAY_GIT_COMMIT_SHA`). DU PHONG
+ *                  CUOI: cho stack khong chay qua tang deploy cua ta, nen khong co manifest va
+ *                  cung khong co ai dat `RELEASE_GIT_SHA` theo TUNG lan deploy.
+ *   · `conflict` — tu hai nguon tro len cung tra loi, va tra loi KHAC NHAU. Khong ben nao duoc
+ *                  chon.
  *   · `none`     — khong nguon nao biet. Trang thai BINH THUONG khi chay local/CI.
  */
-export type ReleaseIdentitySource = 'manifest' | 'env' | 'conflict' | 'none';
+export type ReleaseIdentitySource = 'manifest' | 'env' | 'platform' | 'conflict' | 'none';
 
-/** Hai gia tri dang tranh nhau, giu lai de nguoi truc doc duoc ma khong phai SSH len VM. */
+/**
+ * Cac gia tri dang tranh nhau, giu lai de nguoi truc doc duoc ma khong phai SSH len VM.
+ *
+ * MOI TRUONG DEU TUY CHON vi xung dot khong chi xay ra giua cap manifest/env. Tren PaaS, cap
+ * thuong gap la `RELEASE_GIT_SHA` DAT TAY (dat mot lan roi nam yen) doi dau voi commit ma nen
+ * tang vua build THAT. Chi nhung nguon CO tra loi moi xuat hien o day.
+ */
 export interface ReleaseIdentityMismatch {
-  readonly manifestGitSha: string;
-  readonly envGitSha: string;
+  readonly manifestGitSha?: string;
+  readonly envGitSha?: string;
+  readonly platformGitSha?: string;
 }
 
 export interface ReleaseIdentity {
