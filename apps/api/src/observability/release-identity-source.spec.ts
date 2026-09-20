@@ -111,7 +111,12 @@ describe('resolveReleaseIdentity — gitSha phai noi duoc minh den tu dau', () =
     expect(release.source).toBe('conflict');
     // Khong duoc tra ra MOT TRONG HAI: mot permalink tro toi commit sai te hon "khong biet".
     expect(release.gitSha).toBe('unknown');
-    expect(release.mismatch).toEqual({ manifestGitSha: SHA_A, envGitSha: SHA_B });
+    // `envSource` di kem: bao loi phai goi dung TEN BIEN nguoi truc can di sua.
+    expect(release.mismatch).toEqual({
+      manifestGitSha: SHA_A,
+      envGitSha: SHA_B,
+      envSource: 'env',
+    });
   });
 
   it('xung dot van giu duoc cac chieu con lai (tenant/environment) de con lan vet', () => {

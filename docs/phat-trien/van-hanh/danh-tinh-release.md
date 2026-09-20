@@ -30,16 +30,42 @@ nên nó chỉ mang danh tính. Có test khoá điều đó (`write-release-mani
 
 ## Dự phòng
 
-Thiếu manifest → `RELEASE_GIT_SHA` (biến môi trường). Chạy local/CI không có gì cả → `unknown`.
+Thứ tự ưu tiên — **manifest → `RAILWAY_GIT_COMMIT_SHA` → `RELEASE_GIT_SHA` → `unknown`**. Chạy
+local/CI không có gì cả → `unknown`.
 
 Mọi câu trả lời đều **kèm tên nguồn** trong trường `source`:
 
 | `source` | Nghĩa |
 |---|---|
 | `manifest` | canonical — đọc từ `release.json` |
-| `env` | dự phòng — manifest chưa tới được tiến trình |
-| `conflict` | hai nguồn nói hai commit khác nhau |
+| `railway` | nền tảng khai — `RAILWAY_GIT_COMMIT_SHA` của chính deployment đang chạy |
+| `env` | dự phòng — `RELEASE_GIT_SHA`, biến người đặt, cho stack không có hai nguồn trên |
+| `conflict` | manifest và SHA đọc từ môi trường nói hai commit khác nhau |
 | `none` | không nguồn nào biết (bình thường ở local/CI) |
+
+### Vì sao Railway đứng TRÊN `RELEASE_GIT_SHA` (sự cố 20/09/2026)
+
+`RELEASE_GIT_SHA` là biến **đặt bằng tay** trên service: đặt đúng một lần rồi đứng yên trong khi
+bản phát hành đi tiếp. Trên `api-321`/`web-321`, tiến trình chạy đúng commit
+(`commitHash=e857a018…`) nhưng mọi span và dòng `Telemetry:` lúc boot đều khai một SHA cũ hơn
+nhiều lần deploy. Railway đặt `RAILWAY_GIT_COMMIT_SHA` cho **từng deployment** sinh ra từ GitHub —
+không gỡ tay được, và đổi mỗi lần.
+
+Hai điều dễ làm sai, cả hai đều đã được khoá bằng test
+(`apps/api/src/observability/release-identity-railway.spec.ts`):
+
+- **không phải** `RELEASE_GIT_SHA ?? RAILWAY_GIT_COMMIT_SHA` — biến cũ *đang có mặt*, `??` chỉ bắt
+  `null`/`undefined`, nên bản cũ vẫn thắng. Đúng cái sự cố này;
+- **không phải** `conflict` — hai biến không cùng hạng. Một bên là lời khai của nền tảng về chính
+  lần deploy này, bên kia là ghi chú người để lại. Gọi là "xung đột" thì **mọi** lần boot trên
+  Railway kêu một lần, và một báo động kêu mỗi lần là một báo động chết.
+
+Khi nền tảng đã lên tiếng, biến đặt tay hết việc — kể cả khi nó lệch. `mismatch.envSource` nói rõ
+**biến nào** đang tranh với manifest, để dòng báo lỗi lúc boot gọi đúng tên biến cần đi sửa.
+
+> Dọn dẹp đi kèm (**sau** khi bản vá này chạy thật): xoá biến `RELEASE_GIT_SHA` đặt tay trên
+> Railway. Đây là dọn cấu hình, **không** thay cho bản vá — luật trên không phụ thuộc vào việc ai
+> đó nhớ xoá một biến.
 
 `gitSha` chỉ được chấp nhận khi là **SHA đầy đủ 40 ký tự hex**, ở mọi nguồn. Chuỗi cắt ngắn bị coi
 như "nguồn này không biết".
