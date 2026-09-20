@@ -42,12 +42,26 @@ const json = async (route: Route, body: unknown, status = 200): Promise<void> =>
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 };
 
+/** Danh muc khach — man hinh tao don CHON tu day, nen mot bo mock thieu no la mot bo mock sai. */
+const CUSTOMERS = [
+  { id: 'cus-nam-phong', name: 'Công ty Nam Phong' },
+  { id: 'cus-hai-ha', name: 'Hải Hà Logistics' },
+].map((entry) => ({
+  ...entry,
+  phone: null,
+  address: null,
+  taxCode: null,
+  status: 'ACTIVE',
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+}));
+
 const order = (id: string, code: string): OrderRow => ({
   id,
   code,
   status: 'OPEN',
   businessDate: '2026-09-19',
-  customerId: null,
+  customerId: 'cus-nam-phong',
   originLabel: 'Kho Hải Phòng',
   destinationLabel: 'Ninh Bình',
   cargoDescription: 'Hàng tổng hợp synthetic',
@@ -178,6 +192,7 @@ async function mockOwner(
     ]),
   );
   await page.route('**/transport/runs', (route) => json(route, []));
+  await page.route('**/transport/customers', (route) => json(route, CUSTOMERS));
 
   await page.route('**/transport/orders', async (route) => {
     if (route.request().method() === 'GET') return json(route, state.orders);
@@ -190,6 +205,10 @@ async function mockOwner(
       businessDate: String(body.businessDate ?? created.businessDate),
       originLabel: String(body.originLabel),
       destinationLabel: String(body.destinationLabel),
+      // Khach + cuoc di theo DUNG than yeu cau: mot ban mock tu dap hai truong nay vao se giau
+      // mat dung lo hong ma `lane-w-customer-ar.spec.ts` sinh ra de chan.
+      customerId: typeof body.customerId === 'string' ? body.customerId : null,
+      freightAmount: typeof body.freightAmount === 'number' ? body.freightAmount : null,
       cargoDescription:
         typeof body.cargoDescription === 'string'
           ? body.cargoDescription
@@ -265,13 +284,23 @@ test.describe('Lane W — duong order-first cua chu doanh nghiep', () => {
     const create = page.getByRole('form', { name: 'Tạo đơn hàng' });
     await expect(create).toBeVisible();
     await create.getByLabel('Mã đơn').fill('W-ONE-UI-01');
+    await create.getByLabel('Khách hàng').selectOption({ label: 'Công ty Nam Phong' });
     await create.getByLabel('Điểm lấy hàng').fill('Kho Hải Phòng');
     await create.getByLabel('Điểm giao hàng').fill('Ninh Bình');
     await create.getByLabel('Ngày vận hành').fill('2026-09-19');
+    await create.getByLabel('Cước (đ)').fill('5000000');
     await create.getByRole('button', { name: 'Tạo đơn' }).click();
 
     await expect(page.getByRole('rowheader', { name: 'W-ONE-UI-01' })).toBeVisible();
     expect(state.createBodies).toHaveLength(1);
+    /*
+     * KHACH + CUOC phai nam trong than yeu cau, khong phai chi tren man hinh: thieu mot trong hai,
+     * don nay se chay het duong van hanh roi khong bao gio vao duoc so cong no.
+     */
+    expect(state.createBodies[0]).toMatchObject({
+      customerId: 'cus-nam-phong',
+      freightAmount: 5_000_000,
+    });
     expect(state.suggestionBodies).toEqual([]);
 
     await page.getByRole('rowheader', { name: 'W-ONE-UI-01' }).click();

@@ -4,6 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { DataTable, MetricCard, StatusBadge } from '../components/primitives';
 import { ErrorState, LoadingState } from '../components/SectionState';
+import {
+  useCustomers,
+  useNavigationInput,
+  useTransportOrders,
+} from '../hooks/useTransportWorkspace';
 import { newCorrelationKey, transportApi } from '../transport-api';
 import { toCustomerArWorkspace } from '../workspace/customer-ar';
 import { businessTodayIn } from './business-today';
@@ -15,12 +20,40 @@ const optional = (data: FormData, name: string): string | null => {
   return value === '' ? null : value;
 };
 
+/**
+ * SO CONG NO KHACH HANG — va mot luat ve cach HOI NGUOI DUNG.
+ *
+ * ============================================================================================
+ * KHONG MOT O NHAP NAO DOI MOT ID
+ * ============================================================================================
+ *
+ * Ba o o ban dau doi ke toan GO VAO `customerId`, `paymentId` va `documentId`. Ca ba deu la
+ * `cuid` cua kho du lieu, nen cach duy nhat lay duoc chung la mo DevTools hoac doc thang DB — va
+ * mot ban UAT phai lam the thi khong con la UAT cua nguoi dung nua.
+ *
+ * Ba o do nay la ba o CHON: nhan la ten khach / so tien + ngay nhan / ma don + so con lai, con ID
+ * nam trong `value`. Than yeu cau gui len may chu KHONG doi — van la `customerId`, `paymentId`,
+ * `documentId` — nen day thuan tuy la mot lop doc duoc dat trum len cung mot hop dong.
+ *
+ * Nhan duoc ghep o `workspace/customer-ar.ts` chu khong o day: mot bai test doc duoc dung cau ma
+ * ke toan se doc, va hai man hinh khong ghep ra hai cach goi khac nhau cho cung mot dong tien.
+ */
 export function CustomerArWorkspace() {
   const tenant = useTenantRuntime();
+  const navigation = useNavigationInput();
+  const customers = useCustomers(navigation);
+  const orders = useTransportOrders(navigation);
   const client = useQueryClient();
   const [asOf, setAsOf] = useState(() => businessTodayIn(tenant.transport?.timeZone));
   const [notice, setNotice] = useState<string | null>(null);
-  const [lastPaymentId, setLastPaymentId] = useState<string>('');
+  /**
+   * Khoan tien dang chon de phan bo.
+   *
+   * Ghi nhan tien xong thi chon SAN khoan vua ghi — do la viec ke toan lam ngay sau do. Nhung day
+   * van la mot o chon binh thuong: mot khoan tra truoc tu tuan truoc phai chon lai duoc, va `#296`
+   * doi dung dieu do.
+   */
+  const [paymentId, setPaymentId] = useState<string>('');
   const actionKeys = useRef(new Map<string, string>());
   const keyFor = (slot: string): string => {
     const held = actionKeys.current.get(slot);
@@ -60,8 +93,18 @@ export function CustomerArWorkspace() {
             pending: pending.data?.orders ?? [],
             batches: batches.data?.batches ?? [],
             summary: summary.data,
+            customers: (customers.data ?? []).map((customer) => ({
+              id: customer.id,
+              name: customer.name,
+            })),
+            orders: (orders.data ?? []).map((order) => ({ id: order.id, code: order.code })),
           }),
-    [asOf, batches.data, pending.data, summary.data],
+    [asOf, batches.data, customers.data, orders.data, pending.data, summary.data],
+  );
+
+  /** Danh muc khach de CHON — khach da ngung hop tac khong con la mot lua chon hop le. */
+  const customerOptions = (customers.data ?? []).filter(
+    (customer) => customer.status === 'ACTIVE',
   );
 
   const error = pending.error ?? batches.error ?? summary.error ?? mutation.error;
@@ -129,7 +172,7 @@ export function CustomerArWorkspace() {
             rowKey={(row) => row.orderId}
             columns={[
               { key: 'order', header: 'Đơn', isRowHeader: true, render: (row) => row.orderCode },
-              { key: 'customer', header: 'Khách', render: (row) => row.customerId },
+              { key: 'customer', header: 'Khách', render: (row) => row.customerName },
               { key: 'date', header: 'Ngày', render: (row) => row.businessDate },
               {
                 key: 'amount',
@@ -239,8 +282,15 @@ export function CustomerArWorkspace() {
         >
           <h3>Tạo lô đối soát</h3>
           <label className="tx-field">
-            <span>Mã khách hàng</span>
-            <input name="customerId" required />
+            <span>Khách hàng</span>
+            <select name="customerId" required defaultValue="">
+              <option value="">— Chọn khách hàng —</option>
+              {customerOptions.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="tx-field">
             <span>Tiền tệ</span>
@@ -268,10 +318,10 @@ export function CustomerArWorkspace() {
         </form>
       </div>
 
-      {(batches.data?.batches ?? []).map((batch) => (
+      {(model?.batches ?? []).map((batch) => (
         <section className="tx-panel" key={batch.id} aria-label={`Lô đối soát ${batch.id}`}>
           <h3>
-            Lô {batch.id} · {batch.customerId}
+            Lô đối soát · {batch.customerName} · {batch.currencyCode}
           </h3>
           <p>
             <StatusBadge label={batch.status} tone={batch.status === 'CLOSED' ? 'done' : 'wait'} />
@@ -370,7 +420,7 @@ export function CustomerArWorkspace() {
               {
                 onSuccess: (result) => {
                   const id = (result as { payment?: { id?: string } }).payment?.id ?? '';
-                  setLastPaymentId(id);
+                  setPaymentId(id);
                   setNotice('Đã ghi nhận tiền; phần chưa phân bổ được giữ là tiền nhận trước.');
                 },
               },
@@ -379,8 +429,15 @@ export function CustomerArWorkspace() {
         >
           <h3>Ghi nhận tiền vào</h3>
           <label className="tx-field">
-            <span>Mã khách hàng</span>
-            <input name="customerId" required />
+            <span>Khách hàng</span>
+            <select name="customerId" required defaultValue="">
+              <option value="">— Chọn khách hàng —</option>
+              {customerOptions.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="tx-field">
             <span>Số tiền</span>
@@ -432,12 +489,31 @@ export function CustomerArWorkspace() {
         >
           <h3>Phân bổ tiền</h3>
           <label className="tx-field">
-            <span>Mã thanh toán</span>
-            <input name="paymentId" defaultValue={lastPaymentId} required />
+            <span>Khoản tiền đã nhận</span>
+            <select
+              name="paymentId"
+              required
+              value={paymentId}
+              onChange={(event) => setPaymentId(event.target.value)}
+            >
+              <option value="">— Chọn khoản tiền —</option>
+              {(model?.paymentChoices ?? []).map((choice) => (
+                <option key={choice.id} value={choice.id}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="tx-field">
-            <span>Mã chứng từ phải thu</span>
-            <input name="documentId" required />
+            <span>Khoản phải thu</span>
+            <select name="documentId" required defaultValue="">
+              <option value="">— Chọn khoản phải thu —</option>
+              {(model?.receivableChoices ?? []).map((choice) => (
+                <option key={choice.documentId} value={choice.documentId}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="tx-field">
             <span>Số tiền phân bổ</span>

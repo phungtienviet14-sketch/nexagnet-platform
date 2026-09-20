@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/SectionState
 import type { StatusTone } from '../customer-view';
 import {
   toSectionQuery,
+  useCustomers,
   useNavigationInput,
   useOrderLegs,
   useOrderRunPlans,
@@ -116,6 +117,12 @@ const km = (value: number | null): string =>
 const money = (value: number | null): string =>
   value === null ? '—' : `${value.toLocaleString('vi-VN')} đ`;
 
+/** O tuy chon: chuoi rong la CHUA NHAP, khong phai mot mo ta rong. */
+const cargoOf = (data: FormData): string | null => {
+  const value = String(data.get('cargoDescription') ?? '').trim();
+  return value === '' ? null : value;
+};
+
 const ratio = (value: number | null): string =>
   value === null ? 'chưa đủ dữ liệu' : `${(value * 100).toFixed(1)}%`;
 
@@ -125,6 +132,7 @@ export function MovementView() {
   const orders = toSectionQuery(useTransportOrders(navigation));
   const runs = toSectionQuery(useVehicleRuns(navigation));
   const vehicles = toSectionQuery(useVehicles(navigation));
+  const customers = toSectionQuery(useCustomers(navigation));
 
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const orderLegs = toSectionQuery(useOrderLegs(navigation, openOrderId));
@@ -189,6 +197,13 @@ export function MovementView() {
   const runCodeOf = (runId: string): string =>
     runs.data?.find((run) => run.id === runId)?.code ?? runId;
 
+  /** Ten khach doc duoc thay cho `customerId` — man hinh khong hien mot `cuid` bao gio. */
+  const customerNameOf = (customerId: string | null): string =>
+    customerId === null
+      ? '—'
+      : (customers.data?.find((customer) => customer.id === customerId)?.name ??
+        'khách đã gỡ khỏi danh mục');
+
   /** Ma don doc duoc thay cho `orderId`. */
   const orderCodeOf = (orderId: string | null): string =>
     orderId === null
@@ -197,6 +212,11 @@ export function MovementView() {
 
   const activePlan = orderPlans.data?.find((plan) => plan.cancelledAt === null) ?? null;
 
+  /** Chi khach DANG HOAT DONG moi la mot lua chon hop le cho mot don moi. */
+  const activeCustomers = (customers.data ?? []).filter(
+    (customer) => customer.status === 'ACTIVE',
+  );
+
   return (
     <>
       <PageHeader
@@ -204,6 +224,20 @@ export function MovementView() {
         summary="Nghiệp vụ đi từ ĐƠN. Vòng chạy và chặng do hệ thống lập và tự đóng — không ai phải bấm tạo hay đóng vòng chạy."
       />
 
+      {/*
+       * KHACH HANG va CUOC la BAT BUOC o day, va do khong phai mot lua chon ve giao dien.
+       *
+       * May chu cho phep ca hai truong rong luc tao don — dung, vi mot don noi bo chua chot gia
+       * van phai ghi duoc. Nhung so cong no khach hang chi nhan mot don vao "cho doi soat" khi
+       * don DONG THOI: da `FULFILLED`, ket thuc thuong mai da `APPROVED`, co `customerId` va co
+       * `freightAmount`. Thieu mot trong hai truong nay thi don van chay xong tren duong van hanh
+       * roi DUNG LAI mai mai truoc cua doi soat — khong mot man hinh nao bao loi, va khong ai biet
+       * tai sao tien khong bao gio len so.
+       *
+       * Nen mot don tao tu man hinh nay LUON di duoc het duong: tao -> giao -> doi soat -> phai
+       * thu -> thu tien. Don khong co khach/cuoc van ton tai duoc qua API, chi khong sinh ra tu
+       * day.
+       */}
       <form
         className="tx-panel tx-filters"
         aria-label="Tạo đơn hàng"
@@ -215,6 +249,9 @@ export function MovementView() {
             originLabel: String(data.get('originLabel') ?? ''),
             destinationLabel: String(data.get('destinationLabel') ?? ''),
             businessDate: String(data.get('businessDate') ?? ''),
+            customerId: String(data.get('customerId') ?? ''),
+            freightAmount: Number(data.get('freightAmount')),
+            cargoDescription: cargoOf(data),
           });
         }}
       >
@@ -222,6 +259,17 @@ export function MovementView() {
         <label className="tx-field">
           <span>Mã đơn</span>
           <input name="code" required />
+        </label>
+        <label className="tx-field">
+          <span>Khách hàng</span>
+          <select name="customerId" required defaultValue="">
+            <option value="">— Chọn khách hàng —</option>
+            {activeCustomers.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="tx-field">
           <span>Điểm lấy hàng</span>
@@ -235,7 +283,27 @@ export function MovementView() {
           <span>Ngày vận hành</span>
           <input name="businessDate" type="date" required />
         </label>
-        <button className="tx-btn" type="submit" disabled={createOrder.isPending}>
+        <label className="tx-field">
+          <span>Cước (đ)</span>
+          {/* KHONG dat `step`: moc buoc tinh tu `min`, nen `min=1 step=1000` lam trinh duyet coi
+              5.000.000 la khong hop le va NUOT luon lan bam gui — khong mot thong bao nao cua ta. */}
+          <input name="freightAmount" type="number" min="1" required />
+        </label>
+        <label className="tx-field">
+          <span>Hàng hoá (tuỳ chọn)</span>
+          <input name="cargoDescription" />
+        </label>
+        {activeCustomers.length === 0 ? (
+          <p className="tx-note tx-note--warn">
+            Chưa có khách hàng nào đang hoạt động trong danh mục, nên chưa tạo được đơn thương mại.
+            Thêm khách ở mục Khách hàng trước.
+          </p>
+        ) : null}
+        <button
+          className="tx-btn"
+          type="submit"
+          disabled={createOrder.isPending || activeCustomers.length === 0}
+        >
           Tạo đơn
         </button>
       </form>
@@ -255,6 +323,7 @@ export function MovementView() {
             header: 'Tuyến',
             render: (order) => `${order.originLabel} → ${order.destinationLabel}`,
           },
+          { key: 'customer', header: 'Khách', render: (order) => customerNameOf(order.customerId) },
           { key: 'businessDate', header: 'Ngày', render: (order) => order.businessDate },
           {
             key: 'freight',
