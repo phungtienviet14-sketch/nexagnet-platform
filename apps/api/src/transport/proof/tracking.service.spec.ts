@@ -561,6 +561,93 @@ describe('Bam vi tri theo VONG CHAY — DOI KHANG — PROOF-022', () => {
     });
 
     /**
+     * DUONG GHI, khong chi duong MO.
+     *
+     * Duoi vong doi suy-tu-chu-the, mot hang phien cua vong chay da xong VAN o `ACTIVE` cho toi lan
+     * don dep ke tiep. Neu `ingest()` chi doc moi `session.status` thi phien do van NHAN duoc ban
+     * dinh vi — tuc no that su song lau hon chu the o dung cho nguy hiem nhat: duong GHI. Mot toa do
+     * ghi vao mot vong chay da dong la mot dong du lieu khong con nghia nghiep vu nao doc duoc.
+     */
+    it('vong chay ve trang thai cuoi GIUA CA: ban dinh vi tiep theo bi tu choi, va phien dong lai', async () => {
+      const session = await openRunA();
+      facts.runs.set('run-a', {
+        id: 'run-a',
+        code: 'VC-001',
+        status: 'COMPLETED',
+        vehicleId: 'vehicle-run-a',
+      });
+
+      await expect(
+        service.ingest({
+          authUserId: 'user-a',
+          sessionId: session.id,
+          clientEventId: 'evt-sau-khi-xong',
+          latitude: HANOI.latitude,
+          longitude: HANOI.longitude,
+          accuracyMetres: 8,
+          speedMetresPerSecond: null,
+          bearingDegrees: null,
+          source: 'DEVICE_GNSS',
+          capturedAt: T0,
+          mockLocationReported: false,
+        }),
+      ).rejects.toMatchObject({ reason: 'SESSION_SUBJECT_ENDED', kind: 'CONFLICT' });
+
+      expect(await repository.listObservations(session.id)).toHaveLength(0);
+      const after = await repository.findSession(session.id);
+      expect(after?.status).not.toBe('ACTIVE');
+      expect(after?.endedReason).toBe('RUN_TERMINAL');
+    });
+
+    it('vong chay CON DANG CHAY thi ban dinh vi vao binh thuong — cong khong bi siet nham', async () => {
+      const session = await openRunA();
+      const observation = await service.ingest({
+        authUserId: 'user-a',
+        sessionId: session.id,
+        clientEventId: 'evt-binh-thuong',
+        latitude: HANOI.latitude,
+        longitude: HANOI.longitude,
+        accuracyMetres: 8,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source: 'DEVICE_GNSS',
+        capturedAt: T0,
+        mockLocationReported: false,
+      });
+      expect(observation.sessionId).toBe(session.id);
+      expect((await repository.findSession(session.id))?.status).toBe('ACTIVE');
+    });
+
+    /**
+     * DUONG CHUYEN KHONG BI CHAM TOI. Mot phien theo CHUYEN khong co vong chay de hoi, nen no giu
+     * nguyen hanh vi cu — ke ca khi chuyen do da `DELIVERED`.
+     */
+    it('phien theo CHUYEN van nhan duoc ban dinh vi — duong cu khong bi cong moi cham toi', async () => {
+      const session = await service.openSession({
+        authUserId: 'user-a',
+        tripId: 'trip-a',
+        device: null,
+      });
+      facts.trips.set('trip-a', { id: 'trip-a', code: 'HN-HP-01', status: 'DELIVERED' });
+
+      const observation = await service.ingest({
+        authUserId: 'user-a',
+        sessionId: session.id,
+        clientEventId: 'evt-chuyen',
+        latitude: HANOI.latitude,
+        longitude: HANOI.longitude,
+        accuracyMetres: 8,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source: 'DEVICE_GNSS',
+        capturedAt: T0,
+        mockLocationReported: false,
+      });
+      expect(observation.sessionId).toBe(session.id);
+      expect((await repository.findSession(session.id))?.status).toBe('ACTIVE');
+    });
+
+    /**
      * DUONG CHUYEN KHONG BI CHAM TOI. Mot phien theo CHUYEN khong co vong chay de hoi, nen no giu
      * nguyen hanh vi cu — ke ca khi chuyen do da `DELIVERED`.
      */

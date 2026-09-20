@@ -107,6 +107,17 @@ export const TRACKING_INGEST_REASONS = [
   'SESSION_NOT_OWNED',
   /** Phien da dong — khong nhan them ban dinh vi. */
   'SESSION_NOT_ACTIVE',
+  /**
+   * CHU THE cua phien da ket thuc — `#327`. Phien vua bi dong ngay trong lan goi nay.
+   *
+   * Ma RIENG, khong gop vao `SESSION_NOT_ACTIVE`: cai kia noi *"phien da dong truoc do"* (lai xe
+   * hoac he thong da ket thuc no), con cai nay noi *"vong chay da xong nen phien vua het hieu luc
+   * tai day"*. Nguoi doi chieu can phan biet duoc hai dieu do — mot cai la trinh tu binh thuong,
+   * cai kia la mot lan ghi bi chan o dung ranh gioi.
+   */
+  'SESSION_SUBJECT_ENDED',
+  /** Phien cu cua vong chay da ket thuc vua duoc dong o chinh lan ghi nay. */
+  'STALE_RUN_SESSION_CLOSED',
   /** Toa do khong qua duoc kiem bien (`geo-point.ts`), ke ca truong hop (0,0). */
   'COORDINATE_REJECTED',
 ] as const;
@@ -338,6 +349,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     OBSERVATION_REPLAYED: 'Gửi lại đúng bản cũ — không ghi thêm hàng nào',
     OBSERVATION_EVENT_ID_REUSED: 'Một mã sự kiện được dùng lại cho nội dung khác',
     SESSION_NOT_ACTIVE: 'Phiên đã đóng — không nhận thêm bản định vị',
+    SESSION_SUBJECT_ENDED: 'Vòng chạy của phiên đã kết thúc — phiên vừa hết hiệu lực tại đây',
     COORDINATE_REJECTED: 'Toạ độ không qua được kiểm biên',
 
     RISK_NONE: 'Không có gì đáng để người nhìn',

@@ -733,5 +733,64 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       await closeAnyOpenSession(driverA);
     });
+
+    /**
+     * RANH GIOI GHI, tren DB that.
+     *
+     * Bai ngay tren do duong DOC (`LocationHealthService`) va duong MO (`openSession`). Con lai
+     * duong GHI, va no la cho nguy hiem nhat: hang phien cua vong chay da xong VAN o `ACTIVE` theo
+     * dung thiet ke, nen neu `ingest()` chi doc moi `session.status` thi toa do van chay tiep vao
+     * mot vong chay da dong. Luc do phien THAT SU song lau hon chu the cua no.
+     */
+    it('vong chay ket thuc GIUA CA: ban dinh vi tiep theo bi tu choi, va phien dong lai voi RUN_TERMINAL', async () => {
+      await closeAnyOpenSession(driverA);
+      const onRunB = await trackingService.openSession({
+        authUserId: AUTH_A,
+        runId: runBId,
+        device: null,
+      });
+
+      // TRUOC: vong chay con chay, ban dinh vi vao binh thuong — cong khong bi siet nham.
+      const before = await trackingService.ingest({
+        authUserId: AUTH_A,
+        sessionId: onRunB.id,
+        clientEventId: `${PREFIX}-obs-truoc-khi-xong`,
+        latitude: HANOI.latitude,
+        longitude: HANOI.longitude,
+        accuracyMetres: 8,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source: 'DEVICE_FUSED',
+        capturedAt: new Date('2026-09-19T08:00:00Z'),
+        mockLocationReported: false,
+      });
+      expect(before.sessionId).toBe(onRunB.id);
+
+      await movement.setRunStatus(runBId, 'COMPLETED', new Date('2026-09-19T09:00:00Z'));
+
+      // SAU: cung mot phien, cung mot lai xe, chi doi trang thai vong chay.
+      await expect(
+        trackingService.ingest({
+          authUserId: AUTH_A,
+          sessionId: onRunB.id,
+          clientEventId: `${PREFIX}-obs-sau-khi-xong`,
+          latitude: HANOI.latitude + 0.0003,
+          longitude: HANOI.longitude + 0.0003,
+          accuracyMetres: 8,
+          speedMetresPerSecond: null,
+          bearingDegrees: null,
+          source: 'DEVICE_FUSED',
+          capturedAt: new Date('2026-09-19T09:05:00Z'),
+          mockLocationReported: false,
+        }),
+      ).rejects.toMatchObject({ reason: 'SESSION_SUBJECT_ENDED', kind: 'CONFLICT' });
+
+      // Khong mot hang nao duoc them, va phien khong con nhan duoc gi nua.
+      const points = await tracking.listObservations(onRunB.id);
+      expect(points.map((row) => row.clientEventId)).toEqual([`${PREFIX}-obs-truoc-khi-xong`]);
+      const closed = await tracking.findSession(onRunB.id);
+      expect(closed?.status).not.toBe('ACTIVE');
+      expect(closed?.endedReason).toBe('RUN_TERMINAL');
+    });
   },
 );

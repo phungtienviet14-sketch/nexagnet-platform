@@ -433,7 +433,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.history_read": {
       "functionName": "TrackingService.trackForSession",
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
-      "line": 454
+      "line": 498
     },
     "tracking.location_health": {
       "functionName": "LocationHealthService.forVehicle",
@@ -446,7 +446,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.risk_assessed": {
       "functionName": "TrackingService.recordRisk",
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
-      "line": 533
+      "line": 577
     },
     "tracking.session_close": {
       "functionName": "TrackingService.closeSession",
@@ -1825,7 +1825,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "tracking.risk_assessed|*": {
       "functionName": "TrackingService.recordRisk",
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
-      "line": 548
+      "line": 592
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",

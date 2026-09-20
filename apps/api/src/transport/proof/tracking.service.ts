@@ -13,7 +13,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_PROOF_DECISIONS } from './proof-decisions.js';
 import { ACTIVE_TRACKING_SESSION, DEVICE_INSTALLATION_ID } from './proof-storage-conflict.js';
 import { assessObservationRisk, clockSkewSeconds } from './risk-assessment.js';
-import { findEndedRunSubject } from './run-subject-lifecycle.js';
+import { findEndedRunSubject, type EndedRunSubject } from './run-subject-lifecycle.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
 import { TrackingRepository, type AppendRiskFlagInput } from './tracking.repository.js';
 import type {
@@ -103,7 +103,7 @@ export class TrackingService {
     }
     // Phien cu con GIU CHO hay khong la cau hoi cua CHU THE cua no, khong cua nguoi dang goi. Xem
     // `releaseIfSubjectEnded()`.
-    if (open && !(await this.releaseIfSubjectEnded(open))) {
+    if (open && (await this.releaseIfSubjectEnded(open, 'tracking.session_open')) === null) {
       this.deny('tracking.session_open', 'DRIVER_HAS_ANOTHER_OPEN_SESSION', {
         openSessionId: open.id,
         openTripId: open.tripId,
@@ -297,23 +297,29 @@ export class TrackingService {
    *
    * Tra ve `true` khi phien cu vua duoc nhuong duong.
    */
-  private async releaseIfSubjectEnded(open: TrackingSession): Promise<boolean> {
+  private async releaseIfSubjectEnded(
+    open: TrackingSession,
+    point: 'tracking.session_open' | 'tracking.observation_ingest',
+  ): Promise<EndedRunSubject | null> {
     const ended = await findEndedRunSubject(this.core, open);
-    if (ended === null) return false;
+    if (ended === null) return null;
 
     const closed = await this.repository.closeSession(
       open.id,
       this.now(),
       RUN_TERMINAL_SESSION_END_REASON,
     );
-    this.allow('tracking.session_open', 'STALE_RUN_SESSION_CLOSED', {
+    // Diem quyet dinh do NGUOI GOI truyen vao, vi cung mot buoc don dep xay ra o hai ranh gioi
+    // nghiep vu khac nhau — mo mot phien moi, va chan mot lan ghi. Ghi ca hai vao mot diem se lam
+    // mot luot doc so khong con noi duoc phien do dong luc lai xe bat dau ca hay luc ho bam nut.
+    this.allow(point, 'STALE_RUN_SESSION_CLOSED', {
       sessionId: closed.id,
       runId: ended.runId,
       runStatus: ended.status,
       driverId: open.driverId,
       observationCount: closed.observationCount,
     });
-    return true;
+    return ended;
   }
 
   /* ------------------------------------------------------------------ *
@@ -377,6 +383,44 @@ export class TrackingService {
       throw TransportDomainError.conflict(
         'SESSION_NOT_ACTIVE',
         'Phien da dong — khong nhan them ban dinh vi',
+      );
+    }
+
+    /*
+     * RANH GIOI GHI cua vong doi suy-tu-chu-the — `#327`.
+     *
+     * ============================================================================================
+     * VI SAO PHEP KIEM NAY PHAI CO MAT O DAY, CHU KHONG CHI O `openSession`
+     * ============================================================================================
+     *
+     * Duoi vong doi nay, hang phien cua mot vong chay da xong VAN o `ACTIVE` cho toi lan don dep ke
+     * tiep — co y, va chap nhan duoc o duong DOC vi `LocationHealthService` da bo qua no. Nhung
+     * duong GHI thi khac han: mot `session.status` con `ACTIVE` se cho ban dinh vi tiep tuc chay
+     * vao mot vong chay da dong, va luc do phien THAT SU song lau hon chu the cua no — dung o cho
+     * nguy hiem nhat. Toa do ghi vao mot vong chay da ket thuc khong con mot cau nghiep vu nao doc
+     * duoc: no khong thuoc chuyen viec nao, va khong ai doi no.
+     *
+     * Dat SAU phep kiem `status`, khong truoc: mot phien da dong tu truoc tra loi bang
+     * `SESSION_NOT_ACTIVE` va khong duoc dong lan thu hai — lan dong thu hai se ghi de `endedAt`
+     * va `endedReason` cua lan dau, tuc xoa mat ly do that su.
+     *
+     * Dat TRUOC `parseGeoPoint` va truoc phep tra khoa phat lai: mot lan gui lai vao vong chay da
+     * dong cung la mot lan ghi, va no phai dung o dung cho nay.
+     *
+     * Cung `findEndedRunSubject()` ma `openSession()` va `LocationHealthService` hoi. Mot dinh
+     * nghia, ba cho — xem `run-subject-lifecycle.ts`.
+     */
+    const ended = await this.releaseIfSubjectEnded(session, 'tracking.observation_ingest');
+    if (ended !== null) {
+      this.deny('tracking.observation_ingest', 'SESSION_SUBJECT_ENDED', {
+        sessionId: session.id,
+        runId: ended.runId,
+        runStatus: ended.status,
+        driverId: driver.id,
+      });
+      throw TransportDomainError.conflict(
+        'SESSION_SUBJECT_ENDED',
+        'Vong chay cua phien nay da ket thuc — khong nhan them ban dinh vi',
       );
     }
 
