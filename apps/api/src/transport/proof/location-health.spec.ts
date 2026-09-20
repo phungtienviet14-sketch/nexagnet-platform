@@ -57,7 +57,7 @@ const telematicsSample = (
 
 const input = (overrides: Partial<LocationHealthInput> = {}): LocationHealthInput => ({
   vehicleId: 'vehicle-1',
-  expectation: { tripId: 'trip-1', sessionId: 'session-1', since: agedBy(3_600) },
+  expectation: { tripId: 'trip-1', runId: null, sessionId: 'session-1', since: agedBy(3_600) },
   samples: [],
   telematicsConfigured: false,
   ...overrides,
@@ -214,7 +214,9 @@ describe('T10.4 — khong co ky vong bam vi tri', () => {
 
   it('ky vong vua mo, chua co ban nao -> DEGRADED/AWAITING, KHONG phai LOST', () => {
     // May thu GNSS khoi dong nguoi mat hang chuc giay. Bao "mat GPS" o day la sai theo nghia den.
-    const result = classify({ expectation: { tripId: 't', sessionId: 's', since: agedBy(30) } });
+    const result = classify({
+      expectation: { tripId: 't', runId: null, sessionId: 's', since: agedBy(30) },
+    });
 
     expect(result.status).toBe('DEGRADED');
     expect(result.reason).toBe('AWAITING_FIRST_OBSERVATION');
@@ -224,7 +226,7 @@ describe('T10.4 — khong co ky vong bam vi tri', () => {
 
   it('ky vong mo qua lau ma chua he nhan ban nao -> LOST kem ly do RIENG', () => {
     const result = classify({
-      expectation: { tripId: 't', sessionId: 's', since: agedBy(LOST + 1) },
+      expectation: { tripId: 't', runId: null, sessionId: 's', since: agedBy(LOST + 1) },
     });
 
     expect(result.status).toBe('LOST');
@@ -348,8 +350,11 @@ describe('T10.17 — khong mot ma ly do nao ta hanh vi con nguoi', () => {
       classify({ samples: [phoneSample(60)] }).reason,
       classify({ samples: [phoneSample(HEALTHY + 1)] }).reason,
       classify({ samples: [phoneSample(LOST + 1)] }).reason,
-      classify({ expectation: { tripId: 't', sessionId: 's', since: agedBy(30) } }).reason,
-      classify({ expectation: { tripId: 't', sessionId: 's', since: agedBy(LOST + 1) } }).reason,
+      classify({ expectation: { tripId: 't', runId: null, sessionId: 's', since: agedBy(30) } })
+        .reason,
+      classify({
+        expectation: { tripId: 't', runId: null, sessionId: 's', since: agedBy(LOST + 1) },
+      }).reason,
       classify({
         telematicsConfigured: true,
         samples: [phoneSample(LOST + 1), telematicsSample(60)],

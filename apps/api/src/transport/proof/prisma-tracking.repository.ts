@@ -43,6 +43,7 @@ export class PrismaTrackingRepository extends TrackingRepository {
       data: {
         driverId: input.driverId,
         tripId: input.tripId,
+        runId: input.runId,
         vehicleId: input.vehicleId,
         deviceInstallationId: input.deviceInstallationId,
         businessDate: input.businessDate,
@@ -87,6 +88,14 @@ export class PrismaTrackingRepository extends TrackingRepository {
   async listSessionsForTrip(tripId: string): Promise<readonly TrackingSession[]> {
     const rows = await this.prisma.transportTrackingSession.findMany({
       where: { tripId },
+      orderBy: { startedAt: 'asc' },
+    });
+    return rows.map(toSession);
+  }
+
+  async listSessionsForRun(runId: string): Promise<readonly TrackingSession[]> {
+    const rows = await this.prisma.transportTrackingSession.findMany({
+      where: { runId },
       orderBy: { startedAt: 'asc' },
     });
     return rows.map(toSession);
@@ -393,6 +402,7 @@ function toSession(row: PrismaSession): TrackingSession {
     id: row.id,
     driverId: row.driverId,
     tripId: row.tripId,
+    runId: row.runId,
     vehicleId: row.vehicleId,
     deviceInstallationId: row.deviceInstallationId,
     status: row.status,

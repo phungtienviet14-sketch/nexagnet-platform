@@ -4239,6 +4239,8 @@ model TransportVehicleRun {
   runPlans             TransportOrderRunPlan[]
   waitingSessions      TransportDeliveryWaitingSession[]
   operationalDocuments TransportOperationalDocument[]
+  /// `#327`: phien bam vi tri cua lai xe tren chinh vong chay nay (luong Order-first).
+  trackingSessions     TransportTrackingSession[]
 
   @@index([status])
   @@index([businessDate])
@@ -4625,8 +4627,17 @@ model TransportTrackingSession {
   id                   String                         @id @default(cuid())
   driverId             String
   driver               TransportDriver                @relation(fields: [driverId], references: [id])
-  tripId               String
-  trip                 TransportTrip                  @relation(fields: [tripId], references: [id])
+  /// CHU THE #1 — mot CHUYEN. `null` khi phien nay bam theo mot VONG CHAY.
+  tripId               String?
+  trip                 TransportTrip?                 @relation(fields: [tripId], references: [id])
+  /// CHU THE #2 — mot VONG CHAY (`#327`, luong Order-first). `null` khi phien bam theo CHUYEN.
+  ///
+  /// DUNG MOT trong hai cot khac NULL, cuong che bang `TransportTrackingSession_one_subject`
+  /// (`num_nonnulls = 1`) chu khong chi o tang mien: hai cot nullable khong tu noi ra rang chung
+  /// loai tru nhau, va khong co `CHECK` thi mot phien khong gan vao viec gi — hoac gan vao ca hai
+  /// va hai chu the mau thuan — deu ghi duoc ma khong cai nao tu lo ra.
+  runId                String?
+  run                  TransportVehicleRun?           @relation(fields: [runId], references: [id])
   vehicleId            String?
   vehicle              TransportVehicle?              @relation(fields: [vehicleId], references: [id])
   deviceInstallationId String?
@@ -4647,6 +4658,7 @@ model TransportTrackingSession {
 
   @@index([driverId, status])
   @@index([tripId])
+  @@index([runId])
   @@index([businessDate])
 }
 

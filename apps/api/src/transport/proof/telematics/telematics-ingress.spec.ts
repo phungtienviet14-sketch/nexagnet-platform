@@ -9,6 +9,7 @@ import {
   type ProofDriverFacts,
   type ProofTripFacts,
   type ProofVehicleFacts,
+  type ProofRunFacts,
 } from '../transport-proof-facts.port.js';
 import { TelematicsIngressService } from './telematics-ingress.service.js';
 import {
@@ -84,6 +85,20 @@ class FakeCoreFacts extends TransportProofCoreFacts {
 
   async findVehicle(vehicleId: string): Promise<ProofVehicleFacts | null> {
     return this.known.has(vehicleId) ? { id: vehicleId, registrationPlate: '29H-123.45' } : null;
+  }
+
+  /**
+   * Bo bai nay khong di qua duong phien theo VONG CHAY (`#327`), nen ban gia tra "khong tim thay"
+   * / "chua tung duoc phan cong". Fail-closed la mac dinh dung cho mot ban gia: neu mot duong moi
+   * lang le bat dau goi hai ham nay, no se bi TU CHOI chu khong duoc cho qua bang mot cau tra loi
+   * bia ra.
+   */
+  async findRun(): Promise<ProofRunFacts | null> {
+    return null;
+  }
+
+  async wasDriverEverAssignedToRun(): Promise<boolean> {
+    return false;
   }
 }
 

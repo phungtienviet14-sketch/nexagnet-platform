@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ingestTelematicsObservationBatchSchema,
   ingestTelematicsObservationSchema,
+  openTrackingSessionSchema,
   recordProofSchema,
   reportObservationSchema,
 } from './proof.schemas.js';
@@ -198,5 +199,59 @@ describe('Lieu do cua nhap telematics — PROOF-082', () => {
     }));
 
     expect(ingestTelematicsObservationBatchSchema.safeParse({ observations }).success).toBe(false);
+  });
+});
+
+/**
+ * PROOF-081 — CHU THE cua mot phien bam vi tri: chuyen HOAC vong chay, dung MOT.
+ *
+ * `#327` `ARCHITECTURE_DECISION_2026_09_19`. Luong Order-first sinh `TransportVehicleRun`, khong
+ * sinh `TransportTrip`, nen mot lieu do chi biet `tripId` khoa lai xe ra ngoai chinh cai moc ma
+ * chinh sach bat ho phai bam kem vi tri.
+ *
+ * Phep "dung MOT" duoc dat o TANG BIEN VAO chu khong o mot cau `if` trong dich vu: mot than yeu
+ * cau mang ca hai khoa la mot than yeu cau KHONG BIET no dang noi ve cai gi, va doan ho no (uu
+ * tien `tripId`, uu tien `runId`) se lang le ghi mot phien vao sai chu the.
+ */
+describe('Chu the cua phien bam vi tri — PROOF-081', () => {
+  it('`tripId` mot minh: hop le — duong cu KHONG doi', () => {
+    const parsed = openTrackingSessionSchema.safeParse({ tripId: 'trip-1' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data).toMatchObject({ tripId: 'trip-1' });
+  });
+
+  it('`runId` mot minh: hop le — duong Order-first', () => {
+    const parsed = openTrackingSessionSchema.safeParse({ runId: 'run-1' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data).toMatchObject({ runId: 'run-1' });
+  });
+
+  it('CA HAI khoa: bi tu choi — khong doan ho may khach', () => {
+    expect(openTrackingSessionSchema.safeParse({ tripId: 'trip-1', runId: 'run-1' }).success).toBe(
+      false,
+    );
+  });
+
+  it('KHONG khoa nao: bi tu choi — mot phien khong gan vao cai gi la mot phien mo coi', () => {
+    expect(openTrackingSessionSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('`vehicleId` van KHONG vao duoc bang duong nay, ke ca kem `runId`', () => {
+    expect(
+      openTrackingSessionSchema.safeParse({ runId: 'run-1', vehicleId: 'xe-cua-nguoi-khac' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('`driverId` cung vay — danh tinh den tu phien, khong tu than yeu cau', () => {
+    expect(
+      openTrackingSessionSchema.safeParse({ runId: 'run-1', driverId: 'lai-xe-khac' }).success,
+    ).toBe(false);
+  });
+
+  it('thiet bi di kem duoc ca hai chu the', () => {
+    const device = { installationId: 'inst-1', platform: 'WEB' as const, appVersion: '1.0.0' };
+    expect(openTrackingSessionSchema.safeParse({ runId: 'run-1', device }).success).toBe(true);
+    expect(openTrackingSessionSchema.safeParse({ tripId: 'trip-1', device }).success).toBe(true);
   });
 });

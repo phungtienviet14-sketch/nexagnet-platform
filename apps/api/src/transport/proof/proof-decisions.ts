@@ -41,6 +41,18 @@ export const TRACKING_SESSION_OPEN_REASONS = [
   'DRIVER_NOT_ASSIGNED_TO_TRIP',
   /** Chuyen da o trang thai ket thuc — khong con gi de bam. */
   'TRIP_NOT_ACTIVE',
+  /** Vong chay khong ton tai — `#327`, chu the thu hai cua mot phien. */
+  'RUN_NOT_FOUND',
+  /**
+   * Lai xe nay chua tung cam vong chay do.
+   *
+   * Cong SONG SINH cua `DRIVER_NOT_ASSIGNED_TO_TRIP`, khong phai mot ban sao: hai chu the khac
+   * nhau doc hai bang phan cong khac nhau, va gop chung thanh mot ma se lam mot lan tu choi
+   * khong con noi duoc no tu choi tren truc nao.
+   */
+  'DRIVER_NOT_ASSIGNED_TO_RUN',
+  /** Vong chay da `COMPLETED`/`CANCELLED` — khong con gi de bam. */
+  'RUN_NOT_ACTIVE',
   /**
    * Lai xe dang co MOT phien khac mo tren mot chuyen khac.
    *
@@ -48,6 +60,14 @@ export const TRACKING_SESSION_OPEN_REASONS = [
    * mot thu khong co that, va he thong khong biet cai nao — nen no tu choi thay vi doan.
    */
   'DRIVER_HAS_ANOTHER_OPEN_SESSION',
+  /**
+   * Phien cu cua mot VONG CHAY DA KET THUC vua duoc dong de nhuong duong — `#327`.
+   *
+   * Mot ket qua CHO PHEP, khong phai mot loi: no la dau vet cua mot buoc don dep tat dinh, va no
+   * PHAI de lai dau vet. Khong ghi thi mot phien bien mat giua hai lan doc so, va nguoi doi chieu
+   * ve sau khong co cach nao noi duoc no da dong vi lai xe bam, vi het gio, hay vi vong chay xong.
+   */
+  'STALE_RUN_SESSION_CLOSED',
   /** Ma cai dat ung dung nay da duoc gan cho mot lai xe KHAC. */
   'DEVICE_BOUND_TO_ANOTHER_DRIVER',
   /** Ma cai dat da bi thu hoi. */
@@ -87,6 +107,17 @@ export const TRACKING_INGEST_REASONS = [
   'SESSION_NOT_OWNED',
   /** Phien da dong — khong nhan them ban dinh vi. */
   'SESSION_NOT_ACTIVE',
+  /**
+   * CHU THE cua phien da ket thuc — `#327`. Phien vua bi dong ngay trong lan goi nay.
+   *
+   * Ma RIENG, khong gop vao `SESSION_NOT_ACTIVE`: cai kia noi *"phien da dong truoc do"* (lai xe
+   * hoac he thong da ket thuc no), con cai nay noi *"vong chay da xong nen phien vua het hieu luc
+   * tai day"*. Nguoi doi chieu can phan biet duoc hai dieu do — mot cai la trinh tu binh thuong,
+   * cai kia la mot lan ghi bi chan o dung ranh gioi.
+   */
+  'SESSION_SUBJECT_ENDED',
+  /** Phien cu cua vong chay da ket thuc vua duoc dong o chinh lan ghi nay. */
+  'STALE_RUN_SESSION_CLOSED',
   /** Toa do khong qua duoc kiem bien (`geo-point.ts`), ke ca truong hop (0,0). */
   'COORDINATE_REJECTED',
 ] as const;
@@ -301,7 +332,11 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     TRIP_NOT_FOUND: 'Không tìm thấy chuyến',
     DRIVER_NOT_ASSIGNED_TO_TRIP: 'Lái xe chưa từng được phân công vào chuyến này',
     TRIP_NOT_ACTIVE: 'Chuyến đã kết thúc — không còn gì để bám',
+    RUN_NOT_FOUND: 'Không tìm thấy vòng chạy',
+    DRIVER_NOT_ASSIGNED_TO_RUN: 'Lái xe chưa từng được phân công vào vòng chạy này',
+    RUN_NOT_ACTIVE: 'Vòng chạy đã kết thúc — không còn gì để bám',
     DRIVER_HAS_ANOTHER_OPEN_SESSION: 'Lái xe đang có một phiên khác mở trên chuyến khác',
+    STALE_RUN_SESSION_CLOSED: 'Đã đóng phiên cũ của một vòng chạy đã kết thúc',
     DEVICE_BOUND_TO_ANOTHER_DRIVER: 'Mã cài đặt ứng dụng này đã gắn với một lái xe khác',
     DEVICE_REVOKED: 'Mã cài đặt ứng dụng đã bị thu hồi',
 
@@ -314,6 +349,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     OBSERVATION_REPLAYED: 'Gửi lại đúng bản cũ — không ghi thêm hàng nào',
     OBSERVATION_EVENT_ID_REUSED: 'Một mã sự kiện được dùng lại cho nội dung khác',
     SESSION_NOT_ACTIVE: 'Phiên đã đóng — không nhận thêm bản định vị',
+    SESSION_SUBJECT_ENDED: 'Vòng chạy của phiên đã kết thúc — phiên vừa hết hiệu lực tại đây',
     COORDINATE_REJECTED: 'Toạ độ không qua được kiểm biên',
 
     RISK_NONE: 'Không có gì đáng để người nhìn',
