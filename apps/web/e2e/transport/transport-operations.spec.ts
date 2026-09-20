@@ -348,6 +348,71 @@ const DRIVERS = [
   },
 ];
 
+/*
+ * SO DOI SOAT KHACH HANG — ba duong DOC cua nua tren man `Cong no & quyet toan`.
+ *
+ * Thieu chung thi man hinh xuong che do loi o dung cai khoi ma no duoc dat ten theo, va bo anh
+ * `chup bo anh o be rong may tinh va dien thoai` dua cho nguoi review mot man hinh HONG thay vi
+ * man hinh that. Cac con so o day chi de ve ra mot trang co du lieu, khong phai cua khach nao.
+ */
+const CUSTOMER_AR_PENDING = [
+  {
+    orderId: 'ord-e2e-1',
+    orderCode: 'DH-E2E-1',
+    customerId: 'cus-1',
+    proposedAmount: 5_000_000,
+    currencyCode: 'VND',
+    businessDate: '2026-09-12',
+  },
+];
+
+const CUSTOMER_AR_SUMMARY = {
+  asOf: '2026-09-30',
+  customerId: null,
+  pendingReconciliationAmount: 5_000_000,
+  officialReceivableAmount: 23_500_000,
+  outstandingAmount: 11_500_000,
+  notYetDueAmount: 0,
+  dueAmount: 0,
+  overdueAmount: 11_500_000,
+  paidAmount: 12_000_000,
+  unallocatedCreditAmount: 2_000_000,
+  receivables: [
+    {
+      reconciliation: { orderId: 'ord-e2e-1' },
+      documentId: 'doc-1',
+      customerId: 'cus-1',
+      currencyCode: 'VND',
+      grossAmount: 23_500_000,
+      allocatedAmount: 12_000_000,
+      outstandingAmount: 11_500_000,
+      dueDate: '2026-09-15',
+      status: 'OVERDUE',
+    },
+  ],
+  payments: [
+    {
+      payment: {
+        id: 'pay-e2e-1',
+        customerId: 'cus-1',
+        amount: 14_000_000,
+        currencyCode: 'VND',
+        receivedAt: '2026-09-20T02:00:00.000Z',
+        businessDate: '2026-09-20',
+        externalRef: 'NH-0001',
+        note: null,
+        recordedBy: 'e2e',
+        sourceId: 'src-e2e-1',
+        sourceFingerprint: 'fp-e2e-1',
+        createdAt: '2026-09-20T02:00:00.000Z',
+      },
+      allocations: [],
+      allocatedAmount: 12_000_000,
+      unallocatedAmount: 2_000_000,
+    },
+  ],
+};
+
 const CUSTOMERS = [
   {
     id: 'cus-1',
@@ -906,6 +971,13 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
   );
   await page.route('**/transport/settlement/trips/*/direct-margin', (route) =>
     json(route, DIRECT_MARGIN),
+  );
+  await page.route('**/transport/customer-ar/pending**', (route) =>
+    json(route, { orders: CUSTOMER_AR_PENDING }),
+  );
+  await page.route('**/transport/customer-ar/batches**', (route) => json(route, { batches: [] }));
+  await page.route('**/transport/customer-ar/summary**', (route) =>
+    json(route, CUSTOMER_AR_SUMMARY),
   );
   // PHONG BI, khong mang tran. May chu that goi `{ due }`, `{ plans }`, `{ workOrders }`,
   // `{ documents }`, `{ alerts, gaps }`, `{ vehicles, conflicts }`. Cac may chu gia o day tung tra

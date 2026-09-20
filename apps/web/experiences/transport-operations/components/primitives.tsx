@@ -69,6 +69,9 @@ export function CommandPanel({
   title,
   hint,
   openLabel,
+  step,
+  isOpen: controlledOpen,
+  onOpenChange,
   children,
 }: {
   readonly title: string;
@@ -76,16 +79,41 @@ export function CommandPanel({
   readonly hint?: string;
   /** Chu tren nut mo. Mac dinh dung chinh tieu de, vi do thuong da la mot dong lenh. */
   readonly openLabel?: string;
+  /**
+   * So thu tu trong mot CHUOI viec. Chi dat khi cac ngan canh nhau that su phai lam theo thu tu —
+   * mot con so o day noi "cai nay truoc cai kia" re hon mot doan van noi dieu do.
+   */
+  readonly step?: number;
+  /**
+   * KHONG truyen ⇒ ngan tu giu trang thai, dong san (hanh vi cu, va moi cho dang dung deu the).
+   * Co truyen ⇒ NGUOI GOI giu trang thai.
+   *
+   * Cho duy nhat can toi hom nay: ghi nhan xong mot khoan tien thi viec ngay sau do la phan bo
+   * chinh khoan vua ghi, va man hinh chon san khoan do (`#296`). Neu ngan phan bo van dong thi lua
+   * chon da chon san nam sau mot cai nut va khong ai nhin thay no.
+   */
+  readonly isOpen?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
   readonly children: ReactNode;
 }) {
-  const [isOpen, setOpen] = useState(false);
+  const [selfOpen, setSelfOpen] = useState(false);
   const bodyId = useId();
+  const isOpen = controlledOpen ?? selfOpen;
+
+  const toggle = () => {
+    const next = !isOpen;
+    setSelfOpen(next);
+    onOpenChange?.(next);
+  };
 
   return (
     <section className="tx-command" data-open={isOpen ? 'open' : 'closed'} aria-label={title}>
       <div className="tx-command__head">
         <div className="tx-command__text">
-          <h3>{title}</h3>
+          <h3>
+            {step === undefined ? null : <span className="tx-command__step">{step}</span>}
+            {title}
+          </h3>
           {hint === undefined ? null : <p className="tx-command__hint">{hint}</p>}
         </div>
         <button
@@ -93,7 +121,7 @@ export function CommandPanel({
           className="tx-command__toggle"
           aria-expanded={isOpen}
           aria-controls={bodyId}
-          onClick={() => setOpen((open) => !open)}
+          onClick={toggle}
         >
           {isOpen ? 'Đóng' : (openLabel ?? title)}
         </button>
@@ -110,12 +138,19 @@ export function MetricCard({
   value,
   hint,
   href,
+  tone,
 }: {
   readonly label: string;
   readonly value: string;
   readonly hint?: string | null;
   /** Co dia chi ⇒ con so la mot loi vao viec, khong phai mot trang tri. */
   readonly href?: string;
+  /**
+   * Chi dat khi con so TU NO mang mot trang thai — vd tien qua han. Mau chi to dam mot dieu ma
+   * NHAN da noi ra bang chu, no khong bao gio duoc la thu DUY NHAT noi dieu do. Va phai dat that
+   * tiet kiem: mot dai ma the nao cung co mau thi khong the nao noi len duoc nua.
+   */
+  readonly tone?: StatusTone;
 }) {
   const body = (
     <>
@@ -124,10 +159,13 @@ export function MetricCard({
       {hint == null ? null : <span className="tx-metric__hint">{hint}</span>}
     </>
   );
+  const className = ['tx-metric', tone === undefined ? null : `tx-metric--${tone}`]
+    .filter((part) => part !== null)
+    .join(' ');
   return href === undefined ? (
-    <div className="tx-metric">{body}</div>
+    <div className={className}>{body}</div>
   ) : (
-    <a className="tx-metric tx-metric--link" href={href}>
+    <a className={`${className} tx-metric--link`} href={href}>
       {body}
     </a>
   );
