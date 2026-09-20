@@ -8,6 +8,7 @@ import { TraceLookupService } from './historical/trace-lookup.service.js';
 import { OtelTraceBridge } from './otel/otel-trace-bridge.js';
 import { isOtelRunning } from './otel/otel-runtime.js';
 import { resolveReleaseIdentity, formatRelease } from './release-identity.js';
+import { RELEASE_ENV_VARIABLE } from './release-sha.js';
 import { RecentTracesSink } from './recent-traces.sink.js';
 import { StructuredLogSink } from './structured-logging.js';
 import { TraceController } from './trace.controller.js';
@@ -105,9 +106,12 @@ import { privacyModeFor } from './telemetry-redaction.js';
           // HAI NGUON, HAI CAU TRA LOI. Khong ben nao duoc chon (xem `resolveGitSha`), nen o day
           // chi con viec noi to. Cong CUNG nam o `deploy-stack.sh`: mot lan deploy roi vao trang
           // thai nay do voi ma `RELEASE_IDENTITY_MISMATCH`, khong phai mot loi suc khoe chung.
+          const envVariable = release.mismatch
+            ? RELEASE_ENV_VARIABLE[release.mismatch.envSource]
+            : 'RELEASE_GIT_SHA';
           logger.error(
             `Danh tinh release XUNG DOT: manifest=${release.mismatch?.manifestGitSha} ` +
-              `RELEASE_GIT_SHA=${release.mismatch?.envGitSha}. Trace se khong neo vao release nao ` +
+              `${envVariable}=${release.mismatch?.envGitSha}. Trace se khong neo vao release nao ` +
               'cho toi khi hai nguon thong nhat — mot permalink tro toi commit sai te hon khong co.',
           );
         } else if (release.gitSha === 'unknown') {
