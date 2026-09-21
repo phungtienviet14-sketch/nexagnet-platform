@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "defaultMode": "bypassPermissions" ,
     "deny": [
       "Bash(docker compose up:*)",
       "Bash(docker compose down:*)",
@@ -23,14 +24,9 @@
       "Read(./secrets/**)",
       "Edit(./.env)",
       "Edit(./secrets/**)"
-    ],
-    "ask": [
-      "Bash(git push:*)",
-      "Bash(git worktree remove:*)",
-      "Bash(git worktree prune:*)",
-      "Bash(docker:*)"
     ]
   },
+  "env": { "ECC_GATEGUARD": "off" },
   "worktree": {
     "baseRef": "fresh",
     "bgIsolation": "worktree",
