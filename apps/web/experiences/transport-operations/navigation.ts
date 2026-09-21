@@ -99,7 +99,7 @@ export const TRANSPORT_SECTIONS = [
     id: 'overview',
     label: 'Tổng quan',
     group: 'root',
-    summary: 'Chuyến đang chạy, đội xe, và những việc đang chờ người xử lý.',
+    summary: 'Đơn hàng, vòng chạy đang chạy, đội xe, và những việc đang chờ người xử lý.',
     requiredCapabilities: [],
     requiredAction: 'transport.trip.read',
   },
@@ -134,7 +134,9 @@ export const TRANSPORT_SECTIONS = [
      * `TransportTrip` — chuyen LAP TAY cua the he truoc (#339).
      *
      * KHONG xoa, va dia chi `?section=trips&selected=…` van mo dung man nay cho nguoi du hai truc
-     * quyen: du lieu chuyen cu, bo loc tren dia chi (#222 P2) va cac the o Tong quan van tro vao day.
+     * quyen: du lieu chuyen cu va bo loc tren dia chi (#222 P2) van song. Tong quan chi con tro vao day
+     * tu MOT dong thong tin phu ve chuyen chua khep (#348) — the so va hang viec cua no da doc tu vong
+     * chay.
      * Nhung no khong con dung tren danh muc chinh canh `Đơn hàng & vòng chạy`: hai muc cung noi
      * "xe chay hang" dung canh nhau la cach nguoi dung First-UAT da bat dau sai luong.
      */
