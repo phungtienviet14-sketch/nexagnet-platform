@@ -134,6 +134,14 @@ export class PrismaAcceptanceRepository extends AcceptanceRepository {
     return rows.map(toAcceptance);
   }
 
+  async findDecisionsByIds(ids: readonly string[]): Promise<CommercialAcceptanceDecision[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.transportCommercialAcceptanceDecision.findMany({
+      where: { id: { in: [...ids] } },
+    });
+    return rows.map(toDecision);
+  }
+
   async append(command: AppendAcceptanceDecisionCommand): Promise<AcceptanceDecisionOutcome> {
     try {
       return await this.prisma.$transaction(async (tx) => {

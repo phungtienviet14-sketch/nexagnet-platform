@@ -141,6 +141,25 @@ này, và `CommercialAcceptanceService` **không cầm** một kho ghi nào ngo�
 `decidedBy` đến từ phiên, `decidedAt` từ đồng hồ máy chủ — giữ bằng **kiểu**: lệnh của miền không có
 trường nào để bên gọi đặt chúng.
 
+### 6.1 Người quyết trên màn hình — mã thô cho kiểm toán, tên cho con người (#334)
+
+`decidedBy` là **mã tài khoản thô** và là sự thật kiểm toán: không bị đổi, không bị ghi đè. Mọi câu
+trả lời của `CommercialAcceptanceController` đi qua `CommercialAcceptanceReadModel`, lớp này chỉ
+**thêm** `decidedByActor` (lịch sử) và `latestDecidedByActor` (hàng chờ) dạng `{ id, label, kind }`:
+
+| `kind` | Khi nào | `label` |
+|---|---|---|
+| `USER` | tài khoản còn hoạt động | `User.name`, rỗng thì `User.username` |
+| `DISABLED_USER` | tài khoản đã khoá | vẫn là tên người đó — họ đã thật sự quyết |
+| `SEED_DATA` | hàng do bước gieo dữ liệu mẫu ghi (`demo-seed`) | `Dữ liệu khởi tạo` |
+| `UNRESOLVED` | mã không còn trỏ vào tài khoản nào | `Tài khoản không còn hoạt động` |
+
+Nguồn tên là `UserRepository` — cùng nguồn phiên đăng nhập dùng; không có tên nào viết cứng.
+`label` **không bao giờ** là mã thô. Lớp này không có đường ghi nào nên không chạm được quyền hay
+chống ghi trùng. Cùng lượt: `latestDecidedBy`/`latestDecidedAt` của hàng chờ nay đọc từ **cùng một**
+quyết định mới nhất (`latestDecisionId`) — trước đó người là `openedBy` (người quyết lần đầu) còn
+giờ là lần sửa gần nhất, nên hai người quyết một đơn sẽ in ra một cặp người/giờ chưa từng xảy ra.
+
 ---
 
 ## 7. Giới hạn đã biết, báo chứ không che

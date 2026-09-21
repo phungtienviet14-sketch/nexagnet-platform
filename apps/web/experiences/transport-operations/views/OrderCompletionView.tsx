@@ -300,10 +300,11 @@ export function OrderCompletionView() {
           {
             key: 'decided',
             header: 'Người quyết / lúc',
+            // NHAN, khong phai ma tai khoan tho `latestDecidedBy` (`#334`).
             render: (row) =>
-              row.latestDecidedBy === null
+              row.latestDecidedByActor === null
                 ? '—'
-                : `${row.latestDecidedBy} · ${localTime(row.latestDecidedAt)}`,
+                : `${row.latestDecidedByActor.label} · ${localTime(row.latestDecidedAt)}`,
           },
           {
             key: 'actions',
@@ -353,7 +354,7 @@ export function OrderCompletionView() {
             },
             { key: 'reason', header: 'Mã lý do', render: (d) => d.reasonCode },
             { key: 'note', header: 'Căn cứ', render: (d) => d.externalNote ?? '—' },
-            { key: 'by', header: 'Người quyết', render: (d) => d.decidedBy },
+            { key: 'by', header: 'Người quyết', render: (d) => d.decidedByActor.label },
             { key: 'at', header: 'Lúc', render: (d) => localTime(d.decidedAt) },
           ]}
         />
