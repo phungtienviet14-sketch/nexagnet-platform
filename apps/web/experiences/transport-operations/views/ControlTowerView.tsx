@@ -69,6 +69,7 @@ export function ControlTowerView() {
 
           <section className="tx-panel" aria-label="Bảng vòng chạy">
             <h2>Vòng chạy hôm nay</h2>
+            <p className="tx-panel__lead">{model.runningSummary}</p>
             <div className="tx-board">
               {model.columns.map((column) => (
                 <article

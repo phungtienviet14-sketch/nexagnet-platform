@@ -37,6 +37,17 @@ export const isTerminalOrderStatus = (status: OrderStatus): boolean =>
 export const isTerminalRunStatus = (status: VehicleRunStatus): boolean =>
   status === 'COMPLETED' || status === 'CANCELLED';
 
+/**
+ * "ĐANG CHẠY" — MOT dinh nghia, va no song o day, canh may trang thai cua vong chay (`#336`).
+ *
+ * Vong chay dang chay = da vao `ACTIVE`, chua dong, chua huy. Khong doc giai doan chang, khong doc
+ * cot `TransportVehicle.status`, khong doc `TransportTrip`: giai doan chi quyet mot vong chay dang
+ * chay NAM O COT NAO tren bang, con cot trang thai xe la cot chinh tay ma luong Order-first khong
+ * ghi. The so "Đang chạy" va nam cot dang chay cua thap dieu hanh cung goi ham nay — do la cach
+ * hai con so do khong the lech nhau.
+ */
+export const isRunningRunStatus = (status: VehicleRunStatus): boolean => status === 'ACTIVE';
+
 const ORDER_EDGES: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   OPEN: ['FULFILLED', 'CANCELLED'],
   FULFILLED: [],

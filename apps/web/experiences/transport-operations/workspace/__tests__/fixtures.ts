@@ -1,4 +1,7 @@
+import { OPERATIONS_BOARD_ORDER } from '../control-tower';
 import type {
+  ActionQueueItem,
+  ControlTowerView,
   Driver,
   DriverFuelSlipView,
   DriverFundEntry,
@@ -11,7 +14,10 @@ import type {
   FuelReconciliationWorkspace,
   FuelStatementLine,
   FuelSupplierStatement,
+  OperationsBoardCard,
+  OperationsBoardColumnView,
   TransportCustomer,
+  TransportOrder,
   TransportPartner,
   Trip,
   TripAssignment,
@@ -345,5 +351,74 @@ export const driverFuelSlip = (over: Partial<DriverFuelSlipView> = {}): DriverFu
   evidenceCount: 1,
   evidence: [{ id: 'ev-1', contentType: 'image/png' }],
   createdAt: '2026-09-04T06:35:00.000Z',
+  ...over,
+});
+
+/* ------------------------------------------------------------------ *
+ * DON HANG + VONG CHAY (#348) — MOT bo hat giong cho CA Tong quan lan Bang dieu hanh
+ *
+ * Hai man doc cung mot read model, nen bai kiem "hai man noi cung mot con so" phai chay tren CUNG
+ * mot doi tuong. Hat giong nam o day chu khong trong tung tep spec: hai ban sao rieng se lech nhau
+ * o lan sua dau tien, va bai kiem se xanh tren hai the gioi khac nhau.
+ * ------------------------------------------------------------------ */
+
+export const order = (over: Partial<TransportOrder> = {}): TransportOrder => ({
+  id: '22222222-2222-4222-8222-222222222222',
+  code: 'DH-2026-0001',
+  status: 'OPEN',
+  businessDate: TODAY,
+  customerId: 'cus-1',
+  originLabel: 'Kho Hải Phòng',
+  destinationLabel: 'Ninh Bình',
+  cargoDescription: null,
+  freightAmount: 5_000_000,
+  currencyCode: 'VND',
+  note: null,
+  cancelledAt: null,
+  cancellationReason: null,
+  ...over,
+});
+
+export const boardCard = (over: Partial<OperationsBoardCard> = {}): OperationsBoardCard => ({
+  runId: '33333333-3333-4333-8333-333333333333',
+  runCode: 'VR-001',
+  vehicleId: 'veh-1',
+  businessDate: TODAY,
+  driverId: 'drv-1',
+  loadedLegs: 1,
+  emptyLegs: 0,
+  totalKm: 120,
+  emptyKm: 0,
+  currentLeg: null,
+  ...over,
+});
+
+/** Bay cot du, moi cot rong — cot `WAITING` dong vi chua co phien cho, dung hinh dang sau Lane N. */
+export const boardColumns = (
+  cards: Partial<Record<OperationsBoardColumnView['column'], readonly OperationsBoardCard[]>> = {},
+): OperationsBoardColumnView[] =>
+  OPERATIONS_BOARD_ORDER.map((column) => ({
+    column,
+    cards: [...(cards[column] ?? [])],
+    total: cards[column]?.length ?? 0,
+    unavailableReason: column === 'WAITING' ? 'AWAITING_WAITING_SESSION_SOURCE' : null,
+  }));
+
+export const queueItem = (over: Partial<ActionQueueItem> = {}): ActionQueueItem => ({
+  kind: 'RUN_ACTIVE_WITHOUT_DRIVER',
+  severity: 'CRITICAL',
+  subject: { kind: 'RUN', id: '33333333-3333-4333-8333-333333333333', reference: 'VR-001' },
+  detail: {},
+  ...over,
+});
+
+export const controlTowerView = (over: Partial<ControlTowerView> = {}): ControlTowerView => ({
+  generatedFor: TODAY,
+  board: boardColumns(),
+  fleet: { total: 0, idle: 0, onTrip: 0, underMaintenance: 0, activeDrivers: 0, runningRuns: 0 },
+  queue: [],
+  queueTotal: 0,
+  unavailableSources: [],
+  pendingWork: [],
   ...over,
 });
