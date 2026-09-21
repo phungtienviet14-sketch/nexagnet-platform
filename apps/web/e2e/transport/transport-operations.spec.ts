@@ -1134,7 +1134,14 @@ test.describe('vo va kien truc thong tin', () => {
     await page.goto('/');
 
     const nav = page.getByRole('navigation', { name: 'Điều hướng vận hành vận tải' });
-    await expect(nav.getByRole('link', { name: 'Chuyến xe' })).toBeVisible();
+    // #339 — don hang la duong chinh; `Chuyến xe` rut xuong loi phu "Cách làm trước đây".
+    await expect(nav.getByRole('link', { name: 'Đơn hàng & vòng chạy' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Chuyến xe' })).toHaveCount(0);
+    await expect(
+      page.getByRole('navigation', { name: 'Cách làm trước đây' }).getByRole('link', {
+        name: 'Chuyến xe',
+      }),
+    ).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Đội xe & lái xe' })).toBeVisible();
     await expect(nav.getByRole('link', { name: /Quỹ lái xe/ })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Nhiên liệu' })).toBeVisible();
@@ -1259,15 +1266,70 @@ test.describe('trang thai tren dia chi', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Chuyến xe' }).click();
+    // #339 — duong chinh la `Đơn hàng & vòng chạy`, nen lich su duoc do tren chinh muc do.
+    const nav = page.getByRole('navigation', { name: 'Điều hướng vận hành vận tải' });
+    await nav.getByRole('link', { name: 'Đơn hàng & vòng chạy' }).click();
+    await expect(page).toHaveURL(/\?section=movement/);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Đơn hàng & vòng chạy' }),
+    ).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
+
+    await page.goForward();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Đơn hàng & vòng chạy' }),
+    ).toBeVisible();
+  });
+
+  /**
+   * #339 — `Chuyến xe` rut khoi danh muc chinh nhung KHONG thanh mot man mo coi.
+   *
+   * Mo tu loi phu thi ghi lich su y het mot muc chinh (Back/Forward van la "ra/vao man nay"), va
+   * dau `aria-current` hien o loi phu — nguoi dung van biet minh dang o dau du muc nay khong con
+   * nam tren danh muc chinh.
+   */
+  test('Chuyen xe mo tu loi phu "Cách làm trước đây" van giu Back/Forward', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
+
+    const older = page.getByRole('navigation', { name: 'Cách làm trước đây' });
+    await expect(older).toContainText('Việc mới bắt đầu ở “Đơn hàng & vòng chạy”.');
+    await older.getByRole('link', { name: 'Chuyến xe' }).click();
     await expect(page).toHaveURL(/\?section=trips/);
     await expect(page.getByRole('heading', { level: 1, name: 'Chuyến xe' })).toBeVisible();
+    await expect(older.getByRole('link', { name: 'Chuyến xe' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    const nav = page.getByRole('navigation', { name: 'Điều hướng vận hành vận tải' });
+    await expect(nav.locator('[aria-current="page"]')).toHaveCount(0);
 
     await page.goBack();
     await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
 
     await page.goForward();
     await expect(page.getByRole('heading', { level: 1, name: 'Chuyến xe' })).toBeVisible();
+  });
+
+  test('dau trang cu toi mot chuyen van mo dung chuyen do, ke ca sau khi tai lai', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=trips&selected=VT-2026-0912');
+    await expect(page.getByRole('heading', { level: 1, name: 'Chuyến xe' })).toBeVisible();
+    await expect(page.getByRole('region', { name: /Chi tiết chuyến VT-2026-0912/ })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Chuyến xe' })).toBeVisible();
+    await expect(page.getByRole('region', { name: /Chi tiết chuyến VT-2026-0912/ })).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'Cách làm trước đây' }).getByRole('link', {
+        name: 'Chuyến xe',
+      }),
+    ).toHaveAttribute('aria-current', 'page');
   });
 
   test('mo thang mot dia chi sau va tai lai van ra dung man hinh', async ({ page }) => {
@@ -1535,6 +1597,71 @@ test.describe('be rong man hinh', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
+  });
+
+  /**
+   * #339 — ngan keo o 390px dan dung duong chinh, va loi phu van o trong ngan keo.
+   *
+   * Dia chi mo dau la `?section=trips` co y: day la dau trang cu cua mot nguoi dung dien thoai, va
+   * no phai mo ra dung man, voi loi phu danh dau dang o dau, thay vi mot trang trang.
+   */
+  test('o be rong dien thoai, ngan keo dan toi Don hang, loi phu van con', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.goto('/?section=trips');
+    await expect(page.getByRole('heading', { level: 1, name: 'Chuyến xe' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Danh mục' }).click();
+    const older = page.getByRole('navigation', { name: 'Cách làm trước đây' });
+    await expect(older.getByRole('link', { name: 'Chuyến xe' })).toBeVisible();
+    await expect(older.getByRole('link', { name: 'Chuyến xe' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    const nav = page.getByRole('navigation', { name: 'Điều hướng vận hành vận tải' });
+    await nav.getByRole('link', { name: 'Đơn hàng & vòng chạy' }).click();
+    await expect(page).toHaveURL(/\?section=movement/);
+    // Bam mot muc thi ngan keo tu dong lai — khong de nguoi dung phai dong tay.
+    await expect(page.getByRole('button', { name: 'Danh mục' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Đơn hàng & vòng chạy' }),
+    ).toBeVisible();
+  });
+});
+
+test.describe('o loc danh muc', () => {
+  /**
+   * #339 — o loc van la loi tat cua danh muc chinh, va KHONG keo muc cu len lai canh don hang.
+   * Luat thuan cua no khoa o `navigation.spec.ts`; bai nay do tren trinh duyet that.
+   */
+  test('go "don hang" ra muc chinh, go "chuyen xe" khong keo muc cu len danh muc', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/');
+    const filter = page.getByRole('searchbox', { name: 'Lọc danh mục vận hành vận tải' });
+    const nav = page.getByRole('navigation', { name: 'Điều hướng vận hành vận tải' });
+
+    await filter.fill('don hang');
+    await expect(nav.getByRole('link')).toHaveCount(1);
+    await expect(nav.getByRole('link', { name: 'Đơn hàng & vòng chạy' })).toBeVisible();
+
+    await filter.fill('chuyen xe');
+    await expect(nav.getByRole('link')).toHaveCount(0);
+    await expect(nav).toContainText('Không có mục nào khớp');
+    // Loi phu nam ngoai o loc, nen muc cu van tim thay duoc — chi khong dung canh don hang.
+    await expect(
+      page.getByRole('navigation', { name: 'Cách làm trước đây' }).getByRole('link', {
+        name: 'Chuyến xe',
+      }),
+    ).toBeVisible();
+
+    await filter.fill('');
+    await expect(nav.getByRole('link', { name: 'Bảng điều hành' })).toBeVisible();
   });
 });
 

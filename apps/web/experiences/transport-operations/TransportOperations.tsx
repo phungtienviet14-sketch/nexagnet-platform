@@ -13,6 +13,7 @@ import {
   navigationGroups,
   parseNavigationFromSearch,
   resolveNavigation,
+  supersededEntries,
   visibleDriverScreens,
   type DriverScreenId,
   type NavigationInput,
@@ -214,6 +215,7 @@ export function TransportOperations() {
   return (
     <TransportShell
       groups={groups}
+      superseded={supersededEntries(navigation)}
       activeSection={state.section}
       activeTitle={active?.label ?? 'Vận hành vận tải'}
       roleLabel={roleLabelOf(navigation.role)}
