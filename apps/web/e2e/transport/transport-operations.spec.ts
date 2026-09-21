@@ -1404,6 +1404,126 @@ test.describe('chon mot dong thi bang co lai ve dong do', () => {
   });
 });
 
+/**
+ * #335 (UAT BUG-06) — man Doi xe hua "lich su phu trach" va bao "mo tung xe de xem nguoi dang phu
+ * trach", nhung mo xe ra chi co Suc khoe vi tri. Bai nay khoa cau tra loi cho "xe nay hien ai dang
+ * phu trach?" o CA hai phia: xe co nguoi, va xe chua co ai.
+ */
+test.describe('doi xe — xe nay hien ai dang phu trach', () => {
+  const DRIVER_HISTORY: Readonly<Record<string, readonly unknown[]>> = {
+    'veh-1': [
+      {
+        id: 'vda-1',
+        vehicleId: 'veh-1',
+        driverId: 'drv-2',
+        effectiveFrom: '2026-06-01T01:00:00.000Z',
+        effectiveTo: '2026-08-15T01:00:00.000Z',
+        createdAt: '2026-06-01T01:00:00.000Z',
+      },
+      {
+        id: 'vda-2',
+        vehicleId: 'veh-1',
+        driverId: 'drv-1',
+        effectiveFrom: '2026-08-15T01:00:00.000Z',
+        effectiveTo: null,
+        createdAt: '2026-08-15T01:00:00.000Z',
+      },
+    ],
+    'veh-3': [],
+  };
+
+  /** `.../vehicles/<id>/<duoi>` — ma xe la doan THU HAI tu cuoi. */
+  const vehicleIdOf = (route: Route): string =>
+    new URL(route.request().url()).pathname.split('/').at(-2) ?? '';
+
+  const mockVehicleDetail = async (page: Page): Promise<void> => {
+    await page.route('**/transport/vehicles/*/driver-history', (route) =>
+      json(route, DRIVER_HISTORY[vehicleIdOf(route)] ?? []),
+    );
+    await page.route('**/transport/vehicles/*/location-health', (route) =>
+      json(route, {
+        vehicleId: vehicleIdOf(route),
+        status: 'NOT_TRACKED',
+        reason: 'NO_OBSERVATION',
+        currentSource: null,
+        lastReceivedAt: null,
+        ageSeconds: null,
+        sources: [
+          {
+            family: 'PHONE',
+            status: 'NOT_CONFIGURED',
+            source: null,
+            lastReceivedAt: null,
+            ageSeconds: null,
+          },
+        ],
+        lastKnown: null,
+      }),
+    );
+  };
+
+  test('xe CO nguoi phu trach: hien TEN va lich su ngan, suc khoe vi tri van con', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await mockVehicleDetail(page);
+    await page.goto('/?section=fleet');
+
+    await page.getByRole('rowheader', { name: '29H-123.45' }).click();
+
+    const panel = page.getByRole('region', { name: 'Lái xe phụ trách xe 29H-123.45' });
+    await expect(
+      panel.getByRole('heading', { name: 'Lái xe phụ trách · 29H-123.45' }),
+    ).toBeVisible();
+    await expect(panel.getByText('Nguyễn Văn Bình')).toBeVisible();
+    await expect(panel.getByText('Đang làm')).toBeVisible();
+    await expect(panel.getByRole('list', { name: 'Lịch sử phụ trách' })).toContainText(
+      'Trần Thị Mai',
+    );
+    await expect(panel).not.toContainText('Chưa có lái xe phụ trách');
+    // Nhan chinh la TEN nguoi — khong mot `driverId` nao duoc lot ra man hinh.
+    await expect(panel).not.toContainText('drv-');
+
+    // Khoi Suc khoe vi tri giu nguyen, va dong vua chon that su duoc chon (bang co lai ve no).
+    await expect(page.getByRole('region', { name: 'Sức khoẻ vị trí xe' })).toBeVisible();
+    await expect(page.getByText('Đang xem 1 / 3 dòng')).toBeVisible();
+  });
+
+  test('xe CHUA co ai phu trach: noi thang ra, khong mang theo nguoi cua xe truoc', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await mockVehicleDetail(page);
+    await page.goto('/?section=fleet');
+
+    await page.getByRole('rowheader', { name: '29H-123.45' }).click();
+    await expect(page.getByText('Nguyễn Văn Bình')).toBeVisible();
+    await page.getByRole('button', { name: 'Xem tất cả' }).click();
+    await page.getByRole('rowheader', { name: '29H-246.80' }).click();
+
+    const panel = page.getByRole('region', { name: 'Lái xe phụ trách xe 29H-246.80' });
+    await expect(panel.getByText('Chưa có lái xe phụ trách')).toBeVisible();
+    await expect(panel.getByText('Chưa có lượt phụ trách nào trước đó.')).toBeVisible();
+    await expect(panel).not.toContainText('Nguyễn Văn Bình');
+    await expect(page.getByRole('region', { name: 'Sức khoẻ vị trí xe' })).toBeVisible();
+  });
+
+  test('doc lich su HONG thi bao loi, KHONG noi "chua co lai xe phu trach"', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await mockVehicleDetail(page);
+    await page.route('**/transport/vehicles/*/driver-history', (route) =>
+      json(route, { message: 'Máy chủ đang bận' }, 503),
+    );
+    await page.goto('/?section=fleet');
+
+    await page.getByRole('rowheader', { name: '29H-246.80' }).click();
+
+    const panel = page.getByRole('region', { name: 'Lái xe phụ trách xe 29H-246.80' });
+    await expect(panel.getByRole('button', { name: /thử lại/i })).toBeVisible();
+    await expect(panel).not.toContainText('Chưa có lái xe phụ trách');
+  });
+});
+
 test.describe('quy lai xe — phieu phai giu dung nguoi', () => {
   test('phieu tam ung ghim lai xe cua chinh no va noi ten nguoi do', async ({ page }) => {
     await mockTransport(page, 'ACCOUNTING');

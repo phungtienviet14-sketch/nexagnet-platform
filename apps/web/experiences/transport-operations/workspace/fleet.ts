@@ -157,6 +157,12 @@ export interface VehicleDriverHistoryRow {
 }
 
 /**
+ * Nhan thay cho mot `driverId` khong tra duoc ra ho so. KHONG bao gio in chinh `driverId` — mot
+ * chuoi CUID tren man hinh khong tra loi duoc cau "ai", va nguoi doc se chep no di hoi lai.
+ */
+export const UNKNOWN_DRIVER_LABEL = 'Lái xe chưa đọc được tên';
+
+/**
  * Doi nguoi phu trach DONG dong cu trong cung mot giao dich thay vi ghi de (`GD-06`), nen lich su
  * doc len la mot chuoi lien tuc — va dong `effectiveTo === null` la nguoi dang phu trach.
  */
@@ -167,7 +173,7 @@ export const toVehicleDriverHistoryRows = (
   const index = new Map(drivers.map((driver) => [driver.id, driver.fullName]));
   return assignments.map((row) => ({
     id: row.id,
-    driverLabel: index.get(row.driverId) ?? 'Lái xe chưa đọc được tên',
+    driverLabel: index.get(row.driverId) ?? UNKNOWN_DRIVER_LABEL,
     fromLabel: formatInstant(row.effectiveFrom),
     toLabel: row.effectiveTo === null ? 'đang phụ trách' : formatInstant(row.effectiveTo),
     isActive: row.effectiveTo === null,
@@ -179,3 +185,101 @@ export const toVehicleDriverHistoryRows = (
  * Nen man hinh danh sach khong bay cot do, va cau nay giai thich vi sao thay vi de mot cot trong.
  */
 export const NO_FLEET_WIDE_ASSIGNMENT_NOTE = 'Mở từng xe để xem người đang phụ trách.';
+
+/* ------------------------------------------------------------------ *
+ * Lai xe DANG phu trach mot xe (#335)
+ * ------------------------------------------------------------------ */
+
+/** Xe khong co ban phan cong nao dang hieu luc — noi thang ra, khong de nguoi doc tu doan. */
+export const NO_RESPONSIBLE_DRIVER = 'Chưa có lái xe phụ trách';
+
+/**
+ * Lich su NGAN: du tra loi "truoc do ai cam xe nay", khong phai mot so nhat ky. Phan bi cat duoc
+ * DEM ra (`olderCount`) — mot danh sach lang le ngan lai se bi doc thanh "chi co bay nhieu".
+ */
+export const RECENT_DRIVER_HISTORY_LIMIT = 5;
+
+export interface ResponsibleDriver {
+  readonly assignmentId: string;
+  readonly driverLabel: string;
+  readonly sinceLabel: string;
+  /** `null` khi khong tra duoc ho so — khong doan trang thai cua mot nguoi khong doc duoc. */
+  readonly statusLabel: string | null;
+  readonly statusTone: StatusTone;
+  /** `null` cung ly do. `Chưa nối` ⇒ lai xe do chua mo duoc man hinh lai xe cua chinh minh. */
+  readonly accountLabel: string | null;
+}
+
+interface VehicleDriverHistorySlice {
+  /** Cac luot phu trach DA DONG, moi nhat truoc, toi da `RECENT_DRIVER_HISTORY_LIMIT` dong. */
+  readonly previous: readonly VehicleDriverHistoryRow[];
+  readonly olderCount: number;
+}
+
+/**
+ * `conflict`: bat bien `TX-01` noi mot xe khong co hai ban phan cong chong thoi gian, va Postgres
+ * giu no bang unique MOT PHAN. Neu van doc ra tu hai ban hieu luc thi do la du lieu sai — bay het
+ * ra, KHONG chon bua mot nguoi: chon bua la tra loi sai cau "ai dang cam xe nay" ma trong nhu dung.
+ */
+export type VehicleResponsibility = VehicleDriverHistorySlice &
+  (
+    | { readonly kind: 'assigned'; readonly current: ResponsibleDriver }
+    | { readonly kind: 'none' }
+    | { readonly kind: 'conflict'; readonly current: readonly ResponsibleDriver[] }
+  );
+
+/** Chuoi ISO cua may chu cung mot khuon (`toISOString`), nen so sanh CHUOI la dung thu tu thoi gian. */
+const newestFirst = (a: VehicleDriverAssignment, b: VehicleDriverAssignment): number =>
+  a.effectiveFrom < b.effectiveFrom ? 1 : a.effectiveFrom > b.effectiveFrom ? -1 : 0;
+
+const toResponsibleDriver = (
+  assignment: VehicleDriverAssignment,
+  index: ReadonlyMap<string, Driver>,
+): ResponsibleDriver => {
+  const driver = index.get(assignment.driverId);
+  const since = formatInstant(assignment.effectiveFrom);
+  if (driver === undefined) {
+    return {
+      assignmentId: assignment.id,
+      driverLabel: UNKNOWN_DRIVER_LABEL,
+      sinceLabel: since,
+      statusLabel: null,
+      statusTone: 'flat',
+      accountLabel: null,
+    };
+  }
+  return {
+    assignmentId: assignment.id,
+    driverLabel: driver.fullName,
+    sinceLabel: since,
+    statusLabel: DRIVER_STATUS_LABEL[driver.status],
+    // Nguoi da nghi ma van dung ten cam xe la dieu nguoi dieu hanh can thay ngay.
+    statusTone: driver.status === 'ACTIVE' ? 'flat' : 'stop',
+    accountLabel: driver.authUserId === null ? 'Chưa nối' : 'Đã nối',
+  };
+};
+
+/**
+ * Tra loi "xe nay hien ai dang phu trach?" tu lich su phan cong cua CHINH xe do
+ * (`GET /transport/vehicles/:id/driver-history`) va danh sach lai xe man hinh da tai san.
+ * Chi DOC — gan lai xe cho xe khong nam o day.
+ */
+export const toVehicleResponsibility = (
+  assignments: readonly VehicleDriverAssignment[],
+  drivers: readonly Driver[],
+): VehicleResponsibility => {
+  const index = new Map(drivers.map((driver) => [driver.id, driver]));
+  const ordered = [...assignments].sort(newestFirst);
+  const closed = ordered.filter((row) => row.effectiveTo !== null);
+  const history: VehicleDriverHistorySlice = {
+    previous: toVehicleDriverHistoryRows(closed.slice(0, RECENT_DRIVER_HISTORY_LIMIT), drivers),
+    olderCount: Math.max(0, closed.length - RECENT_DRIVER_HISTORY_LIMIT),
+  };
+  const active = ordered
+    .filter((row) => row.effectiveTo === null)
+    .map((row) => toResponsibleDriver(row, index));
+  const [only, ...others] = active;
+  if (only === undefined) return { kind: 'none', ...history };
+  if (others.length === 0) return { kind: 'assigned', current: only, ...history };
+  return { kind: 'conflict', current: active, ...history };
+};
