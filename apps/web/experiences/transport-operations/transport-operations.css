@@ -302,6 +302,69 @@
   color: var(--tx-ink-faint);
 }
 
+/*
+ * LOI PHU "Cach lam truoc day" (#339) — nho hon, nhat hon danh muc chinh, va nam SAU no.
+ *
+ * Muc dich la de muc cu KHONG canh tranh voi viec hang ngay ma van tim thay duoc: chu nho, mau
+ * mo, kem mot dong chi duong sang muc moi. Muc dang mo (qua dau trang cu) van co thanh doc nhu
+ * danh muc chinh, de nguoi dung biet minh dang o dau.
+ */
+.tx-rail__older {
+  border-top: 1px dashed var(--tx-line);
+  padding: 0.55rem 0 0.1rem;
+}
+
+.tx-rail__older ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tx-rail__olderlabel {
+  margin: 0 0 0.3rem;
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--tx-ink-faint);
+}
+
+.tx-rail__olderlink {
+  display: inline-block;
+  padding-left: 0.55rem;
+  border-left: 2px solid transparent;
+  font-size: 0.8rem;
+  color: var(--tx-ink-soft);
+  text-decoration: none;
+}
+
+.tx-rail__olderlink:hover {
+  color: var(--tx-ink);
+  text-decoration: underline;
+}
+
+.tx-rail__olderlink:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 1px;
+}
+
+.tx-rail__olderlink[aria-current='page'] {
+  border-left-color: var(--tx-accent);
+  color: var(--tx-ink);
+  font-weight: 600;
+}
+
+.tx-rail__oldernote {
+  display: block;
+  padding-left: 0.7rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--tx-ink-faint);
+}
+
 .tx-rail__foot {
   display: flex;
   flex-direction: column;

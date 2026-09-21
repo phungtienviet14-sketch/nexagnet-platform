@@ -15,6 +15,9 @@ import { canPerform, type TransportAction } from './transport-actions';
  *   1. `requiredCapabilities` — khach co MUA nghiep vu nay khong (`CapabilityId`, dong kin).
  *   2. `requiredAction`       — vai nay co lam duoc viec do khong (`GD-22`, theo hanh dong).
  *
+ * Va mot truc VI TRI tach han khoi hai truc quyen: `supersededBy` (#339) — muc da co duong thay the
+ * rut khoi danh muc chinh nhung dia chi cu van mo duoc. No khong bao gio cap hay tuoc quyen.
+ *
  * TRUOC DAY co mot truc thu tu — `pendingCapability` — so bang CHUOI voi danh sach nang luc luc
  * chay, vi `TX-06`/`TX-07` chua co ma trong `CapabilityId` khi T7A duoc viet. T6 da vao `main`
  * (PR #152, #88 dong), va `CAPABILITY_IDS` nay da co `transport-asset-compliance` +
@@ -75,6 +78,20 @@ export interface TransportSection {
   readonly summary: string;
   readonly requiredCapabilities: readonly CapabilityId[];
   readonly requiredAction: TransportAction;
+  /**
+   * MUC DA CO DUONG THAY THE — truc thu BA, va no KHONG phai mot truc quyen (#339).
+   *
+   * Hai truc tren tra loi "nguoi nay CO DUOC mo muc nay khong". Truc nay tra loi mot cau khac:
+   * "muc nay co nen DUNG TREN DANH MUC CHINH khong". Mot muc khai `supersededBy` van mo duoc bang
+   * dia chi cu (`canNavigateTo` khong doc truc nay), chi rut khoi danh muc chinh xuong mot loi phu
+   * noi ro viec moi bat dau o dau.
+   *
+   * VA CHI RUT KHI MUC THAY THE CUNG MO DUOC cho CHINH nguoi do. Neu mot vai/goi khach mo duoc muc
+   * cu ma khong mo duoc muc moi, muc cu van la duong duy nhat cua ho vao nghiep vu — giau no di la
+   * cat duong, khong phai don danh muc. Nen day la mot quy tac tren HAI muc, khong phai mot cau
+   * `if role === ...`.
+   */
+  readonly supersededBy?: TransportSectionId;
 }
 
 export const TRANSPORT_SECTIONS = [
@@ -85,6 +102,50 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Chuyến đang chạy, đội xe, và những việc đang chờ người xử lý.',
     requiredCapabilities: [],
     requiredAction: 'transport.trip.read',
+  },
+  /*
+   * NHOM DIEU HANH doc theo THU TU MOT NGAY LAM VIEC (#339): nhan don → nhin toan canh → chon xe →
+   * ho so xe va nguoi. Thu tu mang la thu tu tren thanh ben, nen day la mot quyet dinh kien truc
+   * thong tin chu khong phai cach sap tep.
+   */
+  {
+    id: 'movement',
+    /**
+     * DON dung truoc VONG CHAY trong ca ten man hinh — `#274`: sep/ke toan lam viec voi don, con
+     * vong chay la su that van hanh he thong tu lap va tu dong.
+     *
+     * Va muc nay dung DAU nhom (#339): don hang la doi tuong nghiep vu chinh, nen day la noi mot
+     * ngay lam viec bat dau.
+     */
+    label: 'Đơn hàng & vòng chạy',
+    group: 'dispatch',
+    summary:
+      'Nơi việc hằng ngày bắt đầu: đơn hàng là đối tượng chính; vòng chạy và chặng chạy rỗng là phần vận hành, do hệ thống lập và tự đóng theo sự thật vận hành.',
+    requiredCapabilities: ['transport-core'],
+    /**
+     * Van la `transport.run.read` chu khong `transport.order.read`, va do la co y: man hinh doc CA
+     * hai truc, nen quyen hep hon phai la quyen quyet dinh. Doi sang quyen doc don se cho mot
+     * nguoi khong duoc phep xem vong chay nhin thay bang vong chay o nua duoi.
+     */
+    requiredAction: 'transport.run.read',
+  },
+  {
+    /**
+     * `TransportTrip` — chuyen LAP TAY cua the he truoc (#339).
+     *
+     * KHONG xoa, va dia chi `?section=trips&selected=…` van mo dung man nay cho nguoi du hai truc
+     * quyen: du lieu chuyen cu, bo loc tren dia chi (#222 P2) va cac the o Tong quan van tro vao day.
+     * Nhung no khong con dung tren danh muc chinh canh `Đơn hàng & vòng chạy`: hai muc cung noi
+     * "xe chay hang" dung canh nhau la cach nguoi dung First-UAT da bat dau sai luong.
+     */
+    id: 'trips',
+    label: 'Chuyến xe',
+    group: 'dispatch',
+    summary:
+      'Chuyến lập tay theo cách làm trước đây — vẫn mở được để xem và xử lý chuyến đã có; việc mới bắt đầu từ Đơn hàng & vòng chạy.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.trip.read',
+    supersededBy: 'movement',
   },
   {
     id: 'control-tower',
@@ -101,40 +162,6 @@ export const TRANSPORT_SECTIONS = [
     requiredAction: 'transport.control_tower.read',
   },
   {
-    id: 'trips',
-    label: 'Chuyến xe',
-    group: 'dispatch',
-    summary: 'Lập chuyến, phân công xe và lái xe, theo dõi vòng đời chuyến.',
-    requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.trip.read',
-  },
-  {
-    id: 'movement',
-    /**
-     * DON dung truoc VONG CHAY trong ca ten man hinh — `#274`: sep/ke toan lam viec voi don, con
-     * vong chay la su that van hanh he thong tu lap va tu dong.
-     */
-    label: 'Đơn hàng & vòng chạy',
-    group: 'dispatch',
-    summary:
-      'Đơn hàng là trục chính; vòng chạy và chặng chạy rỗng do hệ thống lập và tự đóng theo sự thật vận hành.',
-    requiredCapabilities: ['transport-core'],
-    /**
-     * Van la `transport.run.read` chu khong `transport.order.read`, va do la co y: man hinh doc CA
-     * hai truc, nen quyen hep hon phai la quyen quyet dinh. Doi sang quyen doc don se cho mot
-     * nguoi khong duoc phep xem vong chay nhin thay bang vong chay o nua duoi.
-     */
-    requiredAction: 'transport.run.read',
-  },
-  {
-    id: 'fleet',
-    label: 'Đội xe & lái xe',
-    group: 'dispatch',
-    summary: 'Hồ sơ xe, hồ sơ lái xe, lịch sử phụ trách và số km đồng hồ.',
-    requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.vehicle.read',
-  },
-  {
     id: 'dispatch',
     label: 'Điều xe',
     group: 'dispatch',
@@ -148,6 +175,14 @@ export const TRANSPORT_SECTIONS = [
      */
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.dispatch.suggest.read',
+  },
+  {
+    id: 'fleet',
+    label: 'Đội xe & lái xe',
+    group: 'dispatch',
+    summary: 'Hồ sơ xe, hồ sơ lái xe, lịch sử phụ trách và số km đồng hồ.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.vehicle.read',
   },
   {
     id: 'driver-fund',
@@ -486,13 +521,50 @@ export const isSectionEnabled = (section: TransportSection, input: NavigationInp
 export const findSection = (id: string): TransportSection | undefined =>
   TRANSPORT_SECTIONS.find((section) => section.id === id);
 
+/**
+ * DIA CHI mo duoc muc nay khong — CHI hai truc quyen. `supersededBy` co y KHONG duoc doc o day:
+ * rut mot muc khoi danh muc chinh khong bao gio duoc lam mot dau trang cu cua nguoi co quyen chet.
+ */
 export const canNavigateTo = (section: string, input: NavigationInput): boolean => {
   const found = findSection(section);
   return found !== undefined && isSectionEnabled(found, input);
 };
 
+/**
+ * Muc nay da co duong thay the MA CHINH nguoi nay mo duoc. Hai dieu kien, va thieu dieu kien sau
+ * la cat duong: xem ghi chu cua `TransportSection.supersededBy`.
+ */
+const isSupersededFor = (section: TransportSection, input: NavigationInput): boolean =>
+  section.supersededBy !== undefined && canNavigateTo(section.supersededBy, input);
+
+/** DANH MUC CHINH — muc mo duoc, tru muc da co duong thay the mo duoc. */
 export const visibleSections = (input: NavigationInput): readonly TransportSection[] =>
-  TRANSPORT_SECTIONS.filter((section) => isSectionEnabled(section, input));
+  TRANSPORT_SECTIONS.filter(
+    (section) => isSectionEnabled(section, input) && !isSupersededFor(section, input),
+  );
+
+/**
+ * MOT muc cu cung duong thay the cua no — de vo noi duoc "viec moi bat dau o dau" bang chinh nhan
+ * cua muc moi, thay vi chep tay mot cau chu co the lech voi danh muc.
+ */
+export interface SupersededEntry {
+  readonly section: TransportSection;
+  readonly successor: TransportSection;
+}
+
+/**
+ * LOI PHU cho muc da co duong thay the — van mo duoc, nhung khong dung chung hang voi viec hang ngay.
+ *
+ * Hop cua `visibleSections` va ham nay bang DUNG tap muc mo duoc: menu doi nhom khong lam ai thay
+ * THEM mot muc ho khong co quyen, va cung khong lam ai MAT mot muc ho von co.
+ */
+export const supersededEntries = (input: NavigationInput): readonly SupersededEntry[] =>
+  TRANSPORT_SECTIONS.flatMap((section: TransportSection): readonly SupersededEntry[] => {
+    if (!isSectionEnabled(section, input) || !isSupersededFor(section, input)) return [];
+    const successor =
+      section.supersededBy === undefined ? undefined : findSection(section.supersededBy);
+    return successor === undefined ? [] : [{ section, successor }];
+  });
 
 export interface TransportNavigationGroup {
   readonly group: TransportSectionGroup;
@@ -786,3 +858,16 @@ export const buildNavigationUrl = (navigation: ResolvedNavigation): string =>
 export const NAVIGATION_ENFORCEMENT_NOTE =
   'Danh mục hiển thị theo nghiệp vụ doanh nghiệp đã bật và quyền của tài khoản. Quyền thực thi do ' +
   'máy chủ quyết định, không phải do màn hình ẩn bớt.';
+
+/**
+ * Tieu de cua loi phu duoi danh muc (#339). Noi bang chu cua NGUOI VAN HANH — "cach lam truoc
+ * day" — chu khong bang chu cua kien truc (`legacy`, `TransportTrip`, `v1`).
+ */
+export const SUPERSEDED_HEADING = 'Cách làm trước đây';
+
+/**
+ * Cau chi duong duoi moi muc cu. Lay NHAN cua muc moi tu chinh danh muc, nen doi ten muc moi thi
+ * cau nay doi theo — khong co ban chep tay nao de lech.
+ */
+export const supersededNote = (entry: SupersededEntry): string =>
+  `Việc mới bắt đầu ở “${entry.successor.label}”.`;
