@@ -33,10 +33,10 @@ import { RunClosureService } from './run-closure.service.js';
  * hoi con lai la TANG LUU TRU: cau `WHERE` cua ung vien luot quet, lan doc chang duoi `FOR UPDATE`,
  * va nguon chan that cua `transport-checkpoint` — ba thu chi ton tai tren Postgres.
  *
- * Moi vong chay o day di dung duong runtime: `PlanningService.commit()` sinh chang,
- * `MovementService.transitionLeg()` doi trang thai chang (duong cua `RunsController`), va
- * `RunClosureService.attempt()` phan xu voi nguon chan GOP (hang tren thung + phien cho) — dung
- * cach `app-composition.ts` noi chung luc chay.
+ * Moi vong chay o day di dung duong runtime: `PlanningService.commit()` sinh chang va (tu #338)
+ * gan nguoi cam xe, `MovementService.transitionLeg()` doi trang thai chang (duong cua
+ * `RunsController`), va `RunClosureService.attempt()` phan xu voi nguon chan GOP (hang tren thung +
+ * phien cho) — dung cach `app-composition.ts` noi chung luc chay.
  *
  * ============================================================================================
  * U-IT-04 LA BAN GHI LAI RUNTIME, KHONG PHAI MOT GIA DINH
@@ -124,8 +124,6 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       );
     const closures = closuresWith(policyWith());
 
-    let driverId: string | null = null;
-
     async function cleanup(): Promise<void> {
       const vehicles = await prisma.transportVehicle.findMany({
         where: { registrationPlate: { startsWith: PLATE_PREFIX } },
@@ -160,13 +158,21 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
       await prisma.transportOrder.deleteMany({ where: { code: { startsWith: CODE_PREFIX } } });
+      // TRUOC xe va lai xe: khoa ngoai cua ban phan cong doi xe tro vao ca hai.
+      await prisma.transportVehicleAssignment.deleteMany({
+        where: {
+          OR: [
+            { vehicleId: { in: vehicleIds } },
+            { driver: { phone: { startsWith: PHONE_PREFIX } } },
+          ],
+        },
+      });
       await prisma.transportVehicle.deleteMany({ where: { id: { in: vehicleIds } } });
       await prisma.transportDriver.deleteMany({ where: { phone: { startsWith: PHONE_PREFIX } } });
       // Dau vet dong do HE THONG ghi (`actor` khong mang tien to) — xoa theo chinh vong chay.
       await prisma.auditLog.deleteMany({
         where: { OR: [{ actor: { startsWith: ACTOR } }, { entityId: { in: runIds } }] },
       });
-      driverId = null;
     }
 
     beforeAll(cleanup);
@@ -178,25 +184,47 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     let suffix = 0;
     const next = (label: string): string => `${CODE_PREFIX}-${label}-${++suffix}`;
 
-    const theDriver = async (): Promise<string> => {
-      if (driverId) return driverId;
-      const driver = await fleet.createDriver({
-        fullName: 'IT-U332 Lai xe',
-        phone: `${PHONE_PREFIX}01`,
-        licenceClass: 'FC',
-        licenceExpiry: '2030-01-01',
-        authUserId: AUTH,
-      });
-      driverId = driver.id;
-      return driverId;
-    };
-
-    /** Chot ke hoach qua DUNG duong runtime, roi gan lai xe (buoc rieng — xem BUG-01). */
-    const plannedRun = async () => {
+    /**
+     * Mot chiec xe DIEU DUOC theo hop dong cua #338: `commit()` doi xe co DUNG MOT lai xe dang phu
+     * trach, lai xe do `ACTIVE` va CO `authUserId`, truoc khi mo vong chay. Moi xe mot lai xe rieng
+     * (`authUserId` la unique) — giong mot doi xe that, khong phai mot nguoi cam bon xe cung luc.
+     */
+    const dispatchableVehicle = async () => {
+      const n = ++suffix;
+      const authUserId = `${AUTH}-${n}`;
       const vehicle = await fleet.createVehicle({
-        registrationPlate: `${PLATE_PREFIX}-${++suffix}`,
+        registrationPlate: `${PLATE_PREFIX}-${n}`,
         vehicleClass: 'Dau keo',
       });
+      const driver = await fleet.createDriver({
+        fullName: `IT-U332 Lai xe ${n}`,
+        phone: `${PHONE_PREFIX}${n}`,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+        authUserId,
+      });
+      await fleet.assignDriverToVehicle(vehicle.id, driver.id, new Date());
+      return { vehicle, driverId: driver.id, authUserId };
+    };
+
+    /** Duong cua lai xe (`/transport/me/checkpoints`) — danh tinh tu PHIEN cua nguoi cam xe. */
+    const recordAs =
+      (authUserId: string) => (runId: string, legId: string, type: RunCheckpointType) =>
+        checkpointService.recordAsDriver({
+          type,
+          runId,
+          legId,
+          authUserId,
+          clientEventId: next(type),
+        });
+
+    /**
+     * Chot ke hoach qua DUNG duong runtime. Tu #338, chinh `commit()` gan nguoi cam xe vao vong
+     * chay — buoc gan tay rieng (lach BUG-01) khong con, va fixture KHANG DINH dieu do thay vi gia
+     * dinh: lai xe ghi moc o U-IT-02/04 la nguoi `commit()` da gan, khong phai nguoi test tu chen.
+     */
+    const plannedRun = async () => {
+      const { vehicle, driverId, authUserId } = await dispatchableVehicle();
       const order = await movement.createOrder(
         {
           code: next('ORD'),
@@ -214,8 +242,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         CORE_POLICY,
         policyWith(),
       ).commit(order.id, { vehicleId: vehicle.id, idempotencyKey: next('KEY') }, ACTOR);
-      await movement.assignRun(run.id, { driverId: await theDriver() }, ACTOR);
-      return { run, empty: legs[0]!, loaded: legs[1]! };
+      expect((await movement.getRun(run.id)).activeAssignment?.driverId).toBe(driverId);
+      return { run, empty: legs[0]!, loaded: legs[1]!, record: recordAs(authUserId) };
     };
 
     /** Duong cua `RunsController.transitionLeg`: doi trang thai chang, roi HOI LAI lan dong. */
@@ -238,16 +266,6 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         { sequence: 3, kind: 'EMPTY', originLabel: FAR_LABEL, destinationLabel: DEPOT_LABEL },
         ACTOR,
       );
-
-    /** Duong cua lai xe (`/transport/me/checkpoints`) — danh tinh tu phien. */
-    const record = (runId: string, legId: string, type: RunCheckpointType) =>
-      checkpointService.recordAsDriver({
-        type,
-        runId,
-        legId,
-        authUserId: AUTH,
-        clientEventId: next(type),
-      });
 
     /** ANH CHUP ngay truoc/sau: dung bon thu issue #332 doi do. */
     const snapshot = async (runId: string) => {
@@ -319,7 +337,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
 
     it('U-IT-02 — LOADED dang chay: van khong dong, va lai xe van ghi duoc tren chang do', async () => {
-      const { run, empty, loaded } = await plannedRun();
+      const { run, empty, loaded, record } = await plannedRun();
       await runLeg(run.id, empty.id);
       const outcome = await transitionThenAttempt(run.id, loaded.id, 'IN_TRANSIT');
 
@@ -367,7 +385,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
 
     it('U-IT-04 — REPLAY runtime 19–20/09: vong chay dong vi MOI chang da COMPLETED, khong vi chang RONG', async () => {
-      const { run, empty, loaded } = await plannedRun();
+      const { run, empty, loaded, record } = await plannedRun();
 
       // 19/09 ~12:26Z — moc hien truong ghi tren CHANG 1 RONG, dung thu tu log runtime.
       for (const type of ['PICKUP_ARRIVAL', 'GATE_ENTRY', 'LOADING', 'PICKUP_DEPARTURE'] as const) {

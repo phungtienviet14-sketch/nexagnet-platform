@@ -72,11 +72,24 @@ describe('UAT BUG-02 — chang RONG xong khong duoc dong vong chay (#332)', () =
 
   const next = (prefix: string): string => `${prefix}-${(sequence += 1)}`;
 
+  /**
+   * Xe DIEU DUOC theo hop dong cua #338: `commit()` doi DUNG MOT lai xe dang phu trach xe, `ACTIVE`
+   * va CO `authUserId`. Bo bai nay do chuyen DONG vong chay, khong do cac duong tu choi cua
+   * `commit()` — nhung duong do nam o `planning-driver-handoff.spec.ts`.
+   */
   const uatRun = async () => {
     const vehicle = await fleet.createVehicle({
       registrationPlate: `29C-${10000 + (sequence += 1)}`,
       vehicleClass: 'Đầu kéo',
     });
+    const driver = await fleet.createDriver({
+      fullName: next('Lai xe'),
+      phone: `09${String(100000000 + sequence).slice(0, 8)}`,
+      licenceClass: 'FC',
+      licenceExpiry: '2030-01-01',
+      authUserId: next('auth-lai-xe'),
+    });
+    await fleet.assignDriverToVehicle(vehicle.id, driver.id, now);
     const order = await movement.createOrder(
       {
         code: next('ORD'),
@@ -86,11 +99,14 @@ describe('UAT BUG-02 — chang RONG xong khong duoc dong vong chay (#332)', () =
       },
       ACTOR,
     );
-    return planning.commit(
+    const committed = await planning.commit(
       order.id,
       { vehicleId: vehicle.id, idempotencyKey: next('k') },
       ACTOR,
     );
+    // Nguoi cam vong chay LA nguoi cam xe — `commit()` tu gan tu #338, khong con buoc gan tay.
+    expect((await movement.getRun(committed.run.id)).activeAssignment?.driverId).toBe(driver.id);
+    return committed;
   };
 
   const runLeg = async (legId: string) => {
