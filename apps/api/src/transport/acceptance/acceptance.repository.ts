@@ -84,6 +84,11 @@ export abstract class AcceptanceRepository {
   abstract findDetailByOrder(orderId: string): Promise<CommercialAcceptanceDetail | null>;
   /** Ho so cua NHIEU don trong mot lan — hang cho khong duoc goi N+1 lan. */
   abstract findManyByOrders(orderIds: readonly string[]): Promise<CommercialAcceptance[]>;
+  /**
+   * Quyet dinh theo MA, cho ca lo — hang cho doc `latestDecisionId` cua moi ho so qua day de biet
+   * AI quyet lan gan nhat va LUC NAO, trong mot lan doc. Ma khong co hang nao thi vang mat.
+   */
+  abstract findDecisionsByIds(ids: readonly string[]): Promise<CommercialAcceptanceDecision[]>;
   abstract append(command: AppendAcceptanceDecisionCommand): Promise<AcceptanceDecisionOutcome>;
 }
 
@@ -121,6 +126,11 @@ export class InMemoryAcceptanceRepository extends AcceptanceRepository {
       const found = this.acceptances.get(orderId);
       return found ? [found] : [];
     });
+  }
+
+  async findDecisionsByIds(ids: readonly string[]): Promise<CommercialAcceptanceDecision[]> {
+    const wanted = new Set(ids);
+    return [...this.decisions.values()].flat().filter((decision) => wanted.has(decision.id));
   }
 
   async append(command: AppendAcceptanceDecisionCommand): Promise<AcceptanceDecisionOutcome> {

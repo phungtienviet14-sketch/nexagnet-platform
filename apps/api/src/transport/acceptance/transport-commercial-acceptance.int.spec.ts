@@ -297,6 +297,23 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
 
     /**
+     * `#334` — hang cho doc nguoi/gio cua quyet dinh MOI NHAT qua `latestDecisionId`, cho ca lo.
+     * Ma tho `decidedBy` phai ra NGUYEN VAN: tang doc chi them nhan, khong bao gio doi ma.
+     */
+    it('doc quyet dinh moi nhat cua ca lo ho so, ma nguoi quyet nguyen van', async () => {
+      const acceptances = await repo.findManyByOrders([state.orderId, state.otherOrderId]);
+      const latestIds = acceptances.flatMap((entry) =>
+        entry.latestDecisionId === null ? [] : [entry.latestDecisionId],
+      );
+      expect(latestIds).toHaveLength(2);
+
+      const found = await repo.findDecisionsByIds([...latestIds, 'it-ca30-khong-co-quyet-dinh']);
+      expect(found.map((entry) => entry.id).sort()).toEqual([...latestIds].sort());
+      expect(found.map((entry) => entry.decidedBy)).toEqual([ACTOR, ACTOR]);
+      expect(await repo.findDecisionsByIds([])).toEqual([]);
+    });
+
+    /**
      * BON `CHECK` — chung khong the hien duoc trong `schema.prisma`, nen chung chi ton tai o SQL
      * tho cua migration. Bai duoi day di bang SQL tho de chung minh chung THUC SU tu choi ghi.
      */

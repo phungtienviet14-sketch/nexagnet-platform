@@ -40,6 +40,11 @@ Tài liệu canonical của tầng nền tảng:
 - Luôn áp dụng skill `search-first` trước khi viết bất kỳ function/module mới nào
 - Ưu tiên tìm và dùng thư viện có sẵn (npm) thay vì tự implement
 - Rules ECC của project nằm tại `.claude/rules/ecc/` (common, typescript, react, web) — tuân thủ khi viết code
+- **Kiểm thử trước push = test TẬP TRUNG, không phải full suite** (`docs/phat-trien/van-hanh/ci-cd.md` §3):
+  trong lúc code chạy test đúng module/spec bị ảnh hưởng; **không** chạy `pnpm test`/build/Playwright/IT
+  toàn monorepo chỉ để push — full regression là việc của 7 check CI. Luôn **báo rõ đã chạy test tập
+  trung nào và kết quả**. Hook pre-push của repo chỉ chạy check nhanh (cài một lần:
+  `pnpm hooks:install`); không dùng `--no-verify`.
 - **Rollout tenant bắt buộc qua CI/CD:** commit → push `main` → toàn bộ job trong
   `.github/workflows/ci.yml` xanh → kích hoạt thủ công `.github/workflows/deploy-tenant.yml` với
   đúng `tenant` và `environment`. CD dùng OIDC, image theo digest, smoke/health sau rollout và
