@@ -2130,12 +2130,22 @@ export interface ActionQueueItem {
 
 export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS' | 'CHECKPOINT';
 
+/**
+ * Ban SAO cua `FleetPresenceView` o `apps/api/src/transport/control-tower/control-tower.types.ts`.
+ *
+ * `#336`: "Đang chạy" DAN XUAT tu `VehicleRun` `ACTIVE` — cung tap the ma bang dat vao nam cot tu
+ * "Vào lấy hàng" den "Chờ người nhận". `total = onTrip + idle + underMaintenance`, khong xe nao bi
+ * dem hai lan.
+ */
 export interface FleetPresenceView {
   readonly total: number;
   readonly idle: number;
+  /** SO XE co it nhat mot vong chay dang chay. */
   readonly onTrip: number;
   readonly underMaintenance: number;
   readonly activeDrivers: number;
+  /** SO VONG CHAY dang chay — bang tong the o nam cot dang chay cua bang. */
+  readonly runningRuns: number;
 }
 
 export interface ControlTowerView {

@@ -16,6 +16,7 @@ import {
   type ControlTowerReconciliationFact,
 } from './control-tower-facts.port.js';
 import { ControlTowerReadService } from './control-tower-read.service.js';
+import { isRunningBoardColumn } from './control-tower.types.js';
 
 const TODAY = '2026-09-08';
 const NOW = new Date('2026-09-08T03:00:00.000Z');
@@ -478,6 +479,114 @@ describe('moc hien truong — bang doc, khong suy', () => {
     const card = view.board.find((column) => column.column === 'IN_TRANSIT')?.cards[0];
 
     expect(card?.currentLeg?.orderCode).toBe('ORD-2026-09-0009');
+  });
+});
+
+/**
+ * `#336` BUG-07 — CUNG MOT MAN HINH, HAI CAU TRA LOI CHO "DANG CHAY".
+ *
+ * UAT 20–21/09/2026 tren `transport-preview` (baseline `8a390cb`): the so "Đang chạy" = 0, cung luc
+ * cot "Đang chạy" cua bang co 2 vong chay. Nguyen nhan: the so dem cot `TransportVehicle.status`
+ * (mot cot CHINH TAY — luong Order-first/Lane W khong co duong ghi nao dat `ON_TRIP`), con bang dem
+ * `VehicleRun`. Hai nguon, hai con so.
+ *
+ * Cac bai duoi day chay tren DUNG khung nhin ma man hinh nhan (`view.fleet` canh `view.board`), vi
+ * loi nam o cho hai nua do dat canh nhau — mot bai chi o tang phep chieu se khong thay no.
+ */
+describe('#336 — "Đang chạy" tren the so va tren bang la MOT dinh nghia', () => {
+  const vehicle = (over: Partial<Vehicle> = {}): Vehicle => ({
+    id: 'b0d1e2f3-0000-4000-8000-000000000001',
+    registrationPlate: '29C-123.45',
+    vehicleClass: 'TRACTOR',
+    allowedPayloadKg: 20000,
+    currentOdoKm: 100_000,
+    status: 'IDLE',
+    operationalControl: 'INTERNAL_OPERATED',
+    ownershipRegisterComplete: false,
+    createdAt: `${TODAY}T00:00:00.000Z`,
+    updatedAt: `${TODAY}T00:00:00.000Z`,
+    ...over,
+  });
+
+  /**
+   * DU LIEU UAT: hai xe, hai vong chay `ACTIVE`, chua ai bam moc nao.
+   *
+   * Hai xe van luu `IDLE` — va do KHONG phai du lieu hong: khong co route nao dat `ON_TRIP`
+   * (`fleet-status.controller.ts`), con §7.2 cua hop dong mien noi thang `ON_TRIP` la DAN XUAT.
+   */
+  const uatCore = (): CoreStub =>
+    new CoreStub({
+      vehicles: [
+        vehicle({ id: 'veh-1', registrationPlate: '29C-111.11' }),
+        vehicle({ id: 'veh-2', registrationPlate: '29C-222.22' }),
+      ],
+      runs: [
+        run({ id: 'run-1', code: 'VR-101', vehicleId: 'veh-1' }),
+        run({ id: 'run-2', code: 'VR-102', vehicleId: 'veh-2' }),
+      ],
+      legs: [leg({ status: 'PLANNED', completedAt: null, distanceKm: null })],
+    });
+
+  const runningOnBoard = (view: Awaited<ReturnType<ControlTowerReadService['view']>>): number =>
+    view.board
+      .filter((column) => isRunningBoardColumn(column.column))
+      .reduce((sum, column) => sum + column.total, 0);
+
+  it.each([
+    ['khach BAT moc, chua ai bam', () => new CheckpointStub()],
+    ['khach TAT moc', () => undefined],
+    ['kho moc dang hong', () => new ThrowingCheckpointStub()],
+  ])(
+    'du lieu UAT (%s): the so bang dung so vong chay dang chay tren bang',
+    async (_, checkpoints) => {
+      const service = new ControlTowerReadService(
+        uatCore(),
+        policy,
+        undefined,
+        undefined,
+        undefined,
+        checkpoints(),
+      );
+
+      const view = await service.view(NOW);
+
+      /* Tai hien dung quan sat UAT: hai the nam o cot mac dinh cua vong chay dang chay. */
+      expect(view.board.find((column) => column.column === 'IN_TRANSIT')?.total).toBe(2);
+      expect(runningOnBoard(view)).toBe(2);
+
+      /* Truoc ban sua: `onTrip` = 0 vi ca hai xe van luu `IDLE`. */
+      expect(view.fleet.onTrip).toBe(runningOnBoard(view));
+      expect(view.fleet.runningRuns).toBe(runningOnBoard(view));
+    },
+  );
+
+  it('du lieu UAT: xe dang chay KHONG con bi dem la dang ranh — doi xe khep kin', async () => {
+    const service = new ControlTowerReadService(uatCore(), policy);
+
+    const { fleet } = await service.view(NOW);
+
+    /* Truoc ban sua: `idle` = 2 — hai xe dang chay bi dem them mot lan nua o o "Đang rảnh". */
+    expect(fleet.idle).toBe(0);
+    expect(fleet.onTrip + fleet.idle + fleet.underMaintenance).toBe(fleet.total);
+  });
+
+  /**
+   * FAIL-CLOSED. The so "Đang chạy" gio PHU THUOC kho vong chay; truoc day no chi doc xe. Mot lan
+   * doc vong chay that bai ma van tra ve mot khung nhin se in "Đang chạy 0 · Đang rảnh 2" — dung
+   * cau noi sai ma `#336` bao cao, lan nay vi mot loi kho thay vi mot loi dinh nghia.
+   */
+  it('kho vong chay hong thi ca khung nhin hong — khong in ra mot so 0 gia', async () => {
+    class ThrowingRunsCore extends CoreStub {
+      override listRuns(): Promise<readonly VehicleRun[]> {
+        return Promise.reject(new Error('kho vong chay dang hong'));
+      }
+    }
+    const service = new ControlTowerReadService(
+      new ThrowingRunsCore({ vehicles: [vehicle({ id: 'veh-1' })] }),
+      policy,
+    );
+
+    await expect(service.view(NOW)).rejects.toThrow('kho vong chay dang hong');
   });
 });
 

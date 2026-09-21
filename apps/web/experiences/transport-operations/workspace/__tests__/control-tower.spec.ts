@@ -79,7 +79,7 @@ const item = (over: Partial<ActionQueueItem> = {}): ActionQueueItem => ({
 const view = (over: Partial<ControlTowerView> = {}): ControlTowerView => ({
   generatedFor: TODAY,
   board: emptyBoard(),
-  fleet: { total: 0, idle: 0, onTrip: 0, underMaintenance: 0, activeDrivers: 0 },
+  fleet: { total: 0, idle: 0, onTrip: 0, underMaintenance: 0, activeDrivers: 0, runningRuns: 0 },
   queue: [],
   queueTotal: 0,
   unavailableSources: [],
@@ -334,6 +334,78 @@ describe('do phu — thieu vi TAT khac thieu vi CHUA CO', () => {
 
     expect(model.disabledSourceNotes).toEqual([]);
     expect(model.pendingWorkNotes).toEqual([]);
+  });
+});
+
+/**
+ * `#336` BUG-07 — tren man hinh, "Đang chạy" chi con MOT nghia va MOT con so.
+ *
+ * Tang doc da hoi tu ve `VehicleRun` `ACTIVE` (xem `control-tower-read.service.spec.ts`). Cac bai o
+ * day khoa nua con lai: chu "Đang chạy" khong duoc gan cho mot cot chi chua MOT PHAN cua tap do,
+ * va loi tom tat tren bang phai noi CUNG con so voi the so.
+ */
+describe('#336 — "Đang chạy" mot nghia tren man hinh', () => {
+  const running = (runs: number, vehicles: number): ControlTowerView['fleet'] => ({
+    total: vehicles,
+    idle: 0,
+    onTrip: vehicles,
+    underMaintenance: 0,
+    activeDrivers: 0,
+    runningRuns: runs,
+  });
+
+  it('du lieu UAT: the so va loi tom tat bang cung noi 2', () => {
+    const model = toControlTower(
+      view({
+        fleet: running(2, 2),
+        board: emptyBoard().map((existing) =>
+          existing.column === 'IN_TRANSIT'
+            ? {
+                ...existing,
+                total: 2,
+                cards: [card(), card({ runId: 'r2', runCode: 'VR-002', vehicleId: 'v2' })],
+              }
+            : existing,
+        ),
+      }),
+    );
+
+    expect(model.stats.find((stat) => stat.key === 'on-trip')?.value).toBe('2');
+    expect(model.runningSummary).toContain('2 vòng chạy');
+    expect(model.runningSummary).not.toContain('xe');
+  });
+
+  it('chu "Đang chạy" chi con o the so — khong cot nao mang no', () => {
+    const model = toControlTower(view());
+
+    expect(model.stats.find((stat) => stat.key === 'on-trip')?.label).toBe('Đang chạy');
+    expect(model.columns.map((entry) => entry.label)).not.toContain('Đang chạy');
+    expect(model.columns.find((entry) => entry.column === 'IN_TRANSIT')?.label).toBe('Trên đường');
+  });
+
+  it('loi tom tat chi ra dung khoang cot dang chay, theo nhan cot tren man hinh', () => {
+    const model = toControlTower(view({ fleet: running(1, 1) }));
+
+    expect(model.runningSummary).toContain('“Vào lấy hàng”');
+    expect(model.runningSummary).toContain('“Chờ người nhận”');
+  });
+
+  /*
+   * Mot xe con mo hai vong chay: the so dem XE (1), bang dem VONG CHAY (2). Khong rang buoc nao cam
+   * truong hop do, nen man hinh phai noi ca hai con so kem don vi thay vi de chung trong nhu mau
+   * thuan.
+   */
+  it('so vong chay khac so xe thi noi ca hai, kem don vi', () => {
+    const model = toControlTower(view({ fleet: running(3, 2) }));
+
+    expect(model.stats.find((stat) => stat.key === 'on-trip')?.value).toBe('2');
+    expect(model.runningSummary).toContain('3 vòng chạy trên 2 xe');
+  });
+
+  it('khong vong chay nao dang chay thi noi thang, khong in mot cau rong', () => {
+    const model = toControlTower(view());
+
+    expect(model.runningSummary).toBe('Không có vòng chạy nào đang chạy.');
   });
 });
 

@@ -788,7 +788,7 @@ const CONTROL_TOWER = {
     },
     { column: 'DELIVERED', cards: [], total: 0, unavailableReason: null },
   ],
-  fleet: { total: 1, idle: 0, onTrip: 1, underMaintenance: 0, activeDrivers: 1 },
+  fleet: { total: 1, idle: 0, onTrip: 1, underMaintenance: 0, activeDrivers: 1, runningRuns: 1 },
   queue: [
     {
       kind: 'RUN_LEG_MISSING_DISTANCE',
@@ -1685,6 +1685,27 @@ test.describe('ban do vong chay (Lane N)', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Vận hành' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Hiệu quả chạy xe' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Việc cần xử lý' })).toBeVisible();
+  });
+
+  /*
+   * `#336` BUG-07 — tren CUNG mot man, "Đang chạy" chi con MOT con so.
+   *
+   * Mock `CONTROL_TOWER` co mot vong chay dang chay (cot `IN_TRANSIT`) va `fleet.onTrip = 1`. UAT
+   * tung thay the so "Đang chạy 0" canh mot cot "Đang chạy" co hai the. Bai nay khoa o muc TRINH
+   * DUYET: the so, loi tom tat tren bang va bang cung noi mot dieu, va khong cot nao con mang chu
+   * "Đang chạy" cho mot PHAN cua tap do.
+   */
+  test('#336: the so "Đang chạy" va bang noi cung mot con so', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=control-tower');
+
+    const stats = page.getByRole('region', { name: 'Đội xe và việc đang chờ' });
+    await expect(stats.getByRole('link', { name: /^Đang chạy\s*1$/ })).toBeVisible();
+
+    const board = page.getByRole('region', { name: 'Bảng vòng chạy' });
+    await expect(board.getByText(/^Đang chạy: 1 vòng chạy — /)).toBeVisible();
+    await expect(board.getByRole('heading', { level: 3, name: 'Trên đường' })).toBeVisible();
+    await expect(board.getByRole('heading', { level: 3, name: 'Đang chạy' })).toHaveCount(0);
   });
 
   /* `#278` N12 — 390px la be mat lai xe/dien thoai; ban do phai thap lai chu khong bien mat. */
