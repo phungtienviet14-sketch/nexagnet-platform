@@ -18,11 +18,12 @@ import {
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { firstIssue } from '../transport.schemas.js';
+import { CommercialAcceptanceReadModel } from './acceptance-read-model.js';
 import { acceptanceQuerySchema, recordAcceptanceDecisionSchema } from './acceptance.schemas.js';
 import { CommercialAcceptanceService } from './acceptance.service.js';
 import type {
-  CommercialAcceptanceDetail,
-  CommercialAcceptanceQueueRow,
+  CommercialAcceptanceDetailView,
+  CommercialAcceptanceQueueRowView,
 } from './acceptance.types.js';
 
 /**
@@ -61,11 +62,22 @@ import type {
  * Hai tang tra loi hai cau hoi khac nhau, dung quy uoc da chay: `@Roles` la cong AS-BUILT cua nen
  * tang (thu ma `roles-coverage.spec.ts` duyet), `@RequiresTransportAction` la cong CUA MIEN. Bo mot
  * trong hai se lam mot nua so cong mo mot nua dong.
+ *
+ * ============================================================================================
+ * MOI CAU TRA LOI DI QUA `CommercialAcceptanceReadModel` (`#334`)
+ * ============================================================================================
+ *
+ * Dich vu tra su that kiem toan (`decidedBy` la ma tai khoan tho); hinh chieu doc them nhan cho
+ * con nguoi (`decidedByActor.label`) va KHONG bo truong nao. Quyen, thu tu kiem va chong ghi trung
+ * van nam tron o dich vu — lop them nhan khong cham duoc vao chung.
  */
 @Controller('transport/commercial-acceptance')
 @UseGuards(TransportActionGuard)
 export class CommercialAcceptanceController {
-  constructor(private readonly acceptance: CommercialAcceptanceService) {}
+  constructor(
+    private readonly acceptance: CommercialAcceptanceService,
+    private readonly readModel: CommercialAcceptanceReadModel,
+  ) {}
 
   /**
    * HANG CHO — `Cho ket thuc`, `Da ket thuc`, `Can bo sung`, `Tu choi` (`#275` K4).
@@ -79,22 +91,23 @@ export class CommercialAcceptanceController {
   @RequiresTransportAction('transport.commercial_acceptance.read')
   async queue(
     @Query() query: unknown,
-  ): Promise<{ readonly acceptances: readonly CommercialAcceptanceQueueRow[] }> {
+  ): Promise<{ readonly acceptances: readonly CommercialAcceptanceQueueRowView[] }> {
     const parsed = acceptanceQuerySchema.safeParse(query ?? {});
     if (!parsed.success) throw new BadRequestException(firstIssue(parsed.error));
 
-    const acceptances = await this.guard(() =>
+    const rows = await this.guard(() =>
       this.acceptance.queue(parsed.data.state ? { state: parsed.data.state } : {}),
     );
-    return { acceptances };
+    return { acceptances: await this.readModel.queue(rows) };
   }
 
   /** HO SO cua mot DON — kem CA lich su quyet dinh (`#275` K1: khong ban nao bi mat). */
   @Get('orders/:orderId')
   @Roles('ADMIN', 'ACCOUNTING')
   @RequiresTransportAction('transport.commercial_acceptance.read')
-  detail(@Param('orderId') orderId: string): Promise<CommercialAcceptanceDetail> {
-    return this.guard(() => this.acceptance.detailForOrder(orderId));
+  async detail(@Param('orderId') orderId: string): Promise<CommercialAcceptanceDetailView> {
+    const detail = await this.guard(() => this.acceptance.detailForOrder(orderId));
+    return this.readModel.detail(detail);
   }
 
   /**
@@ -111,16 +124,16 @@ export class CommercialAcceptanceController {
   @Post('orders/:orderId/decisions')
   @Roles('ADMIN', 'ACCOUNTING')
   @RequiresTransportAction('transport.commercial_acceptance.decide')
-  decide(
+  async decide(
     @Req() request: AuthenticatedRequest,
     @Param('orderId') orderId: string,
     @Body() body: unknown,
-  ): Promise<CommercialAcceptanceDetail> {
+  ): Promise<CommercialAcceptanceDetailView> {
     const authUserId = requireAuthUserId(request);
     const parsed = recordAcceptanceDecisionSchema.safeParse(body ?? {});
     if (!parsed.success) throw new BadRequestException(firstIssue(parsed.error));
 
-    return this.guard(() =>
+    const detail = await this.guard(() =>
       this.acceptance.decide({
         orderId,
         outcome: parsed.data.outcome,
@@ -135,6 +148,7 @@ export class CommercialAcceptanceController {
         authUserId,
       }),
     );
+    return this.readModel.detail(detail);
   }
 
   private async guard<T>(run: () => Promise<T>): Promise<T> {
