@@ -305,6 +305,9 @@ export class PlanningService {
      * dang nhap, nen nguoi cam xe con phai ton tai, con hoat dong, va co tai khoan — xem
      * `requireFieldReachableDriver()`. Ca hai phep hoi nam SAU phep doc lai khoa chong lap o dau
      * ham: mot lan gui lai van nhan dung ket qua cu, ke ca khi lai xe da bi khoa tu do toi nay.
+     *
+     * Day moi la nguoi cam CHIEC XE. Neu don duoc noi vao mot vong chay DA CO nguoi cam, nguoi do
+     * phai trung voi nguoi nay — `joinOpenRun()` doi chieu, cung truoc chang dau tien.
      */
     const driverId = await this.requireFieldReachableDriver(
       await this.requireVehicleDriver(command.vehicleId, orderId),
@@ -317,7 +320,7 @@ export class PlanningService {
     const { proposal } = await this.buildProposal(order, command);
     const businessDate = toBusinessDate(this.now(), this.corePolicy.timeZone);
 
-    const run = await this.resolveTargetRun(proposal, command, businessDate, actor);
+    const run = await this.resolveTargetRun(proposal, command, businessDate, driverId, actor);
     if (run === null) {
       // Ban kia da chiem ma vong chay nhung chua ghi xong ke hoach. Doan la sai, nen noi that.
       throw this.conflict('planning.commit', 'PLAN_COMMIT_IN_FLIGHT', {
@@ -359,7 +362,9 @@ export class PlanningService {
       );
     }
 
-    await this.ensureRunAssignment(run, driverId, proposal.outcome === 'NEW_RUN', actor);
+    // Vong chay MOI chua co su that rieng ve nguoi cam: lay cua doi xe. Vong chay DA CO thi
+    // `joinOpenRun()` da chot nguoi cam no — va da tu choi neu lech — truoc khi noi chang nao.
+    if (proposal.outcome === 'NEW_RUN') await this.movement.assignRun(run.id, { driverId }, actor);
 
     const plan = await this.plans
       .create({
@@ -653,11 +658,16 @@ export class PlanningService {
     proposal: RunPlanProposal,
     command: CommitPlanCommand,
     businessDate: string,
+    vehicleDriverId: string,
     actor: string,
   ): Promise<VehicleRun | null> {
     if (proposal.runId !== null) {
-      const detail = await this.movement.getRun(proposal.runId);
-      return detail.run;
+      return await this.joinOpenRun(
+        proposal.runId,
+        vehicleDriverId,
+        { orderId: proposal.orderId, vehicleId: command.vehicleId },
+        actor,
+      );
     }
 
     const code = planRunCode(businessDate, this.planDigest(command));
@@ -813,27 +823,46 @@ export class PlanningService {
   }
 
   /**
-   * GHI ban phan cong lai xe cho vong chay, sau khi da co vong chay va cac chang.
+   * NOI DON vao vong chay DANG CHAY (`MULTI_ORDER_RUN`) — chi khi nguoi cam vong chay va nguoi cam
+   * xe la MOT nguoi. Chay TRUOC chang dau tien: nhanh noi don chua ghi gi truoc diem nay.
    *
-   * Vong chay MOI thi luon ghi. Vong chay DANG CHAY duoc noi them don (`MULTI_ORDER_RUN`) thi
-   * KHONG: nguoi cam vo lang cua chuyen do da duoc quyet tu luc mo vong chay, va mot lan them don
-   * khong phai luc doi tai xe giua duong. Chi ghi khi vong chay cu do CHUA co ai — do la vong chay
-   * sinh ra truoc ban va nay, va de nguyen thi no van mo coi.
+   *     doi xe  (`TransportVehicleAssignment`)  ai dang cam CHIEC XE      -> `vehicleDriverId`
+   *     vong chay (`TransportRunAssignment`)    ai dang cam VONG CHAY NAY -> `activeAssignment`
    *
-   * `MovementService.assignRun()` tu no da bat tinh huong "van la nguoi do" (`RUN_ASSIGNMENT_
-   * UNCHANGED`), nen goi lai khong bao gio sinh ban phan cong thu hai.
+   * Ba tinh huong, ba ket cuc — va khong ket cuc nao la "chon mot ben":
+   *
+   *   CUNG NGUOI  noi don, KHONG ghi phan cong: nguoi cam vong chay da dung.
+   *   KHAC NGUOI  `PLAN_RUN_DRIVER_CONFLICT`. Nguoi cam vong chay la su that cua no — ho dang cam
+   *               chang cua no tren man Hien truong. Doi xe noi nguoi khac nghia la hai nguon dang
+   *               noi hai dieu: noi don vao day la giao don cho nguoi doi xe vua noi KHONG cam xe,
+   *               con doi nguoi la doi tai xe giua chuyen. Mot lan them don khong duoc lam ca hai.
+   *   CHUA AI     `PLAN_RUN_DRIVER_ADOPTED`: vong chay sinh truoc ban va BUG-01, hoac mo tay qua
+   *               `POST /runs`. Khong co su that nao de lech, nen nguoi cam xe — da qua du phep
+   *               kiem cua vong chay moi — thanh ban phan cong DAU TIEN, dung quy tac cua vong chay
+   *               moi. Ghi TRUOC khi noi chang: hong o lan ghi nay thi don chua nam trong mot vong
+   *               chay khong ai mo duoc.
    */
-  private async ensureRunAssignment(
-    run: VehicleRun,
-    driverId: string,
-    isNewRun: boolean,
+  private async joinOpenRun(
+    runId: string,
+    vehicleDriverId: string,
+    context: { readonly orderId: string; readonly vehicleId: string },
     actor: string,
-  ): Promise<void> {
-    if (!isNewRun) {
-      const assignments = await this.movement.runAssignmentHistory(run.id);
-      if (assignments.some((entry) => entry.effectiveTo === null)) return;
+  ): Promise<VehicleRun> {
+    const { run, activeAssignment } = await this.movement.getRun(runId);
+    const detail = { ...context, runId, vehicleDriverId };
+
+    if (activeAssignment === null) {
+      await this.movement.assignRun(runId, { driverId: vehicleDriverId }, actor);
+      this.decide('planning.commit', 'allowed', 'PLAN_RUN_DRIVER_ADOPTED', detail);
+      return run;
     }
-    await this.movement.assignRun(run.id, { driverId }, actor);
+    if (activeAssignment.driverId !== vehicleDriverId) {
+      throw this.conflict('planning.commit', 'PLAN_RUN_DRIVER_CONFLICT', {
+        ...detail,
+        runDriverId: activeAssignment.driverId,
+      });
+    }
+    return run;
   }
 
   private now(): Date {

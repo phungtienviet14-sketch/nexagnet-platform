@@ -82,6 +82,25 @@ export const PLAN_COMMIT_REASONS = [
    * MISSING`: vong chay co chu tren giay, khong co chu tren dien thoai. Cung ten mat xich voi ma do.
    */
   'PLAN_VEHICLE_DRIVER_BINDING_MISSING',
+  /*
+   * HAI MA DUOI DAY chi co o nhanh NOI DON (`MULTI_ORDER_RUN`), va tra loi cau hoi thu ba: vong
+   * chay DANG CHAY thuoc ve ai. Doi xe noi ai cam CHIEC XE; phan cong vong chay noi ai cam VONG
+   * CHAY. Vong chay da co nguoi thi nguoi do la su that cua no.
+   */
+  /**
+   * Vong chay dang mo cua xe do MOT lai xe cam, con doi xe noi xe dang thuoc NGUOI KHAC.
+   *
+   * Noi don luc nay la im lang chon mot ben: chon nguoi cua vong chay thi giao don cho nguoi ma doi
+   * xe vua noi KHONG cam xe; chon nguoi cua doi xe thi doi tai xe giua chuyen. Ca hai deu sai, nen
+   * tu choi — truoc chang dau tien, de khong mot hang nao cua don nay nam trong vong chay do.
+   */
+  'PLAN_RUN_DRIVER_CONFLICT',
+  /**
+   * Vong chay dang mo CHUA co ai cam — sinh ra truoc ban va BUG-01, hoac mo tay qua `POST /runs`.
+   * Khong co su that nao de lech, nen nguoi cam xe (da qua du phep kiem cua vong chay moi) duoc
+   * ghi lam ban phan cong DAU TIEN, truoc khi noi chang. Cung quy tac voi vong chay moi.
+   */
+  'PLAN_RUN_DRIVER_ADOPTED',
 ] as const;
 export type PlanCommitReason = (typeof PLAN_COMMIT_REASONS)[number];
 
@@ -204,6 +223,10 @@ export const TRANSPORT_PLANNING_DECISIONS = defineDecisionVocabulary({
       'Lai xe phu trach xe nay da ngung hoat dong — gan lai xe khac cho xe roi giao don lai',
     PLAN_VEHICLE_DRIVER_BINDING_MISSING:
       'Lai xe phu trach xe nay chua co tai khoan dang nhap — noi tai khoan roi giao don lai',
+    PLAN_RUN_DRIVER_CONFLICT:
+      'Vong chay dang mo cua xe do lai xe khac cam, khong phai nguoi dang phu trach xe — doi chieu lai roi giao don lai',
+    PLAN_RUN_DRIVER_ADOPTED:
+      'Vong chay dang mo chua co lai xe: ghi nguoi dang phu trach xe lam lai xe cua vong chay',
     PLAN_CANCELLED: 'Da huy ke hoach va cac chang chua chay cua no',
     PLAN_CANCEL_ALREADY_CANCELLED: 'Ke hoach da huy tu truoc',
     PLAN_CANCEL_LEG_COMPLETED: 'Chang co hang cua ke hoach nay da chay xong, khong go nguoc duoc',

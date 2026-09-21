@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { TransportCheckpointCoreFactsAdapter } from '../checkpoint/checkpoint-facts.port.js';
@@ -75,6 +75,7 @@ describe('Giao xe thi giao ca nguoi — lai xe THAY vong chay qua chinh phien da
   let auditLog: InMemoryAuditLogRepository;
   let movement: MovementService;
   let planning: PlanningService;
+  let multi: PlanningService;
   let field: DriverFieldReadService;
 
   beforeEach(() => {
@@ -85,16 +86,11 @@ describe('Giao xe thi giao ca nguoi — lai xe THAY vong chay qua chinh phien da
     auditLog = new InMemoryAuditLogRepository();
     const audit = new AuditLogService(auditLog);
     movement = new MovementService(movementRepo, fleet, audit, CORE_POLICY);
-    planning = new PlanningService(
-      movement,
-      plans,
-      fleet,
-      audit,
-      CORE_POLICY,
-      POLICY,
-      undefined,
-      () => now,
-    );
+    const plannerWith = (policy: TransportPlanningPolicy): PlanningService =>
+      new PlanningService(movement, plans, fleet, audit, CORE_POLICY, policy, undefined, () => now);
+    planning = plannerWith(POLICY);
+    // CUNG kho, CUNG dong ho — chi khac che do gom nhom. Nhanh NOI DON chi ton tai o che do nay.
+    multi = plannerWith({ ...POLICY, grouping: 'MULTI_ORDER_RUN' });
     // Dung hai adapter THAT cua man Hien truong, tren CUNG hai kho ma `commit()` ghi vao.
     field = new DriverFieldReadService(
       new TransportFieldCoreFactsAdapter(movementRepo),
@@ -318,5 +314,205 @@ describe('Giao xe thi giao ca nguoi — lai xe THAY vong chay qua chinh phien da
       'PLAN_VEHICLE_DRIVER_AMBIGUOUS',
     );
     await expectNothingWritten(vehicle.id, order.id);
+  });
+
+  /* ---------------------------------------------------------------- *
+   * VONG CHAY DA CO — `MULTI_ORDER_RUN`
+   *
+   * Hai nguon tra loi hai cau hoi khac nhau: doi xe noi ai dang cam CHIEC XE, phan cong vong chay
+   * noi ai dang cam VONG CHAY. Vong chay moi chua co su that rieng nen lay cua doi xe. Vong chay
+   * da co nguoi thi nguoi do la su that cua no, va doi xe phai noi CUNG mot nguoi — lech thi tu
+   * choi truoc moi lan ghi, khong im lang chon ben nao.
+   * ---------------------------------------------------------------- */
+
+  describe('MULTI_ORDER_RUN — nguoi cam Run la su that cua Run do', () => {
+    const commitMulti = (orderId: string, vehicleId: string, idempotencyKey: string) =>
+      multi.commit(orderId, { vehicleId, idempotencyKey }, ACTOR);
+
+    const activeHolders = async (runId: string): Promise<string[]> =>
+      (await movement.runAssignmentHistory(runId))
+        .filter((entry) => entry.effectiveTo === null)
+        .map((entry) => entry.driverId);
+
+    const loadedOrdersSeenBy = async (authUserId: string): Promise<(string | null)[]> =>
+      (await field.workFor(authUserId)).runs.flatMap((run) =>
+        run.legs.filter((leg) => leg.kind === 'LOADED').map((leg) => leg.orderCode),
+      );
+
+    /** Moi lan ghi vong chay / chang / phan cong / ke hoach deu de dau o so kiem toan. */
+    const runAndPlanWrites = async (): Promise<string[]> =>
+      (await auditLog.list({ limit: 200 }))
+        .filter(
+          (entry) =>
+            entry.action.startsWith('transport.run.') ||
+            entry.action.startsWith('transport.planning.'),
+        )
+        .map((entry) => `${entry.action}:${entry.entityId}`)
+        .sort();
+
+    /** Mot vong chay KHONG ai cam — dung nhu vong chay `commit()` de lai truoc ban va. */
+    const aRunWithoutDriver = async (vehicleId: string, orderCode: string) => {
+      const order = await anOrder(orderCode);
+      const run = await movement.createRun(
+        { code: `RUN-CU-${orderCode}`, vehicleId, businessDate: '2026-09-20', note: null },
+        ACTOR,
+      );
+      await movement.addLeg(
+        run.id,
+        {
+          sequence: 1,
+          kind: 'LOADED',
+          orderId: order.id,
+          originLabel: 'Kho Hà Nội',
+          destinationLabel: 'Hải Phòng',
+          businessDate: '2026-09-20',
+        },
+        ACTOR,
+      );
+      return run;
+    };
+
+    it('xe chua co Run dang mo: NEW_RUN lay nguoi cam xe lam phan cong DAU TIEN — dung mot ban', async () => {
+      const vehicle = await aVehicle('29H-152.44');
+      const binh = await aDriver('Nguyễn Văn Bình', '0901120301', { authUserId: BINH_LOGIN });
+      await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+      const order = await anOrder('DH-MULTI-1');
+
+      const { run, plan } = await commitMulti(order.id, vehicle.id, 'multi-1');
+
+      expect(plan.grouping).toBe('MULTI_ORDER_RUN');
+      expect(plan.outcome).toBe('NEW_RUN');
+      // Ca LICH SU, khong chi ban hieu luc: dung mot lan ghi phan cong.
+      expect(await movement.runAssignmentHistory(run.id)).toHaveLength(1);
+      expect(await activeHolders(run.id)).toEqual([binh.id]);
+      expect(await runIdsSeenBy(BINH_LOGIN)).toEqual([run.id]);
+    });
+
+    it('Run cua A, doi xe van la A: noi don vao DUNG Run do, KHONG ghi them ban phan cong nao', async () => {
+      const vehicle = await aVehicle('29H-152.44');
+      const binh = await aDriver('Nguyễn Văn Bình', '0901120301', { authUserId: BINH_LOGIN });
+      await aDriver('Trần Quốc Hùng', '0901120302', { authUserId: HUNG_LOGIN });
+      await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+      const a = await anOrder('DH-MULTI-2A');
+      const b = await anOrder('DH-MULTI-2B');
+      const first = await commitMulti(a.id, vehicle.id, 'multi-2a');
+
+      const assign = vi.spyOn(movement, 'assignRun');
+      const second = await commitMulti(b.id, vehicle.id, 'multi-2b');
+
+      expect(second.plan.outcome).toBe('APPENDED');
+      expect(second.run.id).toBe(first.run.id);
+      // Khong ca mot lan goi "van la nguoi do": nguoi cam Run da dung, khong co gi de ghi.
+      expect(assign).not.toHaveBeenCalled();
+      expect(await movement.runAssignmentHistory(first.run.id)).toHaveLength(1);
+      expect(await activeHolders(first.run.id)).toEqual([binh.id]);
+      expect(await loadedOrdersSeenBy(BINH_LOGIN)).toEqual(['DH-MULTI-2A', 'DH-MULTI-2B']);
+      expect(await runIdsSeenBy(HUNG_LOGIN)).toEqual([]);
+    });
+
+    it('Run cua A, doi xe da giao xe cho B: PLAN_RUN_DRIVER_CONFLICT — khong noi, khong doi nguoi, khong ghi gi', async () => {
+      const vehicle = await aVehicle('29H-152.44');
+      const binh = await aDriver('Nguyễn Văn Bình', '0901120301', { authUserId: BINH_LOGIN });
+      const hung = await aDriver('Trần Quốc Hùng', '0901120302', { authUserId: HUNG_LOGIN });
+      await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+      const a = await anOrder('DH-MULTI-3A');
+      const { run } = await commitMulti(a.id, vehicle.id, 'multi-3a');
+
+      // Doi xe giao chiec xe cho Hung trong luc vong chay cua Binh van dang mo. Hung hop le tron
+      // ven (ACTIVE, co tai khoan) — nen moi phep kiem cua doi xe deu qua, va chi con do lech.
+      await fleet.assignDriverToVehicle(vehicle.id, hung.id, now);
+      const b = await anOrder('DH-MULTI-3B');
+      const legsBefore = (await movement.legsOfRun(run.id)).map((leg) => leg.id);
+      const writesBefore = await runAndPlanWrites();
+
+      expect(await reasonOf(() => commitMulti(b.id, vehicle.id, 'multi-3b'))).toBe(
+        'PLAN_RUN_DRIVER_CONFLICT',
+      );
+      // Gui lai CUNG khoa: lan truoc khong de lai ket qua nao de phat lai, nen van tu choi.
+      expect(await reasonOf(() => commitMulti(b.id, vehicle.id, 'multi-3b'))).toBe(
+        'PLAN_RUN_DRIVER_CONFLICT',
+      );
+
+      expect((await movement.legsOfRun(run.id)).map((leg) => leg.id)).toEqual(legsBefore);
+      expect(await plans.listForOrder(b.id)).toHaveLength(0);
+      expect((await plans.listActiveForRun(run.id)).map((plan) => plan.orderId)).toEqual([a.id]);
+      expect(await movement.listRuns()).toHaveLength(1);
+      expect(await movement.runAssignmentHistory(run.id)).toHaveLength(1);
+      expect(await activeHolders(run.id)).toEqual([binh.id]);
+      expect(await runAndPlanWrites()).toEqual(writesBefore);
+
+      // Khong ben nao bi chon thay: Binh van cam dung Run cu, Hung khong bi nhet vao Run cua Binh.
+      expect(await loadedOrdersSeenBy(BINH_LOGIN)).toEqual(['DH-MULTI-3A']);
+      expect(await runIdsSeenBy(HUNG_LOGIN)).toEqual([]);
+    });
+
+    it('gui lai cung khoa sau khi noi don — ke ca khi doi xe da doi nguoi: phat lai, KHONG ghi phan cong nao', async () => {
+      const vehicle = await aVehicle('29H-152.44');
+      const binh = await aDriver('Nguyễn Văn Bình', '0901120301', { authUserId: BINH_LOGIN });
+      const hung = await aDriver('Trần Quốc Hùng', '0901120302', { authUserId: HUNG_LOGIN });
+      await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+      const a = await anOrder('DH-MULTI-4A');
+      const b = await anOrder('DH-MULTI-4B');
+      const first = await commitMulti(a.id, vehicle.id, 'multi-4a');
+      const second = await commitMulti(b.id, vehicle.id, 'multi-4b');
+      await fleet.assignDriverToVehicle(vehicle.id, hung.id, now);
+
+      const assign = vi.spyOn(movement, 'assignRun');
+      const replayFirst = await commitMulti(a.id, vehicle.id, 'multi-4a');
+      const replaySecond = await commitMulti(b.id, vehicle.id, 'multi-4b');
+
+      // Lenh DA thanh cong tra dung ket qua cu — khong bi phep kiem do lech cat, va khong "sua" Run.
+      expect([replayFirst.replayed, replaySecond.replayed]).toEqual([true, true]);
+      expect(replayFirst.plan.id).toBe(first.plan.id);
+      expect(replaySecond.plan.id).toBe(second.plan.id);
+      expect(assign).not.toHaveBeenCalled();
+      expect(await movement.runAssignmentHistory(first.run.id)).toHaveLength(1);
+      expect(await activeHolders(first.run.id)).toEqual([binh.id]);
+    });
+
+    it('Run CHUA co ai cam: nguoi cam xe duoc ghi lam phan cong dau tien, TRUOC khi noi chang nao', async () => {
+      const vehicle = await aVehicle('29H-152.44');
+      const binh = await aDriver('Nguyễn Văn Bình', '0901120301', { authUserId: BINH_LOGIN });
+      await aDriver('Trần Quốc Hùng', '0901120302', { authUserId: HUNG_LOGIN });
+      await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+      const orphan = await aRunWithoutDriver(vehicle.id, 'DH-MULTI-5A');
+      expect(await runIdsSeenBy(BINH_LOGIN)).toEqual([]);
+
+      const assign = vi.spyOn(movement, 'assignRun');
+      const addLeg = vi.spyOn(movement, 'addLeg');
+      const next = await anOrder('DH-MULTI-5B');
+      const { run, plan } = await commitMulti(next.id, vehicle.id, 'multi-5b');
+
+      expect(plan.outcome).toBe('APPENDED');
+      expect(run.id).toBe(orphan.id);
+      expect(assign.mock.calls.map(([runId, command]) => [runId, command])).toEqual([
+        [orphan.id, { driverId: binh.id }],
+      ]);
+      // Chot nguoi TRUOC, noi chang SAU: hong giua chung thi don chua nam trong Run khong ai mo duoc.
+      expect(addLeg).toHaveBeenCalled();
+      expect(assign.mock.invocationCallOrder[0]).toBeLessThan(
+        Math.min(...addLeg.mock.invocationCallOrder),
+      );
+      expect(await movement.runAssignmentHistory(orphan.id)).toHaveLength(1);
+      expect(await activeHolders(orphan.id)).toEqual([binh.id]);
+      expect(await loadedOrdersSeenBy(BINH_LOGIN)).toEqual(['DH-MULTI-5A', 'DH-MULTI-5B']);
+      expect(await runIdsSeenBy(HUNG_LOGIN)).toEqual([]);
+    });
+
+    it('Run CHUA co ai cam + nguoi cam xe khong mo duoc Hien truong: tu choi, Run van khong ai cam, khong noi gi', async () => {
+      const vehicle = await aVehicle('29H-152.44');
+      const binh = await aDriver('Nguyễn Văn Bình', '0901120301', { authUserId: null });
+      await fleet.assignDriverToVehicle(vehicle.id, binh.id, now);
+      const orphan = await aRunWithoutDriver(vehicle.id, 'DH-MULTI-6A');
+      const legsBefore = (await movement.legsOfRun(orphan.id)).map((leg) => leg.id);
+      const next = await anOrder('DH-MULTI-6B');
+
+      expect(await reasonOf(() => commitMulti(next.id, vehicle.id, 'multi-6b'))).toBe(
+        'PLAN_VEHICLE_DRIVER_BINDING_MISSING',
+      );
+      expect((await movement.legsOfRun(orphan.id)).map((leg) => leg.id)).toEqual(legsBefore);
+      expect(await movement.runAssignmentHistory(orphan.id)).toEqual([]);
+      expect(await plans.listForOrder(next.id)).toHaveLength(0);
+    });
   });
 });
