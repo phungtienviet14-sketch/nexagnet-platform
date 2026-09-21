@@ -159,6 +159,44 @@ export interface CommercialAcceptanceDetail {
 }
 
 /**
+ * DANH TINH mot nguoi quyet la GI — `#334` (UAT BUG-04).
+ *
+ *   · `USER`          — tai khoan con hoat dong;
+ *   · `DISABLED_USER` — tai khoan con ton tai nhung da bi khoa. Ten van dung la nguoi da quyet;
+ *   · `SEED_DATA`     — hang do buoc gieo du lieu mau ghi, khong co con nguoi nao dung sau;
+ *   · `UNRESOLVED`    — ma khong con tro vao tai khoan nao (da xoa, hoac khong phai ma tai khoan).
+ *
+ * Mot `kind` di kem `label` vi mot cau du phong nhu "Tài khoản không còn hoạt động" la mot CHUOI
+ * — va mot tai khoan hoan toan co the dat ten dung nhu vay. Chi `kind` noi duoc nhan do la ten
+ * that hay la cau du phong.
+ */
+export const ACCEPTANCE_ACTOR_KINDS = ['USER', 'DISABLED_USER', 'SEED_DATA', 'UNRESOLVED'] as const;
+export type AcceptanceActorKind = (typeof ACCEPTANCE_ACTOR_KINDS)[number];
+
+/**
+ * NGUOI QUYET cho con nguoi doc — kem nguyen van ma tho cho kiem toan.
+ *
+ * `id` la DUNG gia tri da ghi trong `decidedBy`: phep phan giai chi THEM mot nhan, khong bao gio
+ * thay the hay ghi de su that kiem toan. `label` khong bao gio la `id` — do la ca diem cua `#334`.
+ */
+export interface AcceptanceActorView {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: AcceptanceActorKind;
+}
+
+/** Mot quyet dinh nhu be mat nguoi doc thay — `decidedBy` tho VAN o nguyen cho cu. */
+export interface CommercialAcceptanceDecisionView extends CommercialAcceptanceDecision {
+  readonly decidedByActor: AcceptanceActorView;
+}
+
+/** Ho so kem lich su, moi quyet dinh mang CA ma tho lan nhan doc duoc. */
+export interface CommercialAcceptanceDetailView {
+  readonly acceptance: CommercialAcceptance;
+  readonly decisions: readonly CommercialAcceptanceDecisionView[];
+}
+
+/**
  * LENH ghi mot quyet dinh. Danh tinh den tu PHIEN, gio den tu MAY CHU.
  *
  * KHONG co truong `decidedBy` lan `decidedAt` — do la ca diem. `#275` K1 doi *"`decidedBy`, role
@@ -243,6 +281,16 @@ export interface CommercialAcceptanceQueueRow {
   /** NGU CANH dieu hanh: vong chay dang cho don nay, neu co. Khong phai dau vao cua quyet dinh. */
   readonly runCode: string | null;
   readonly vehicleId: string | null;
+  /**
+   * Gio va nguoi cua quyet dinh MOI NHAT — ca hai doc tu CUNG mot hang quyet dinh
+   * (`latestDecisionId`), khong phai tu ho so. `openedBy` la nguoi quyet LAN DAU; ghep no voi gio
+   * cua lan sua gan nhat se in ra mot cap nguoi/gio chua tung xay ra.
+   */
   readonly latestDecidedAt: string | null;
   readonly latestDecidedBy: string | null;
+}
+
+/** Mot dong hang cho nhu be mat nguoi doc thay — `latestDecidedBy` tho VAN o nguyen cho cu. */
+export interface CommercialAcceptanceQueueRowView extends CommercialAcceptanceQueueRow {
+  readonly latestDecidedByActor: AcceptanceActorView | null;
 }

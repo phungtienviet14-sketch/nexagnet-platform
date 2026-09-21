@@ -12,6 +12,8 @@ import {
   AcceptanceMovementFactsAdapter,
   NoOperationalDocumentsAdapter,
 } from './acceptance-facts.port.js';
+import { AcceptanceActorFacts, AcceptanceActorFactsAdapter } from './acceptance-actor.js';
+import { CommercialAcceptanceReadModel } from './acceptance-read-model.js';
 import { AcceptanceRepository, InMemoryAcceptanceRepository } from './acceptance.repository.js';
 import { CommercialAcceptanceService } from './acceptance.service.js';
 import { PrismaAcceptanceRepository } from './prisma-acceptance.repository.js';
@@ -82,7 +84,24 @@ import { PrismaAcceptanceRepository } from './prisma-acceptance.repository.js';
       inject: [{ token: OperationalDocumentAcceptanceEvidenceAdapter, optional: true }],
     },
     CommercialAcceptanceService,
+    /*
+     * `#334` — ten nguoi quyet doc tu `UserRepository` cua `AuthModule` (`foundation`, `@Global`):
+     * cung khuon `transport-document.module.ts` da tiem no.
+     */
+    { provide: AcceptanceActorFacts, useClass: AcceptanceActorFactsAdapter },
+    CommercialAcceptanceReadModel,
   ],
-  exports: [CommercialAcceptanceService, AcceptanceRepository, AcceptanceMovementFacts],
+  /*
+   * `CommercialAcceptanceReadModel` PHAI nam o day: `CommercialAcceptanceController` duoc dang ky
+   * o module GOC qua `app-composition.ts`, nen no chi thay nhung gi module nay xuat ra.
+   * `app.module.transport-order-completion.boot.spec.ts` la bai bat duoc thieu sot nay — tsc, bai
+   * don vi va bai composition deu xanh khi thieu no.
+   */
+  exports: [
+    CommercialAcceptanceService,
+    CommercialAcceptanceReadModel,
+    AcceptanceRepository,
+    AcceptanceMovementFacts,
+  ],
 })
 export class TransportAcceptanceModule {}
