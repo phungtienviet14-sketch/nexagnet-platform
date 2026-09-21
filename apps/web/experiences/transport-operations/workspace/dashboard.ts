@@ -82,7 +82,12 @@ export interface DashboardModel {
   /** Ngay nghiep vu cua lan doc thap dieu hanh (`dd/mm/yyyy`); `null` khi chua co. */
   readonly generatedFor: string | null;
   readonly stats: readonly DashboardStat[];
-  /** Cau noi VI SAO khong co con so vong chay; `null` khi nguoi nay mo duoc `Bảng điều hành`. */
+  /**
+   * Cau noi VI SAO khong co con so vong chay khi nguoi nay KHONG mo duoc `Bảng điều hành`.
+   *
+   * `null` chi noi ve QUYEN, khong hua la da co so: nguoi co quyen van co the chua thay con so nao
+   * trong luc thap dieu hanh dang doc hoac doc loi — luc do `headline` cung la `null`.
+   */
   readonly operationsNotice: string | null;
   /** Da CAT xuong `WORK_LIMIT` de bay len bang. */
   readonly work: readonly DashboardWorkItem[];
@@ -113,10 +118,19 @@ export interface DashboardInput {
   readonly tower: ControlTowerView | null;
   /** Don hang — `null` khi chua co trong tay hoac vai khong doc duoc don. */
   readonly orders: readonly TransportOrder[] | null;
-  /** Chuyen lap tay — CHI de noi thong tin phu, khong bao gio thanh con so chinh. */
-  readonly trips: readonly Trip[];
-  readonly vehicles: readonly Vehicle[];
-  readonly drivers: readonly Driver[];
+  /**
+   * Chuyen lap tay — CHI de noi thong tin phu, khong bao gio thanh con so chinh. `null` khi chua co
+   * trong tay (dang doc, hoac vai/goi khong doc duoc chuyen).
+   */
+  readonly trips: readonly Trip[] | null;
+  /**
+   * Lan doc chuyen lap tay vua HONG. Tach khoi `trips: null` vi hai dieu noi hai cau khac nhau: bi
+   * chan thi im lang la dung, con doc hong ma im lang thi doc ra y het "khong con chuyen nao".
+   */
+  readonly tripsFailed: boolean;
+  /** Xe va lai xe — `null` khi chua co trong tay. Chua co thi KHONG co the, khong co so 0. */
+  readonly vehicles: readonly Vehicle[] | null;
+  readonly drivers: readonly Driver[] | null;
   readonly reconciliations: readonly FuelReconciliation[];
   /** Hai truc quyen. Moi duong dan va moi con so vong chay deu hoi qua day. */
   readonly navigation: NavigationInput;
@@ -196,35 +210,46 @@ const operationStats = (
 };
 
 /**
- * DOI XE, LAI XE, KY DOI SOAT — giu nguyen tu truoc #348: ba the nay khong doc chuyen lap tay, va
- * #348 co y khong mo rong sang chung.
+ * DOI XE, LAI XE, KY DOI SOAT — NGUON giu nguyen tu truoc #348: cac the nay khong doc chuyen lap tay,
+ * va #348 co y khong doi chung sang doc thap dieu hanh.
+ *
+ * Cai #348 doi la HAI dieu cua luat fail-closed, ap cho moi the tren trang: chua co du lieu trong tay
+ * thi KHONG co the (truoc day la mot so 0 bia ra tu `?? []`), va muc khong mo duoc thi the khong dan
+ * di dau (truoc day dan vao mot muc se bi day nguoc ve Tong quan).
  */
 const fleetStats = (input: DashboardInput): readonly DashboardStat[] => {
-  const byVehicleStatus = countBy(input.vehicles, (vehicle) => vehicle.status);
-  const activeDrivers = input.drivers.filter((driver) => driver.status === 'ACTIVE').length;
-  const stats: DashboardStat[] = [
-    {
-      key: 'vehicles-idle',
-      label: 'Xe đang rỗi',
-      value: formatCount(byVehicleStatus.IDLE ?? 0),
-      hint: null,
-      section: 'fleet',
-    },
-    {
-      key: 'vehicles-maintenance',
-      label: 'Xe đang bảo dưỡng',
-      value: formatCount(byVehicleStatus.UNDER_MAINTENANCE ?? 0),
-      hint: 'Đọc từ trạng thái xe, chưa phải từ lịch bảo dưỡng.',
-      section: 'fleet',
-    },
-    {
+  const stats: DashboardStat[] = [];
+  const fleet = linkIf('fleet', input.navigation);
+
+  if (input.vehicles !== null) {
+    const byVehicleStatus = countBy(input.vehicles, (vehicle) => vehicle.status);
+    stats.push(
+      {
+        key: 'vehicles-idle',
+        label: 'Xe đang rỗi',
+        value: formatCount(byVehicleStatus.IDLE ?? 0),
+        hint: null,
+        section: fleet,
+      },
+      {
+        key: 'vehicles-maintenance',
+        label: 'Xe đang bảo dưỡng',
+        value: formatCount(byVehicleStatus.UNDER_MAINTENANCE ?? 0),
+        hint: 'Đọc từ trạng thái xe, chưa phải từ lịch bảo dưỡng.',
+        section: fleet,
+      },
+    );
+  }
+
+  if (input.drivers !== null) {
+    stats.push({
       key: 'drivers-active',
       label: 'Lái xe đang làm',
-      value: formatCount(activeDrivers),
+      value: formatCount(input.drivers.filter((driver) => driver.status === 'ACTIVE').length),
       hint: null,
-      section: 'fleet',
-    },
-  ];
+      section: fleet,
+    });
+  }
 
   if (input.reconciliations.length > 0) {
     stats.push({
@@ -234,7 +259,7 @@ const fleetStats = (input: DashboardInput): readonly DashboardStat[] => {
         input.reconciliations.filter((row) => OPEN_RECONCILIATION_STATES.has(row.state)).length,
       ),
       hint: null,
-      section: 'fuel',
+      section: linkIf('fuel', input.navigation),
     });
   }
 
@@ -271,22 +296,29 @@ const workFrom = (board: ControlTowerModel): readonly DashboardWorkItem[] =>
     selection: row.selection,
   }));
 
-const legacyNoteFor = (
-  trips: readonly Trip[],
-  navigation: NavigationInput,
-): DashboardLegacyNote | null => {
-  const open = trips.filter((trip) => !isTerminalTrip(trip.status)).length;
+const legacyNoteFor = (input: DashboardInput): DashboardLegacyNote | null => {
+  const link: DashboardLink | null = canNavigateTo('trips', input.navigation)
+    ? { label: `Xem ở “${sectionLabel('trips')}”`, section: 'trips' }
+    : null;
+
+  if (input.tripsFailed) {
+    return {
+      text: 'Chưa đọc được các chuyến lập tay theo cách làm trước đây, nên chưa biết còn chuyến nào chưa khép.',
+      link,
+    };
+  }
+  if (input.trips === null) return null;
+
+  const open = input.trips.filter((trip) => !isTerminalTrip(trip.status)).length;
   if (open === 0) return null;
   return {
     text: `Còn ${formatCount(open)} chuyến lập tay theo cách làm trước đây chưa khép.`,
-    link: canNavigateTo('trips', navigation)
-      ? { label: `Xem ở “${sectionLabel('trips')}”`, section: 'trips' }
-      : null,
+    link,
   };
 };
 
 const operationsBlockedNotice = (): string =>
-  `Doanh nghiệp chưa bật nghiệp vụ vận hành xe, hoặc vai của bạn không mở được “${sectionLabel('control-tower')}” — nên Tổng quan không hiện số vòng chạy và hàng việc đang chờ.`;
+  `Tổng quan không hiện số vòng chạy và hàng việc đang chờ: doanh nghiệp chưa bật hoặc chưa thiết lập xong nghiệp vụ vận hành xe, hoặc vai của bạn không mở được “${sectionLabel('control-tower')}”.`;
 
 export const toDashboard = (input: DashboardInput): DashboardModel => {
   const canOpenTower = canNavigateTo('control-tower', input.navigation);
@@ -310,6 +342,6 @@ export const toDashboard = (input: DashboardInput): DashboardModel => {
             section: 'control-tower',
           }
         : null,
-    legacy: legacyNoteFor(input.trips, input.navigation),
+    legacy: legacyNoteFor(input),
   };
 };

@@ -24,6 +24,7 @@ const input = (over: Partial<DashboardInput> = {}): DashboardInput => ({
   tower: controlTowerView(),
   orders: [],
   trips: [],
+  tripsFailed: false,
   vehicles: [],
   drivers: [],
   reconciliations: [],
@@ -120,6 +121,20 @@ describe('#348 — con so chinh doc tu DON + VONG CHAY, khong tu chuyen lap tay'
       text: 'Còn 4 chuyến lập tay theo cách làm trước đây chưa khép.',
       link: { label: 'Xem ở “Chuyến xe”', section: 'trips' },
     });
+  });
+
+  it('doc chuyen lap tay HONG thi dong phu noi "chua doc duoc", khong im lang nhu "khong con chuyen"', () => {
+    const model = toDashboard(input({ trips: null, tripsFailed: true }));
+    expect(model.legacy).toEqual({
+      text: 'Chưa đọc được các chuyến lập tay theo cách làm trước đây, nên chưa biết còn chuyến nào chưa khép.',
+      link: { label: 'Xem ở “Chuyến xe”', section: 'trips' },
+    });
+    /* Nguon PHU hong khong duoc cham vao con so CHINH. */
+    expect(statOf(model, 'runs-running')?.value).toBe('0');
+  });
+
+  it('chuyen lap tay chua co trong tay (dang doc, hoac bi chan) thi chua noi gi ve chung', () => {
+    expect(toDashboard(input({ trips: null })).legacy).toBeNull();
   });
 
   it('chuyen cu da khep het thi khong co dong thong tin phu nao', () => {
@@ -357,6 +372,25 @@ describe('#348 — vai/goi khong du quyen thi KHONG co con so vong chay', () => 
     expect(statOf(model, 'orders-open')).toMatchObject({ value: '1', section: null });
   });
 
+  it('khach chua bat transport-core: moi query bi chan, trang KHONG co mot con so nao — ke ca 0', () => {
+    /* Dung dau vao ma `OverviewView` nhan khi `allowed()` chan moi query: moi nguon deu `null`. */
+    const model = toDashboard(
+      input({
+        tower: null,
+        orders: null,
+        trips: null,
+        vehicles: null,
+        drivers: null,
+        reconciliations: [],
+        navigation: { capabilities: [], role: 'ADMIN' },
+      }),
+    );
+    expect(model.stats).toEqual([]);
+    expect(model.legacy).toBeNull();
+    expect(model.headline).toBeNull();
+    expect(model.operationsNotice).toContain('chưa bật hoặc chưa thiết lập xong');
+  });
+
   it('dang doc (chua co thap dieu hanh) thi khong noi 0 va khong noi "khong co viec"', () => {
     const model = toDashboard(input({ tower: null }));
     expect(statOf(model, 'runs-running')).toBeUndefined();
@@ -365,7 +399,45 @@ describe('#348 — vai/goi khong du quyen thi KHONG co con so vong chay', () => 
   });
 });
 
-describe('the doi xe, lai xe, ky doi soat — giu nguyen (ngoai pham vi #348)', () => {
+describe('the doi xe, lai xe, ky doi soat — nguon giu nguyen, nhung fail-closed nhu moi the', () => {
+  it('chua co xe/lai xe trong tay thi KHONG co the — khong bia so 0 tu mot danh sach rong', () => {
+    const model = toDashboard(input({ vehicles: null, drivers: null }));
+    for (const key of ['vehicles-idle', 'vehicles-maintenance', 'drivers-active']) {
+      expect(statOf(model, key)).toBeUndefined();
+    }
+  });
+
+  it('muc khong mo duoc thi the van la so that nhung khong dan di dau', () => {
+    const model = toDashboard(
+      input({
+        vehicles: [vehicle()],
+        drivers: [driver()],
+        reconciliations: [reconciliation()],
+        navigation: {
+          capabilities: CORE,
+          role: 'ADMIN',
+          blockedCapabilityKeys: ['transport-core'],
+        },
+      }),
+    );
+    expect(statOf(model, 'vehicles-idle')).toMatchObject({ value: '1', section: null });
+    expect(statOf(model, 'drivers-active')).toMatchObject({ value: '1', section: null });
+    /* `fuel` doi `transport-fuel`, ma goi nay khong bat. */
+    expect(statOf(model, 'reconciliations-open')?.section).toBeNull();
+  });
+
+  it('muc mo duoc thi the dan dung muc', () => {
+    const model = toDashboard(
+      input({
+        vehicles: [vehicle()],
+        reconciliations: [reconciliation()],
+        navigation: { capabilities: ['transport-core', 'transport-fuel'], role: 'ADMIN' },
+      }),
+    );
+    expect(statOf(model, 'vehicles-idle')?.section).toBe('fleet');
+    expect(statOf(model, 'reconciliations-open')?.section).toBe('fuel');
+  });
+
   it('doi xe khong co du lieu thi la 0 that, khong phai o trong', () => {
     const model = toDashboard(input({ vehicles: [vehicle({ status: 'UNDER_MAINTENANCE' })] }));
     expect(statOf(model, 'vehicles-maintenance')?.value).toBe('1');

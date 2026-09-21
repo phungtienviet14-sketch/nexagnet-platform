@@ -48,12 +48,13 @@ export function OverviewView() {
   }
 
   /*
-   * LOI cua nguon CHINH moi duoc len dau trang. Chuyen lap tay la nguon PHU: no hong thi chi mat
-   * dong thong tin phu, khong duoc day mot loi do len tren nhung con so van dang dung.
+   * LOI cua nguon CHINH moi duoc len dau trang. Chuyen lap tay la nguon PHU: no hong thi CHINH dong
+   * thong tin phu noi "chua doc duoc" (`tripsFailed`), khong day mot loi do len tren nhung con so van
+   * dang dung — va cung khong im lang, vi im lang doc ra y het "khong con chuyen nao chua khep".
    */
   const primary = [tower, orders, vehicles, drivers];
   const firstError = primary.find((query) => query.errorMessage !== null)?.errorMessage ?? null;
-  const isLoading = primary.some((query) => query.isLoading);
+  const isLoading = [...primary, trips].some((query) => query.isLoading);
   const retryFailed = () => {
     for (const query of primary) if (query.errorMessage !== null) query.refetch();
   };
@@ -61,9 +62,10 @@ export function OverviewView() {
   const model = toDashboard({
     tower: tower.data ?? null,
     orders: orders.data ?? null,
-    trips: trips.data ?? [],
-    vehicles: vehicles.data ?? [],
-    drivers: drivers.data ?? [],
+    trips: trips.data ?? null,
+    tripsFailed: trips.errorMessage !== null,
+    vehicles: vehicles.data ?? null,
+    drivers: drivers.data ?? null,
     reconciliations: reconciliations.data ?? [],
     navigation,
   });

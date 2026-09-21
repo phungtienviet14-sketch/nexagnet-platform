@@ -2117,6 +2117,27 @@ test.describe('#348 — Tong quan lay so tu don va vong chay', () => {
     await expect(page.getByRole('region', { name: 'Cần xử lý ngay' })).toHaveCount(0);
   });
 
+  test('doc chuyen lap tay hong: dong phu noi "chua doc duoc", khong mot loi do nao len dau trang', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.route('**/transport/trips', (route) =>
+      json(route, { message: 'Không đọc được danh sách chuyến' }, 500),
+    );
+    await page.goto('/');
+
+    /* Doi DONG PHU noi loi truoc — tuc query chuyen DA hong — roi moi khang dinh dau trang sach. */
+    await expect(page.getByRole('region', { name: 'Chuyến lập tay chưa khép' })).toContainText(
+      'Chưa đọc được các chuyến lập tay theo cách làm trước đây',
+    );
+    await expect(page.locator('#tx-main').getByRole('alert')).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('region', { name: 'Số liệu vận hành' })
+        .getByRole('link', { name: RUNNING_CARD }),
+    ).toBeVisible();
+  });
+
   test('o 390px Tong quan moi khong tran ngang', async ({ page }) => {
     await mockTransport(page, 'ADMIN');
     await page.setViewportSize({ width: 390, height: 780 });
