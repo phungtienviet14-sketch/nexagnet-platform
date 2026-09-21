@@ -103,8 +103,28 @@ describe('PlanningService — vong chay do he thong quan (#276 Lane L)', () => {
     planning = build(planningPolicy('ONE_ORDER_PER_RUN'));
   });
 
-  const aVehicle = (plate = '29C-11111') =>
-    fleet.createVehicle({ registrationPlate: plate, vehicleClass: 'Đầu kéo' });
+  /**
+   * MOT CHIEC XE DIEU DUOC — co nghia la co nguoi cam no, va nguoi do MO duoc man Hien truong.
+   *
+   * Fixture nay co y KHONG tra ve mot chiec xe tran: ke tu khi `commit()` doi mot lai xe dang phu
+   * trach, con hoat dong va co tai khoan, mot chiec xe thieu mot trong ba dieu do la mot chiec xe
+   * KHONG giao viec duoc. Cac duong tu choi do nam o `planning-driver-handoff.spec.ts`.
+   */
+  const aVehicle = async (plate = '29C-11111') => {
+    const vehicle = await fleet.createVehicle({
+      registrationPlate: plate,
+      vehicleClass: 'Đầu kéo',
+    });
+    const driver = await fleet.createDriver({
+      fullName: `Lai xe ${plate}`,
+      phone: `090${plate.replace(/\D/g, '').slice(0, 7)}`,
+      licenceClass: 'FC',
+      licenceExpiry: '2030-01-01',
+      authUserId: `auth-${plate}`,
+    });
+    await fleet.assignDriverToVehicle(vehicle.id, driver.id, now);
+    return vehicle;
+  };
 
   const anOrder = (code: string, origin: string, destination: string) =>
     movement.createOrder(

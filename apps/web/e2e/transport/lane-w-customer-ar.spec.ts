@@ -189,6 +189,7 @@ const completionRowOf = (order: OrderRow, state: ArMock) => ({
   vehicleId: 'veh-one',
   latestDecidedAt: null,
   latestDecidedBy: null,
+  latestDecidedByActor: null,
 });
 
 async function mockCustomerAr(page: Page, initialOrders: OrderRow[]): Promise<ArMock> {

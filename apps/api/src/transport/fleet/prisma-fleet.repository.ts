@@ -286,6 +286,22 @@ export class PrismaFleetRepository extends FleetRepository {
     return rows.map(toVehicleAssignment);
   }
 
+  async activeDriverAssignmentsForVehicle(
+    vehicleId: string,
+  ): Promise<readonly VehicleDriverAssignment[]> {
+    // `@@index([vehicleId, effectiveTo])` phuc vu dung truy van nay — khong quet lich su cua xe.
+    //
+    // `take: 2` chu khong phai `findFirst`: mot hang la du de tra loi "ai dang cam xe nay", nhung
+    // KHONG du de tra loi "co dung mot nguoi khong". Hai hang la so nho nhat phan biet duoc ba
+    // tinh huong (khong ai / dung mot / nhieu hon mot) ma van khong bao gio doc ca bang.
+    const rows: AssignmentRow[] = await model(this.prisma, 'transportVehicleAssignment').findMany({
+      where: { vehicleId, effectiveTo: null },
+      orderBy: { effectiveFrom: 'asc' },
+      take: 2,
+    });
+    return rows.map(toVehicleAssignment);
+  }
+
   async activeVehicleForDriver(driverId: string): Promise<string | null> {
     // `@@index([driverId])` tren `TransportVehicleAssignment` phuc vu dung truy van nay.
     const row: AssignmentRow | null = await model(

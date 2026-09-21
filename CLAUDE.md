@@ -53,6 +53,7 @@ Chữ `netviet` trong tên hạ tầng là **tên riêng của một hệ thốn
 - Ưu tiên tìm và dùng thư viện có sẵn (npm) thay vì tự implement
 - Rules ECC của project nằm tại `.claude/rules/ecc/` (common, typescript, react, web) — tuân thủ khi viết code
 - **Trước khi sửa `.github/workflows/` hoặc `deploy/`**: đọc [docs/phat-trien/van-hanh/ci-cd.md](docs/phat-trien/van-hanh/ci-cd.md) — 7 bất biến, cách lên khách mới, 6 sự cố đã xảy ra thật và cách nhận diện
+- **Kiểm thử trước push = test TẬP TRUNG, không phải full suite** (ci-cd.md §3): trong lúc code chạy test đúng module/spec bị ảnh hưởng; **không** chạy `pnpm test`/build/Playwright/IT toàn monorepo chỉ để push — full regression là việc của 7 check CI. Luôn **báo rõ đã chạy test tập trung nào và kết quả**. Hook pre-push của repo chỉ chạy check nhanh (cài một lần: `pnpm hooks:install`); thấy log `[ECC pre-push] Running: test` là hook global cũ đang chạy → cài lại, không dùng `--no-verify`
 
 ## Bối cảnh khách hàng đầu tiên (Ultty)
 
