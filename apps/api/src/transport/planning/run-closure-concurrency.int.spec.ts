@@ -733,13 +733,19 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       return sharedDriverId;
     };
 
-    /** Mot vong chay da xong viec, co lai xe da phan cong va mot chang de bam moc. */
+    /**
+     * Mot vong chay da xong viec, co lai xe da phan cong va mot chang de bam moc.
+     *
+     * Chang de bam moc la chang CO HANG. `legs[0]` la chang 1 RONG (bai -> kho), va tu `#332` moc
+     * hang hoa (`PICKUP_ARRIVAL`, `LOADING`, `DELIVERY_ARRIVAL`...) khong neo duoc vao chang rong —
+     * dung hinh dang ma runtime 19/09/2026 da ghi nham.
+     */
     const closableRunWithDriver = async () => {
       const { run } = await finishedRun(DEPOT_LABEL);
       const driverId = await theDriver();
       await movement.assignRun(run.id, { driverId }, ACTOR);
       const legs = (await movement.getRun(run.id)).legs;
-      return { run, driverId, legId: legs[0]!.id };
+      return { run, driverId, legId: legs.find((leg) => leg.kind === 'LOADED')!.id };
     };
 
     const reasonOfRejection = (error: unknown): string =>

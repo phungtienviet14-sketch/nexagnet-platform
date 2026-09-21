@@ -29,6 +29,14 @@ export const CHECKPOINT_RECORD_REASONS = [
   /** Loai moc muc vong chay khong duoc gan vao mot chang. */
   'CHECKPOINT_LEG_NOT_APPLICABLE',
   /**
+   * Moc mang nghia HANG HOA neo vao mot chang CHAY RONG — `#332`.
+   *
+   * Ma RIENG, khong gop vao `CHECKPOINT_LEG_NOT_APPLICABLE`: cai kia la "loai moc nay khong thuoc
+   * muc chang"; cai nay la "chang nay khong cho hang". Runtime 19/09/2026 ghi chuoi lay hang len
+   * chang 1 RONG — dem rieng duoc hinh dang nay la cach biet no con xay ra hay khong.
+   */
+  'CHECKPOINT_CARGO_ON_EMPTY_LEG',
+  /**
    * Thu tu nghiep vu: khong roi diem lay hang truoc khi den do. Xem `checkpoint-lifecycle.ts` —
    * moi canh thieu la MOT ma rieng, khong gop thanh mot `boolean`.
    */
@@ -68,6 +76,7 @@ export const TRANSPORT_CHECKPOINT_DECISIONS = defineDecisionVocabulary({
     CHECKPOINT_LEG_NOT_IN_RUN: 'Chang do khong thuoc vong chay nay',
     CHECKPOINT_LEG_REQUIRED: 'Loai moc nay phai gan vao mot chang cu the',
     CHECKPOINT_LEG_NOT_APPLICABLE: 'Loai moc nay thuoc muc vong chay, khong gan vao chang',
+    CHECKPOINT_CARGO_ON_EMPTY_LEG: 'Chang chay rong khong cho hang, khong nhan moc hang hoa',
     CHECKPOINT_PREDECESSOR_MISSING: 'Thieu moc dung truoc trong quy trinh',
     CHECKPOINT_ALREADY_RECORDED: 'Moc nay da duoc ghi tu truoc',
     CHECKPOINT_LOCATION_REQUIRED: 'Loai moc nay bat buoc co vi tri hien tai',
