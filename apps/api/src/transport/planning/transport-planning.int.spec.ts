@@ -2,6 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { TransportCheckpointCoreFactsAdapter } from '../checkpoint/checkpoint-facts.port.js';
+import { PrismaCheckpointRepository } from '../checkpoint/prisma-checkpoint.repository.js';
+import { PrismaOperationalDocumentRepository } from '../document/prisma-document.repository.js';
+import { PrismaPhysicalReceiptHandoverRepository } from '../document/prisma-handover.repository.js';
+import { TransportFieldCoreFactsAdapter } from '../field/field-facts.port.js';
+import { DriverFieldReadService } from '../field/field-read.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { MovementService } from '../movement/movement.service.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
@@ -9,6 +15,7 @@ import { summariseRunMovement } from '../movement/run-distance.js';
 import { describeStorageError } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { PrismaWaitingSessionRepository } from '../waiting/prisma-waiting.repository.js';
 import { PlanningService } from './planning.service.js';
 import type { TransportPlanningPolicy } from './planning.types.js';
 import { PrismaRunPlanRepository } from './prisma-planning.repository.js';
@@ -27,6 +34,9 @@ import { PrismaRunPlanRepository } from './prisma-planning.repository.js';
  *     bai 4   chang da hoan thanh khong sua duoc, ke ca bang `UPDATE` viet tay
  *     bai 6   che do ONE bi cuong che O DB, khong chi o tang dich vu
  *     bai 17  phep chieu chuyen v1 van chay y nguyen
+ *     BUG-01  lai xe THAY vong chay qua chinh phien dang nhap; thieu tai khoan hoac da ngung hoat
+ *             dong thi tu choi truoc moi lan ghi; noi don (MULTI) chi khi nguoi cam Run va nguoi
+ *             cam xe la MOT nguoi
  *
  * Chay bang `RUN_PRISMA_IT=1`; khong co bien do thi ca khoi khong chay.
  */
@@ -58,6 +68,20 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
     const planner = (policy = planningPolicy()): PlanningService =>
       new PlanningService(movement, planRepo, fleet, audit, CORE_POLICY, policy);
+
+    /**
+     * MAN HIEN TRUONG THAT cua lai xe — dich vu va hai adapter y nhu `TransportFieldModule` dung,
+     * tren CUNG Postgres ma `commit()` vua ghi. Chi thieu lop HTTP, va lop do chi doc `authUserId`
+     * tu phien roi chuyen nguyen vao `workFor()`.
+     */
+    const field = new DriverFieldReadService(
+      new TransportFieldCoreFactsAdapter(movementRepo),
+      new TransportCheckpointCoreFactsAdapter(movementRepo, fleet),
+      new PrismaCheckpointRepository(prisma),
+      new PrismaWaitingSessionRepository(prisma),
+      new PrismaOperationalDocumentRepository(prisma),
+      new PrismaPhysicalReceiptHandoverRepository(prisma),
+    );
 
     /**
      * Don dep theo THU TU AN TOAN VE KHOA NGOAI: ke hoach -> lien ket chuyen -> chang -> phan cong
@@ -107,6 +131,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const tripIds = tripRows.map((trip) => trip.id);
       await prisma.transportTripAssignment.deleteMany({ where: { tripId: { in: tripIds } } });
       await prisma.transportTrip.deleteMany({ where: { id: { in: tripIds } } });
+      // TRUOC khi xoa xe: khoa ngoai cua ban phan cong lai xe tro vao ca xe lan lai xe, nen bo
+      // sot dong nay se lam lan don sau do that bai voi mot loi trong khong lien quan gi toi no.
+      await prisma.transportVehicleAssignment.deleteMany({
+        where: { vehicleId: { in: vehicleIds } },
+      });
       await prisma.transportVehicle.deleteMany({ where: { id: { in: vehicleIds } } });
       await prisma.transportDriver.deleteMany({ where: { phone: { startsWith: '0955PL' } } });
     }
@@ -120,11 +149,48 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     let suffix = 0;
     const nextCode = (label: string): string => `${CODE_PREFIX}-${label}-${++suffix}`;
 
-    const aVehicle = () =>
-      fleet.createVehicle({
+    /**
+     * MOT CHIEC XE va NGUOI CAM NO — mac dinh la nguoi mo duoc man Hien truong.
+     *
+     * `commit()` doi mot lai xe dang phu trach, con hoat dong va CO tai khoan truoc khi mo vong
+     * chay. So dien thoai giu tien to `0955PL` de `cleanup()` o tren don duoc; ban phan cong cung
+     * phai duoc don, neu khong khoa ngoai se chan lan xoa xe. `authUserId` la unique tren bang lai
+     * xe, nen mac dinh sinh rieng cho tung ho so; `holder` ghi de de dung duong tu choi.
+     */
+    const aVehicleHeldBy = async (
+      holder: { authUserId?: string | null; status?: 'ACTIVE' | 'INACTIVE' } = {},
+    ) => {
+      const vehicle = await fleet.createVehicle({
         registrationPlate: `${PLATE_PREFIX}-${++suffix}`,
         vehicleClass: 'Dau keo',
       });
+      const driver = await fleet.createDriver({
+        fullName: `${CODE_PREFIX} Lai xe ${suffix}`,
+        phone: `0955PL${suffix}`,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+        authUserId:
+          holder.authUserId === undefined ? `${CODE_PREFIX}-auth-${suffix}` : holder.authUserId,
+        status: holder.status ?? 'ACTIVE',
+      });
+      await fleet.assignDriverToVehicle(vehicle.id, driver.id, new Date());
+      return { vehicle, driver };
+    };
+
+    const aVehicle = async () => (await aVehicleHeldBy()).vehicle;
+
+    /** Mot lai xe CO tai khoan nhung chua cam xe nao — de doi xe giao lai mot chiec xe cho nguoi nay. */
+    const aSpareDriver = async () => {
+      const n = ++suffix;
+      return fleet.createDriver({
+        fullName: `${CODE_PREFIX} Lai xe ${n}`,
+        phone: `0955PL${n}`,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+        authUserId: `${CODE_PREFIX}-auth-${n}`,
+        status: 'ACTIVE',
+      });
+    };
 
     const anOrder = (origin: string, destination: string) =>
       movement.createOrder(
@@ -436,6 +502,202 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       // Vong chay duoc chieu ra KHONG mang mot ke hoach nao: hai duong doc lap.
       expect(await planRepo.listActiveForRun(projection.run.id)).toHaveLength(0);
+    });
+
+    /* ---------------------------------------------------------------- *
+     * BUG-01 — giao xe thi giao ca nguoi, do QUA CUA DANG NHAP
+     *
+     * Man Hien truong di `phien.authUserId -> findDriverByAuthUserId -> driver.id ->
+     * listOpenRunsForDriver`. Bai o day di dung chuoi do tren Postgres that: `authUserId` la
+     * `@unique` that, va `listOpenRunsForDriver` la truy van Prisma that loc theo phan cong.
+     * ---------------------------------------------------------------- */
+
+    it('PL-IT-11 -- BUG-01: tai khoan cua nguoi cam xe THAY vong chay vua giao; tai khoan lai xe khac KHONG', async () => {
+      const { vehicle, driver } = await aVehicleHeldBy();
+      const { driver: other } = await aVehicleHeldBy();
+      const login = driver.authUserId;
+      const otherLogin = other.authUserId;
+      if (login === null || otherLogin === null) throw new Error('fixture phai co tai khoan');
+      const order = await anOrder('IT-PLAN Kho A', 'IT-PLAN Cang B');
+
+      const { run } = await planner().commit(
+        order.id,
+        { vehicleId: vehicle.id, idempotencyKey: nextCode('KEY') },
+        ACTOR,
+      );
+
+      const mine = await field.workFor(login);
+      expect(mine.runs.map((entry) => entry.runId)).toEqual([run.id]);
+      const loaded = mine.runs[0]?.legs.find((leg) => leg.kind === 'LOADED');
+      expect(loaded?.orderCode).toBe(order.code);
+
+      const theirs = await field.workFor(otherLogin);
+      expect(theirs.runs.map((entry) => entry.runId)).not.toContain(run.id);
+
+      // Hang Postgres nam duoi man hinh do: DUNG MOT phan cong hieu luc, cua dung nguoi cam xe.
+      const active = await prisma.transportRunAssignment.findMany({
+        where: { runId: run.id, effectiveTo: null },
+        select: { driverId: true },
+      });
+      expect(active).toEqual([{ driverId: driver.id }]);
+    });
+
+    it.each([
+      {
+        label: 'lai xe cam xe CHUA co tai khoan (authUserId = NULL)',
+        holder: { authUserId: null },
+        reason: 'PLAN_VEHICLE_DRIVER_BINDING_MISSING',
+      },
+      {
+        label: 'lai xe cam xe da NGUNG hoat dong (INACTIVE)',
+        holder: { status: 'INACTIVE' as const },
+        reason: 'PLAN_VEHICLE_DRIVER_INACTIVE',
+      },
+    ])('PL-IT-12 -- BUG-01: $label -> $reason, TRUOC moi lan ghi', async ({ holder, reason }) => {
+      const { vehicle, driver } = await aVehicleHeldBy(holder);
+      const order = await anOrder('IT-PLAN Kho A', 'IT-PLAN Cang B');
+      const idempotencyKey = nextCode('KEY');
+
+      const outcome = await planner()
+        .commit(order.id, { vehicleId: vehicle.id, idempotencyKey }, ACTOR)
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(outcome, describeStorageError(outcome)).toBeInstanceOf(TransportDomainError);
+      expect((outcome as TransportDomainError).reason).toBe(reason);
+
+      // Do tren CHINH Postgres, khoanh theo xe / don / lai xe / khoa cua bai nay — khong tren so
+      // toan cuc, vi job `integration` dung chung mot DB cho moi bo int spec.
+      expect(await prisma.transportVehicleRun.count({ where: { vehicleId: vehicle.id } })).toBe(0);
+      expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(0);
+      expect(await prisma.transportRunAssignment.count({ where: { driverId: driver.id } })).toBe(0);
+      expect(await prisma.transportOrderRunPlan.count({ where: { orderId: order.id } })).toBe(0);
+      expect(await prisma.transportOrderRunPlan.count({ where: { idempotencyKey } })).toBe(0);
+    });
+
+    /* ---------------------------------------------------------------- *
+     * BUG-01, nhanh NOI DON (`MULTI_ORDER_RUN`) — nguoi cam Run la su that cua Run do
+     *
+     * Doi xe noi ai cam CHIEC XE; phan cong vong chay noi ai cam VONG CHAY. Noi don vao mot vong
+     * chay dang co nguoi chi khi hai nguon noi CUNG mot nguoi. `TransportRunAssignment_activeRun_key`
+     * (unique mot phan) la thu giu "mot ban hieu luc" o DB; cac bai duoi dem ca hang DA dong.
+     * ---------------------------------------------------------------- */
+
+    const multiPlanner = () => planner(planningPolicy({ grouping: 'MULTI_ORDER_RUN' }));
+    const assignmentRowsOf = (runId: string) =>
+      prisma.transportRunAssignment.findMany({
+        where: { runId },
+        select: { driverId: true, effectiveTo: true },
+      });
+    const loadedOrderCodesSeenBy = async (login: string | null) => {
+      if (login === null) throw new Error('fixture phai co tai khoan');
+      return (await field.workFor(login)).runs.map((run) => ({
+        runId: run.runId,
+        orders: run.legs.filter((leg) => leg.kind === 'LOADED').map((leg) => leg.orderCode),
+      }));
+    };
+
+    it('PL-IT-13 -- MULTI: Run cua A, doi xe van la A -> noi don, van DUNG MOT hang phan cong', async () => {
+      const service = multiPlanner();
+      const { vehicle, driver } = await aVehicleHeldBy();
+      const a = await anOrder('IT-PLAN Kho A', 'IT-PLAN Cang B');
+      const b = await anOrder('IT-PLAN Kho D', 'IT-PLAN Kho E');
+
+      const first = await service.commit(
+        a.id,
+        { vehicleId: vehicle.id, idempotencyKey: nextCode('K1') },
+        ACTOR,
+      );
+      const second = await service.commit(
+        b.id,
+        { vehicleId: vehicle.id, idempotencyKey: nextCode('K2') },
+        ACTOR,
+      );
+
+      expect(second.plan.outcome).toBe('APPENDED');
+      expect(second.run.id).toBe(first.run.id);
+      expect(await assignmentRowsOf(first.run.id)).toEqual([
+        { driverId: driver.id, effectiveTo: null },
+      ]);
+      expect(await loadedOrderCodesSeenBy(driver.authUserId)).toEqual([
+        { runId: first.run.id, orders: [a.code, b.code] },
+      ]);
+    });
+
+    it('PL-IT-14 -- MULTI: Run cua A, doi xe da giao cho B -> PLAN_RUN_DRIVER_CONFLICT, KHONG ghi gi', async () => {
+      const service = multiPlanner();
+      const { vehicle, driver: holder } = await aVehicleHeldBy();
+      const next = await aSpareDriver();
+      const a = await anOrder('IT-PLAN Kho A', 'IT-PLAN Cang B');
+      const { run } = await service.commit(
+        a.id,
+        { vehicleId: vehicle.id, idempotencyKey: nextCode('K1') },
+        ACTOR,
+      );
+      await fleet.assignDriverToVehicle(vehicle.id, next.id, new Date());
+
+      const b = await anOrder('IT-PLAN Kho D', 'IT-PLAN Kho E');
+      const idempotencyKey = nextCode('K2');
+      const legsBefore = await prisma.transportRunLeg.count({ where: { runId: run.id } });
+
+      const outcome = await service
+        .commit(b.id, { vehicleId: vehicle.id, idempotencyKey }, ACTOR)
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(outcome, describeStorageError(outcome)).toBeInstanceOf(TransportDomainError);
+      expect((outcome as TransportDomainError).reason).toBe('PLAN_RUN_DRIVER_CONFLICT');
+
+      // Khoanh theo xe / Run / don / khoa / lai xe cua bai nay — job `integration` dung chung DB.
+      expect(await prisma.transportRunLeg.count({ where: { runId: run.id } })).toBe(legsBefore);
+      expect(await prisma.transportRunLeg.count({ where: { orderId: b.id } })).toBe(0);
+      expect(await prisma.transportOrderRunPlan.count({ where: { orderId: b.id } })).toBe(0);
+      expect(await prisma.transportOrderRunPlan.count({ where: { idempotencyKey } })).toBe(0);
+      expect(await prisma.transportOrderRunPlan.count({ where: { runId: run.id } })).toBe(1);
+      expect(await prisma.transportVehicleRun.count({ where: { vehicleId: vehicle.id } })).toBe(1);
+      expect(await assignmentRowsOf(run.id)).toEqual([{ driverId: holder.id, effectiveTo: null }]);
+      expect(await prisma.transportRunAssignment.count({ where: { driverId: next.id } })).toBe(0);
+    });
+
+    it('PL-IT-15 -- MULTI: Run CHUA co ai cam -> nguoi cam xe thanh phan cong DAU TIEN, dung mot hang', async () => {
+      const service = multiPlanner();
+      const { vehicle, driver } = await aVehicleHeldBy();
+      // Vong chay khong ai cam, dung nhu `commit()` de lai truoc ban va (hoac `POST /runs` mo tay).
+      const old = await anOrder('IT-PLAN Kho A', 'IT-PLAN Cang B');
+      const orphan = await movement.createRun(
+        { code: nextCode('RUN-CU'), vehicleId: vehicle.id, businessDate: '2026-09-11', note: null },
+        ACTOR,
+      );
+      await movement.addLeg(
+        orphan.id,
+        {
+          sequence: 1,
+          kind: 'LOADED',
+          orderId: old.id,
+          originLabel: old.originLabel,
+          destinationLabel: old.destinationLabel,
+          businessDate: '2026-09-11',
+        },
+        ACTOR,
+      );
+      const next = await anOrder('IT-PLAN Cang B', 'IT-PLAN Kho E');
+
+      const { run, plan } = await service.commit(
+        next.id,
+        { vehicleId: vehicle.id, idempotencyKey: nextCode('K') },
+        ACTOR,
+      );
+
+      expect(plan.outcome).toBe('APPENDED');
+      expect(run.id).toBe(orphan.id);
+      expect(await assignmentRowsOf(orphan.id)).toEqual([
+        { driverId: driver.id, effectiveTo: null },
+      ]);
+      expect(await loadedOrderCodesSeenBy(driver.authUserId)).toEqual([
+        { runId: orphan.id, orders: [old.code, next.code] },
+      ]);
     });
   },
 );
