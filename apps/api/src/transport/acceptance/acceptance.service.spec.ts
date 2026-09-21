@@ -436,6 +436,56 @@ describe('CommercialAcceptanceService — bai doi khang #275 K8', () => {
   });
 
   /**
+   * `#334` — cot "Người quyết / lúc" la MOT cap nguoi/gio cua CUNG mot quyet dinh.
+   *
+   * Truoc ban nay nguoi doc tu `openedBy` (nguoi quyet LAN DAU) con gio doc tu `updatedAt` (lan
+   * sua GAN NHAT). Khi hai nguoi khac nhau cung quyet mot don, hang cho in ten nguoi thu nhat kem
+   * gio cua nguoi thu hai — mot cap chua tung xay ra. Voi ma tho thi khong ai nhan ra; voi mot cai
+   * TEN doc duoc thi dong do noi doi mot cach thuyet phuc.
+   */
+  describe('#334 — hang cho in nguoi quyet MOI NHAT', () => {
+    it('nguoi va gio den tu quyet dinh moi nhat, khong phai tu nguoi mo ho so', async () => {
+      let now = new Date('2026-09-08T03:15:00.000Z');
+      const clocked = new CommercialAcceptanceService(
+        new InMemoryAcceptanceRepository(),
+        new FakeMovement(),
+        new FakeEvidence(),
+        new FakeCounterparties(),
+        { timeZone: 'Asia/Ho_Chi_Minh' },
+        undefined,
+        () => now,
+      );
+
+      const first = await clocked.decide(
+        command({
+          outcome: 'NEEDS_CORRECTION',
+          reasonCode: 'MISSING_RECEIPT',
+          evidenceRefs: [],
+          authUserId: 'ke-toan-lan-dau',
+        }),
+      );
+      now = new Date('2026-09-08T07:40:00.000Z');
+      await clocked.decide(
+        command({
+          idempotencyKey: 'idem-lan-2',
+          supersedesId: first.acceptance.latestDecisionId,
+          authUserId: 'giam-doc-sua-lai',
+        }),
+      );
+
+      const row = (await clocked.queue()).find((entry) => entry.orderId === ORDER_DONE);
+      expect(row?.latestDecidedBy).toBe('giam-doc-sua-lai');
+      expect(row?.latestDecidedAt).toBe('2026-09-08T07:40:00.000Z');
+    });
+
+    it('don chua ai quyet thi khong co nguoi quyet lan gio quyet', async () => {
+      const row = (await service.queue()).find((entry) => entry.orderId === ORDER_DONE);
+      expect(row?.latestDecidedBy).toBeNull();
+      expect(row?.latestDecidedAt).toBeNull();
+    });
+  });
+
+  /**
    * `#275` K5 — hinh dang ma CONG DOI SOAT doc.
    *
    * Ba nhanh, ba y nghia khac nhau. Nhanh `NO_ORDER` la thu thay the
