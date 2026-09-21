@@ -186,6 +186,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
       await prisma.transportOrder.deleteMany({ where: { code: { contains: CODE_PREFIX } } });
+      // TRUOC khi xoa xe: khoa ngoai cua ban phan cong lai xe tro vao ca xe lan lai xe.
+      await prisma.transportVehicleAssignment.deleteMany({
+        where: { vehicleId: { in: vehicleIds } },
+      });
       await prisma.transportVehicle.deleteMany({ where: { id: { in: vehicleIds } } });
       await prisma.transportDriver.deleteMany({ where: { phone: { startsWith: PHONE_PREFIX } } });
       sharedDriverId = null;
@@ -201,11 +205,26 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     let suffix = 0;
     const next = (label: string): string => `${CODE_PREFIX}-${label}-${++suffix}`;
 
-    const aVehicle = () =>
-      fleet.createVehicle({
+    /**
+     * Mot chiec xe DIEU DUOC: `commit()` doi mot lai xe dang phu trach, con hoat dong va CO tai
+     * khoan truoc khi mo vong chay. `authUserId` rieng tung xe vi cot do la unique — va khac `AUTH`
+     * cua `theDriver()` ben duoi.
+     */
+    const aVehicle = async () => {
+      const vehicle = await fleet.createVehicle({
         registrationPlate: `${PLATE_PREFIX}-${++suffix}`,
         vehicleClass: 'Dau keo',
       });
+      const driver = await fleet.createDriver({
+        fullName: `${CODE_PREFIX} Lai xe ${suffix}`,
+        phone: `${PHONE_PREFIX}${suffix}`,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+        authUserId: `${AUTH}-xe-${suffix}`,
+      });
+      await fleet.assignDriverToVehicle(vehicle.id, driver.id, new Date());
+      return vehicle;
+    };
 
     const anOrder = (origin: string, destination: string) =>
       movement.createOrder(
