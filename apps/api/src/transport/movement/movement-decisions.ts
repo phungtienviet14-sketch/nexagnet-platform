@@ -105,6 +105,22 @@ export const RUN_LEG_TRANSITION_REASONS = [
   'LEG_ALREADY_IN_STATE',
   'LEG_TRANSITION_NOT_PERMITTED',
   'LEG_CANCEL_REQUIRES_DEDICATED_PATH',
+  /**
+   * Hoan tat chang CO HANG khi so ghi hien truong chua noi nguoi nhan da nhan hang — `#332`.
+   *
+   * Runtime 19/09/2026: chang `LOADED` thanh `COMPLETED` voi 0 moc, qua duong API dieu hanh. Ma nay
+   * la cho hai truc su that gap nhau: trang thai chang khong duoc noi "xong" khi hien truong noi
+   * "chua giao", tru khi nguoi goi GHI DE tuong minh.
+   */
+  'LEG_FIELD_DELIVERY_NOT_RECORDED',
+  /**
+   * Hoan tat chang CO HANG bang GHI DE tuong minh, co ly do — `#332`.
+   *
+   * Cho phep, nhung la mot ma RIENG chu khong phai `LEG_TRANSITION_APPLIED`: so quyet dinh phai dem
+   * rieng duoc bao nhieu chang da dong trai voi hien truong, va dau vet kiem toan cua no la mot
+   * hanh dong rieng (`transport.run.leg.complete.override`) mang ly do + giai doan hien truong.
+   */
+  'LEG_COMPLETED_BY_OVERRIDE',
 ] as const;
 export type RunLegTransitionReason = (typeof RUN_LEG_TRANSITION_REASONS)[number];
 
@@ -222,6 +238,10 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     LEG_ALREADY_IN_STATE: 'Chang da o dung trang thai nay',
     LEG_TRANSITION_NOT_PERMITTED: 'May trang thai khong cho phep buoc chuyen nay',
     LEG_CANCEL_REQUIRES_DEDICATED_PATH: 'Huy chang phai di duong huy rieng',
+    LEG_FIELD_DELIVERY_NOT_RECORDED:
+      'Hien truong chua ghi nguoi nhan da nhan hang — chua hoan tat duoc chang co hang',
+    LEG_COMPLETED_BY_OVERRIDE:
+      'Hoan tat chang co hang bang ghi de tuong minh, trai voi hien truong',
     LEG_CANCEL_RECORDED: 'Da huy chang chua chay',
     LEG_CANCEL_ALREADY_CANCELLED: 'Chang da huy tu truoc',
     LEG_CANCEL_ALREADY_COMPLETED: 'Chang da chay xong, khong huy nguoc',

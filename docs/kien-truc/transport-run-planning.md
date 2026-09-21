@@ -378,6 +378,22 @@ Mọi đường **ghi** đều bắt đầu bằng một **đơn**, không bằn
 | `POST /transport/runs/:runId/legs/:legId/transition`      | `transport.run.manage` | có                                                    |
 | `POST /transport/runs/:runId/legs/:legId/cancel`          | `transport.run.manage` | có                                                    |
 
+> **Chặng CÓ HÀNG và sự thật hiện trường — `#332` (21/09/2026).** `TransportRunLeg.status` và mốc
+> của lái xe là hai trục độc lập: mốc **không** đẩy trạng thái chặng. Hai quy tắc giữ cho hai trục
+> không nói ngược nhau:
+>
+> - `…/legs/:legId/transition` với `to: 'COMPLETED'` trên chặng `LOADED` bị từ chối bằng
+>   `LEG_FIELD_DELIVERY_NOT_RECORDED` khi hiện trường của chặng đó chưa `DELIVERED`
+>   (`DELIVERY_ACCEPTED`), trừ khi thân yêu cầu mang `overrideReason` (ghi đè tường minh). Khi đó
+>   lần hoàn tất ghi hành động kiểm toán riêng `transport.run.leg.complete.override`, gồm lý do và
+>   giai đoạn hiện trường lúc ghi đè. Chặng `EMPTY`, bước `IN_TRANSIT`, và khách không bật
+>   `transport-checkpoint` (nguồn `NoLegFieldTruthSource`) giữ hành vi cũ.
+> - Mốc mang nghĩa hàng hoá (`PICKUP_ARRIVAL` … `DELIVERY_ACCEPTED`) không neo được vào chặng `EMPTY`
+>   (`CHECKPOINT_CARGO_ON_EMPTY_LEG`), qua cả đường lái xe lẫn đường điều hành. Màn Hiện trường cũng
+>   không mời những mốc đó trên chặng rỗng.
+>
+> Ngữ nghĩa đóng vòng chạy (`LEG_STILL_OPEN`, `PLAN_STILL_OPEN`, `CARGO_STILL_CARRIED`) không đổi.
+
 `idempotencyKey` là **bắt buộc** ở đường chốt. Không có khoá thì không có gì để nhận ra lần thứ hai
 là lần thứ hai, và #276 L9 bài 1 không thể đạt được.
 

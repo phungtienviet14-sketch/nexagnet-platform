@@ -123,8 +123,10 @@ describe('CheckpointService', () => {
     core.drivers.set('u.cuong', { id: 'drv_b', fullName: 'Tran Van Cuong' });
     core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'ACTIVE' });
     core.runs.set('run_2', { id: 'run_2', code: 'VC-002', status: 'ACTIVE' });
-    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1' });
-    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2' });
+    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1', kind: 'LOADED' });
+    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2', kind: 'LOADED' });
+    // Chang 1 RONG cua chinh `run_1` — hinh dang `EMPTY #1 -> LOADED #2` cua UAT `#332`.
+    core.legs.set('leg_e', { id: 'leg_e', runId: 'run_1', kind: 'EMPTY' });
     core.assignments.set('run_1', ['drv_a']);
     core.assignments.set('run_2', ['drv_b']);
     /*
@@ -136,7 +138,7 @@ describe('CheckpointService', () => {
      * vong chay kia.
      */
     core.runs.set('run_3', { id: 'run_3', code: 'VC-003', status: 'ACTIVE' });
-    core.legs.set('leg_3', { id: 'leg_3', runId: 'run_3' });
+    core.legs.set('leg_3', { id: 'leg_3', runId: 'run_3', kind: 'LOADED' });
     core.assignments.set('run_3', ['drv_a']);
 
     service = new CheckpointService(
@@ -204,6 +206,48 @@ describe('CheckpointService', () => {
       await arriveAtPickup();
       expect(await service.listOwn('u.binh')).toHaveLength(1);
       expect(await service.listOwn('u.cuong')).toHaveLength(0);
+    });
+  });
+
+  /**
+   * HANG HOA KHONG DUOC NEO VAO CHANG RONG — `#332`.
+   *
+   * Hai duong ghi (lai xe, dieu hanh) deu di qua `append()`, va truoc lane nay `append()` chi hoi
+   * "chang co thuoc vong chay nay khong". Runtime 19/09/2026 ghi `PICKUP_ARRIVAL`, `GATE_ENTRY`,
+   * `LOADING` len chang 1 RONG qua `/transport/me/checkpoints` — va may chu nhan het.
+   */
+  describe('chang chay rong (#332)', () => {
+    it('lai xe khong neo duoc moc hang hoa vao chang RONG, va khong mot dong nao duoc ghi', async () => {
+      const reason = await reasonOf(
+        service.recordAsDriver({
+          type: 'PICKUP_ARRIVAL',
+          runId: 'run_1',
+          legId: 'leg_e',
+          authUserId: 'u.binh',
+          clientEventId: 'evt_empty',
+        }),
+      );
+      expect(reason).toBe('CHECKPOINT_CARGO_ON_EMPTY_LEG');
+      expect(await repository.listForLeg('leg_e')).toEqual([]);
+    });
+
+    it('duong dieu hanh ghi ho cung khong neo duoc', async () => {
+      const reason = await reasonOf(
+        service.recordAsOperator({
+          type: 'PICKUP_ARRIVAL',
+          runId: 'run_1',
+          legId: 'leg_e',
+          authUserId: 'u.dieu-hanh',
+          clientEventId: 'evt_empty_op',
+        }),
+      );
+      expect(reason).toBe('CHECKPOINT_CARGO_ON_EMPTY_LEG');
+      expect(await repository.listForLeg('leg_e')).toEqual([]);
+    });
+
+    it('chang CO HANG cua cung vong chay van ghi binh thuong', async () => {
+      const checkpoint = await arriveAtPickup('evt_loaded');
+      expect(checkpoint.legId).toBe('leg_1');
     });
   });
 

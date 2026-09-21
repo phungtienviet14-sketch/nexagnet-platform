@@ -155,6 +155,7 @@ export class DriverFieldReadService {
       missingDocumentTypes: loaded ? missingDocumentTypes(this.documentPolicy, documentTypes) : [],
       receiptHandover: handovers.at(-1)?.state ?? null,
       nextActions: fieldActionsFor({
+        legKind: input.leg.kind,
         recordedTypes,
         documentTypes,
         requiredDocumentTypes: loaded ? this.documentPolicy.requiredOnLoadedLeg : [],

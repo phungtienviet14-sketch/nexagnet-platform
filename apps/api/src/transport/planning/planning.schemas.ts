@@ -40,7 +40,17 @@ export const planCancelSchema = z.object({ reason: trimmed.min(1).max(500) }).st
  * `CANCELLED` CO Y vang mat: huy mot chang di duong rieng vi no doi mot ly do bang chu, va chi
  * chang CHUA CHAY moi huy duoc. Cung khuon voi `orderTransitionSchema`/`runTransitionSchema`.
  */
-export const legTransitionSchema = z.object({ to: z.enum(['IN_TRANSIT', 'COMPLETED']) }).strict();
+/**
+ * `overrideReason` — GHI DE tuong minh khi hoan tat chang CO HANG ma hien truong chua ghi giao xong
+ * (`#332`). Bat buoc co chu that sau khi cat khoang trang: mot lan ghi de khong ly do la mot lan
+ * ghi de khong ai giai trinh duoc.
+ */
+export const legTransitionSchema = z
+  .object({
+    to: z.enum(['IN_TRANSIT', 'COMPLETED']),
+    overrideReason: trimmed.min(1).max(500).optional(),
+  })
+  .strict();
 
 export const legCancelSchema = z.object({ reason: trimmed.min(1).max(500) }).strict();
 

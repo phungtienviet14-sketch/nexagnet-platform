@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CHECKPOINT_POLICY,
+  carriesCargoMeaning,
   evaluateCheckpoint,
   isRepeatable,
   isRunScoped,
@@ -21,6 +22,7 @@ const base = (overrides: Partial<CheckpointEvaluation> = {}): CheckpointEvaluati
   type: 'PICKUP_ARRIVAL',
   runTerminal: false,
   hasLeg: true,
+  legKind: 'LOADED',
   recordedTypes: [],
   hasObservation: false,
   policy: DEFAULT_CHECKPOINT_POLICY,
@@ -176,6 +178,54 @@ describe('vong chay da dong', () => {
         base({ type, runTerminal: true, hasLeg: !isRunScoped(type) }),
       );
       expect(decision).toMatchObject({ allowed: false, reason: 'CHECKPOINT_RUN_TERMINAL' });
+    }
+  });
+});
+
+/**
+ * CHANG CHAY RONG KHONG NHAN MOC HANG HOA — `#332`.
+ *
+ * Runtime transport-preview 19/09/2026: man lai xe moi chuoi lay hang tren chang 1 RONG, va may chu
+ * nhan het (`PICKUP_ARRIVAL`, `GATE_ENTRY`, `LOADING`) vi phep kiem chi hoi "chang co thuoc vong
+ * chay nay khong". Hang tren thung sinh ra o mot chang khong cho hang, con chang CO HANG thi khong
+ * co mot moc nao — hai truc su that lech nhau ngay tu lan bam dau tien.
+ */
+describe('chang chay rong khong nhan moc hang hoa (#332)', () => {
+  const LEG_TYPES = RUN_CHECKPOINT_TYPES.filter((type) => !isRunScoped(type));
+
+  it.each(LEG_TYPES)('%s tren chang RONG bi chan bang mot ma rieng', (type) => {
+    const predecessor = requiredPredecessor(type);
+    const decision = evaluateCheckpoint(
+      base({
+        type,
+        legKind: 'EMPTY',
+        // Du moi dieu kien khac — de cong dang do la cong DUY NHAT con lai.
+        recordedTypes: predecessor === null ? [] : [predecessor],
+        hasObservation: true,
+      }),
+    );
+    expect(decision).toMatchObject({ allowed: false, reason: 'CHECKPOINT_CARGO_ON_EMPTY_LEG' });
+  });
+
+  it('pham vi truoc thu tu: chang rong bao loi PHAM VI, khong bao thieu moc dung truoc', () => {
+    const decision = evaluateCheckpoint(
+      base({ type: 'DELIVERY_ACCEPTED', legKind: 'EMPTY', recordedTypes: [] }),
+    );
+    expect(decision).toMatchObject({ allowed: false, reason: 'CHECKPOINT_CARGO_ON_EMPTY_LEG' });
+  });
+
+  it('chang CO HANG van nhan dung chuoi cu', () => {
+    const decision = evaluateCheckpoint(base({ type: 'PICKUP_ARRIVAL', legKind: 'LOADED' }));
+    expect(decision).toMatchObject({ allowed: true, reason: 'CHECKPOINT_RECORDED' });
+  });
+
+  /**
+   * Hom nay moi moc muc CHANG deu thuoc chuoi hang hoa. Bai nay ghim phan loai do: mot loai moc
+   * moi muc chang (vd "ve toi bai") phai duoc phan loai CO Y, khong tu dong roi vao nhom nao.
+   */
+  it('moi moc muc chang deu mang nghia hang hoa, moc muc vong chay thi khong', () => {
+    for (const type of RUN_CHECKPOINT_TYPES) {
+      expect(carriesCargoMeaning(type)).toBe(!isRunScoped(type));
     }
   });
 });

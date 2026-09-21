@@ -193,7 +193,12 @@ import {
   NoRunClosureBlockerSource,
   RunClosureBlockerSource,
 } from './transport/planning/run-closure-blocker.source.js';
+import { CheckpointLegFieldTruthSource } from './transport/checkpoint/checkpoint-leg-field-truth.source.js';
 import { CheckpointRunClosureBlockerSource } from './transport/checkpoint/checkpoint-run-closure-blocker.source.js';
+import {
+  LegFieldTruthSource,
+  NoLegFieldTruthSource,
+} from './transport/movement/leg-field-truth.port.js';
 import { TransportCheckpointRunClosureBlockerSource } from './transport/checkpoint/transport-checkpoint-blocker.source.js';
 import { WaitingRunClosureBlockerSource } from './transport/waiting/waiting-run-closure-blocker.source.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
@@ -692,6 +697,12 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: NoRunClosureBlockerSource,
   }),
   /**
+   * SO GHI HIEN TRUONG CUA CHANG (`#332`) — cung khuon ngay tren: mac dinh RONG o `transport-core`
+   * (khong co moc thi khong co gi de doi chieu), GHI DE boi `transport-checkpoint` ben duoi. Thu tu
+   * la hop dong: ban ghi de phai nam SAU dong nay.
+   */
+  owned('transport-core', { provide: LegFieldTruthSource, useClass: NoLegFieldTruthSource }),
+  /**
    * MOC HIEN TRUONG (`#243` F1) — cong thu NAM, va la cong doi ban chat cua bang.
    *
    * Bon cong tren chi them MUC vao hang viec. Cong nay quyet dinh ba COT cua bang dieu hanh
@@ -724,6 +735,14 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-checkpoint', {
     provide: RunClosureBlockerSource,
     useClass: TransportCheckpointRunClosureBlockerSource,
+  }),
+  /**
+   * CHANG CO HANG KHONG "XONG" TRAI HIEN TRUONG (`#332`) — GHI DE ban rong cua `transport-core`.
+   * `RunsController.transitionLeg` hoi no truoc khi hoan tat mot chang `LOADED`.
+   */
+  owned('transport-checkpoint', {
+    provide: LegFieldTruthSource,
+    useClass: CheckpointLegFieldTruthSource,
   }),
   /**
    * NGUON HIEN TRUONG (`#279` O11) — cong thu SAU cua thap dieu hanh.

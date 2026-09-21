@@ -6,7 +6,8 @@ import type {
   RunLegTransitionReason,
   RunTransitionReason,
 } from './movement-decisions.js';
-import type { OrderStatus, RunLegStatus, VehicleRunStatus } from './movement.types.js';
+import type { LegFieldDelivery } from './leg-field-truth.port.js';
+import type { OrderStatus, RunLegKind, RunLegStatus, VehicleRunStatus } from './movement.types.js';
 
 /**
  * HAI MAY TRANG THAI, HAI TRUC.
@@ -140,7 +141,9 @@ export function evaluateRunTransition(
  * — *"da du dieu kien dong chua"* — thuoc `evaluateRunClosure()`, va do la thu phai tra loi TRUOC.
  * `MovementService.closeRunAsSystem()` vi vay la mot phep THI HANH, khong phai mot phep PHAN XU.
  */
-export function evaluateSystemRunClose(from: VehicleRunStatus): TransitionDecision<RunTransitionReason> {
+export function evaluateSystemRunClose(
+  from: VehicleRunStatus,
+): TransitionDecision<RunTransitionReason> {
   if (isTerminalRunStatus(from)) return deny('RUN_ALREADY_TERMINAL');
   if (!RUN_EDGES[from].includes('COMPLETED')) return deny('RUN_TRANSITION_NOT_PERMITTED');
   return allow('RUN_TRANSITION_APPLIED');
@@ -215,4 +218,32 @@ export function evaluateLegCancel(from: RunLegStatus): TransitionDecision<RunLeg
   if (from === 'COMPLETED') return deny('LEG_CANCEL_ALREADY_COMPLETED');
   if (from === 'IN_TRANSIT') return deny('LEG_CANCEL_ALREADY_STARTED');
   return allow('LEG_CANCEL_RECORDED');
+}
+
+export interface LegCompletionEvidence {
+  readonly kind: RunLegKind;
+  readonly to: RunLegStatus;
+  /** So ghi hien truong cua chang — `null` khi khach khong co nguon hien truong nao. */
+  readonly field: LegFieldDelivery | null;
+  /** Ly do GHI DE tuong minh cua nguoi goi — `null` khi khong ghi de. */
+  readonly overrideReason: string | null;
+}
+
+/**
+ * HOAN TAT CHANG CO HANG PHAI KHOP HIEN TRUONG — `#332`. Chay SAU `evaluateLegTransition`.
+ *
+ * Bat bien: khong co `LOADED` + `COMPLETED` trong khi hien truong chua ghi nguoi nhan da nhan hang,
+ * tru mot lan GHI DE tuong minh co ly do. Chang `EMPTY` va buoc `IN_TRANSIT` khong doi bang chung:
+ * khong co hang thi khong co gi de giao, va lan banh khong khang dinh da giao.
+ *
+ * Ly do ghi de chi co hieu luc khi THAT SU ghi de. Hien truong da noi "da giao" thi lan hoan tat do
+ * la binh thuong — dan nhan ghi de len no se lam so quyet dinh dem sai so lan dong trai hien truong.
+ */
+export function evaluateLegCompletionEvidence(
+  input: LegCompletionEvidence,
+): TransitionDecision<RunLegTransitionReason> {
+  if (input.to !== 'COMPLETED' || input.kind !== 'LOADED') return allow('LEG_TRANSITION_APPLIED');
+  if (input.field === null || input.field.delivered) return allow('LEG_TRANSITION_APPLIED');
+  if (input.overrideReason !== null) return allow('LEG_COMPLETED_BY_OVERRIDE');
+  return deny('LEG_FIELD_DELIVERY_NOT_RECORDED');
 }
