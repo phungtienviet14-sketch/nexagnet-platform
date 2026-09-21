@@ -167,7 +167,7 @@ function checkEnv() {
 }
 
 function git(args) {
-  const r = spawnSync('git', args, { encoding: 'utf8', windowsHide: true });
+  const r = spawnSync('git', args, { encoding: 'utf8', env: checkEnv(), windowsHide: true });
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
