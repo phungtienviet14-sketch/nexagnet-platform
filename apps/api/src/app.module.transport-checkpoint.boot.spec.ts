@@ -139,6 +139,14 @@ describe('transport-checkpoint process boot contract', () => {
       const waitingAfter = columnOf(waiting, 'WAITING');
       const arrivedAfter = columnOf(waiting, 'ARRIVED');
 
+      // #336: cot luu cua xe SAU khi vong chay da chay qua bon moc — khong duong nao da ghi no.
+      const storedVehicleStatus = (await fleet.getVehicle(vehicle.id)).status;
+      const fleetOf = (view) => ({
+        onTrip: view.fleet.onTrip,
+        idle: view.fleet.idle,
+        runningRuns: view.fleet.runningRuns,
+      });
+
       const proof = {
         controlTower: has(ControlTowerController),
         checkpointsController: has(CheckpointsController),
@@ -167,6 +175,9 @@ describe('transport-checkpoint process boot contract', () => {
         pendingCheckpointReasons: after.pendingWork.filter(
           (entry) => entry.reason === 'AWAITING_CHECKPOINT_SOURCE',
         ).length,
+        storedVehicleStatus,
+        fleetBefore: fleetOf(before),
+        fleetAtLoading: fleetOf(after),
       };
       await context.close();
       process.stdout.write('<<TRANSPORT_CHECKPOINT_BOOT_PROOF>>' + JSON.stringify(proof));
@@ -220,6 +231,18 @@ describe('transport-checkpoint process boot contract', () => {
         waitingRunsAfterSession: ['RUN-BOOT-1'],
         arrivedRunsAfterSession: [],
         pendingCheckpointReasons: 0,
+        /*
+         * `#336` — NGUYEN NHAN, do tren mot tien trinh that: vong chay da `ACTIVE` va da qua bon moc,
+         * ma cot luu cua xe van la `IDLE`. Luong Order-first khong co duong nao ghi cot do.
+         */
+        storedVehicleStatus: 'IDLE',
+        /*
+         * Va HAU QUA da duoc chan: the so doc tu vong chay, nen no noi 1 — khong phai 0 — va xe do
+         * khong con bi dem them o "Đang rảnh". Van la 1 khi vong chay da roi `IN_TRANSIT` sang
+         * `LOADING`: "Đang chạy" la ca nam cot, khong phai mot cot.
+         */
+        fleetBefore: { onTrip: 1, idle: 0, runningRuns: 1 },
+        fleetAtLoading: { onTrip: 1, idle: 0, runningRuns: 1 },
       });
     },
     BOOT_TEST_TIMEOUT_MS,

@@ -10,10 +10,12 @@ import {
 import {
   OPERATIONS_BOARD_COLUMNS,
   PHASE_DERIVED_COLUMNS,
+  RUNNING_BOARD_COLUMNS,
   WAITING_COLUMN,
+  isRunningBoardColumn,
   type ActionQueueItem,
 } from './control-tower.types.js';
-import type { RunLegPhase } from '../checkpoint/run-timeline.js';
+import { RUN_LEG_PHASES, type RunLegPhase } from '../checkpoint/run-timeline.js';
 
 const TODAY = '2026-09-08';
 
@@ -409,27 +411,172 @@ describe('bang dieu hanh — mot PHEP CHIEU cua trang thai da duoc transport-cor
   });
 });
 
-describe('doi xe — dem tren du lieu that, khong suy tu vong chay', () => {
-  it('dem theo trang thai xe va chi dem lai xe ACTIVE', () => {
+/**
+ * DOI XE — `#336`: "Đang chạy" DAN XUAT tu `VehicleRun`, khong doc cot `TransportVehicle.status`.
+ *
+ * Ten cu cua khoi nay la "dem tren du lieu that, khong suy tu vong chay", va chinh quyet dinh do la
+ * nguyen nhan cua BUG-07: cot `status` la cot CHINH TAY, luong Order-first khong co duong ghi nao dat
+ * `ON_TRIP`, nen the so luon noi 0 trong khi bang co vong chay dang chay. §7.2 cua hop dong mien da
+ * noi tu dau: `ON_TRIP` la DAN XUAT, khong phai co chinh tay.
+ */
+describe('doi xe — "Đang chạy" dan xuat tu vong chay, doi xe khep kin', () => {
+  it('du lieu UAT: xe luu IDLE ma co vong chay ACTIVE thi la dang chay, khong phai dang ranh', () => {
+    const presence = countFleetPresence(
+      coreInput({
+        vehicles: [vehicle({ id: 'v1', status: 'IDLE' }), vehicle({ id: 'v2', status: 'IDLE' })],
+        runs: [
+          run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+          run({ id: 'r2', code: 'VR-002', vehicleId: 'v2', status: 'ACTIVE' }),
+        ],
+      }),
+    );
+
+    expect(presence.onTrip).toBe(2);
+    expect(presence.idle).toBe(0);
+    expect(presence.runningRuns).toBe(2);
+  });
+
+  it('xe luu ON_TRIP ma khong co vong chay ACTIVE thi la dang ranh — cot chinh tay khong duoc tin', () => {
+    const presence = countFleetPresence(
+      coreInput({ vehicles: [vehicle({ id: 'v1', status: 'ON_TRIP' })] }),
+    );
+
+    expect(presence.onTrip).toBe(0);
+    expect(presence.idle).toBe(1);
+  });
+
+  it('chi `ACTIVE` la dang chay — PLANNED, COMPLETED, CANCELLED deu khong', () => {
+    const presence = countFleetPresence(
+      coreInput({
+        vehicles: [vehicle({ id: 'v1' }), vehicle({ id: 'v2' }), vehicle({ id: 'v3' })],
+        runs: [
+          run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'PLANNED' }),
+          run({ id: 'r2', code: 'VR-002', vehicleId: 'v2', status: 'COMPLETED' }),
+          run({ id: 'r3', code: 'VR-003', vehicleId: 'v3', status: 'CANCELLED' }),
+        ],
+      }),
+    );
+
+    expect(presence.onTrip).toBe(0);
+    expect(presence.runningRuns).toBe(0);
+    expect(presence.idle).toBe(3);
+  });
+
+  /*
+   * XE VUA LUU "DANG SUA" VUA CO VONG CHAY ACTIVE — dem MOT lan, o "Đang chạy".
+   *
+   * Dem ca hai o se lam doi xe cong ra nhieu hon so xe co that (dung loi `#336` yeu cau tranh). Dat
+   * vao "Đang sửa chữa" se lam the so noi it hon so the dang chay tren bang — tuc dung BUG-07, chi
+   * doi chieu. `§18.2` dat bao duong truoc chuyen cho mot cau hoi KHAC: "xe nay co dieu duoc khong"
+   * (`effectiveFleetStatus` cua `transport-asset-compliance`). The so o day tra loi "xe nay dang lam
+   * gi", va cau tra loi do phai trung voi bang.
+   */
+  it('xe luu UNDER_MAINTENANCE: khong chay thi dang sua; dang chay thi dem mot lan, o dang chay', () => {
     const presence = countFleetPresence(
       coreInput({
         vehicles: [
-          vehicle({ id: '1', status: 'IDLE' }),
-          vehicle({ id: '2', status: 'ON_TRIP' }),
-          vehicle({ id: '3', status: 'UNDER_MAINTENANCE' }),
-          vehicle({ id: '4', status: 'IDLE' }),
+          vehicle({ id: 'v1', status: 'UNDER_MAINTENANCE' }),
+          vehicle({ id: 'v2', status: 'UNDER_MAINTENANCE' }),
+        ],
+        runs: [run({ id: 'r2', code: 'VR-002', vehicleId: 'v2', status: 'ACTIVE' })],
+      }),
+    );
+
+    expect(presence).toMatchObject({ total: 2, underMaintenance: 1, onTrip: 1, idle: 0 });
+  });
+
+  /*
+   * HAI DON VI — review PR `#344`. `onTrip` dem XE (the so "Xe đang chạy"), `runningRuns` dem VONG
+   * CHAY (loi tom tat "Vòng chạy đang chạy" tren bang). Khong rang buoc nao cam mot xe mo hai vong
+   * chay `ACTIVE` cung luc, nen hai so do CO the khac nhau. Moi ca khoa ca hai so VA phan hoach doi
+   * xe, de mot xe hai vong chay khong bi dem hai lan o bat ky o nao.
+   */
+  it.each([
+    {
+      name: '1 xe, 2 vong chay ACTIVE',
+      vehicles: [vehicle({ id: 'v1' })],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r2', code: 'VR-002', vehicleId: 'v1', status: 'ACTIVE' }),
+      ],
+      expected: { total: 1, onTrip: 1, idle: 0, underMaintenance: 0, runningRuns: 2 },
+    },
+    {
+      name: '2 xe, 2 vong chay ACTIVE — moi xe mot',
+      vehicles: [vehicle({ id: 'v1' }), vehicle({ id: 'v2' })],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r2', code: 'VR-002', vehicleId: 'v2', status: 'ACTIVE' }),
+      ],
+      expected: { total: 2, onTrip: 2, idle: 0, underMaintenance: 0, runningRuns: 2 },
+    },
+    {
+      name: '0 vong chay ACTIVE — chi co PLANNED/COMPLETED va mot cot ON_TRIP cu',
+      vehicles: [
+        vehicle({ id: 'v1', status: 'IDLE' }),
+        vehicle({ id: 'v2', status: 'UNDER_MAINTENANCE' }),
+        vehicle({ id: 'v3', status: 'ON_TRIP' }),
+      ],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'PLANNED' }),
+        run({ id: 'r3', code: 'VR-003', vehicleId: 'v3', status: 'COMPLETED' }),
+      ],
+      expected: { total: 3, onTrip: 0, idle: 2, underMaintenance: 1, runningRuns: 0 },
+    },
+    {
+      name: 'ranh + sua chua + xe hai vong chay + xe sua chua dang chay',
+      vehicles: [
+        vehicle({ id: 'v1', status: 'IDLE' }),
+        vehicle({ id: 'v2', status: 'IDLE' }),
+        vehicle({ id: 'v3', status: 'UNDER_MAINTENANCE' }),
+        vehicle({ id: 'v4', status: 'UNDER_MAINTENANCE' }),
+      ],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r2', code: 'VR-002', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r4', code: 'VR-004', vehicleId: 'v4', status: 'ACTIVE' }),
+        run({ id: 'r5', code: 'VR-005', vehicleId: 'v2', status: 'PLANNED' }),
+      ],
+      expected: { total: 4, onTrip: 2, idle: 1, underMaintenance: 1, runningRuns: 3 },
+    },
+  ])('hai don vi — $name', ({ vehicles, runs, expected }) => {
+    const presence = countFleetPresence(coreInput({ vehicles, runs }));
+
+    expect(presence).toEqual({ ...expected, activeDrivers: 0 });
+    /* Khong xe nao bi dem hai lan: ba o phan hoach dung `total`, du xe co bao nhieu vong chay. */
+    expect(presence.onTrip + presence.idle + presence.underMaintenance).toBe(presence.total);
+    /* Moi xe dang chay co it nhat mot vong chay dang chay, nen so xe khong vuot so vong chay. */
+    expect(presence.onTrip).toBeLessThanOrEqual(presence.runningRuns);
+  });
+
+  it('doi xe KHEP KIN: moi xe o dung mot o, va chi dem lai xe ACTIVE', () => {
+    const presence = countFleetPresence(
+      coreInput({
+        vehicles: [
+          vehicle({ id: 'v1', status: 'IDLE' }),
+          vehicle({ id: 'v2', status: 'ON_TRIP' }),
+          vehicle({ id: 'v3', status: 'UNDER_MAINTENANCE' }),
+          vehicle({ id: 'v4', status: 'IDLE' }),
+          vehicle({ id: 'v5', status: 'UNDER_MAINTENANCE' }),
+        ],
+        runs: [
+          run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+          run({ id: 'r5', code: 'VR-005', vehicleId: 'v5', status: 'ACTIVE' }),
+          run({ id: 'r4', code: 'VR-004', vehicleId: 'v4', status: 'PLANNED' }),
         ],
         drivers: [driver({ id: 'd1', status: 'ACTIVE' }), driver({ id: 'd2', status: 'INACTIVE' })],
       }),
     );
 
     expect(presence).toEqual({
-      total: 4,
+      total: 5,
+      onTrip: 2,
       idle: 2,
-      onTrip: 1,
       underMaintenance: 1,
       activeDrivers: 1,
+      runningRuns: 2,
     });
+    expect(presence.onTrip + presence.idle + presence.underMaintenance).toBe(presence.total);
   });
 
   it('doi xe rong cho ra so 0 that, khong phai mot o trong', () => {
@@ -439,7 +586,69 @@ describe('doi xe — dem tren du lieu that, khong suy tu vong chay', () => {
       onTrip: 0,
       underMaintenance: 0,
       activeDrivers: 0,
+      runningRuns: 0,
     });
+  });
+});
+
+/**
+ * `#336` — THE SO VA BANG DUNG CHUNG MOT DINH NGHIA, O MOI HINH DANG NGUON.
+ *
+ * Bat bien: tong the o `RUNNING_BOARD_COLUMNS` BANG `runningRuns`, va tap vong chay o nam cot do
+ * BANG tap vong chay `ACTIVE`. Chay qua moi giai doan chang, ca khi nguon moc/phien cho TAT — vi
+ * nguon tuy chon vang mat chi duoc doi CHO cua the, khong duoc doi viec no co dang chay hay khong.
+ */
+describe('the so va bang — mot dinh nghia "Đang chạy" (#336)', () => {
+  const ACTIVE_A = 'run-active-a';
+  const ACTIVE_B = 'run-active-b';
+  const legOf = (runId: string): RunLeg => leg({ id: `leg-${runId}`, runId });
+
+  const runs: readonly VehicleRun[] = [
+    run({ id: 'run-planned', code: 'VR-001', vehicleId: 'v1', status: 'PLANNED' }),
+    run({ id: ACTIVE_A, code: 'VR-002', vehicleId: 'v2', status: 'ACTIVE' }),
+    run({ id: ACTIVE_B, code: 'VR-003', vehicleId: 'v3', status: 'ACTIVE' }),
+    run({ id: 'run-done', code: 'VR-004', vehicleId: 'v4', status: 'COMPLETED' }),
+    run({ id: 'run-cancelled', code: 'VR-005', vehicleId: 'v5', status: 'CANCELLED' }),
+  ];
+
+  const phaseCases: readonly (RunLegPhase | 'NO_SOURCE')[] = ['NO_SOURCE', ...RUN_LEG_PHASES];
+  const waitingCases = ['NO_SOURCE', 'NONE_WAITING', 'B_WAITING'] as const;
+
+  const cases = phaseCases.flatMap((phase) =>
+    waitingCases.map((waiting) => [phase, waiting] as const),
+  );
+
+  it.each(cases)('giai doan chang A = %s, phien cho = %s', (phase, waiting) => {
+    const input = coreInput({
+      runs,
+      vehicles: ['v1', 'v2', 'v3', 'v4', 'v5'].map((id) => vehicle({ id })),
+      legsByRun: new Map(runs.map((entry) => [entry.id, [legOf(entry.id)]] as const)),
+      legPhasesByRun:
+        phase === 'NO_SOURCE' ? null : new Map([[ACTIVE_A, { [`leg-${ACTIVE_A}`]: phase }]]),
+      waitingLegIds:
+        waiting === 'NO_SOURCE'
+          ? null
+          : new Set(waiting === 'B_WAITING' ? [`leg-${ACTIVE_B}`] : []),
+    });
+
+    const board = buildOperationsBoard(input);
+    const presence = countFleetPresence(input);
+    const running = board.filter((column) => isRunningBoardColumn(column.column));
+
+    expect(running.reduce((sum, column) => sum + column.total, 0)).toBe(presence.runningRuns);
+    expect(running.flatMap((column) => column.cards.map((card) => card.runId)).sort()).toEqual([
+      ACTIVE_A,
+      ACTIVE_B,
+    ]);
+    expect(presence.onTrip).toBe(2);
+  });
+
+  it('danh sach nam cot la dung khoang giua cua bang, theo thu tu quy trinh', () => {
+    expect(OPERATIONS_BOARD_COLUMNS.filter(isRunningBoardColumn)).toEqual([
+      ...RUNNING_BOARD_COLUMNS,
+    ]);
+    expect(RUNNING_BOARD_COLUMNS).not.toContain('PLANNED');
+    expect(RUNNING_BOARD_COLUMNS).not.toContain('DELIVERED');
   });
 });
 

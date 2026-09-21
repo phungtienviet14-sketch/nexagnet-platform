@@ -164,8 +164,8 @@ describe('WaitingSessionService — WT-020', () => {
     core.drivers.set('u.cuong', { id: 'drv_b', fullName: 'Tran Van Cuong' });
     core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'ACTIVE' });
     core.runs.set('run_2', { id: 'run_2', code: 'VC-002', status: 'ACTIVE' });
-    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1' });
-    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2' });
+    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1', kind: 'LOADED' });
+    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2', kind: 'LOADED' });
     core.assignments.set('run_1', ['drv_a']);
     core.assignments.set('run_2', ['drv_b']);
 
@@ -240,6 +240,29 @@ describe('WaitingSessionService — WT-020', () => {
     expect(
       (await sessions.listForLeg('leg_1')).filter((row) => row.status === 'OPEN'),
     ).toHaveLength(1);
+  });
+
+  /**
+   * UAT BUG-03/05 (`#333`) — `Bat dau cho` la mot nut tren CUNG the hien truong voi nut chup bien
+   * nhan. Man hinh cu bam no sau khi luot quet dong vong chay thi may chu van tu choi, va cau tu
+   * choi di nguyen van len man hinh — nen phai la tieng Viet co dau.
+   */
+  it('may khach cu bam `Bat dau cho` sau khi vong chay dong: xung dot, cau co dau (#333)', async () => {
+    const arrivalId = await arriveAtDelivery();
+    core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+
+    let caught: unknown = null;
+    try {
+      await startWaiting({ arrivalCheckpointId: arrivalId });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TransportDomainError);
+    const error = caught as TransportDomainError;
+    expect(error.kind).toBe('CONFLICT');
+    expect(error.reason).toBe('WAITING_RUN_TERMINAL');
+    expect(error.message).toBe('Vòng chạy đã kết thúc — không mở phiên chờ được nữa.');
+    expect(await sessions.listForLeg('leg_1')).toEqual([]);
   });
 
   it('khong mo duoc phien khi chua bam `Da den noi`', async () => {

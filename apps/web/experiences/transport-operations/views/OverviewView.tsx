@@ -1,12 +1,14 @@
 'use client';
 
 import { MetricCard, PageHeader } from '../components/primitives';
-import { ErrorState, LoadingState } from '../components/SectionState';
+import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
+  useControlTower,
   useDrivers,
   useNavigationInput,
   useReconciliations,
+  useTransportOrders,
   useTrips,
   useVehicles,
 } from '../hooks/useTransportWorkspace';
@@ -21,12 +23,16 @@ import { toDashboard } from '../workspace/dashboard';
  * truoc T6 o cho nao noi that duoc"*. Lenh cam do van nguyen: mot con so khong dem duoc thi KHONG
  * len bang, va tuyet doi khong duoc uoc doan cho day cho.
  *
- * TRUOC DAY cuoi trang con mot khoi "Chua dung duoc" liet ke ten cac con so thieu kem ly do ky
- * thuat cua tung cai. Khoi do da bo (#195): khong hien mot con so la du: no khong tuyen bo gi sai,
- * va no khong bat nguoi doc phai hieu kien truc may chu de dung mot bang dieu khien.
+ * #348: con so van hanh chinh doc tu THAP DIEU HANH (`useControlTower`) — cung lan goi, cung khoa
+ * cache voi man `Bảng điều hành`, nen di tu Tong quan sang do la thay DUNG con so vua doc. Chuyen
+ * lap tay chi con mot dong thong tin phu o cuoi trang.
+ *
+ * Man hinh nay CHI SAP XEP: moi phep dem, moi cau chu, moi duong dan deu do `toDashboard` quyet.
  */
 export function OverviewView() {
   const navigation = useNavigationInput();
+  const tower = toSectionQuery(useControlTower(navigation));
+  const orders = toSectionQuery(useTransportOrders(navigation));
   const trips = toSectionQuery(useTrips(navigation));
   const vehicles = toSectionQuery(useVehicles(navigation));
   const drivers = toSectionQuery(useDrivers(navigation));
@@ -41,27 +47,40 @@ export function OverviewView() {
     );
   }
 
-  const firstError = trips.errorMessage ?? vehicles.errorMessage ?? drivers.errorMessage ?? null;
-  const isLoading = trips.isLoading || vehicles.isLoading || drivers.isLoading;
+  /*
+   * LOI cua nguon CHINH moi duoc len dau trang. Chuyen lap tay la nguon PHU: no hong thi CHINH dong
+   * thong tin phu noi "chua doc duoc" (`tripsFailed`), khong day mot loi do len tren nhung con so van
+   * dang dung — va cung khong im lang, vi im lang doc ra y het "khong con chuyen nao chua khep".
+   */
+  const primary = [tower, orders, vehicles, drivers];
+  const firstError = primary.find((query) => query.errorMessage !== null)?.errorMessage ?? null;
+  const isLoading = [...primary, trips].some((query) => query.isLoading);
+  const retryFailed = () => {
+    for (const query of primary) if (query.errorMessage !== null) query.refetch();
+  };
 
   const model = toDashboard({
-    trips: trips.data ?? [],
-    vehicles: vehicles.data ?? [],
-    drivers: drivers.data ?? [],
+    tower: tower.data ?? null,
+    orders: orders.data ?? null,
+    trips: trips.data ?? null,
+    tripsFailed: trips.errorMessage !== null,
+    vehicles: vehicles.data ?? null,
+    drivers: drivers.data ?? null,
     reconciliations: reconciliations.data ?? [],
-    capabilities: navigation.capabilities,
-    role: navigation.role,
+    navigation,
   });
 
   return (
     <>
       <PageHeader
         title="Tổng quan"
-        summary="Chuyến đang chạy, đội xe, và những việc đang chờ người xử lý."
+        summary="Đơn hàng, vòng chạy đang chạy, đội xe, và những việc đang chờ người xử lý."
+        context={model.generatedFor === null ? undefined : `Số liệu ngày ${model.generatedFor}`}
       />
 
-      {firstError === null ? null : <ErrorState message={firstError} onRetry={trips.refetch} />}
+      {firstError === null ? null : <ErrorState message={firstError} onRetry={retryFailed} />}
       {isLoading ? <LoadingState label="Đang đọc số liệu vận hành…" /> : null}
+      {model.operationsNotice === null ? null : <EmptyState title={model.operationsNotice} />}
 
       <section className="tx-cards" aria-label="Số liệu vận hành">
         {model.stats.map((stat) => (
@@ -75,22 +94,40 @@ export function OverviewView() {
         ))}
       </section>
 
-      <section className="tx-panel" aria-label="Cần xử lý ngay">
-        <h2>Cần xử lý ngay</h2>
-        <p className="tx-panel__lead">{model.headline}</p>
-        {model.hasWork ? (
-          <ul className="tx-worklist">
-            {model.work.map((item) => (
-              <li key={item.key}>
-                <a href={buildSectionUrl(item.section, item.selection)}>
-                  <strong>{item.title}</strong>
-                  <span>{item.detail}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
+      {model.headline === null ? null : (
+        <section className="tx-panel" aria-label="Cần xử lý ngay">
+          <h2>Cần xử lý ngay</h2>
+          <p className="tx-panel__lead">{model.headline}</p>
+          {model.hasWork ? (
+            <ul className="tx-worklist">
+              {model.work.map((item) => (
+                <li key={item.key}>
+                  <a href={buildSectionUrl(item.section, item.selection)}>
+                    <span className={`tx-dot tx-dot--${item.tone}`} aria-hidden="true" />
+                    {item.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {model.moreWork === null ? null : (
+            <p className="tx-note">
+              <a href={buildSectionUrl(model.moreWork.section)}>{model.moreWork.label} →</a>
+            </p>
+          )}
+        </section>
+      )}
+
+      {model.legacy === null ? null : (
+        <section className="tx-panel tx-panel--muted" aria-label="Chuyến lập tay chưa khép">
+          <p className="tx-note">
+            {model.legacy.text}{' '}
+            {model.legacy.link === null ? null : (
+              <a href={buildSectionUrl(model.legacy.link.section)}>{model.legacy.link.label}</a>
+            )}
+          </p>
+        </section>
+      )}
     </>
   );
 }

@@ -8,6 +8,7 @@ import type {
   BoardCurrentLeg,
   ControlTowerSource,
   ControlTowerView,
+  FleetPresenceView,
   OperationsBoardColumn,
   PendingActionQueueEntry,
   RunLegPhase,
@@ -42,11 +43,20 @@ export const OPERATIONS_BOARD_ORDER = [
   'DELIVERED',
 ] as const satisfies readonly OperationsBoardColumn[];
 
+/**
+ * `IN_TRANSIT` la "Trên đường", KHONG phai "Đang chạy" — `#336`.
+ *
+ * "Đang chạy" tren man nay co DUNG MOT nghia: vong chay `ACTIVE`, tuc moi the tu cot "Vào lấy hàng"
+ * den cot "Chờ người nhận". Va chu do KHONG BAO GIO dung tran: the so noi "Xe đang chạy" (dem XE),
+ * loi tom tat tren bang noi "Vòng chạy đang chạy" (dem VONG CHAY) — xem `runningSummaryFor`. Cot
+ * `IN_TRANSIT` chi la MOT buoc trong khoang do. Truoc day no mang dung chu "Đang chạy", va mot vong
+ * chay vua vao bai lay hang la du de the so va cot noi hai con so khac nhau cho cung mot chu.
+ */
 const COLUMN_LABEL: Readonly<Record<OperationsBoardColumn, string>> = {
   PLANNED: 'Đã lên kế hoạch',
   PICKUP: 'Vào lấy hàng',
   LOADING: 'Đang xếp hàng',
-  IN_TRANSIT: 'Đang chạy',
+  IN_TRANSIT: 'Trên đường',
   ARRIVED: 'Đã đến nơi giao',
   WAITING: 'Chờ người nhận',
   DELIVERED: 'Đã giao xong',
@@ -206,6 +216,8 @@ export interface ControlTowerStat {
 
 export interface ControlTowerModel {
   readonly generatedFor: string;
+  /** "Vòng chạy đang chạy" tren BANG — dem VONG CHAY; the so `on-trip` dem XE, cung dinh nghia. */
+  readonly runningSummary: string;
   readonly columns: readonly ControlTowerColumn[];
   readonly stats: readonly ControlTowerStat[];
   readonly queue: readonly ControlTowerQueueRow[];
@@ -284,9 +296,19 @@ export function toControlTower(view: ControlTowerView): ControlTowerModel {
       selection: entry.subject.reference,
     }));
 
+  /*
+   * `on-trip` dem XE, khong dem vong chay, nen nhan phai mang don vi: "Xe đang chạy" (`#336`).
+   * Mot xe con mo hai vong chay thi the nay noi 1 trong khi bang co 2 the; mot nhan tran
+   * "Đang chạy" o day doc ra nhu mau thuan voi `runningSummary` ngay ben duoi.
+   */
   const stats: readonly ControlTowerStat[] = [
     { key: 'fleet', label: 'Xe trong đội', value: formatCount(view.fleet.total), section: 'fleet' },
-    { key: 'on-trip', label: 'Đang chạy', value: formatCount(view.fleet.onTrip), section: 'fleet' },
+    {
+      key: 'on-trip',
+      label: 'Xe đang chạy',
+      value: formatCount(view.fleet.onTrip),
+      section: 'fleet',
+    },
     { key: 'idle', label: 'Đang rảnh', value: formatCount(view.fleet.idle), section: 'fleet' },
     {
       key: 'maintenance',
@@ -310,6 +332,7 @@ export function toControlTower(view: ControlTowerView): ControlTowerModel {
 
   return {
     generatedFor: formatBusinessDate(view.generatedFor),
+    runningSummary: runningSummaryFor(view.fleet),
     columns,
     stats,
     queue,
@@ -325,6 +348,27 @@ export function toControlTower(view: ControlTowerView): ControlTowerModel {
     ),
   };
 }
+
+/**
+ * "VÒNG CHẠY ĐANG CHẠY" TREN BANG — `#336`.
+ *
+ * Con so den tu may chu (`runningRuns`), KHONG cong o day tu `columns`: biet cot nao la cot "dang
+ * chay" la kien thuc cua phep chieu (`RUNNING_BOARD_COLUMNS`), va chep lai no o tang hien thi se
+ * cho ra hai danh sach lech nhau o lan them cot ke tiep.
+ *
+ * MOI con so "dang chay" tren man nay mang DON VI cua no. The so `on-trip` dem XE ("Xe đang chạy");
+ * dong nay dem VONG CHAY va LUON noi kem so xe. Mot xe con mo hai vong chay la chuyen hiem nhung CO
+ * the xay ra (khong rang buoc nao cam): luc do man hinh doc ra "Xe đang chạy 1" va "Vòng chạy đang
+ * chạy: 2 trên 1 xe" — hai con so khac nhau, va khong cai nao trong nhu mau thuan voi cai kia. Mot
+ * chu "Đang chạy" tran dung cho CA HAI don vi chinh la dieu review cua PR `#344` chan lai.
+ */
+const runningSummaryFor = (fleet: FleetPresenceView): string => {
+  if (fleet.runningRuns === 0) return 'Không có vòng chạy nào đang chạy.';
+  const span = `mọi thẻ từ cột “${COLUMN_LABEL.PICKUP}” đến cột “${COLUMN_LABEL.WAITING}”`;
+  const runs = formatCount(fleet.runningRuns);
+  const vehicles = formatCount(fleet.onTrip);
+  return `Vòng chạy đang chạy: ${runs} trên ${vehicles} xe — ${span}.`;
+};
 
 /**
  * BA NHANH, cung khuon `dashboard.ts`.

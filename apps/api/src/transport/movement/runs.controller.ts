@@ -29,6 +29,7 @@ import {
   createRunSchema,
   runTransitionSchema,
 } from './movement.schemas.js';
+import { LegFieldTruthSource } from './leg-field-truth.port.js';
 import { MovementService } from './movement.service.js';
 import { summariseRunDistance, summariseRunMovement } from './run-distance.js';
 
@@ -55,6 +56,12 @@ export class RunsController {
      * `RunClosureService` — mot cho duy nhat cho moi duong danh thuc.
      */
     private readonly closures: RunClosureService,
+    /**
+     * SO GHI HIEN TRUONG cua chang — `#332`. Ban rong cua `transport-core` khi khach tat
+     * `transport-checkpoint`; ban doc kho moc khi bat. Controller CHI chuyen no vao
+     * `transitionLeg()` — phan xu nam o `MovementService`, khong nam o day.
+     */
+    private readonly fieldTruth: LegFieldTruthSource,
   ) {}
 
   @Get()
@@ -125,10 +132,13 @@ export class RunsController {
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
   ) {
-    const { to } = this.parse(legTransitionSchema, body);
+    const { to, overrideReason } = this.parse(legTransitionSchema, body);
     return this.guard(async () => {
       await this.requireLegOfRun(runId, legId);
-      const leg = await this.movement.transitionLeg(legId, to, transportActorOf(request));
+      const leg = await this.movement.transitionLeg(legId, to, transportActorOf(request), {
+        fieldTruth: this.fieldTruth,
+        overrideReason,
+      });
       return { leg, closure: await this.closures.attempt(runId, 'LEG_CHANGED') };
     });
   }

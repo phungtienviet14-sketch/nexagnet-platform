@@ -238,7 +238,7 @@ export class TrackingService {
       this.deny('tracking.session_open', 'RUN_NOT_ACTIVE', { runId: run.id, status: run.status });
       throw TransportDomainError.conflict(
         'RUN_NOT_ACTIVE',
-        `Vong chay ${run.code} da o trang thai ${run.status} — khong con gi de bam`,
+        `Vòng chạy ${run.code} đã kết thúc — không còn việc gì để bấm.`,
       );
     }
     if (!(await this.core.wasDriverEverAssignedToRun(run.id, driver.id))) {
@@ -420,7 +420,7 @@ export class TrackingService {
       });
       throw TransportDomainError.conflict(
         'SESSION_SUBJECT_ENDED',
-        'Vong chay cua phien nay da ket thuc — khong nhan them ban dinh vi',
+        'Vòng chạy của phiên này đã kết thúc — không nhận thêm bản định vị.',
       );
     }
 

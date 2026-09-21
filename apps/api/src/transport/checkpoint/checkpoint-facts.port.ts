@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FleetRepository } from '../fleet/fleet.repository.js';
 import { MovementRepository } from '../movement/movement.repository.js';
-import type { VehicleRunStatus } from '../movement/movement.types.js';
+import type { RunLegKind, VehicleRunStatus } from '../movement/movement.types.js';
 import { TrackingRepository } from '../proof/tracking.repository.js';
 
 /**
@@ -31,6 +31,8 @@ export interface CheckpointLegFacts {
   readonly id: string;
   /** Vong chay so huu chang. Dung de chan mot chang cua vong chay khac di lac vao day. */
   readonly runId: string;
+  /** Chang CO HANG hay CHAY RONG — chang rong khong nhan moc hang hoa (`#332`). */
+  readonly kind: RunLegKind;
 }
 
 export abstract class TransportCheckpointCoreFacts {
@@ -94,7 +96,7 @@ export class TransportCheckpointCoreFactsAdapter extends TransportCheckpointCore
 
   async findLeg(legId: string): Promise<CheckpointLegFacts | null> {
     const leg = await this.movement.findLeg(legId);
-    return leg ? { id: leg.id, runId: leg.runId } : null;
+    return leg ? { id: leg.id, runId: leg.runId, kind: leg.kind } : null;
   }
 
   async wasDriverEverAssignedToRun(runId: string, driverId: string): Promise<boolean> {
