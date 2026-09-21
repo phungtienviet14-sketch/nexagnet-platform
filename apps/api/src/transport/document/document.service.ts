@@ -496,7 +496,7 @@ export class OperationalDocumentService {
       case 'DOCUMENT_RUN_TERMINAL':
         return TransportDomainError.conflict(
           reason,
-          'Vong chay da o trang thai cuoi, khong ghi them chung tu duoc',
+          'Vòng chạy đã kết thúc — không ghi thêm chứng từ được nữa.',
         );
       case 'DOCUMENT_BASIS_MISMATCH':
         return TransportDomainError.invalid(reason, 'Can cu va ma tep khong khop nhau');

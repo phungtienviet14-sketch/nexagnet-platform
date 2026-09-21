@@ -213,6 +213,59 @@ describe('OperationalDocumentService — DC-020', () => {
     expect(await reasonOf(record({ authUserId: 'u.cuong' }))).toBe('DOCUMENT_DRIVER_NOT_ASSIGNED');
   });
 
+  /**
+   * UAT BUG-03/05 (`#333`) — man hinh lai xe con CU sau khi luot quet dong vong chay.
+   *
+   * Man hinh da phai loc nut truoc khi ve (xem `field-terminal-run.spec.ts`), nhung mot may khach
+   * cu van co the gui. Cong nay KHONG duoc noi long de "cho tai len cho xong": no tu choi bang mot
+   * xung dot, va cau tu choi di NGUYEN VAN len man hinh — nen phai la tieng Viet co dau.
+   */
+  describe('vong chay da dong trong luc man hinh lai xe con cu — #333', () => {
+    const TERMINAL_MESSAGE = 'Vòng chạy đã kết thúc — không ghi thêm chứng từ được nữa.';
+
+    const errorOf = async (run: Promise<unknown>): Promise<TransportDomainError> => {
+      try {
+        await run;
+      } catch (error) {
+        if (error instanceof TransportDomainError) return error;
+        throw error;
+      }
+      throw new Error('NO_ERROR_THROWN');
+    };
+
+    it('lan bam `Chup bien nhan giao hang` cu bi tu choi, khong ghi to nao, khong gan tep nao', async () => {
+      core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+
+      const error = await errorOf(
+        record({ basis: 'DIGITAL_FILE', fileId: 'file_1', externalNote: undefined }),
+      );
+      expect(error.kind).toBe('CONFLICT');
+      expect(error.reason).toBe('DOCUMENT_RUN_TERMINAL');
+      expect(error.message).toBe(TERMINAL_MESSAGE);
+      expect(await documents.listForRun('run_1')).toEqual([]);
+      expect(files.bound).toEqual([]);
+    });
+
+    it('vong chay bi HUY cung tu choi bang dung cau do', async () => {
+      core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'CANCELLED' });
+      const error = await errorOf(record());
+      expect(error.reason).toBe('DOCUMENT_RUN_TERMINAL');
+      expect(error.message).toBe(TERMINAL_MESSAGE);
+    });
+
+    /*
+     * `#279` O10 khong thoai lui: lenh DA thanh cong truoc khi dong, mat cau tra loi, gui lai sau
+     * khi dong — nhan dung to cu. Phep phat lai dung TRUOC cong trang thai cuoi la co y.
+     */
+    it('gui lai mot lenh DA thanh cong truoc khi dong van tra dung to cu', async () => {
+      const first = await record();
+      core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+      const again = await record();
+      expect(again.id).toBe(first.id);
+      expect(await documents.listForRun('run_1')).toHaveLength(1);
+    });
+  });
+
   /** `#279` O12 — lai xe A khong neo chung tu vao moc cua lai xe B. */
   it('khong neo duoc vao moc cua lai xe khac', async () => {
     identity.assignments.set('run_1', ['drv_a', 'drv_b']);
