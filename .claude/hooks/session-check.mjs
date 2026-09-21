@@ -123,6 +123,19 @@ try {
     say('         khong tu bat/migrate no tu mot lane.');
   }
 
+  // --- 8. Hook git cuc bo ------------------------------------------------------------------
+  // Khong co core.hooksPath CUC BO thi hook TOAN CUC thang (vd ~/.codex/git-hooks cua ECC), va
+  // pre-push o do chay lint+typecheck+test+build toan monorepo moi lan push (10-25 phut). So gia
+  // tri DANG HIEU LUC, vi `config.worktree` cua tung worktree co the ghim de len scope local.
+  const localHooks = run('git', ['config', '--local', '--get', 'core.hooksPath']);
+  const effectiveHooks = run('git', ['config', '--get', 'core.hooksPath']);
+  if (localHooks && effectiveHooks === localHooks) {
+    say(`  git hooks: cuc bo (${localHooks})`);
+  } else {
+    say(`  git hooks: dang dung ${effectiveHooks ?? '(mac dinh)'} — KHONG phai hook cuc bo cua repo`);
+    todo.push('pnpm hooks:install');
+  }
+
   if (todo.length > 0) {
     say('  can chay TRUOC khi build/test/push (theo dung thu tu):');
     for (const t of todo) say(`    ${t}`);
