@@ -205,7 +205,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     let suffix = 0;
     const next = (label: string): string => `${CODE_PREFIX}-${label}-${++suffix}`;
 
-    /** Mot chiec xe DIEU DUOC: `commit()` doi dung mot lai xe dang phu trach truoc khi mo vong chay. */
+    /**
+     * Mot chiec xe DIEU DUOC: `commit()` doi mot lai xe dang phu trach, con hoat dong va CO tai
+     * khoan truoc khi mo vong chay. `authUserId` rieng tung xe vi cot do la unique — va khac `AUTH`
+     * cua `theDriver()` ben duoi.
+     */
     const aVehicle = async () => {
       const vehicle = await fleet.createVehicle({
         registrationPlate: `${PLATE_PREFIX}-${++suffix}`,
@@ -216,6 +220,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         phone: `${PHONE_PREFIX}${suffix}`,
         licenceClass: 'FC',
         licenceExpiry: '2030-01-01',
+        authUserId: `${AUTH}-xe-${suffix}`,
       });
       await fleet.assignDriverToVehicle(vehicle.id, driver.id, new Date());
       return vehicle;

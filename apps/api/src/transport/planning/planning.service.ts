@@ -300,8 +300,16 @@ export class PlanningService {
      * mot vong chay CO THAT, hien tren Bang dieu hanh, nhung `listOpenRunsForDriver()` khong tra no
      * ve cho ai — khong ai mo duoc chang cua no, va man hinh van bao "Da giao don" mot cach sai su
      * that. Tu choi o day thi chua co hang nao duoc ghi, nen khong co gi phai don.
+     *
+     * "Co mot `driverId`" CHUA du. Man Hien truong khong tim nguoi bang `driverId` ma bang PHIEN
+     * dang nhap, nen nguoi cam xe con phai ton tai, con hoat dong, va co tai khoan — xem
+     * `requireFieldReachableDriver()`. Ca hai phep hoi nam SAU phep doc lai khoa chong lap o dau
+     * ham: mot lan gui lai van nhan dung ket qua cu, ke ca khi lai xe da bi khoa tu do toi nay.
      */
-    const driverId = await this.requireVehicleDriver(command.vehicleId, orderId);
+    const driverId = await this.requireFieldReachableDriver(
+      await this.requireVehicleDriver(command.vehicleId, orderId),
+      { orderId, vehicleId: command.vehicleId },
+    );
 
     const active = await this.plans.findActiveForOrder(orderId);
     if (active) throw this.conflict('planning.commit', 'PLAN_ORDER_ALREADY_PLANNED', { orderId });
@@ -766,6 +774,42 @@ export class PlanningService {
       });
     }
     return first.driverId;
+  }
+
+  /**
+   * NGUOI CAM XE co thuc su MO duoc man Hien truong khong — tra ve chinh `driverId` do neu co.
+   *
+   * Man Hien truong (`DriverFieldReadService.workFor`) di dung mot chuoi:
+   *
+   *     phien.authUserId -> findDriverByAuthUserId -> driver.id -> listOpenRunsForDriver
+   *
+   * Ban phan cong vong chay chi noi mat xich cuoi. Neu ho so khong ton tai, da ngung, hoac khong
+   * co `authUserId` thi khong phien nao di toi duoc no — va giao viec luc do lai sinh dung cai
+   * vong chay mo coi da phai di lan mot buoi, chi la mo coi o mot tang sau hon.
+   *
+   * KHONG chon thay mot lai xe khac, va KHONG co nut gan tay: doi xe la nguon su that cua cau "ai
+   * cam xe", nen du lieu doi xe sai thi sua o doi xe.
+   *
+   * `authUserId` la `@unique` tren Postgres, nen "khac rong" da du de noi rang MOT phien giai ra
+   * dung nguoi nay. Chuoi toan khoang trang cung bi coi la thieu: schema chi doi `min(1)`, va
+   * khong mot phien nao mang ma nhu the.
+   */
+  private async requireFieldReachableDriver(
+    driverId: string,
+    context: { readonly orderId: string; readonly vehicleId: string },
+  ): Promise<string> {
+    const detail = { ...context, driverId };
+    const driver = await this.fleet.findDriver(driverId);
+    if (driver === null) {
+      throw this.conflict('planning.commit', 'PLAN_VEHICLE_DRIVER_NOT_FOUND', detail);
+    }
+    if (driver.status !== 'ACTIVE') {
+      throw this.conflict('planning.commit', 'PLAN_VEHICLE_DRIVER_INACTIVE', detail);
+    }
+    if (driver.authUserId === null || driver.authUserId.trim() === '') {
+      throw this.conflict('planning.commit', 'PLAN_VEHICLE_DRIVER_BINDING_MISSING', detail);
+    }
+    return driver.id;
   }
 
   /**

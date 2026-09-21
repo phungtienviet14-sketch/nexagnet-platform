@@ -130,22 +130,25 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
   const next = (prefix: string): string => `${prefix}-${(sequence += 1)}`;
 
   /**
-   * MOT CHIEC XE DIEU DUOC — nghia la co nguoi cam no.
+   * MOT CHIEC XE DIEU DUOC — nghia la co nguoi cam no, va nguoi do mo duoc man Hien truong.
    *
-   * `commit()` doi dung mot lai xe dang phu trach truoc khi mo vong chay, nen mot chiec xe khong co
-   * ai khong phai "xe binh thuong" ma la mot cau chuyen khac han. Bo bai nay do chuyen DONG vong
-   * chay, khong do duong tu choi do — nen fixture phai dung xe day du.
+   * `commit()` doi mot lai xe dang phu trach, con hoat dong va CO tai khoan truoc khi mo vong chay,
+   * nen mot chiec xe thieu mot trong ba dieu do khong phai "xe binh thuong" ma la mot cau chuyen
+   * khac han. Bo bai nay do chuyen DONG vong chay, khong do duong tu choi do — nen fixture phai
+   * dung xe day du.
    */
   const aVehicle = async () => {
     const vehicle = await fleet.createVehicle({
       registrationPlate: `29C-${10000 + sequence}`,
       vehicleClass: 'Đầu kéo',
     });
+    const fullName = next('Lai xe');
     const driver = await fleet.createDriver({
-      fullName: next('Lai xe'),
+      fullName,
       phone: `09${String(100000000 + sequence).slice(0, 8)}`,
       licenceClass: 'FC',
       licenceExpiry: '2030-01-01',
+      authUserId: `auth-${fullName}`,
     });
     await fleet.assignDriverToVehicle(vehicle.id, driver.id, new Date());
     return vehicle;

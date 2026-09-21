@@ -2,6 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { TransportCheckpointCoreFactsAdapter } from '../checkpoint/checkpoint-facts.port.js';
+import { PrismaCheckpointRepository } from '../checkpoint/prisma-checkpoint.repository.js';
+import { PrismaOperationalDocumentRepository } from '../document/prisma-document.repository.js';
+import { PrismaPhysicalReceiptHandoverRepository } from '../document/prisma-handover.repository.js';
+import { TransportFieldCoreFactsAdapter } from '../field/field-facts.port.js';
+import { DriverFieldReadService } from '../field/field-read.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { MovementService } from '../movement/movement.service.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
@@ -9,6 +15,7 @@ import { summariseRunMovement } from '../movement/run-distance.js';
 import { describeStorageError } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { PrismaWaitingSessionRepository } from '../waiting/prisma-waiting.repository.js';
 import { PlanningService } from './planning.service.js';
 import type { TransportPlanningPolicy } from './planning.types.js';
 import { PrismaRunPlanRepository } from './prisma-planning.repository.js';
@@ -27,6 +34,8 @@ import { PrismaRunPlanRepository } from './prisma-planning.repository.js';
  *     bai 4   chang da hoan thanh khong sua duoc, ke ca bang `UPDATE` viet tay
  *     bai 6   che do ONE bi cuong che O DB, khong chi o tang dich vu
  *     bai 17  phep chieu chuyen v1 van chay y nguyen
+ *     BUG-01  lai xe THAY vong chay qua chinh phien dang nhap; thieu tai khoan hoac da ngung hoat
+ *             dong thi tu choi truoc moi lan ghi
  *
  * Chay bang `RUN_PRISMA_IT=1`; khong co bien do thi ca khoi khong chay.
  */
@@ -58,6 +67,20 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
     const planner = (policy = planningPolicy()): PlanningService =>
       new PlanningService(movement, planRepo, fleet, audit, CORE_POLICY, policy);
+
+    /**
+     * MAN HIEN TRUONG THAT cua lai xe — dich vu va hai adapter y nhu `TransportFieldModule` dung,
+     * tren CUNG Postgres ma `commit()` vua ghi. Chi thieu lop HTTP, va lop do chi doc `authUserId`
+     * tu phien roi chuyen nguyen vao `workFor()`.
+     */
+    const field = new DriverFieldReadService(
+      new TransportFieldCoreFactsAdapter(movementRepo),
+      new TransportCheckpointCoreFactsAdapter(movementRepo, fleet),
+      new PrismaCheckpointRepository(prisma),
+      new PrismaWaitingSessionRepository(prisma),
+      new PrismaOperationalDocumentRepository(prisma),
+      new PrismaPhysicalReceiptHandoverRepository(prisma),
+    );
 
     /**
      * Don dep theo THU TU AN TOAN VE KHOA NGOAI: ke hoach -> lien ket chuyen -> chang -> phan cong
@@ -126,13 +149,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const nextCode = (label: string): string => `${CODE_PREFIX}-${label}-${++suffix}`;
 
     /**
-     * MOT CHIEC XE DIEU DUOC — nghia la co nguoi cam no.
+     * MOT CHIEC XE va NGUOI CAM NO — mac dinh la nguoi mo duoc man Hien truong.
      *
-     * `commit()` doi dung mot lai xe dang phu trach truoc khi mo vong chay. So dien thoai giu tien
-     * to `0955PL` de `cleanup()` o tren don duoc; ban phan cong cung phai duoc don, neu khong khoa
-     * ngoai se chan lan xoa xe.
+     * `commit()` doi mot lai xe dang phu trach, con hoat dong va CO tai khoan truoc khi mo vong
+     * chay. So dien thoai giu tien to `0955PL` de `cleanup()` o tren don duoc; ban phan cong cung
+     * phai duoc don, neu khong khoa ngoai se chan lan xoa xe. `authUserId` la unique tren bang lai
+     * xe, nen mac dinh sinh rieng cho tung ho so; `holder` ghi de de dung duong tu choi.
      */
-    const aVehicle = async () => {
+    const aVehicleHeldBy = async (
+      holder: { authUserId?: string | null; status?: 'ACTIVE' | 'INACTIVE' } = {},
+    ) => {
       const vehicle = await fleet.createVehicle({
         registrationPlate: `${PLATE_PREFIX}-${++suffix}`,
         vehicleClass: 'Dau keo',
@@ -142,10 +168,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         phone: `0955PL${suffix}`,
         licenceClass: 'FC',
         licenceExpiry: '2030-01-01',
+        authUserId:
+          holder.authUserId === undefined ? `${CODE_PREFIX}-auth-${suffix}` : holder.authUserId,
+        status: holder.status ?? 'ACTIVE',
       });
       await fleet.assignDriverToVehicle(vehicle.id, driver.id, new Date());
-      return vehicle;
+      return { vehicle, driver };
     };
+
+    const aVehicle = async () => (await aVehicleHeldBy()).vehicle;
 
     const anOrder = (origin: string, destination: string) =>
       movement.createOrder(
@@ -457,6 +488,78 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       // Vong chay duoc chieu ra KHONG mang mot ke hoach nao: hai duong doc lap.
       expect(await planRepo.listActiveForRun(projection.run.id)).toHaveLength(0);
+    });
+
+    /* ---------------------------------------------------------------- *
+     * BUG-01 — giao xe thi giao ca nguoi, do QUA CUA DANG NHAP
+     *
+     * Man Hien truong di `phien.authUserId -> findDriverByAuthUserId -> driver.id ->
+     * listOpenRunsForDriver`. Bai o day di dung chuoi do tren Postgres that: `authUserId` la
+     * `@unique` that, va `listOpenRunsForDriver` la truy van Prisma that loc theo phan cong.
+     * ---------------------------------------------------------------- */
+
+    it('PL-IT-11 -- BUG-01: tai khoan cua nguoi cam xe THAY vong chay vua giao; tai khoan lai xe khac KHONG', async () => {
+      const { vehicle, driver } = await aVehicleHeldBy();
+      const { driver: other } = await aVehicleHeldBy();
+      const login = driver.authUserId;
+      const otherLogin = other.authUserId;
+      if (login === null || otherLogin === null) throw new Error('fixture phai co tai khoan');
+      const order = await anOrder('IT-PLAN Kho A', 'IT-PLAN Cang B');
+
+      const { run } = await planner().commit(
+        order.id,
+        { vehicleId: vehicle.id, idempotencyKey: nextCode('KEY') },
+        ACTOR,
+      );
+
+      const mine = await field.workFor(login);
+      expect(mine.runs.map((entry) => entry.runId)).toEqual([run.id]);
+      const loaded = mine.runs[0]?.legs.find((leg) => leg.kind === 'LOADED');
+      expect(loaded?.orderCode).toBe(order.code);
+
+      const theirs = await field.workFor(otherLogin);
+      expect(theirs.runs.map((entry) => entry.runId)).not.toContain(run.id);
+
+      // Hang Postgres nam duoi man hinh do: DUNG MOT phan cong hieu luc, cua dung nguoi cam xe.
+      const active = await prisma.transportRunAssignment.findMany({
+        where: { runId: run.id, effectiveTo: null },
+        select: { driverId: true },
+      });
+      expect(active).toEqual([{ driverId: driver.id }]);
+    });
+
+    it.each([
+      {
+        label: 'lai xe cam xe CHUA co tai khoan (authUserId = NULL)',
+        holder: { authUserId: null },
+        reason: 'PLAN_VEHICLE_DRIVER_BINDING_MISSING',
+      },
+      {
+        label: 'lai xe cam xe da NGUNG hoat dong (INACTIVE)',
+        holder: { status: 'INACTIVE' as const },
+        reason: 'PLAN_VEHICLE_DRIVER_INACTIVE',
+      },
+    ])('PL-IT-12 -- BUG-01: $label -> $reason, TRUOC moi lan ghi', async ({ holder, reason }) => {
+      const { vehicle, driver } = await aVehicleHeldBy(holder);
+      const order = await anOrder('IT-PLAN Kho A', 'IT-PLAN Cang B');
+      const idempotencyKey = nextCode('KEY');
+
+      const outcome = await planner()
+        .commit(order.id, { vehicleId: vehicle.id, idempotencyKey }, ACTOR)
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(outcome, describeStorageError(outcome)).toBeInstanceOf(TransportDomainError);
+      expect((outcome as TransportDomainError).reason).toBe(reason);
+
+      // Do tren CHINH Postgres, khoanh theo xe / don / lai xe / khoa cua bai nay — khong tren so
+      // toan cuc, vi job `integration` dung chung mot DB cho moi bo int spec.
+      expect(await prisma.transportVehicleRun.count({ where: { vehicleId: vehicle.id } })).toBe(0);
+      expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(0);
+      expect(await prisma.transportRunAssignment.count({ where: { driverId: driver.id } })).toBe(0);
+      expect(await prisma.transportOrderRunPlan.count({ where: { orderId: order.id } })).toBe(0);
+      expect(await prisma.transportOrderRunPlan.count({ where: { idempotencyKey } })).toBe(0);
     });
   },
 );
