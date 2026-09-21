@@ -242,6 +242,29 @@ describe('WaitingSessionService — WT-020', () => {
     ).toHaveLength(1);
   });
 
+  /**
+   * UAT BUG-03/05 (`#333`) — `Bat dau cho` la mot nut tren CUNG the hien truong voi nut chup bien
+   * nhan. Man hinh cu bam no sau khi luot quet dong vong chay thi may chu van tu choi, va cau tu
+   * choi di nguyen van len man hinh — nen phai la tieng Viet co dau.
+   */
+  it('may khach cu bam `Bat dau cho` sau khi vong chay dong: xung dot, cau co dau (#333)', async () => {
+    const arrivalId = await arriveAtDelivery();
+    core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+
+    let caught: unknown = null;
+    try {
+      await startWaiting({ arrivalCheckpointId: arrivalId });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TransportDomainError);
+    const error = caught as TransportDomainError;
+    expect(error.kind).toBe('CONFLICT');
+    expect(error.reason).toBe('WAITING_RUN_TERMINAL');
+    expect(error.message).toBe('Vòng chạy đã kết thúc — không mở phiên chờ được nữa.');
+    expect(await sessions.listForLeg('leg_1')).toEqual([]);
+  });
+
   it('khong mo duoc phien khi chua bam `Da den noi`', async () => {
     await checkpointService.recordAsDriver({
       type: 'PICKUP_ARRIVAL',

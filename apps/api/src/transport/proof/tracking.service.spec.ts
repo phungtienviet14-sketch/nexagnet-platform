@@ -470,10 +470,19 @@ describe('Bam vi tri theo VONG CHAY — DOI KHANG — PROOF-022', () => {
     ).rejects.toMatchObject({ reason: 'RUN_NOT_FOUND', kind: 'NOT_FOUND' });
   });
 
+  /*
+   * `#333` BUG-05 — day la cau DAU TIEN lai xe doc khi bam mot moc CAN VI TRI tren man hinh cu:
+   * chuoi vi tri mo phien TRUOC khi ghi moc. No di nguyen van len man hinh, nen phai la tieng Viet
+   * co dau, va KHONG mang ten enum (`COMPLETED`) — `#279` O9 cam tu vung noi bo tren man hinh do.
+   */
   it('vong chay DA DONG khong mo phien duoc — khong con gi de bam', async () => {
     await expect(
       service.openSession({ authUserId: 'user-a', runId: 'run-done', device: null }),
-    ).rejects.toMatchObject({ reason: 'RUN_NOT_ACTIVE', kind: 'CONFLICT' });
+    ).rejects.toMatchObject({
+      reason: 'RUN_NOT_ACTIVE',
+      kind: 'CONFLICT',
+      message: 'Vòng chạy VC-099 đã kết thúc — không còn việc gì để bấm.',
+    });
   });
 
   it('mo LAI tren dung vong chay do tra ve ban cu — ung dung khoi dong lai khong phai mot loi', async () => {
@@ -591,7 +600,12 @@ describe('Bam vi tri theo VONG CHAY — DOI KHANG — PROOF-022', () => {
           capturedAt: T0,
           mockLocationReported: false,
         }),
-      ).rejects.toMatchObject({ reason: 'SESSION_SUBJECT_ENDED', kind: 'CONFLICT' });
+      ).rejects.toMatchObject({
+        reason: 'SESSION_SUBJECT_ENDED',
+        kind: 'CONFLICT',
+        // `#333` BUG-05 — cung chuoi vi tri cua man hinh hien truong, nen cung tieng Viet co dau.
+        message: 'Vòng chạy của phiên này đã kết thúc — không nhận thêm bản định vị.',
+      });
 
       expect(await repository.listObservations(session.id)).toHaveLength(0);
       const after = await repository.findSession(session.id);

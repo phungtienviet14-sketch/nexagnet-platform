@@ -216,6 +216,35 @@ describe('Vong chay da ket thuc — FD-013', () => {
   it('khong con viec gi de bam', () => {
     expect(labels({ recordedTypes: ['PICKUP_ARRIVAL'], runTerminal: true })).toEqual([]);
   });
+
+  /**
+   * HINH DANG CUA UAT BUG-03 (`#333`): chang da giao xong, CHUA chup bien nhan, CO don de ban giao.
+   *
+   * Dung luc vong chay con chay, ba nut deu hop le (bai dau). Vong chay ket thuc thi `document`
+   * (`DOCUMENT_RUN_TERMINAL`) va moi moc deu bi tu choi — nen khong mot nut nao duoc chao, ke ca
+   * o chon tep cua `Chup bien nhan giao hang`.
+   */
+  const deliveredWithoutReceipt = {
+    recordedTypes: [
+      'PICKUP_ARRIVAL',
+      'PICKUP_DEPARTURE',
+      'DELIVERY_ARRIVAL',
+      'DELIVERY_ACCEPTED',
+    ] as const,
+    documentTypes: [],
+    hasOrder: true,
+    receiptHandoverRecorded: false,
+  };
+
+  it('con chay: bien nhan va ban giao duoc chao — diem xuat phat cua UAT (#333)', () => {
+    expect(labels(deliveredWithoutReceipt)).toEqual(
+      expect.arrayContaining(['Chụp biên nhận giao hàng', 'Tôi đang giữ biên nhận']),
+    );
+  });
+
+  it('da ket thuc: KHONG DOCUMENT, KHONG RECEIPT_HANDOVER, KHONG moc nao (#333)', () => {
+    expect(fieldActionsFor(input({ ...deliveredWithoutReceipt, runTerminal: true }))).toEqual([]);
+  });
 });
 
 /**

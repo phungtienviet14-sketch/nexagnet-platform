@@ -372,7 +372,7 @@ export class CheckpointService {
       case 'CHECKPOINT_RUN_TERMINAL':
         return TransportDomainError.conflict(
           reason,
-          'Vong chay da o trang thai cuoi, khong ghi them moc duoc',
+          'Vòng chạy đã kết thúc — không ghi thêm mốc được nữa.',
         );
       case 'CHECKPOINT_ALREADY_RECORDED':
         return TransportDomainError.conflict(reason, 'Moc nay da duoc ghi tu truoc');
