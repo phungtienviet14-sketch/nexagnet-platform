@@ -570,6 +570,36 @@ describe('#336 — "Đang chạy" tren the so va tren bang la MOT dinh nghia', (
     expect(fleet.onTrip + fleet.idle + fleet.underMaintenance).toBe(fleet.total);
   });
 
+  /*
+   * MOT XE, HAI VONG CHAY `ACTIVE` — ca review PR `#344` neu ra. Tren khung nhin that, the so dem XE
+   * (1), con `runningRuns` — con so dong "Vòng chạy đang chạy" tren bang in ra — dem VONG CHAY (2) va
+   * phai bang dung so the o nam cot dang chay, khong phai so xe.
+   */
+  it('1 xe mo 2 vong chay ACTIVE: onTrip dem 1 XE, runningRuns dem 2 VONG CHAY', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub({
+        vehicles: [vehicle({ id: 'veh-1', registrationPlate: '29C-111.11' })],
+        runs: [
+          run({ id: 'run-1', code: 'VR-101', vehicleId: 'veh-1' }),
+          run({ id: 'run-2', code: 'VR-102', vehicleId: 'veh-1' }),
+        ],
+        legs: [leg({ status: 'PLANNED', completedAt: null, distanceKm: null })],
+      }),
+      policy,
+    );
+
+    const view = await service.view(NOW);
+
+    expect(view.fleet).toMatchObject({
+      total: 1,
+      onTrip: 1,
+      idle: 0,
+      underMaintenance: 0,
+      runningRuns: 2,
+    });
+    expect(runningOnBoard(view)).toBe(2);
+  });
+
   /**
    * FAIL-CLOSED. The so "Đang chạy" gio PHU THUOC kho vong chay; truoc day no chi doc xe. Mot lan
    * doc vong chay that bai ma van tra ve mot khung nhin se in "Đang chạy 0 · Đang rảnh 2" — dung

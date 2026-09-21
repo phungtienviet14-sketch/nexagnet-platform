@@ -485,20 +485,68 @@ describe('doi xe — "Đang chạy" dan xuat tu vong chay, doi xe khep kin', () 
     expect(presence).toMatchObject({ total: 2, underMaintenance: 1, onTrip: 1, idle: 0 });
   });
 
-  it('mot xe con mo hai vong chay: the so dem XE (1), `runningRuns` dem VONG CHAY (2)', () => {
-    const presence = countFleetPresence(
-      coreInput({
-        vehicles: [vehicle({ id: 'v1' })],
-        runs: [
-          run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
-          run({ id: 'r2', code: 'VR-002', vehicleId: 'v1', status: 'ACTIVE' }),
-        ],
-      }),
-    );
+  /*
+   * HAI DON VI — review PR `#344`. `onTrip` dem XE (the so "Xe đang chạy"), `runningRuns` dem VONG
+   * CHAY (loi tom tat "Vòng chạy đang chạy" tren bang). Khong rang buoc nao cam mot xe mo hai vong
+   * chay `ACTIVE` cung luc, nen hai so do CO the khac nhau. Moi ca khoa ca hai so VA phan hoach doi
+   * xe, de mot xe hai vong chay khong bi dem hai lan o bat ky o nao.
+   */
+  it.each([
+    {
+      name: '1 xe, 2 vong chay ACTIVE',
+      vehicles: [vehicle({ id: 'v1' })],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r2', code: 'VR-002', vehicleId: 'v1', status: 'ACTIVE' }),
+      ],
+      expected: { total: 1, onTrip: 1, idle: 0, underMaintenance: 0, runningRuns: 2 },
+    },
+    {
+      name: '2 xe, 2 vong chay ACTIVE — moi xe mot',
+      vehicles: [vehicle({ id: 'v1' }), vehicle({ id: 'v2' })],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r2', code: 'VR-002', vehicleId: 'v2', status: 'ACTIVE' }),
+      ],
+      expected: { total: 2, onTrip: 2, idle: 0, underMaintenance: 0, runningRuns: 2 },
+    },
+    {
+      name: '0 vong chay ACTIVE — chi co PLANNED/COMPLETED va mot cot ON_TRIP cu',
+      vehicles: [
+        vehicle({ id: 'v1', status: 'IDLE' }),
+        vehicle({ id: 'v2', status: 'UNDER_MAINTENANCE' }),
+        vehicle({ id: 'v3', status: 'ON_TRIP' }),
+      ],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'PLANNED' }),
+        run({ id: 'r3', code: 'VR-003', vehicleId: 'v3', status: 'COMPLETED' }),
+      ],
+      expected: { total: 3, onTrip: 0, idle: 2, underMaintenance: 1, runningRuns: 0 },
+    },
+    {
+      name: 'ranh + sua chua + xe hai vong chay + xe sua chua dang chay',
+      vehicles: [
+        vehicle({ id: 'v1', status: 'IDLE' }),
+        vehicle({ id: 'v2', status: 'IDLE' }),
+        vehicle({ id: 'v3', status: 'UNDER_MAINTENANCE' }),
+        vehicle({ id: 'v4', status: 'UNDER_MAINTENANCE' }),
+      ],
+      runs: [
+        run({ id: 'r1', code: 'VR-001', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r2', code: 'VR-002', vehicleId: 'v1', status: 'ACTIVE' }),
+        run({ id: 'r4', code: 'VR-004', vehicleId: 'v4', status: 'ACTIVE' }),
+        run({ id: 'r5', code: 'VR-005', vehicleId: 'v2', status: 'PLANNED' }),
+      ],
+      expected: { total: 4, onTrip: 2, idle: 1, underMaintenance: 1, runningRuns: 3 },
+    },
+  ])('hai don vi — $name', ({ vehicles, runs, expected }) => {
+    const presence = countFleetPresence(coreInput({ vehicles, runs }));
 
-    expect(presence.onTrip).toBe(1);
-    expect(presence.runningRuns).toBe(2);
-    expect(presence.total).toBe(1);
+    expect(presence).toEqual({ ...expected, activeDrivers: 0 });
+    /* Khong xe nao bi dem hai lan: ba o phan hoach dung `total`, du xe co bao nhieu vong chay. */
+    expect(presence.onTrip + presence.idle + presence.underMaintenance).toBe(presence.total);
+    /* Moi xe dang chay co it nhat mot vong chay dang chay, nen so xe khong vuot so vong chay. */
+    expect(presence.onTrip).toBeLessThanOrEqual(presence.runningRuns);
   });
 
   it('doi xe KHEP KIN: moi xe o dung mot o, va chi dem lai xe ACTIVE', () => {
