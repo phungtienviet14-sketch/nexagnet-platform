@@ -55,3 +55,15 @@ test('returns empty array when no markets match query', () => {})
 test('throws error when API key is missing', () => {})
 test('falls back to substring search when Redis is unavailable', () => {})
 ```
+
+## Kiểm thử trước push (bổ sung 21/09/2026)
+
+> Chi tiết: [docs/phat-trien/van-hanh/ci-cd.md](../../../../docs/phat-trien/van-hanh/ci-cd.md) §3
+
+- **Trong lúc code:** chạy test **tập trung** đúng module/spec bị ảnh hưởng (TDD vẫn áp dụng).
+- **Trước push:** KHÔNG bắt buộc full monorepo suite (`pnpm test`, build, Playwright, Postgres/Hatchet
+  IT, Docker). Hook pre-push của repo chỉ chạy check nhanh theo vùng sửa.
+- **Full regression** là trách nhiệm của GitHub CI — 7 check bắt buộc: `verify`, `integration`,
+  `workflow-integration`, `tenant-packs`, `e2e`, `audit`, `images`. CI xanh mới review/merge.
+- **Báo cáo:** luôn nêu rõ đã chạy test tập trung nào (lệnh + số pass/fail), và cái gì để CI chứng
+  minh. Đừng tuyên bố "đã kiểm" cho phần chỉ CI chạy được.

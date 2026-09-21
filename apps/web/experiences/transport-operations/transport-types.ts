@@ -2591,6 +2591,22 @@ export type OrderCompletionOutcome = Exclude<OrderCompletionState, 'PENDING'>;
 
 export type OrderCompletionBasis = 'DOCUMENT' | 'EXTERNAL_PHYSICAL_CONFIRMATION';
 
+/** Ban sao cua `ACCEPTANCE_ACTOR_KINDS` (`apps/api/src/transport/acceptance/acceptance.types.ts`). */
+export type OrderCompletionActorKind = 'USER' | 'DISABLED_USER' | 'SEED_DATA' | 'UNRESOLVED';
+
+/**
+ * NGUOI QUYET cho con nguoi doc — `#334` (UAT BUG-04).
+ *
+ * `id` la ma tai khoan THO (su that kiem toan) va KHONG duoc in ra man hinh; `label` la thu duy
+ * nhat duoc in. May chu da phan giai `label` tu nguon tai khoan va bao dam no khong bao gio la `id`,
+ * ke ca voi tai khoan da xoa ("Tài khoản không còn hoạt động").
+ */
+export interface OrderCompletionActor {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: OrderCompletionActorKind;
+}
+
 /**
  * MOT DONG cua hang cho `Cho ket thuc` — `#275` K4.
  *
@@ -2614,7 +2630,9 @@ export interface OrderCompletionRow {
   readonly runCode: string | null;
   readonly vehicleId: string | null;
   readonly latestDecidedAt: string | null;
+  /** Ma tai khoan THO cua nguoi quyet moi nhat — cho kiem toan, khong in ra man hinh. */
   readonly latestDecidedBy: string | null;
+  readonly latestDecidedByActor: OrderCompletionActor | null;
 }
 
 export interface OrderCompletionDecision {
@@ -2628,7 +2646,9 @@ export interface OrderCompletionDecision {
   readonly externalNote: string | null;
   readonly supersedesId: string | null;
   readonly idempotencyKey: string;
+  /** Ma tai khoan THO — cho kiem toan, khong in ra man hinh. */
   readonly decidedBy: string;
+  readonly decidedByActor: OrderCompletionActor;
   readonly decidedAt: string;
 }
 

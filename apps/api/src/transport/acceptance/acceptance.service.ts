@@ -386,6 +386,12 @@ export class CommercialAcceptanceService {
     const orderIds = orders.map((order) => order.id);
     const found = await this.repository.findManyByOrders(orderIds);
     const byOrder = new Map(found.map((entry) => [entry.orderId, entry]));
+    const latestIds = found.flatMap((entry) =>
+      entry.latestDecisionId === null ? [] : [entry.latestDecisionId],
+    );
+    const latest = new Map(
+      (await this.repository.findDecisionsByIds(latestIds)).map((entry) => [entry.id, entry]),
+    );
     const context = new Map(
       (await this.movement.contextForOrders(orderIds)).map((row) => [row.orderId, row]),
     );
@@ -395,6 +401,13 @@ export class CommercialAcceptanceService {
         const acceptance = byOrder.get(order.id) ?? null;
         const state: CommercialAcceptanceState = acceptance?.state ?? 'PENDING';
         const operational = context.get(order.id) ?? null;
+        /*
+         * Nguoi VA gio cua CUNG mot quyet dinh (`#334`). Ho so luon co `latestDecisionId` vi no
+         * duoc ghi trong cung giao dich voi quyet dinh dau tien; hai gia tri du phong chi de mot
+         * hang lech (neu co) van in ra mot cap co that thay vi `null`.
+         */
+        const latestId = acceptance?.latestDecisionId ?? null;
+        const decided = latestId === null ? null : (latest.get(latestId) ?? null);
         return {
           acceptanceId: acceptance?.id ?? null,
           orderId: order.id,
@@ -410,8 +423,8 @@ export class CommercialAcceptanceService {
           settlementEligible: isSettlementEligible({ orderStatus: order.status, state }),
           runCode: operational?.runCode ?? null,
           vehicleId: operational?.vehicleId ?? null,
-          latestDecidedAt: acceptance?.updatedAt ?? null,
-          latestDecidedBy: acceptance?.openedBy ?? null,
+          latestDecidedAt: decided?.decidedAt ?? acceptance?.updatedAt ?? null,
+          latestDecidedBy: decided?.decidedBy ?? acceptance?.openedBy ?? null,
         };
       }),
     );
