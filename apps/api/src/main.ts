@@ -9,6 +9,7 @@ import { setKnowledgeReloader } from './admin/knowledge-refresh.js';
 import { AppModule, loadAppEnv } from './app.module.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { PrismaService } from './config/prisma.service.js';
+import { configureEdgeProxyGuard } from './auth/edge-proxy.guard.js';
 import { configureSession } from './auth/session-bootstrap.js';
 
 const logger = new Logger('Bootstrap');
@@ -30,6 +31,9 @@ if (process.env.LOG_FORMAT === 'json') {
 
 // forRoot() dung module theo env: mount /admin (AdminJS) khi ADMIN_UI=on + PERSISTENCE=prisma.
 const app = await NestFactory.create<NestExpressApplication>(await AppModule.forRoot());
+// TRUOC `configureSession` — va thu tu nay la ca y nghia cua no. Dat sau, mot request khong hop le
+// van kip tao/doc phien trong Postgres truoc khi bi chan; dat truoc, no dung lai o bien ngoai cung.
+configureEdgeProxyGuard(app, env);
 configureSession(app, env, app.get(PrismaService));
 // AUTH_MODE=none (VM dev/demo): khong con xac thuc nao de bao ve -> CORS khoa theo mot origin chi
 // gay ket khi mo qua IP/loopback/tunnel. Phan anh dung origin goi den de trinh duyet nao cung dung duoc.
@@ -54,5 +58,7 @@ if (env.AUTH_MODE === 'none') {
   );
 }
 if (env.ADMIN_UI === 'on' && env.PERSISTENCE === 'prisma') {
-  logger.log(`Panel Nguồn sự thật: http://localhost:${env.PORT}/admin (đăng nhập: ${env.ADMIN_EMAIL})`);
+  logger.log(
+    `Panel Nguồn sự thật: http://localhost:${env.PORT}/admin (đăng nhập: ${env.ADMIN_EMAIL})`,
+  );
 }
