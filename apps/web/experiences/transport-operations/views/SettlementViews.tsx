@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
+import { EMPTY_VALUE } from '../customer-view';
+import { buildSectionUrl } from '../navigation';
 import {
   toSectionQuery,
   useApByFlow,
@@ -28,6 +30,7 @@ import {
   toSettlementDirectory,
 } from '../workspace/settlement';
 import { businessTodayIn } from './business-today';
+import { useCustomerArBook } from './customer-ar-book';
 import { CustomerArWorkspace } from './CustomerArWorkspace';
 
 /**
@@ -60,6 +63,32 @@ function useSettlementDirectory() {
  * Cong no & quyet toan — tuoi no phai thu
  * ------------------------------------------------------------------ */
 
+/**
+ * MOT MAN HINH, HAI CAU HOI — va chung phai nam o hai cho.
+ *
+ * ==============================================================================================
+ * DOC TRUOC, LAM SAU
+ * ==============================================================================================
+ *
+ * Chin tren muoi lan man nay duoc mo la de tra loi *khach nao dang no, bao nhieu, qua han chua*.
+ * Ban cu dat khoi THAO TAC (bon form, hai muoi sau o nhap) len TRUOC bang tuoi no, nen cau tra loi
+ * do nam duoi man hinh thu hai — moi lan, ke ca nhung ngay khong ai nhap gi.
+ *
+ * Gio: con so → bang → roi moi toi viec. Khoi viec van o day, chi khong con dung truoc cau hoi.
+ *
+ * ==============================================================================================
+ * MOT MOC DOC CHO CA TRANG — va day KHONG phai mot lan gom cho gon
+ * ==============================================================================================
+ *
+ * Trang nay tung co HAI o `Tính đến ngày` roi nhau: mot cua so doi soat, mot cua bang tuoi no. Hai
+ * o giu hai `useState` khac nhau, nen doi mot o thi nua tren va nua duoi cua CUNG mot man hinh noi
+ * ve hai ngay khac nhau — va khong mot dong chu nao noi ra dieu do. Voi mot man hinh tien, do
+ * khong phai mot loi trinh bay, do la mot cach doc sai so.
+ *
+ * Cung mot le voi o `Khách hàng`: no von chi loc bang tuoi no, trong khi cac con so ngay tren no
+ * van la cua TAT CA khach. Ba duong doc cua so cong no VON nhan `customerId` (xem
+ * `customer-ar-book.ts`), nen o chon gio dieu khien ca trang.
+ */
 export function SettlementView() {
   const navigation = useNavigationInput();
   const tenant = useTenantRuntime();
@@ -68,50 +97,64 @@ export function SettlementView() {
   const [customerId, setCustomerId] = useState<string | null>(null);
   const customers = toSectionQuery(useCustomers(navigation));
   const aging = toSectionQuery(useArAging(navigation, asOf, customerId));
+  const book = useCustomerArBook({ asOf, customerId });
 
   const model = toArAging(aging.data ?? null, directory);
+  const arBook = book.model;
+  /** Chi khi co DUNG MOT so tien te thi cac con so dau trang moi cong chung duoc (`GD-15`). */
+  const singleLedger =
+    arBook !== null && arBook.combinedTotalsAllowed ? (arBook.currencyGroups[0] ?? null) : null;
 
   return (
     <>
       <PageHeader
         title="Công nợ & quyết toán"
-        summary="Năm dòng tiền giữ riêng: khách hàng, nhà xe, nguồn đơn, cây xăng, lái xe."
+        summary="Tiền khách hàng nợ công ty: ai nợ, nợ bao nhiêu, quá hạn bao lâu — và việc kế toán phải làm để thu về."
+        context={
+          <p className="tx-note">
+            Màn này giữ <strong>một dòng tiền: cước khách hàng</strong>. Ba dòng phải trả — nhà xe,
+            hoa hồng nguồn đơn, cây xăng — đọc ở <a href={buildSectionUrl('ar-ap')}>AR/AP</a>; tiền
+            đã ra với lái xe ở <a href={buildSectionUrl('driver-settlement')}>Quyết toán lái xe</a>.
+            Năm dòng không cộng chung.
+          </p>
+        }
       />
-
-      <CustomerArWorkspace />
 
       {/*
         MOC `asOf` la mot O NHAP, khong phai mot mac dinh im lang. May chu bat buoc tham so nay
         chinh vi ly do do: hai nguoi mo cung man hinh cach nhau qua nua dem se doc ra hai bang khac
         nhau, va khong bang nao ghi lai moc cua no.
       */}
-      <form className="tx-filters" role="search" aria-label="Chọn mốc đọc công nợ">
-        <label className="tx-field">
-          <span>Tính đến ngày</span>
-          <input
-            type="date"
-            value={asOf}
-            onChange={(event) => setAsOf(event.target.value)}
-            required
-          />
-        </label>
-        <label className="tx-field">
-          <span>Khách hàng</span>
-          <select
-            aria-label="Khách hàng"
-            value={customerId ?? ''}
-            onChange={(event) =>
-              setCustomerId(event.target.value === '' ? null : event.target.value)
-            }
-          >
-            <option value="">Tất cả khách hàng</option>
-            {(customers.data ?? []).map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <form className="tx-scope" role="search" aria-label="Chọn mốc đọc công nợ">
+        <p className="tx-scope__lead">Mọi con số trên trang đọc theo hai ô này.</p>
+        <div className="tx-filters">
+          <label className="tx-field">
+            <span>Tính đến ngày</span>
+            <input
+              type="date"
+              value={asOf}
+              onChange={(event) => setAsOf(event.target.value)}
+              required
+            />
+          </label>
+          <label className="tx-field">
+            <span>Khách hàng</span>
+            <select
+              aria-label="Khách hàng"
+              value={customerId ?? ''}
+              onChange={(event) =>
+                setCustomerId(event.target.value === '' ? null : event.target.value)
+              }
+            >
+              <option value="">Tất cả khách hàng</option>
+              {(customers.data ?? []).map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </form>
 
       {aging.errorMessage === null ? null : (
@@ -119,17 +162,39 @@ export function SettlementView() {
       )}
       {aging.isLoading ? <LoadingState label="Đang đọc công nợ phải thu…" /> : null}
 
-      <section className="tx-cards" aria-label="Tổng hợp công nợ phải thu">
+      {/*
+        BON CON SO DAU TRANG — den tu HAI so khac nhau, co chu dich.
+
+        Hai o dau la cua bao cao tuoi no, nen chung cong dung bang bang ngay ben duoi. Hai o sau la
+        cua so doi soat khach hang, va chung tra loi hai cau ma bao cao tuoi no KHONG tra loi: tien
+        nao chua thanh cong no, va tien nao da ve ma chua tru vao dau.
+      */}
+      <section className="tx-cards tx-cards--lead" aria-label="Tiền khách đang nợ">
         <MetricCard label="Tổng còn nợ" value={model.outstandingLabel} />
-        <MetricCard label="Trong đó quá hạn" value={model.overdueLabel} />
-        {model.buckets.map((bucket) => (
-          <MetricCard key={bucket.bucket} label={bucket.label} value={bucket.amountLabel} />
-        ))}
+        <MetricCard label="Trong đó quá hạn" value={model.overdueLabel} tone="stop" />
+        <MetricCard
+          label="Chờ đối soát"
+          value={arBook?.pendingAmountLabel ?? EMPTY_VALUE}
+          hint="chưa phải công nợ"
+          tone="wait"
+        />
+        <MetricCard
+          label="Tiền nhận trước"
+          value={singleLedger?.unallocatedCreditLabel ?? EMPTY_VALUE}
+          hint="đã về, chưa gắn vào chứng từ nào"
+          tone="done"
+        />
       </section>
 
       <p className="tx-note" role="status">
         {model.headline}
       </p>
+
+      <section className="tx-cards tx-cards--quiet" aria-label="Chia theo tuổi nợ">
+        {model.buckets.map((bucket) => (
+          <MetricCard key={bucket.bucket} label={bucket.label} value={bucket.amountLabel} />
+        ))}
+      </section>
 
       {model.rows.length === 0 && !aging.isLoading ? (
         <EmptyState title={`Không có chứng từ nào còn nợ tính đến ${model.asOfLabel}.`} />
@@ -161,6 +226,43 @@ export function SettlementView() {
           ]}
         />
       )}
+
+      {/*
+        SO CHI TIET nam SAU bang, khong truoc.
+
+        Sau con so nay tra loi cau hoi thu hai ("trong so con no do, bao nhieu da den han, bao nhieu
+        da thu duoc") va chi co nghia khi da doc xong cau thu nhat. Truoc day chung dung ngang hang
+        voi tong so o dau trang, nen mot man hinh mot tien te bay muoi bon the so giong het nhau.
+      */}
+      {arBook === null ? null : (
+        <section aria-label="Sổ phải thu theo tiền tệ">
+          <h2>Sổ phải thu theo tiền tệ</h2>
+          {arBook.combinedTotalsAllowed ? null : (
+            <p className="tx-note tx-note--warn">
+              Có nhiều tiền tệ: không cộng gộp. Đọc từng sổ tiền tệ riêng bên dưới.
+            </p>
+          )}
+          {arBook.currencyGroups.map((group) => (
+            <div key={group.currencyCode} className="tx-ledger">
+              {/* Mot so tien te thi tieu de muc da noi du — `Sổ VND` ngay duoi no la mot dong thua. */}
+              {arBook.currencyGroups.length === 1 ? null : <h3>Sổ {group.currencyCode}</h3>}
+              <div className="tx-cards tx-cards--quiet">
+                <MetricCard label="Còn phải thu" value={group.outstandingLabel} />
+                <MetricCard label="Chưa đến hạn" value={group.notYetDueLabel} />
+                <MetricCard label="Đến hạn" value={group.dueLabel} />
+                <MetricCard label="Quá hạn" value={group.overdueLabel} />
+                <MetricCard label="Đã phân bổ" value={group.paidLabel} />
+                <MetricCard
+                  label="Tiền nhận trước / chưa phân bổ"
+                  value={group.unallocatedCreditLabel}
+                />
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <CustomerArWorkspace scope={{ asOf, customerId }} />
     </>
   );
 }

@@ -420,7 +420,7 @@
  * lien nhau doc ra nhu mot danh sach phang. Cho them khong khi o day la cach re nhat de noi "day
  * la mot muc khac".
  */
-.tx-main > section:not(.tx-cards, .tx-panel, .tx-detail, .tx-command) {
+.tx-main > section:not(.tx-cards, .tx-panel, .tx-detail, .tx-command, .tx-work) {
   display: flex;
   flex-direction: column;
   gap: var(--tx-space-tight);
@@ -2216,4 +2216,299 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--tx-ink);
+}
+
+/* ==================================================================================================
+ * HAI COT — va mot lop hoc ve class CHET
+ * ==================================================================================================
+ *
+ * `.tx-grid--two` da nam trong markup cua man Cong no tu dau, nhung KHONG mot dong CSS nao trong ca
+ * kho dinh nghia no. Nen hai form dang le dung canh nhau thuc ra xep doc, moi cai mot bang ngang
+ * het be rong trang — va khong ai doc `className` ma phat hien ra dieu do, vi ten class doc len
+ * nghe nhu no dang lam viec.
+ *
+ * `auto-fit` + `minmax` chu khong `1fr 1fr`: o 390px hai cot phai tu ve mot cot, khong doi mot
+ * media query rieng.
+ */
+.tx-grid {
+  display: grid;
+  gap: var(--tx-space-block);
+  align-items: start;
+}
+
+/*
+ * `28rem` la mot con so DO duoc, khong phai mot con so dep.
+ *
+ * VA `1rem` O DAY LA 14px, KHONG PHAI 16px — `globals.css` dat `html { font-size: 14px }`. Moi
+ * nguong `rem` tren man hinh nay vi the nho hon ~12,5% so voi con so ma mat quen nham. Lan sua dau
+ * dat `26rem` va no VAN cho ra ba cot, dung vi cho nay.
+ *
+ * Do that: than trang rong ~1147px o man 1440, `gap: 1.15rem` = 18,4px. Ba cot can
+ * `3n + 2·gap ≤ 1147`, tuc `n ≤ 370px` — nen moi nguong duoi 370px deu cho ra 3 + 1 va mot hang
+ * cuoi bo trong hai o. `28rem` = 392px chan dung o hai cot, va `min(100%, …)` van cho ra mot cot
+ * o 390px.
+ */
+.tx-grid--two {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+}
+
+/* ==================================================================================================
+ * PHAM VI DOC CUA CA TRANG
+ * ==================================================================================================
+ *
+ * Man Cong no tung co HAI o `Tính đến ngày` roi nhau o hai doan khac nhau cua trang, moi o dieu
+ * khien mot nua so lieu. Gio chi con MOT, va no phai doc ra nhu mot cai cong tac cua ca trang chu
+ * khong nhu mot o nhap cua khoi ngay duoi no — nen no co nen rieng, mot duong vien, va mot cau noi
+ * ro no chi phoi cai gi.
+ */
+.tx-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.8rem 1rem 0.9rem;
+  background: var(--tx-paper);
+  border: 1px solid var(--tx-line-strong);
+  border-radius: var(--tx-radius);
+}
+
+.tx-scope__lead {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--tx-ink-faint);
+}
+
+/*
+ * O NHAP TRONG MOT KHOI XEP DOC bi keo het be ngang — mot o ngay rong 1100px. `.tx-field` mang
+ * `flex: 1 1 190px`, va trong mot khoi xep theo COT thi `flex-basis` do thanh chieu CAO, con be
+ * ngang thi `stretch`. Nen moi hang o nhap phai nam trong mot `.tx-filters` that su xep theo HANG.
+ * Tran duoi day la luoi an toan cho nhung lan quen dieu do.
+ */
+.tx-scope > .tx-field,
+.tx-form > .tx-field {
+  flex: none;
+  width: min(100%, 260px);
+}
+
+/* Hai o CHON dai — nhan cua chung la ca mot cau, khong phai mot tu. */
+.tx-field--wide {
+  flex: 1 1 min(100%, 30rem);
+}
+
+/* ==================================================================================================
+ * BA MUC TO NHO CHO MOT DAI SO
+ * ==================================================================================================
+ *
+ * Man Cong no tung bay muoi bon the so giong het nhau tren mot trang: tong con no nang dung bang
+ * `Đã phân bổ`. Mot dai ma moi o deu quan trong nhu nhau thi khong o nao quan trong ca.
+ *
+ *   · `--lead`  bon con so tra loi cau hoi chinh cua man hinh;
+ *   · (tran)    muc thuong;
+ *   · `--quiet` so chi tiet — doc sau, khi da biet minh dang tim gi.
+ */
+.tx-cards--lead .tx-metric {
+  padding: 1rem 1.1rem 1.05rem;
+}
+
+.tx-cards--lead .tx-metric__value {
+  font-size: clamp(1.5rem, 1.25rem + 0.8vw, 1.9rem);
+}
+
+.tx-cards--lead .tx-metric__label {
+  font-size: 0.78rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-cards--quiet {
+  box-shadow: none;
+  border: 1px solid var(--tx-line);
+}
+
+.tx-cards--quiet .tx-metric {
+  padding: 0.65rem 0.8rem 0.7rem;
+}
+
+.tx-cards--quiet .tx-metric__value {
+  font-size: 1.1rem;
+}
+
+/*
+ * MAU TREN MOT CON SO — chi tren con so, khong tren ca o.
+ *
+ * To ca o lam dai so thanh mot bang den giao thong, va mat se doc mau truoc chu. Nhan van noi ra
+ * y nghia bang CHU (`Trong đó quá hạn`); mau chi lam no den som hon mot nhip.
+ */
+.tx-metric--stop .tx-metric__value {
+  color: var(--tx-stop);
+}
+
+.tx-metric--wait .tx-metric__value {
+  color: var(--tx-wait);
+}
+
+.tx-metric--done .tx-metric__value {
+  color: var(--tx-done);
+}
+
+.tx-metric--go .tx-metric__value {
+  color: var(--tx-go);
+}
+
+/* ==================================================================================================
+ * DUONG DI CUA MOT DONG TIEN — bon buoc, ve ra thanh bon buoc
+ * ==================================================================================================
+ *
+ * Bon o nhap cua man Cong no phai lam THEO THU TU (chot so → gom lo → tien ve → gan vao chung tu),
+ * nhung thu tu do khong hien o dau ca: nguoi moi vao thay bon cai form giong nhau va phai tu doan.
+ * Dai nay noi ra thu tu do mot lan, o tren, bang chinh ngon ngu ke toan dung.
+ */
+.tx-flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 1px;
+  background: var(--tx-line);
+  border-radius: var(--tx-radius);
+  overflow: hidden;
+}
+
+.tx-flow__step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0.15rem 0.5rem;
+  padding: 0.6rem 0.8rem 0.65rem;
+  background: var(--tx-canvas);
+}
+
+.tx-flow__ord {
+  grid-row: span 2;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--tx-paper);
+  border: 1px solid var(--tx-line-strong);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-ink-soft);
+}
+
+.tx-flow__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.tx-flow__note {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--tx-ink-faint);
+}
+
+/* ==================================================================================================
+ * KHOI VIEC — nua "lam" cua mot man hinh vua doc vua lam
+ * ==================================================================================================
+ *
+ * Duong ke tren dau la de noi mot cau: *tu day tro xuong la viec phai lam, khong con la so de doc*.
+ * No la duong ke thu hai tren trang (sau dau trang), va khong co duong thu ba.
+ */
+.tx-work {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-space-block);
+  margin-top: var(--tx-space-section);
+  padding-top: var(--tx-space-block);
+  border-top: 1px solid var(--tx-line-strong);
+}
+
+.tx-work__head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.tx-work__head .tx-panel__lead {
+  margin: 0.3rem 0 0;
+}
+
+/* Form trong mot ngan thao tac: cac hang o nhap, roi mot hang nut. */
+.tx-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+/*
+ * LOI NHAN SAU MOT LENH — khong phai mot `tx-note`.
+ *
+ * Cau "Đã ghi nhận tiền…" truoc day dung chinh kieu cua ghi chu phu: chu 0.8rem, mau nhat nhat
+ * trang. No la cau tra loi cho viec nguoi dung vua lam, nen no phai thay duoc ma khong phai tim.
+ */
+.tx-notice {
+  margin: 0;
+  padding: 0.55rem 0.8rem;
+  border-left: 3px solid var(--tx-go);
+  background: var(--tx-go-wash);
+  border-radius: 0 var(--tx-radius-sm) var(--tx-radius-sm) 0;
+  font-size: 0.85rem;
+  color: var(--tx-ink);
+}
+
+/* So thu tu cua mot ngan thao tac trong mot chuoi. */
+.tx-command__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: var(--tx-canvas);
+  border: 1px solid var(--tx-line-strong);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-ink-soft);
+}
+
+/* ==================================================================================================
+ * LO DOI SOAT · SO THEO TIEN TE — hai danh sach lap lai trong mot khoi
+ * ==================================================================================================
+ *
+ * Ca hai tung la `tx-panel` long trong `tx-panel`: mot cai hop trang trong mot cai hop trang, va o
+ * muc long thu hai thi cai vien khong con noi len duoc dieu gi. Gio chung chi la cac MUC cua mot
+ * khoi, ngan cach bang khoang trang va mot duong day mong.
+ */
+.tx-batch + .tx-batch,
+.tx-ledger + .tx-ledger {
+  margin-top: var(--tx-space-block);
+  padding-top: var(--tx-space-block);
+  border-top: 1px solid var(--tx-line);
+}
+
+.tx-batch__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tx-batch__head h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+}
+
+.tx-ledger h3 {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--tx-ink-soft);
 }

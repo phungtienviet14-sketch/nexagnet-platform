@@ -128,6 +128,30 @@ const RECEIVABLE_STATUS_LABELS = {
 } as const;
 
 /**
+ * TRANG THAI CUA MOT LO va CUA MOT DONG TRONG LO — doi ra chu Viet.
+ *
+ * `OPEN`/`PENDING` la tu vung cua kho du lieu. Chung tung duoc dan thang len man hinh canh nhung
+ * dong tieng Viet khac, va mot nguoi doc `PENDING` khong biet do la "chua ai quyet" hay "dang gui
+ * di" — hai nghia dan toi hai viec khac nhau.
+ *
+ * Roi ve CHINH chuoi goc khi gap mot gia tri chua biet: mot ma la, du kho doc, van that hon mot
+ * cau tieng Viet doan mo.
+ */
+const BATCH_STATUS_LABELS: Readonly<Record<string, string>> = {
+  OPEN: 'Đang mở',
+  CLOSED: 'Đã chốt',
+};
+
+const BATCH_LINE_STATE_LABELS: Readonly<Record<string, string>> = {
+  PENDING: 'Chờ quyết',
+  CONFIRMED: 'Đã chốt số',
+  DEFERRED: 'Đã hoãn',
+};
+
+const labelOf = (labels: Readonly<Record<string, string>>, code: string): string =>
+  labels[code] ?? code;
+
+/**
  * SO CONG NO CUA KE TOAN, va mot luat duy nhat ve NHAN.
  *
  * ==============================================================================================
@@ -257,10 +281,25 @@ export function toCustomerArWorkspace(input: {
     pendingRows: input.pending.map((row) => ({
       ...row,
       customerName: customerNameOf(row.customerId),
+      /*
+       * NGAY va SO TIEN da thanh chu o day, khong o component.
+       *
+       * Bang "Don cho doi soat" tung in thang `row.businessDate`, nen no hien `2026-09-17` trong
+       * khi bang tuoi no ngay duoi hien `17/09/2026` — hai kieu ngay tren cung mot man hinh, va
+       * kieu dung la kieu ke toan doc.
+       */
+      businessDateLabel: dayLabel(row.businessDate),
+      proposedAmountLabel: money(row.proposedAmount, row.currencyCode),
     })),
     batches: input.batches.map((batch) => ({
       ...batch,
       customerName: customerNameOf(batch.customerId),
+      statusLabel: labelOf(BATCH_STATUS_LABELS, batch.status),
+      lines: batch.lines.map((line) => ({
+        ...line,
+        stateLabel: labelOf(BATCH_LINE_STATE_LABELS, line.state),
+        proposedAmountLabel: money(line.proposedAmount, line.currencyCode),
+      })),
     })),
     paymentChoices,
     receivableChoices,
