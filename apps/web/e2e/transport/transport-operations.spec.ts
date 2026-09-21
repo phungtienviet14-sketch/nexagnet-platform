@@ -1988,3 +1988,150 @@ test.describe('hoat dong cua xe toi co co phan (Lane N)', () => {
     await expect(page.getByText(/phần Bảo dưỡng chưa được bật/)).toBeVisible();
   });
 });
+
+/**
+ * ===========================================================================
+ * #348 — TONG QUAN DOC TU DON + VONG CHAY, KHONG TU CHUYEN LAP TAY.
+ *
+ * Mock `CONTROL_TOWER` co MOT vong chay dang chay tren MOT xe va MOT viec: chang thieu km cua vong
+ * chay `RUN-E2E-1` (`id` ky thuat cua chang la `l-9`). Bo `seedTrips()` co ba chuyen lap tay chua
+ * khep. Bai `.ts` da khoa phep dem; o day do nhung thu chi trinh duyet that do duoc — duong dan THAT
+ * tren the, dia chi THAT sau khi bam, va con so THAT o man ben kia.
+ */
+test.describe('#348 — Tong quan lay so tu don va vong chay', () => {
+  const RUNNING_CARD = /^Vòng chạy đang chạy\s*1\s*Trên 1 xe\.$/;
+
+  test('0 chuyen lap tay + vong chay dang chay: Tong quan thay dang co van hanh', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.route('**/transport/trips', (route) => json(route, []));
+    await page.goto('/');
+
+    const stats = page.getByRole('region', { name: 'Số liệu vận hành' });
+    await expect(stats.getByRole('link', { name: RUNNING_CARD })).toBeVisible();
+    await expect(stats.getByRole('link', { name: /^Đơn đang mở\s*1/ })).toHaveAttribute(
+      'href',
+      '/?section=movement',
+    );
+
+    await expect(page.getByRole('region', { name: 'Cần xử lý ngay' })).toContainText(
+      '1 việc đang chờ người xử lý.',
+    );
+    await expect(page.getByText('Không có chuyến nào đang chờ người xử lý.')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Chuyến lập tay chưa khép' })).toHaveCount(0);
+  });
+
+  test('co ca chuyen cu lan vong chay moi: so chinh la vong chay, chuyen cu chi la dong phu', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/');
+
+    const stats = page.getByRole('region', { name: 'Số liệu vận hành' });
+    await expect(stats.getByRole('link', { name: RUNNING_CARD })).toBeVisible();
+    /* Khong mot the so nao con dem chuyen lap tay — va khong the nao cong chung hai thu. */
+    await expect(stats.getByText(/Chuyến/)).toHaveCount(0);
+
+    const legacy = page.getByRole('region', { name: 'Chuyến lập tay chưa khép' });
+    await expect(legacy).toContainText('Còn 3 chuyến lập tay theo cách làm trước đây chưa khép.');
+    await expect(legacy.getByRole('link', { name: 'Xem ở “Chuyến xe”' })).toHaveAttribute(
+      'href',
+      '/?section=trips',
+    );
+  });
+
+  test('so "đang chạy" cua Tong quan = Bang dieu hanh, va bam the la sang dung man do', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    /* Cung hinh dang bai `#344`: 1 xe mo 2 vong chay — con so ma mot phep dem theo xe se noi SAI. */
+    const twoRunsOneVehicle = {
+      ...CONTROL_TOWER,
+      board: CONTROL_TOWER.board.map((entry) =>
+        entry.column === 'IN_TRANSIT'
+          ? {
+              ...entry,
+              total: 2,
+              cards: [...entry.cards, { ...entry.cards[0], runId: 'r-2', runCode: 'RUN-E2E-2' }],
+            }
+          : entry,
+      ),
+      fleet: { ...CONTROL_TOWER.fleet, total: 1, onTrip: 1, idle: 0, runningRuns: 2 },
+    };
+    await page.route('**/transport/control-tower', (route) => json(route, twoRunsOneVehicle));
+    await page.goto('/');
+
+    const card = page
+      .getByRole('region', { name: 'Số liệu vận hành' })
+      .getByRole('link', { name: /^Vòng chạy đang chạy\s*2\s*Trên 1 xe\.$/ });
+    await expect(card).toHaveAttribute('href', '/?section=control-tower');
+
+    await card.click();
+    await expect(page).toHaveURL(/\?section=control-tower$/);
+    await expect(
+      page
+        .getByRole('region', { name: 'Bảng vòng chạy' })
+        .getByText(/^Vòng chạy đang chạy: 2 trên 1 xe — /),
+    ).toBeVisible();
+  });
+
+  test('khong the, khong dong viec nao dan vao Chuyen xe; dong viec mang MA, khong mang id', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/');
+
+    const stats = page.getByRole('region', { name: 'Số liệu vận hành' });
+    const work = page.getByRole('region', { name: 'Cần xử lý ngay' });
+    const workLink = work.getByRole('link', { name: 'Chặng đã xong nhưng chưa nhập số km' });
+    await expect(stats.getByRole('link', { name: RUNNING_CARD })).toBeVisible();
+    await expect(workLink).toHaveAttribute('href', '/?section=movement&selected=RUN-E2E-1');
+
+    const hrefsOf = (region: typeof stats) =>
+      region
+        .getByRole('link')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    const hrefs = [...(await hrefsOf(stats)), ...(await hrefsOf(work))];
+    expect(hrefs.length).toBeGreaterThan(0);
+    expect(hrefs.filter((href) => href === null || href.includes('section=trips'))).toEqual([]);
+    expect(hrefs.join(' ')).not.toContain('l-9');
+  });
+
+  test('may chu tu choi Bang dieu hanh: Tong quan KHONG ve so vong chay nao, ke ca so 0', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.route('**/transport/control-tower', (route) =>
+      json(route, { message: 'Tài khoản này không được xem bảng điều hành' }, 403),
+    );
+    await page.goto('/');
+
+    await expect(page.locator('#tx-main').getByRole('alert')).toContainText(
+      'Tài khoản này không được xem bảng điều hành',
+    );
+    const stats = page.getByRole('region', { name: 'Số liệu vận hành' });
+    /* Nguon khac van song: the don van la mot con so that. */
+    await expect(stats.getByRole('link', { name: /^Đơn đang mở\s*1/ })).toBeVisible();
+    await expect(stats.getByText(/Vòng chạy/)).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Cần xử lý ngay' })).toHaveCount(0);
+  });
+
+  test('o 390px Tong quan moi khong tran ngang', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.goto('/');
+
+    await expect(
+      page
+        .getByRole('region', { name: 'Số liệu vận hành' })
+        .getByRole('link', { name: RUNNING_CARD }),
+    ).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Chuyến lập tay chưa khép' })).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+});
