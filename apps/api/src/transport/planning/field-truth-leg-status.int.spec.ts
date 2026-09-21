@@ -178,11 +178,17 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       });
     }
 
-    beforeAll(cleanup);
+    /*
+     * TRAN 60 GIAY cho ca hai hook, cung con so voi `transport-waiting*.int.spec.ts`: `cleanup()` cho
+     * khoa tu van `279_005` roi `ALTER TABLE ... DISABLE TRIGGER`, va ca hai phai doi moi giao dich
+     * dang cham hai bang do o CAC TEP KHAC dang chay song song trong job `integration`. Tran mac
+     * dinh 10 giay da do that o CI (run 35591208025) du moi bai cua tep nay deu xanh.
+     */
+    beforeAll(cleanup, 60_000);
     afterAll(async () => {
       await cleanup();
       await prisma.$disconnect();
-    });
+    }, 60_000);
 
     let suffix = 0;
 

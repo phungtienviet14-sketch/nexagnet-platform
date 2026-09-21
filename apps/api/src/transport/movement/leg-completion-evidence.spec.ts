@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
@@ -304,5 +307,48 @@ describe('MovementService.transitionLeg — hien truong chan chang CO HANG noi n
     expect((await completionsOf(loaded.id)).map((entry) => entry.action)).toEqual([
       'transport.run.leg.transition',
     ]);
+  });
+});
+
+/**
+ * KHONG MOT DUONG SAN XUAT NAO DI VONG CONG `#332`.
+ *
+ * `fieldTruth` la mot TUY CHON cua `transitionLeg()` — bat buoc phai the: `MovementService` song
+ * trong `TransportModule`, noi khong nhin thay provider cua `transport-checkpoint`, nen nguon hien
+ * truong phai do tang ghep truyen vao (xem `LegTransitionOptions`). Cai gia cua lua chon do la mot
+ * ben goi moi quen truyen thi cong im lang bien mat. Bai nay doc CHINH ma nguon de chan dieu ay:
+ * moi loi goi `.transitionLeg(` ngoai tep kiem thu phai mang `fieldTruth`.
+ */
+describe('moi loi goi transitionLeg o ma san xuat deu mang nguon hien truong (#332)', () => {
+  const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const stripComments = (source: string): string =>
+    source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+
+  /** Moi lan goi `.transitionLeg(`, cat toi dau `;` dau tien — du bao ca doi so nhieu dong. */
+  const callsIn = (code: string): string[] =>
+    code
+      .split('.transitionLeg(')
+      .slice(1)
+      .map((rest) => rest.slice(0, rest.indexOf(';')));
+
+  const productionCallers = readdirSync(SRC, { recursive: true, encoding: 'utf8' })
+    .filter((name) => name.endsWith('.ts') && !name.endsWith('.spec.ts'))
+    .map((name) => ({
+      file: relative(SRC, join(SRC, name)).split(sep).join('/'),
+      calls: callsIn(stripComments(readFileSync(join(SRC, name), 'utf8'))),
+    }))
+    .filter((entry) => entry.calls.length > 0);
+
+  it('co it nhat mot ben goi that — bai khong duoc xanh vi quet trong khong', () => {
+    expect(productionCallers.map((entry) => entry.file)).toContain(
+      'transport/movement/runs.controller.ts',
+    );
+  });
+
+  it('khong mot loi goi nao bo quen `fieldTruth`', () => {
+    const offenders = productionCallers.flatMap((entry) =>
+      entry.calls.filter((call) => !call.includes('fieldTruth')).map(() => entry.file),
+    );
+    expect(offenders).toEqual([]);
   });
 });
