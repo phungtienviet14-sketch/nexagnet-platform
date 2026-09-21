@@ -1,3 +1,4 @@
+import { isRunningRunStatus } from '../movement/movement-lifecycle.js';
 import { summariseRunDistance } from '../movement/run-distance.js';
 import type { Order, RunAssignment, RunLeg, VehicleRun } from '../movement/movement.types.js';
 import type { RunLegPhase } from '../checkpoint/run-timeline.js';
@@ -13,6 +14,7 @@ import {
   type OperationsBoardCard,
   type OperationsBoardColumn,
   type OperationsBoardColumnView,
+  type RunningBoardColumn,
 } from './control-tower.types.js';
 
 /**
@@ -115,8 +117,20 @@ const columnForRun = (
 ): OperationsBoardColumn | null => {
   if (run.status === 'PLANNED') return 'PLANNED';
   if (run.status === 'COMPLETED') return 'DELIVERED';
-  if (run.status !== 'ACTIVE') return null;
+  if (!isRunningRunStatus(run.status)) return null;
+  return runningColumnFor(currentLeg, waitingLegIds);
+};
 
+/**
+ * CHO cua mot vong chay DANG CHAY — luon la mot trong `RUNNING_BOARD_COLUMNS` (`#336`).
+ *
+ * Kieu tra ve la cai giu bat bien: mot nhanh moi tra ve `PLANNED` hay `DELIVERED` o day se KHONG
+ * bien dich, thay vi lang le lam tong nam cot dang chay lech khoi `runningRuns` cua the so.
+ */
+const runningColumnFor = (
+  currentLeg: BoardCurrentLeg | null,
+  waitingLegIds: ReadonlySet<string> | null,
+): RunningBoardColumn => {
   /*
    * `WAITING` DUNG TRUOC `ARRIVED`, va do la ca ly do cot nay ton tai.
    *
@@ -222,14 +236,37 @@ export function buildOperationsBoard(
   });
 }
 
+type FleetPresenceBucket = 'onTrip' | 'underMaintenance' | 'idle';
+
+/**
+ * DOI XE — `#336`: "Đang chạy" doc tu `VehicleRun`, cung vi tu (`isRunningRunStatus`) ma
+ * `columnForRun` dung de dat the vao nam cot dang chay. Hai con so do vi the khong lech duoc.
+ *
+ * Cot `TransportVehicle.status` chi con duoc doc cho MOT viec: `UNDER_MAINTENANCE`, nguon duy nhat ve
+ * bao duong ma `transport-core` co khi `transport-asset-compliance` tat. Gia tri `ON_TRIP`/`IDLE` cua
+ * no KHONG duoc tin — xem khoi chu thich cua `FleetPresenceView`.
+ *
+ * Moi xe vao DUNG MOT o, nen `total = onTrip + idle + underMaintenance`.
+ */
 export function countFleetPresence(input: ControlTowerCoreInput): FleetPresenceView {
+  const running = input.runs.filter((run) => isRunningRunStatus(run.status));
+  const runningVehicleIds = new Set(running.map((run) => run.vehicleId));
+
+  const bucketOf = (vehicle: Vehicle): FleetPresenceBucket => {
+    if (runningVehicleIds.has(vehicle.id)) return 'onTrip';
+    return vehicle.status === 'UNDER_MAINTENANCE' ? 'underMaintenance' : 'idle';
+  };
+  const buckets = input.vehicles.map(bucketOf);
+  const count = (bucket: FleetPresenceBucket): number =>
+    buckets.filter((entry) => entry === bucket).length;
+
   return {
     total: input.vehicles.length,
-    idle: input.vehicles.filter((vehicle) => vehicle.status === 'IDLE').length,
-    onTrip: input.vehicles.filter((vehicle) => vehicle.status === 'ON_TRIP').length,
-    underMaintenance: input.vehicles.filter((vehicle) => vehicle.status === 'UNDER_MAINTENANCE')
-      .length,
+    idle: count('idle'),
+    onTrip: count('onTrip'),
+    underMaintenance: count('underMaintenance'),
     activeDrivers: input.drivers.filter((driver) => driver.status === 'ACTIVE').length,
+    runningRuns: running.length,
   };
 }
 

@@ -6,7 +6,7 @@ import type {
   OperationsBoardCard,
   OperationsBoardColumnView,
 } from '../../transport-types';
-import { OPERATIONS_BOARD_ORDER, toControlTower } from '../control-tower';
+import { OPERATIONS_BOARD_ORDER, toControlTower, type ControlTowerModel } from '../control-tower';
 
 const TODAY = '2026-09-08';
 
@@ -79,7 +79,7 @@ const item = (over: Partial<ActionQueueItem> = {}): ActionQueueItem => ({
 const view = (over: Partial<ControlTowerView> = {}): ControlTowerView => ({
   generatedFor: TODAY,
   board: emptyBoard(),
-  fleet: { total: 0, idle: 0, onTrip: 0, underMaintenance: 0, activeDrivers: 0 },
+  fleet: { total: 0, idle: 0, onTrip: 0, underMaintenance: 0, activeDrivers: 0, runningRuns: 0 },
   queue: [],
   queueTotal: 0,
   unavailableSources: [],
@@ -334,6 +334,93 @@ describe('do phu — thieu vi TAT khac thieu vi CHUA CO', () => {
 
     expect(model.disabledSourceNotes).toEqual([]);
     expect(model.pendingWorkNotes).toEqual([]);
+  });
+});
+
+/**
+ * `#336` BUG-07 — tren man hinh, "Đang chạy" chi con MOT nghia, va moi con so mang DON VI cua no.
+ *
+ * Tang doc da hoi tu ve `VehicleRun` `ACTIVE` (xem `control-tower-read.service.spec.ts`). Cac bai o
+ * day khoa nua con lai:
+ *
+ *   · chu "Đang chạy" khong duoc gan cho mot cot chi chua MOT PHAN cua tap do;
+ *   · the so dem XE va noi "Xe đang chạy", loi tom tat tren bang dem VONG CHAY va noi "Vòng chạy
+ *     đang chạy". Review PR `#344` chan dung ca "1 xe mo 2 vong chay": khi ca hai cung mang nhan tran
+ *     "Đang chạy", cung mot man doc ra "Đang chạy 1" va "Đang chạy: 2 vòng chạy trên 1 xe".
+ */
+describe('#336 — "Đang chạy" mot nghia tren man hinh, moi con so kem don vi', () => {
+  /** Doi xe da phan hoach o may chu: moi xe dang chay nam o `onTrip`, khong o o nao khac. */
+  const running = (runs: number, vehicles: number): ControlTowerView['fleet'] => ({
+    total: vehicles,
+    idle: 0,
+    onTrip: vehicles,
+    underMaintenance: 0,
+    activeDrivers: 0,
+    runningRuns: runs,
+  });
+
+  /** Moi the vao cot mac dinh cua vong chay dang chay — dung hinh dang du lieu UAT. */
+  const inTransit = (cards: readonly OperationsBoardCard[]): OperationsBoardColumnView[] =>
+    emptyBoard().map((existing) =>
+      existing.column === 'IN_TRANSIT'
+        ? { ...existing, total: cards.length, cards: [...cards] }
+        : existing,
+    );
+
+  /** Moi chu ma man hinh IN RA tu mo hinh: nhan the so, nhan cot, loi tom tat, cau dau hang viec. */
+  const renderedTexts = (model: ControlTowerModel): readonly string[] => [
+    ...model.stats.map((stat) => stat.label),
+    ...model.columns.map((entry) => entry.label),
+    model.runningSummary,
+    model.headline,
+  ];
+
+  it.each([
+    {
+      name: '1 xe mo 2 vong chay ACTIVE',
+      fleet: running(2, 1),
+      cards: [card(), card({ runId: 'r2', runCode: 'VR-002', vehicleId: 'v1' })],
+      vehicles: '1',
+      summary: 'Vòng chạy đang chạy: 2 trên 1 xe — ',
+    },
+    {
+      name: 'du lieu UAT: 2 xe, moi xe 1 vong chay ACTIVE',
+      fleet: running(2, 2),
+      cards: [card(), card({ runId: 'r2', runCode: 'VR-002', vehicleId: 'v2' })],
+      vehicles: '2',
+      summary: 'Vòng chạy đang chạy: 2 trên 2 xe — ',
+    },
+    {
+      name: 'khong vong chay nao dang chay',
+      fleet: running(0, 0),
+      cards: [],
+      vehicles: '0',
+      summary: 'Không có vòng chạy nào đang chạy.',
+    },
+  ])('$name: the so dem XE, bang dem VONG CHAY, ca hai noi ro don vi', (entry) => {
+    const model = toControlTower(view({ fleet: entry.fleet, board: inTransit(entry.cards) }));
+
+    expect(model.stats.find((stat) => stat.key === 'on-trip')).toMatchObject({
+      label: 'Xe đang chạy',
+      value: entry.vehicles,
+    });
+    expect(model.runningSummary.slice(0, entry.summary.length)).toBe(entry.summary);
+    /* Khong con mot chu "Đang chạy" tran nao — cai nao cung dung sau "Xe" hoac "Vòng chạy". */
+    expect(renderedTexts(model).filter((text) => text.includes('Đang chạy'))).toEqual([]);
+  });
+
+  it('khong cot nao mang chu "Đang chạy" — cot IN_TRANSIT la "Trên đường"', () => {
+    const model = toControlTower(view());
+
+    expect(model.columns.map((entry) => entry.label)).not.toContain('Đang chạy');
+    expect(model.columns.find((entry) => entry.column === 'IN_TRANSIT')?.label).toBe('Trên đường');
+  });
+
+  it('loi tom tat chi ra dung khoang cot dang chay, theo nhan cot tren man hinh', () => {
+    const model = toControlTower(view({ fleet: running(1, 1) }));
+
+    expect(model.runningSummary).toContain('“Vào lấy hàng”');
+    expect(model.runningSummary).toContain('“Chờ người nhận”');
   });
 });
 

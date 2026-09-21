@@ -788,7 +788,7 @@ const CONTROL_TOWER = {
     },
     { column: 'DELIVERED', cards: [], total: 0, unavailableReason: null },
   ],
-  fleet: { total: 1, idle: 0, onTrip: 1, underMaintenance: 0, activeDrivers: 1 },
+  fleet: { total: 1, idle: 0, onTrip: 1, underMaintenance: 0, activeDrivers: 1, runningRuns: 1 },
   queue: [
     {
       kind: 'RUN_LEG_MISSING_DISTANCE',
@@ -1812,6 +1812,73 @@ test.describe('ban do vong chay (Lane N)', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Vận hành' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Hiệu quả chạy xe' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Việc cần xử lý' })).toBeVisible();
+  });
+
+  /*
+   * `#336` BUG-07 — tren CUNG mot man, "Đang chạy" chi con MOT nghia, va moi con so kem DON VI.
+   *
+   * Mock `CONTROL_TOWER` co mot vong chay dang chay (cot `IN_TRANSIT`) va `fleet.onTrip = 1`. UAT
+   * tung thay the so "Đang chạy 0" canh mot cot "Đang chạy" co hai the. Bai nay khoa o muc TRINH
+   * DUYET: the so dem XE, loi tom tat tren bang dem VONG CHAY, va khong cot nao con mang chu
+   * "Đang chạy" cho mot PHAN cua tap do.
+   */
+  test('#336: the so "Xe đang chạy" va bang noi cung mot con so', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=control-tower');
+
+    const stats = page.getByRole('region', { name: 'Đội xe và việc đang chờ' });
+    await expect(stats.getByRole('link', { name: /^Xe đang chạy\s*1$/ })).toBeVisible();
+
+    const board = page.getByRole('region', { name: 'Bảng vòng chạy' });
+    await expect(board.getByText(/^Vòng chạy đang chạy: 1 trên 1 xe — /)).toBeVisible();
+    await expect(board.getByRole('heading', { level: 3, name: 'Trên đường' })).toBeVisible();
+    await expect(board.getByRole('heading', { level: 3, name: 'Đang chạy' })).toHaveCount(0);
+  });
+
+  /*
+   * Review PR `#344` — MOT xe mo HAI vong chay `ACTIVE`. Khong rang buoc nao cam truong hop do (vong
+   * chay cu cho ve bai trong khi vong chay moi da bat dau). Khi ca the so lan loi tom tat cung mang
+   * nhan tran "Đang chạy", man nay doc ra "Đang chạy 1" canh "Đang chạy: 2 vòng chạy trên 1 xe".
+   * Gio moi con so noi ro no dem XE hay dem VONG CHAY, va chu "Đang chạy" khong con dung tran.
+   */
+  test('#344: 1 xe mo 2 vong chay — the so dem XE, bang dem VONG CHAY', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    const secondRunSameVehicle = {
+      runId: 'r-2',
+      runCode: 'RUN-E2E-2',
+      vehicleId: 'v-1',
+      businessDate: '2026-09-08',
+      driverId: 'd-1',
+      loadedLegs: 1,
+      emptyLegs: 0,
+      totalKm: 80,
+      emptyKm: 0,
+      currentLeg: null,
+    };
+    const twoRunsOneVehicle = {
+      ...CONTROL_TOWER,
+      board: CONTROL_TOWER.board.map((entry) =>
+        entry.column === 'IN_TRANSIT'
+          ? { ...entry, total: 2, cards: [...entry.cards, secondRunSameVehicle] }
+          : entry,
+      ),
+      fleet: { ...CONTROL_TOWER.fleet, total: 1, onTrip: 1, idle: 0, runningRuns: 2 },
+    };
+    await page.route('**/transport/control-tower', (route) => json(route, twoRunsOneVehicle));
+    await page.goto('/?section=control-tower');
+
+    const stats = page.getByRole('region', { name: 'Đội xe và việc đang chờ' });
+    await expect(stats.getByRole('link', { name: /^Xe đang chạy\s*1$/ })).toBeVisible();
+
+    const board = page.getByRole('region', { name: 'Bảng vòng chạy' });
+    await expect(board.getByText(/^Vòng chạy đang chạy: 2 trên 1 xe — /)).toBeVisible();
+    await expect(
+      board.getByRole('article', { name: 'Trên đường' }).getByRole('listitem'),
+    ).toHaveCount(2);
+
+    /* Khong con chu "Đang chạy" tran nao: moi lan xuat hien deu dung sau "Xe" hoac "Vòng chạy". */
+    await expect(stats.getByText(/Đang chạy/)).toHaveCount(0);
+    await expect(board.getByText(/Đang chạy/)).toHaveCount(0);
   });
 
   /* `#278` N12 — 390px la be mat lai xe/dien thoai; ban do phai thap lai chu khong bien mat. */
