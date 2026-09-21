@@ -44,6 +44,63 @@ export const PLAN_COMMIT_REASONS = [
    * that thay vi doan — cung khuon voi `SITE_INTAKE_CREATE_IN_FLIGHT`.
    */
   'PLAN_COMMIT_IN_FLIGHT',
+  /**
+   * Chiec xe duoc chon khong co lai xe nao dang phu trach.
+   *
+   * Giao xe ma khong biet ai cam vo lang se sinh mot vong chay MO COI: no ton tai, no hien tren
+   * bang dieu hanh, nhung `listOpenRunsForDriver()` khong tra no ve cho ai ca — khong lai xe nao
+   * mo duoc chang cua no. Tu choi TAI DAY dat dung, vi luc nay chua co hang nao duoc ghi.
+   */
+  'PLAN_VEHICLE_DRIVER_MISSING',
+  /**
+   * Chiec xe dang co TU HAI ban phan cong lai xe hieu luc tro len.
+   *
+   * Chon bua mot nguoi se gan viec cho nguoi khong cam chuyen do. Cung ly le voi `DEPOT_AMBIGUOUS`:
+   * khi du lieu nen mo ho thi noi that, khong doan.
+   */
+  'PLAN_VEHICLE_DRIVER_AMBIGUOUS',
+  /*
+   * BA MA DUOI DAY tra loi mot cau khac hai ma o tren: khong phai "ai cam xe", ma "nguoi cam xe co
+   * MO duoc man Hien truong khong". Man do di `phien -> findDriverByAuthUserId -> driver.id ->
+   * listOpenRunsForDriver`; dut o mat xich nao thi vong chay van mo coi, chi la mo coi o mot tang
+   * khac. Ba mat xich, ba hanh dong sua khac nhau, nen ba ma.
+   */
+  /**
+   * Ban phan cong cua xe tro toi mot ho so lai xe KHONG ton tai.
+   *
+   * Khoa ngoai cua Postgres chan duoc truong hop nay; kho trong bo nho thi khong. Noi that thay vi
+   * gan viec cho mot `driverId` ma khong ai la chu.
+   */
+  'PLAN_VEHICLE_DRIVER_NOT_FOUND',
+  /** Lai xe dang phu trach xe da NGUNG hoat dong — khong giao viec moi cho mot ho so da khoa. */
+  'PLAN_VEHICLE_DRIVER_INACTIVE',
+  /**
+   * Lai xe dang phu trach xe CHUA noi voi tai khoan dang nhap nao (`authUserId` trong).
+   *
+   * `TransportDriver.authUserId` duoc phep NULL — mot ho so co the co truoc tai khoan. Nhung khi do
+   * khong phien nao giai ra duoc nguoi nay, va man Hien truong tra `CHECKPOINT_DRIVER_BINDING_
+   * MISSING`: vong chay co chu tren giay, khong co chu tren dien thoai. Cung ten mat xich voi ma do.
+   */
+  'PLAN_VEHICLE_DRIVER_BINDING_MISSING',
+  /*
+   * HAI MA DUOI DAY chi co o nhanh NOI DON (`MULTI_ORDER_RUN`), va tra loi cau hoi thu ba: vong
+   * chay DANG CHAY thuoc ve ai. Doi xe noi ai cam CHIEC XE; phan cong vong chay noi ai cam VONG
+   * CHAY. Vong chay da co nguoi thi nguoi do la su that cua no.
+   */
+  /**
+   * Vong chay dang mo cua xe do MOT lai xe cam, con doi xe noi xe dang thuoc NGUOI KHAC.
+   *
+   * Noi don luc nay la im lang chon mot ben: chon nguoi cua vong chay thi giao don cho nguoi ma doi
+   * xe vua noi KHONG cam xe; chon nguoi cua doi xe thi doi tai xe giua chuyen. Ca hai deu sai, nen
+   * tu choi — truoc chang dau tien, de khong mot hang nao cua don nay nam trong vong chay do.
+   */
+  'PLAN_RUN_DRIVER_CONFLICT',
+  /**
+   * Vong chay dang mo CHUA co ai cam — sinh ra truoc ban va BUG-01, hoac mo tay qua `POST /runs`.
+   * Khong co su that nao de lech, nen nguoi cam xe (da qua du phep kiem cua vong chay moi) duoc
+   * ghi lam ban phan cong DAU TIEN, truoc khi noi chang. Cung quy tac voi vong chay moi.
+   */
+  'PLAN_RUN_DRIVER_ADOPTED',
 ] as const;
 export type PlanCommitReason = (typeof PLAN_COMMIT_REASONS)[number];
 
@@ -156,6 +213,20 @@ export const TRANSPORT_PLANNING_DECISIONS = defineDecisionVocabulary({
     PLAN_ORDER_CANCELLED: 'Don da huy, khong lap ke hoach duoc',
     PLAN_ORDER_FULFILLED: 'Don da hoan thanh, khong lap ke hoach duoc',
     PLAN_COMMIT_IN_FLIGHT: 'Lan bam nay dang duoc xu ly — thu lai sau mot lat',
+    PLAN_VEHICLE_DRIVER_MISSING:
+      'Xe nay chua co lai xe phu trach — gan lai xe cho xe roi giao don lai',
+    PLAN_VEHICLE_DRIVER_AMBIGUOUS:
+      'Xe nay dang co nhieu lai xe phu trach — dong bot ban phan cong cu roi giao don lai',
+    PLAN_VEHICLE_DRIVER_NOT_FOUND:
+      'Ban phan cong cua xe tro toi mot ho so lai xe khong con — gan lai lai xe cho xe',
+    PLAN_VEHICLE_DRIVER_INACTIVE:
+      'Lai xe phu trach xe nay da ngung hoat dong — gan lai xe khac cho xe roi giao don lai',
+    PLAN_VEHICLE_DRIVER_BINDING_MISSING:
+      'Lai xe phu trach xe nay chua co tai khoan dang nhap — noi tai khoan roi giao don lai',
+    PLAN_RUN_DRIVER_CONFLICT:
+      'Vong chay dang mo cua xe do lai xe khac cam, khong phai nguoi dang phu trach xe — doi chieu lai roi giao don lai',
+    PLAN_RUN_DRIVER_ADOPTED:
+      'Vong chay dang mo chua co lai xe: ghi nguoi dang phu trach xe lam lai xe cua vong chay',
     PLAN_CANCELLED: 'Da huy ke hoach va cac chang chua chay cua no',
     PLAN_CANCEL_ALREADY_CANCELLED: 'Ke hoach da huy tu truoc',
     PLAN_CANCEL_LEG_COMPLETED: 'Chang co hang cua ke hoach nay da chay xong, khong go nguoc duoc',

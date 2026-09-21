@@ -81,9 +81,14 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
     await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
     await prisma.transportOrder.deleteMany({ where: { id: { in: orderIds } } });
+    // TRUOC khi xoa xe va lai xe: khoa ngoai cua ban phan cong tro vao ca hai.
+    await prisma.transportVehicleAssignment.deleteMany({
+      where: { vehicle: { registrationPlate: { startsWith: PREFIX } } },
+    });
     await prisma.transportVehicle.deleteMany({
       where: { registrationPlate: { startsWith: PREFIX } },
     });
+    await prisma.transportDriver.deleteMany({ where: { phone: { startsWith: '0977DSP' } } });
   }
 
   beforeAll(cleanup);
@@ -92,6 +97,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
     await prisma.$disconnect();
   });
 
+  /**
+   * Mot chiec xe DIEU DUOC — kem nguoi cam no.
+   *
+   * `PlanningService.commit()` doi mot lai xe dang phu trach, con hoat dong va CO tai khoan truoc
+   * khi mo vong chay, nen mot chiec xe tran (hay mot lai xe khong tai khoan) o day se lam ca bo bai
+   * do sai thu: chung se do o `PLAN_VEHICLE_DRIVER_*` chu khong phai o dieu ma tung bai dinh do.
+   */
   const seedVehicle = async (suffix: string): Promise<string> => {
     const row = await prisma.transportVehicle.create({
       data: {
@@ -99,6 +111,19 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
         vehicleClass: 'TRUCK_10T',
         allowedPayloadKg: 10_000,
       },
+    });
+    const driver = await prisma.transportDriver.create({
+      data: {
+        fullName: `${PREFIX} Lai xe ${suffix}`,
+        phone: `0977DSP${suffix}`,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+        // Unique tren Postgres — rieng tung xe, va don cung ho so qua tien to so dien thoai.
+        authUserId: `it-dsp-auth-${suffix}`,
+      },
+    });
+    await prisma.transportVehicleAssignment.create({
+      data: { vehicleId: row.id, driverId: driver.id, effectiveFrom: new Date() },
     });
     return row.id;
   };

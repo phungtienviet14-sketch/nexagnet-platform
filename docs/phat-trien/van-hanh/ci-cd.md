@@ -93,23 +93,67 @@ sửa bước deploy, sửa ở đó — đừng chép sang file khác.
 
 ---
 
-## 3. Trước khi push — chạy đủ 4 lệnh này
+## 3. Trước khi push — test TẬP TRUNG; regression đầy đủ là việc của CI
 
-```bash
-pnpm lint && pnpm typecheck && pnpm test && node --test deploy/netviet/caddy-route-contract.test.mjs
+> Đổi 21/09/2026. Trước đó mục này bắt chạy `pnpm lint && pnpm typecheck && pnpm test` toàn
+> monorepo trước mỗi lần push — trùng hệt job `verify`, và trên máy phát triển mất 10–25 phút.
+
+```text
+sửa code → test tập trung đúng module/spec bị ảnh hưởng → git push → GitHub CI chạy full regression → CI xanh mới review/merge
 ```
 
-Nếu đụng `apps/web` hoặc `packages/tenant`, chạy thêm hợp đồng đa khách (cần build trước):
+| Ai | Chạy gì |
+|---|---|
+| Người/agent đang code | Test **tập trung** đúng vùng sửa, và **báo rõ đã chạy lệnh nào, kết quả ra sao**. Không bắt buộc full monorepo trước push |
+| Hook pre-push cục bộ | Chỉ check nhanh theo vùng sửa (bảng dưới) — vài giây, tối đa ~15s |
+| GitHub CI — 7 check bắt buộc của `main` | `verify` (lint, typecheck, `pnpm test`, build) · `integration` (Postgres) · `workflow-integration` (Hatchet) · `tenant-packs` · `e2e` (Playwright) · `audit` · `images` |
+
+Test tập trung — ví dụ:
 
 ```bash
-pnpm --filter @netviet/web build && pnpm test:tenant-runtime
+pnpm --filter @netviet/api exec vitest run src/<mien>        # hoặc đúng một tệp spec
+pnpm --filter @netviet/web exec vitest run <duong-dan>
+pnpm --filter @netviet/api typecheck                          # khi đổi kiểu dùng chung
+pnpm --filter @netviet/web build && pnpm test:tenant-runtime  # khi đụng apps/web hoặc packages/tenant
+pnpm --filter @nexagnet/marketing build                       # khi đụng apps/marketing
 ```
 
-Nếu đụng `apps/marketing`:
+### Hook pre-push cục bộ
 
-```bash
-pnpm --filter @nexagnet/marketing build
-```
+Cài **một lần cho mỗi clone** (mọi worktree dùng chung): `pnpm hooks:install`. Kiểm:
+`pnpm hooks:install --check`. Lệnh này đặt `core.hooksPath` ở scope **local** — thắng scope global
+— trỏ vào thư mục hook chung `<git-common-dir>/hooks`, nơi có hai shim:
+
+- `pre-push` → gọi [`tools/git-hooks/pre-push.mjs`](../../../tools/git-hooks/pre-push.mjs) của chính
+  worktree đang push (nhánh cũ chưa có tệp này thì không chạy gì).
+- `pre-commit` → chuyển tiếp sang hook global cùng tên (bộ quét secret của ECC) — không đổi hành vi.
+
+Lệnh cài còn **gỡ `core.hooksPath` ghim ở scope worktree** (`.git/worktrees/<tên>/config.worktree`)
+nếu nó trỏ vào thư mục hook global: scope worktree **thắng** scope local, và Claude Code chép giá trị
+đang có hiệu lực vào đó lúc tạo worktree — đo 21/09/2026 có 46/55 worktree ghim hook ECC, nên chỉ đặt
+scope local thôi thì push trong các worktree đó vẫn chạy full suite. Giá trị ghim khác thì lệnh không
+đụng, chỉ cảnh báo. Kiểm một worktree: `git config --show-scope --get core.hooksPath` phải ra `local`.
+
+Pre-push so với merge-base của `origin/main` — đúng phạm vi PR mà CI sẽ chấm — và chỉ chạy:
+
+| Check | Khi nào | Thời gian đo |
+|---|---|---|
+| `customer-source-history` — guardrail nguồn khách `--range` | luôn | <1s |
+| `eslint` trên đúng các tệp đổi | có tệp `.ts/.tsx/.js/.mjs/.cjs` đổi | ~3–10s |
+| `source-manifest` | đổi `apps/api/src/`, `tools/source-manifest/`, `package.json` | ~6s |
+| `deploy-routes` — hợp đồng Caddy | đổi `deploy/` | <1s |
+| `git-hooks` — tự kiểm hook | đổi `tools/git-hooks/` | <1s |
+
+Guardrail chạy ở đây vì repo **public**: byte đã push là nằm vĩnh viễn trong lịch sử công khai, CI chỉ
+bắt được sau khi đã lộ. Hook **không bao giờ** chạy `pnpm test`, `pnpm -r …`, build, typecheck toàn
+repo, Playwright, Postgres/Hatchet IT hay Docker —
+[`pre-push.test.mjs`](../../../tools/git-hooks/pre-push.test.mjs) khoá điều đó, và khoá luôn việc 7
+job ở trên vẫn còn trong `ci.yml`.
+
+**Nhận diện hook cũ:** log push có `[ECC pre-push] Running: test` = repo chưa cài hook cục bộ, hook
+global `~/.codex/git-hooks/pre-push` của ECC đang chạy `lint → typecheck → test → build` toàn
+monorepo. Chạy `pnpm hooks:install`. Không dùng `--no-verify` (bị hook ECC chặn); lối thoát khẩn cấp
+là `ECC_SKIP_PREPUSH=1`, chỉ khi đã chứng minh hook hỏng vì máy chứ không vì code.
 
 Test Prisma (`*.int.spec.ts`) **không chạy được nếu không có Postgres**; chúng tự bỏ qua. Job
 `integration` trên CI là nơi duy nhất chứng minh chúng. Đừng tuyên bố "đã kiểm" khi mới chỉ thấy

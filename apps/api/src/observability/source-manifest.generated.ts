@@ -279,12 +279,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.depot": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 574
+      "line": 600
     },
     "planning.grouping": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 599
+      "line": 625
     },
     "planning.preview": {
       "functionName": "PlanningService.preview",
@@ -479,7 +479,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.commercial_acceptance.decide": {
       "functionName": "CommercialAcceptanceController.decide",
       "filePath": "apps/api/src/transport/acceptance/commercial-acceptance.controller.ts",
-      "line": 113
+      "line": 126
     },
     "transport.commercial_acceptance.read": {
       "filePath": "apps/api/src/transport/acceptance/commercial-acceptance.controller.ts"
