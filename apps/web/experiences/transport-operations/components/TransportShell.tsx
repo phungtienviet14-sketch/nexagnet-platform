@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { useBranding } from '../../../lib/branding';
 import { AccountMenu } from './AccountMenu';
 import {
@@ -8,8 +8,11 @@ import {
   buildSectionUrl,
   filterNavigationGroups,
   NAVIGATION_ENFORCEMENT_NOTE,
+  SUPERSEDED_HEADING,
+  supersededNote,
   type DriverScreen,
   type DriverScreenId,
+  type SupersededEntry,
   type TransportNavigationGroup,
   type TransportSectionId,
 } from '../navigation';
@@ -38,6 +41,7 @@ export const roleLabelOf = (role: string | null): string | null =>
 
 export function TransportShell({
   groups,
+  superseded,
   activeSection,
   activeTitle,
   roleLabel,
@@ -46,6 +50,8 @@ export function TransportShell({
   children,
 }: {
   readonly groups: readonly TransportNavigationGroup[];
+  /** Muc da co duong thay the (#339). Rong ⇒ khong bay loi phu nao. */
+  readonly superseded: readonly SupersededEntry[];
   readonly activeSection: TransportSectionId;
   readonly activeTitle: string;
   readonly roleLabel: string | null;
@@ -56,6 +62,17 @@ export function TransportShell({
 }) {
   const branding = useBranding();
   const [isDrawerOpen, setDrawerOpen] = useState(false);
+  /*
+   * Giu duong dan that tren `href` de bam giua/mo tab moi van chay; chi chan lan bam thuong de dieu
+   * huong trong ung dung. Danh muc chinh va loi phu di CUNG mot duong — mot muc cu mo tu loi phu
+   * phai ghi lich su y het khi no con nam tren danh muc.
+   */
+  const navigateWithin = (event: MouseEvent<HTMLAnchorElement>, section: TransportSectionId) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+    event.preventDefault();
+    setDrawerOpen(false);
+    onNavigate(section);
+  };
   /*
    * Chu go vao o loc danh muc. Trang thai nay KHONG len dia chi, va do la co y: no khong tra loi
    * cau hoi "dia chi nay nghia la gi" (`resolveNavigation` giu doc quyen cau do), no chi la mot
@@ -139,14 +156,7 @@ export function TransportShell({
                       className="tx-nav__item"
                       href={buildSectionUrl(section.id)}
                       aria-current={section.id === activeSection ? 'page' : undefined}
-                      onClick={(event) => {
-                        // Giu duong dan that tren `href` de bam giua/mo tab moi van chay; chi chan
-                        // lan bam thuong de dieu huong trong ung dung.
-                        if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-                        event.preventDefault();
-                        setDrawerOpen(false);
-                        onNavigate(section.id);
-                      }}
+                      onClick={(event) => navigateWithin(event, section.id)}
                     >
                       <span>{section.label}</span>
                     </a>
@@ -156,6 +166,35 @@ export function TransportShell({
             </div>
           ))}
         </nav>
+
+        {/*
+          LOI PHU CHO MUC DA CO DUONG THAY THE (#339).
+
+          Nam NGOAI `<nav>` chinh va ngoai o loc: no khong phai mot lua chon ngang hang voi viec hang
+          ngay, nen go "chuyen" vao o loc khong duoc day no len canh don hang. Nhung no van la mot
+          vung dieu huong co ten rieng, de nguoi con chuyen cu tim thay — va khi dang mo mot muc cu
+          tu dau trang, dau `aria-current` hien o day chu khong bien mat.
+        */}
+        {superseded.length === 0 ? null : (
+          <nav className="tx-rail__older" aria-label={SUPERSEDED_HEADING}>
+            <p className="tx-rail__olderlabel">{SUPERSEDED_HEADING}</p>
+            <ul>
+              {superseded.map((entry) => (
+                <li key={entry.section.id}>
+                  <a
+                    className="tx-rail__olderlink"
+                    href={buildSectionUrl(entry.section.id)}
+                    aria-current={entry.section.id === activeSection ? 'page' : undefined}
+                    onClick={(event) => navigateWithin(event, entry.section.id)}
+                  >
+                    {entry.section.label}
+                  </a>
+                  <span className="tx-rail__oldernote">{supersededNote(entry)}</span>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
         <div className="tx-rail__foot">
           {/*

@@ -60,6 +60,17 @@ const reasonOf = async (run: Promise<unknown>): Promise<string> => {
   }
 };
 
+/** Nguyen loi — de khang dinh ca CAU CHU di len man hinh, khong chi ma may loc (`#333`). */
+const errorOf = async (run: Promise<unknown>): Promise<TransportDomainError> => {
+  try {
+    await run;
+  } catch (error) {
+    if (error instanceof TransportDomainError) return error;
+    throw error;
+  }
+  throw new Error('NO_ERROR_THROWN');
+};
+
 /**
  * RANH GIOI SERIALIZE gia lap — doc trang thai vong chay TU CHINH `FakeCoreFacts`.
  *
@@ -438,6 +449,74 @@ describe('CheckpointService', () => {
       core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
       const reason = await reasonOf(arriveAtPickup());
       expect(reason).toBe('CHECKPOINT_RUN_TERMINAL');
+    });
+
+    /*
+     * `#333` BUG-05 — cau nay di NGUYEN VAN len man hinh lai xe (`TransportApiError.message`), giua
+     * mot giao dien tieng Viet co dau. Mot cau khong dau o do doc nhu mot loi he thong.
+     */
+    const TERMINAL_MESSAGE = 'Vòng chạy đã kết thúc — không ghi thêm mốc được nữa.';
+
+    it('may khach CU bam sau khi vong chay dong: xung dot, bang tieng Viet co dau (#333)', async () => {
+      core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+      const error = await errorOf(arriveAtPickup());
+      expect(error.kind).toBe('CONFLICT');
+      expect(error.reason).toBe('CHECKPOINT_RUN_TERMINAL');
+      expect(error.message).toBe(TERMINAL_MESSAGE);
+      expect(await repository.listForRun('run_1')).toEqual([]);
+    });
+
+    /*
+     * `#333` — DUA voi luot quet: phep doc dau thay `ACTIVE`, roi luot quet dong vong chay trong khe
+     * truoc khi lenh ghi lay duoc khoa. Man hinh da loc nut truoc khi ve, nhung khe nay van con —
+     * va cong duoi khoa la thu DUY NHAT dung o do.
+     */
+    it('luot quet dong vong chay ngay truoc khi lenh ghi lay khoa: cong duoi khoa van chan (#333)', async () => {
+      class SweepWinsRunWriteGuard extends FakeRunWriteGuard {
+        override async underRunLock<T>(
+          runId: string,
+          write: (scope: RunWriteScope) => Promise<T>,
+        ): Promise<T> {
+          core.runs.set(runId, { id: runId, code: 'VC-001', status: 'COMPLETED' });
+          return super.underRunLock(runId, write);
+        }
+      }
+      const racing = new CheckpointService(
+        repository,
+        core,
+        location,
+        new SweepWinsRunWriteGuard(core),
+        { timeZone: TZ },
+        DEFAULT_CHECKPOINT_POLICY,
+        undefined,
+        () => now,
+      );
+
+      const error = await errorOf(
+        racing.recordAsDriver({
+          type: 'PICKUP_ARRIVAL',
+          runId: 'run_1',
+          legId: 'leg_1',
+          authUserId: 'u.binh',
+          clientEventId: 'evt_race',
+        }),
+      );
+      expect(error.kind).toBe('CONFLICT');
+      expect(error.reason).toBe('CHECKPOINT_RUN_TERMINAL');
+      expect(error.message).toBe(TERMINAL_MESSAGE);
+      expect(await repository.listForRun('run_1')).toEqual([]);
+    });
+
+    /*
+     * `#279` O10 KHONG thoai lui vi `#333`: mot moc DA ghi truoc khi vong chay dong, mat cau tra loi
+     * tren duong ve, roi gui lai SAU khi dong — van nhan dung moc cu, khong phai mot loi.
+     */
+    it('gui lai mot moc DA ghi truoc khi dong van tra dung moc cu (#333)', async () => {
+      const first = await arriveAtPickup('evt_1');
+      core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+      const again = await arriveAtPickup('evt_1');
+      expect(again.id).toBe(first.id);
+      expect(await repository.listForRun('run_1')).toHaveLength(1);
     });
   });
 
