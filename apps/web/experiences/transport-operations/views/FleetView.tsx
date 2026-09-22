@@ -2,25 +2,32 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { DataTable, PageHeader, StatusBadge } from '../components/primitives';
+import { DataTable, DetailRow, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
   useDrivers,
   useNavigationInput,
+  useVehicleDriverHistory,
   useVehicles,
+  type SectionQuery,
 } from '../hooks/useTransportWorkspace';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import {
   LICENCE_NOTE_SCOPE,
   NO_FLEET_WIDE_ASSIGNMENT_NOTE,
+  NO_RESPONSIBLE_DRIVER,
   toDriverRows,
+  toVehicleResponsibility,
   toVehicleRows,
   VEHICLE_STATUS_NOTE,
   type DriverRow,
+  type ResponsibleDriver,
+  type VehicleResponsibility,
   type VehicleRow,
 } from '../workspace/fleet';
 import { transportApi } from '../transport-api';
+import type { Driver, VehicleDriverAssignment } from '../transport-types';
 import { toLocationHealthPresentation } from '../workspace/location-health';
 
 /**
@@ -39,12 +46,110 @@ const todayBusinessDate = (): string => {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 };
 
+function ResponsibleDriverRows({ driver }: { readonly driver: ResponsibleDriver }) {
+  return (
+    <dl className="tx-detail__block">
+      <DetailRow label="Lái xe">{driver.driverLabel}</DetailRow>
+      <DetailRow label="Phụ trách từ">{driver.sinceLabel}</DetailRow>
+      <DetailRow label="Trạng thái">
+        {driver.statusLabel === null ? (
+          '—'
+        ) : (
+          <StatusBadge label={driver.statusLabel} tone={driver.statusTone} />
+        )}
+      </DetailRow>
+      <DetailRow label="Tài khoản">{driver.accountLabel ?? '—'}</DetailRow>
+    </dl>
+  );
+}
+
+function VehicleResponsibilityBody({ model }: { readonly model: VehicleResponsibility }) {
+  return (
+    <div className="tx-detail__grid">
+      <div className="tx-detail__block">
+        <h3>Đang phụ trách</h3>
+        {model.kind === 'none' ? (
+          <p>
+            <StatusBadge label={NO_RESPONSIBLE_DRIVER} tone="wait" />
+          </p>
+        ) : null}
+        {model.kind === 'assigned' ? <ResponsibleDriverRows driver={model.current} /> : null}
+        {model.kind === 'conflict' ? (
+          <>
+            <p className="tx-note tx-note--warn" role="status">
+              {model.current.length} lái xe cùng đang đứng tên phụ trách xe này, trong khi mỗi xe
+              chỉ có một người phụ trách. Cần kiểm tra lại dữ liệu đội xe.
+            </p>
+            {model.current.map((driver) => (
+              <ResponsibleDriverRows key={driver.assignmentId} driver={driver} />
+            ))}
+          </>
+        ) : null}
+      </div>
+      <div className="tx-detail__block">
+        <h3>Trước đó</h3>
+        {model.previous.length === 0 ? (
+          <p className="tx-note">Chưa có lượt phụ trách nào trước đó.</p>
+        ) : (
+          <ul className="tx-timeline" aria-label="Lịch sử phụ trách">
+            {model.previous.map((row) => (
+              <li key={row.id}>
+                <strong>{row.driverLabel}</strong>
+                <span>
+                  {row.fromLabel} → {row.toLabel}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {model.olderCount === 0 ? null : (
+          <p className="tx-note">Còn {model.olderCount} lượt phụ trách cũ hơn không hiện ở đây.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Xe nay hien ai dang phu trach?" (#335). Ba trang thai rieng — dang doc, loi, co cau tra loi —
+ * va KHONG trang thai nao duoc noi "chua co lai xe phu trach" khi thuc ra chua doc duoc gi.
+ */
+function VehicleResponsibilityPanel({
+  plate,
+  history,
+  drivers,
+}: {
+  readonly plate: string;
+  readonly history: SectionQuery<readonly VehicleDriverAssignment[]>;
+  readonly drivers: SectionQuery<readonly Driver[]>;
+}) {
+  if (history.isBlocked) return null;
+  // Ten den tu danh sach lai xe. Ve truoc khi danh sach ve la in "chua doc duoc ten" cho mot nguoi
+  // van co ten — nen cho ca hai.
+  const isLoading = history.isLoading || drivers.isLoading;
+  const model =
+    isLoading || history.data === undefined
+      ? null
+      : toVehicleResponsibility(history.data, drivers.data ?? []);
+  return (
+    <section className="tx-panel" aria-label={`Lái xe phụ trách xe ${plate}`}>
+      <h2>Lái xe phụ trách · {plate}</h2>
+      {isLoading ? <LoadingState label="Đang đọc lái xe phụ trách…" /> : null}
+      {history.errorMessage === null ? null : (
+        <ErrorState message={history.errorMessage} onRetry={history.refetch} />
+      )}
+      {model === null ? null : <VehicleResponsibilityBody model={model} />}
+    </section>
+  );
+}
+
 export function FleetView() {
   const navigation = useNavigationInput();
   const vehicles = toSectionQuery(useVehicles(navigation));
   const drivers = toSectionQuery(useDrivers(navigation));
   const [tab, setTab] = useState<FleetTab>('vehicles');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const driverHistory = toSectionQuery(useVehicleDriverHistory(navigation, selectedVehicleId));
   const locationHealth = useQuery({
     queryKey: ['transport', 'vehicles', selectedVehicleId, 'location-health'],
     queryFn: () => transportApi.fleet.locationHealth(selectedVehicleId ?? ''),
@@ -62,6 +167,7 @@ export function FleetView() {
   }
 
   const vehicleRows = toVehicleRows(vehicles.data ?? []);
+  const selectedVehicle = vehicleRows.find((row) => row.id === selectedVehicleId);
   const driverRows = toDriverRows(drivers.data ?? [], today);
   const expiring = driverRows.filter((row) => row.licenceStanding !== 'valid');
 
@@ -106,7 +212,9 @@ export function FleetView() {
               <DataTable<VehicleRow>
                 caption="Danh sách xe"
                 rows={vehicleRows}
-                rowKey={(row) => row.registrationPlate}
+                // Khoa dong PHAI cung loai voi `selectedKey` (ma xe). Truoc #335 day la bien so, nen
+                // dong vua chon khong bao gio sang len va `Xem tất cả` khong bao gio hien ra.
+                rowKey={(row) => row.id}
                 selectedKey={selectedVehicleId}
                 onSelect={(row) => setSelectedVehicleId(row.id)}
                 onShowAll={() => setSelectedVehicleId(null)}
@@ -137,6 +245,13 @@ export function FleetView() {
                   },
                 ]}
               />
+              {selectedVehicle === undefined ? null : (
+                <VehicleResponsibilityPanel
+                  plate={selectedVehicle.registrationPlate}
+                  history={driverHistory}
+                  drivers={drivers}
+                />
+              )}
               {locationHealth.isLoading ? <LoadingState label="Đang đọc sức khoẻ vị trí…" /> : null}
               {locationHealth.isError ? (
                 <ErrorState message={(locationHealth.error as Error).message} />

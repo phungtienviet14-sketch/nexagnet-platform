@@ -254,6 +254,19 @@ export function useDrivers(input: NavigationInput) {
   });
 }
 
+/**
+ * Lich su lai xe phu trach CUA MOT xe. `Vehicle` khong mang nguoi dang phu trach, va khong co duong
+ * nao tra ve cho ca doi xe — nen chi goi khi da MO mot xe, giong `useTripAssignments`.
+ * Khoa nam duoi `TRANSPORT_QUERY_KEYS.vehicles`: lam tuoi doi xe thi lam tuoi luon lich su nay.
+ */
+export function useVehicleDriverHistory(input: NavigationInput, vehicleId: string | null) {
+  return useQuery({
+    queryKey: [...TRANSPORT_QUERY_KEYS.vehicles, vehicleId, 'driver-history'],
+    queryFn: () => transportApi.fleet.vehicleDriverHistory(vehicleId as string),
+    enabled: vehicleId !== null && allowed(input, 'transport-core', 'transport.vehicle.read'),
+  });
+}
+
 /* ------------------------------------------------------------------ *
  * `TX-08` SO HUU TAI SAN (#242 Lane E)
  * ------------------------------------------------------------------ */
