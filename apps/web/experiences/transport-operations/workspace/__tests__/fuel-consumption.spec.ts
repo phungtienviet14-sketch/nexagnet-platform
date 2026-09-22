@@ -18,6 +18,7 @@ import {
 const link = (overrides: Partial<FuelConsumptionLink> = {}): FuelConsumptionLink => ({
   entryId: 'phieu-b',
   tripId: 'chuyen-1',
+  runId: null,
   businessDate: '2026-09-03',
   occurredAt: '2026-09-03T01:00:00.000Z',
   verificationStatus: 'VERIFIED',

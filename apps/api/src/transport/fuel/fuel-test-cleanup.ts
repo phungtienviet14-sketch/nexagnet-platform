@@ -21,6 +21,30 @@ import type { PrismaService } from '../../config/prisma.service.js';
  * giao dich nay con xoa them bang khac (vd chinh ky doi soat) thi hai ben co the cho nhau — nen
  * trong giao dich chi co mot lenh xoa, pham vi theo `reconciliationId` cua chinh fixture.
  */
+/**
+ * XOA PHAN BO GIA THANH cua cac phieu fixture — `#364`, CHI dung bo Postgres integration test.
+ *
+ * `transport_fuel_cost_attribution_append_only` tu choi moi `DELETE`; cung khuon voi ham duoi day:
+ * tat trigger TRONG mot giao dich chi chua lenh xoa, pham vi theo `fuelEntryId` cua chinh fixture.
+ * Dong DAO xoa truoc dong no tro toi (`reversalOfId` la khoa ngoai `Restrict`).
+ */
+export async function deleteFuelCostAttributionsForTest(
+  prisma: PrismaService,
+  fuelEntryIds: readonly string[],
+): Promise<void> {
+  if (fuelEntryIds.length === 0) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('ALTER TABLE "TransportFuelCostAttribution" DISABLE TRIGGER USER');
+    await tx.transportFuelCostAttribution.deleteMany({
+      where: { fuelEntryId: { in: [...fuelEntryIds] }, reversalOfId: { not: null } },
+    });
+    await tx.transportFuelCostAttribution.deleteMany({
+      where: { fuelEntryId: { in: [...fuelEntryIds] } },
+    });
+    await tx.$executeRawUnsafe('ALTER TABLE "TransportFuelCostAttribution" ENABLE TRIGGER USER');
+  });
+}
+
 export async function deleteFuelDiscrepanciesForTest(
   prisma: PrismaService,
   reconciliationIds: readonly string[],

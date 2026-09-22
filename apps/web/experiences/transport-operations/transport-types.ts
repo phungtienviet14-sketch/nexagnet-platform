@@ -523,7 +523,11 @@ export interface FuelSupplier {
 
 export interface FuelEntry {
   readonly id: string;
-  readonly tripId: string;
+  /** `#364` — chuyen v1, chi de TUONG THICH; `null` o phieu khai theo vong xe. */
+  readonly tripId: string | null;
+  /** `#364` — vong xe / chang lam NGU CANH van hanh (khong phai phan bo gia thanh). */
+  readonly runId: string | null;
+  readonly legId: string | null;
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
@@ -599,8 +603,13 @@ export interface FuelInboxEvidenceRef {
  */
 export interface FuelEntryInboxRow {
   readonly id: string;
-  readonly tripId: string;
-  readonly tripCode: string;
+  /** `#364` — `null` o phieu Run-first: KHONG bia mot ma chuyen. */
+  readonly tripId: string | null;
+  readonly tripCode: string | null;
+  readonly runId: string | null;
+  readonly runCode: string | null;
+  readonly legId: string | null;
+  readonly legSequence: number | null;
   readonly driverId: string;
   readonly driverName: string | null;
   readonly vehicleId: string;
@@ -640,6 +649,8 @@ export interface FuelEntryInboxQuery {
   readonly reconciliation?: FuelReconciliationStatus | null;
   /** MA CHUYEN doc duoc (`UAT-VIET-01`), khong phai `tripId`. */
   readonly tripCode?: string | null;
+  /** `#364` — MA VONG XE doc duoc (`RUN-...`). */
+  readonly runCode?: string | null;
   readonly driverId?: string | null;
   readonly vehicleId?: string | null;
   readonly supplierId?: string | null;
@@ -680,8 +691,18 @@ export interface DriverFuelStation {
 
 export interface DriverFuelSlipView {
   readonly id: string;
-  readonly tripId: string;
+  /**
+   * `#364` — NGU CANH: uu tien XE + thoi diem; vong xe/chang khi khai tren viec duoc dieu; chuyen v1
+   * chi la thong tin tuong thich cua phieu cu. Nhieu nhat mot loai co mat.
+   */
+  readonly tripId: string | null;
+  readonly tripCode: string | null;
+  readonly runId: string | null;
+  readonly runCode: string | null;
+  readonly legId: string | null;
+  readonly legSequence: number | null;
   readonly vehicleId: string;
+  readonly vehiclePlate: string | null;
   readonly supplierId: string;
   /** `#317` G1 — tram lai xe da khai, kem ten tren bien hieu. */
   readonly stationId: string | null;
@@ -715,6 +736,75 @@ export interface DriverFuelSlipView {
 export interface DriverFuelEvidenceView {
   readonly id: string;
   readonly contentType: string | null;
+}
+
+/**
+ * `#364` — VIEC DUOC DIEU lai xe khai phieu dau duoc (`GET /transport/me/fuel/runs`).
+ *
+ * May chu tu tim vong xe dang mo cua chinh lai xe, kem bien so va cac chang. Xe LA xe cua vong xe:
+ * lai xe khong chon xe.
+ */
+export interface DriverFuelRunView {
+  readonly runId: string;
+  readonly runCode: string;
+  readonly runStatus: string;
+  readonly vehicleId: string;
+  readonly vehiclePlate: string | null;
+  readonly legs: readonly DriverFuelLegView[];
+}
+
+export interface DriverFuelLegView {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: string;
+  readonly status: string;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+}
+
+/** `#364` — so cai giu phan bo gia thanh cua MOT phieu (loai tru nhau). */
+export type FuelCostLedger = 'LEGACY_TRIP_EXPENSE' | 'FUEL_COST_ATTRIBUTION';
+
+export interface FuelCostAttributionLine {
+  readonly id: string;
+  readonly kind: 'ALLOCATION' | 'REVERSAL';
+  readonly targetKind: 'RUN' | 'LEG';
+  readonly runId: string;
+  readonly runCode: string | null;
+  readonly legId: string | null;
+  readonly legSequence: number | null;
+  readonly signedAmount: number;
+  readonly reversalOfId: string | null;
+  readonly reversedById: string | null;
+  readonly note: string | null;
+  readonly recordedBy: string;
+  readonly createdAt: string;
+}
+
+/** `#364` — tien cua MOT phieu dang nam o dau (`GET /transport/fuel/entries/:id/cost-attribution`). */
+export interface FuelEntryCostAttributionView {
+  readonly fuelEntryId: string;
+  readonly amount: number;
+  readonly currencyCode: string;
+  readonly verificationStatus: FuelVerificationStatus;
+  readonly businessDate: BusinessDate;
+  readonly vehicleId: string;
+  readonly ledger: FuelCostLedger;
+  readonly legacyTrip: {
+    readonly tripId: string;
+    readonly tripCode: string | null;
+    readonly projectedExpenseId: string | null;
+  } | null;
+  readonly context: {
+    readonly runId: string | null;
+    readonly runCode: string | null;
+    readonly legId: string | null;
+    readonly legSequence: number | null;
+  };
+  /** `null` voi phieu chuyen v1 — con so that thuoc gia thanh chuyen. */
+  readonly attributedAmount: number | null;
+  readonly unattributedAmount: number | null;
+  readonly lines: readonly FuelCostAttributionLine[];
 }
 
 export interface FuelSupplierStatement {

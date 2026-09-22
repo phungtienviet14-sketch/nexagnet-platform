@@ -56,6 +56,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.fuel.entry.read',
       'transport.fuel.entry.submit_for_driver',
       'transport.fuel.entry.verify',
+      'transport.fuel.cost_attribution.record',
       'transport.fuel.station.read',
       'transport.fuel.station.manage',
       'transport.fuel.document.read',
@@ -416,6 +417,12 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ADMIN', 'transport.fuel.reconciliation.reopen')).toBe(true);
     });
 
+    /** `#364` — phan bo gia thanh phieu Run-first la viec cua ke toan (va Giam doc). */
+    it('phan bo gia thanh nhien lieu Run-first: ke toan va Giam doc', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.cost_attribution.record')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.fuel.cost_attribution.record')).toBe(true);
+    });
+
     it('la tap con cua Giam doc, khong phai mot nhanh loai tru', () => {
       for (const action of actionsForRole('ACCOUNTING')) {
         expect(roleCanPerform('ADMIN', action), action).toBe(true);
@@ -574,6 +581,8 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('SALE', 'transport.fuel.statement.import')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.fuel.reconciliation.read')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.fuel.reconciliation.close')).toBe(false);
+      // `#364` — lai xe khong bao gio quyet (hay thay) phan bo gia thanh.
+      expect(roleCanPerform('SALE', 'transport.fuel.cost_attribution.record')).toBe(false);
     });
   });
 

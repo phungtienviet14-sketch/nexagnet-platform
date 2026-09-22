@@ -37,8 +37,22 @@ import type {
  */
 export interface DriverFuelSlipView {
   readonly id: string;
-  readonly tripId: string;
+  /**
+   * `#364` — NGU CANH, uu tien XE + THOI DIEM. Vong chay/chang khi phieu khai tren viec duoc dieu;
+   * chuyen v1 chi la thong tin TUONG THICH cua phieu cu. Nhieu nhat mot loai co mat.
+   */
+  readonly tripId: string | null;
+  /** Ma chuyen v1 doc duoc — chi co voi phieu cu. */
+  readonly tripCode: string | null;
+  readonly runId: string | null;
+  /** Ma vong xe doc duoc (`RUN-...`), cai lai xe thay o man Hien truong. */
+  readonly runCode: string | null;
+  readonly legId: string | null;
+  /** So thu tu chang trong vong xe ("Chang 2"). */
+  readonly legSequence: number | null;
   readonly vehicleId: string;
+  /** BIEN SO — lai xe nhan xe bang bien so, khong bang `id`. */
+  readonly vehiclePlate: string | null;
   readonly supplierId: string;
   /** `#317` G1 — tram lai xe da khai, va TEN tren bien hieu cua no (khong ma so thue, khong toa do). */
   readonly stationId: string | null;
@@ -91,19 +105,38 @@ export interface DriverFuelEvidenceView {
  * "loc" doi lot, va ca hai deu de lot truong moi. O day, mot truong chi co mat neu ai do go ten no
  * ra — va luc go thi phai doc lai chinh khoi chu thich ben tren.
  */
+/**
+ * NHUNG MA DOC DUOC cua phieu — tang doc doi `id -> ma` THEO LO roi dua vao day.
+ *
+ * BAT BUOC du tung truong co the `null`, cung ly le voi `stationName`: mot tham so tuy chon la mot
+ * noi goi quen doi ma.
+ */
+export interface DriverFuelSlipLabels {
+  readonly stationName: string | null;
+  readonly vehiclePlate: string | null;
+  readonly tripCode: string | null;
+  readonly runCode: string | null;
+  readonly legSequence: number | null;
+}
+
 export function toDriverFuelSlipView(
   entry: FuelEntry,
   evidence: readonly FuelReceiptEvidence[],
-  /** BAT BUOC du co the `null`: mot tham so tuy chon la mot noi goi quen doi ten tram. */
-  stationName: string | null,
+  labels: DriverFuelSlipLabels,
 ): DriverFuelSlipView {
   return {
     id: entry.id,
     tripId: entry.tripId,
+    tripCode: entry.tripId === null ? null : labels.tripCode,
+    runId: entry.runId,
+    runCode: entry.runId === null ? null : labels.runCode,
+    legId: entry.legId,
+    legSequence: entry.legId === null ? null : labels.legSequence,
     vehicleId: entry.vehicleId,
+    vehiclePlate: labels.vehiclePlate,
     supplierId: entry.supplierId,
     stationId: entry.stationId,
-    stationName: entry.stationId === null ? null : stationName,
+    stationName: entry.stationId === null ? null : labels.stationName,
     businessDate: entry.businessDate,
     occurredAt: entry.occurredAt,
     litersUnits: entry.litersUnits,
@@ -170,6 +203,33 @@ export interface DriverFuelStationView {
   readonly name: string;
   readonly code: string | null;
   readonly address: string | null;
+}
+
+/**
+ * VIEC DUOC DIEU lai xe khai phieu dau duoc — `#364`, khung nhin cua LAI XE.
+ *
+ * May chu TU tim (vong chay DANG MO ma lai xe DANG duoc phan cong — cung tap voi man Hien truong),
+ * va dua kem BIEN SO cua xe vong chay: lai xe khong chon xe, xe LA xe cua vong chay. Lenh nop van
+ * kiem lai tat ca — danh sach nay chi de DE XUAT, khong phai mot cong quyen.
+ *
+ * Khong doanh thu, khong don hang, khong khach (`INV-09`): chi du de nhan ra MOT viec tren duong.
+ */
+export interface DriverFuelRunView {
+  readonly runId: string;
+  readonly runCode: string;
+  readonly runStatus: string;
+  readonly vehicleId: string;
+  readonly vehiclePlate: string | null;
+  readonly legs: readonly DriverFuelLegView[];
+}
+
+export interface DriverFuelLegView {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: string;
+  readonly status: string;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
 }
 
 export function toDriverFuelStationView(station: FuelStation): DriverFuelStationView {

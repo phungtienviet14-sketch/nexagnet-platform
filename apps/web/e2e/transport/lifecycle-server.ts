@@ -105,7 +105,11 @@ interface Trip {
 
 interface FuelEntry {
   id: string;
-  tripId: string;
+  /** `#364` — `null` o phieu khai theo vong xe; chi de tuong thich voi chuyen v1. */
+  tripId: string | null;
+  /** `#364` — ngu canh van hanh. Tuy chon trong may chu gia: phieu cu cua cac bai khac khong co. */
+  runId?: string | null;
+  legId?: string | null;
   vehicleId: string;
   driverId: string;
   supplierId: string;
@@ -130,6 +134,23 @@ interface FuelEntry {
   recordedBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `#364` — mot vong xe cho o khai phieu, dung khuon `DriverFuelRunView` cua may chu. */
+export interface FuelRun {
+  runId: string;
+  runCode: string;
+  runStatus: string;
+  vehicleId: string;
+  vehiclePlate: string | null;
+  legs: {
+    legId: string;
+    sequence: number;
+    kind: string;
+    status: string;
+    originLabel: string;
+    destinationLabel: string;
+  }[];
 }
 
 interface WorkOrder {
@@ -198,6 +219,8 @@ export interface LifecycleState {
   assignments: Map<string, { vehicleId: string | null; driverId: string | null }>;
   fuelEntries: Map<string, FuelEntry>;
   fuelEvidence: Map<string, { id: string; contentType: string }[]>;
+  /** `#364` — viec duoc dieu cho o khai phieu (`GET /transport/me/fuel/runs`). Mac dinh RONG. */
+  fuelRuns: FuelRun[];
   workOrders: Map<string, WorkOrder>;
   complianceDocuments: unknown[];
   payrollPeriods: Map<string, PayrollPeriod>;
@@ -221,6 +244,7 @@ const newState = (): LifecycleState => ({
   assignments: new Map(),
   fuelEntries: new Map(),
   fuelEvidence: new Map(),
+  fuelRuns: [],
   workOrders: new Map(),
   complianceDocuments: [],
   payrollPeriods: new Map(),
@@ -264,6 +288,8 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
   await page.route('**/transport/customers', (route) => json(route, CUSTOMERS));
   await page.route('**/transport/partners', (route) => json(route, PARTNERS));
   await page.route('**/transport/fuel/suppliers', (route) => json(route, FUEL_SUPPLIERS));
+  // `#364` — viec duoc dieu cua lai xe cho o khai phieu; mac dinh RONG (chi con loi chuyen cu).
+  await page.route('**/transport/me/fuel/runs', (route) => json(route, state.fuelRuns));
   // Duong doc cay xang CUA LAI XE — pham vi cua chinh ho, khong phai duong van hanh.
   await page.route('**/transport/me/fuel/suppliers', (route) =>
     json(
@@ -453,10 +479,20 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
     return json(route, { ...trip, status: body.to });
   });
 
+  const runOf = (runId: string | null | undefined): FuelRun | undefined =>
+    state.fuelRuns.find((run) => run.runId === runId);
+
   const driverSlipView = (entry: FuelEntry): unknown => ({
     id: entry.id,
     tripId: entry.tripId,
+    tripCode: entry.tripId === null ? null : (state.trips.get(entry.tripId)?.code ?? null),
+    runId: entry.runId ?? null,
+    runCode: runOf(entry.runId)?.runCode ?? null,
+    legId: entry.legId ?? null,
+    legSequence:
+      runOf(entry.runId)?.legs.find((leg) => leg.legId === entry.legId)?.sequence ?? null,
     vehicleId: entry.vehicleId,
+    vehiclePlate: runOf(entry.runId)?.vehiclePlate ?? null,
     supplierId: entry.supplierId,
     stationId: entry.stationId ?? null,
     stationName: FUEL_STATIONS.find((station) => station.id === entry.stationId)?.name ?? null,
@@ -491,10 +527,13 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
     }
     const body = route.request().postDataJSON() as Record<string, unknown>;
     const id = next('fuel');
+    const run = typeof body.runId === 'string' ? runOf(body.runId) : undefined;
     const entry: FuelEntry = {
       id,
-      tripId: String(body.tripId),
-      vehicleId: String(body.vehicleId),
+      tripId: run === undefined ? String(body.tripId) : null,
+      runId: run?.runId ?? null,
+      legId: run === undefined ? null : ((body.legId as string | null | undefined) ?? null),
+      vehicleId: run?.vehicleId ?? String(body.vehicleId),
       driverId: 'drv-1',
       supplierId: String(body.supplierId),
       stationId: (body.stationId as string | null | undefined) ?? null,

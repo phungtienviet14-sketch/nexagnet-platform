@@ -317,6 +317,10 @@ const inboxRow = (overrides: Partial<FuelEntryInboxRow> = {}): FuelEntryInboxRow
   id: 'phieu-1',
   tripId: 'chuyen-1',
   tripCode: 'UAT-VIET-01',
+  runId: null,
+  runCode: null,
+  legId: null,
+  legSequence: null,
   driverId: 'lai-xe-1',
   driverName: 'Nguyễn Văn Bình',
   vehicleId: 'xe-1',
@@ -362,7 +366,8 @@ describe('#222 P1-B — hop thu bay du thu ke toan can de quyet', () => {
     const model = toFuelInboxModel(inboxPage([inboxRow()]), 'ACCOUNTING');
     const row = model.rows[0]!;
 
-    expect(row.tripCode).toBe('UAT-VIET-01');
+    // Phieu chuyen v1 giu NGUYEN ma chuyen lam nhan ngu canh (`#364`).
+    expect(row.contextLabel).toBe('UAT-VIET-01');
     expect(row.driverLabel).toBe('Nguyễn Văn Bình');
     expect(row.vehicleLabel).toBe('15C-556.33');
     expect(row.supplierLabel).toBe('Cây xăng Petrolimex 12');

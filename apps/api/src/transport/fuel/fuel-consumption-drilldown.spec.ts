@@ -40,6 +40,8 @@ const entry = (input: {
   return {
     id,
     tripId: `chuyen-${id}`,
+    runId: null,
+    legId: null,
     vehicleId: VEHICLE,
     driverId: 'lai-xe-1',
     supplierId: 'cay-xang-1',

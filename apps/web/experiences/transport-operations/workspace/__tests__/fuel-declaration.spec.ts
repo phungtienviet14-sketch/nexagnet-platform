@@ -29,19 +29,19 @@ const FORM: DriverFuelForm = {
   paymentMethod: 'DRIVER_CASH',
 };
 
-const TRIP = { id: 'chuyen-1', vehicleId: 'xe-1' };
+const TRIP = { kind: 'LEGACY_TRIP', tripId: 'chuyen-1', vehicleId: 'xe-1' } as const;
 
 describe('toDriverFuelSubmission', () => {
   it('hai lan gui voi CUNG form va CUNG khoa cho ra CUNG than yeu cau — gui lai la phat lai', () => {
     const first = toDriverFuelSubmission({
       form: FORM,
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
     const retry = toDriverFuelSubmission({
       form: FORM,
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
@@ -53,7 +53,7 @@ describe('toDriverFuelSubmission', () => {
   it('gui dung cac truong may chu nhan, cat khoang trang, khong co driverId', () => {
     const body = toDriverFuelSubmission({
       form: FORM,
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
@@ -76,7 +76,7 @@ describe('toDriverFuelSubmission', () => {
   it('so hoa don de trong thi gui null, khong gui chuoi rong', () => {
     const body = toDriverFuelSubmission({
       form: { ...FORM, invoiceNo: '   ' },
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
@@ -88,7 +88,7 @@ describe('toDriverFuelSubmission', () => {
     expect(DEFAULT_DRIVER_PAYMENT_METHOD).toBe('SUPPLIER_ACCOUNT');
     const cash = toDriverFuelSubmission({
       form: { ...FORM, paymentMethod: 'DRIVER_CASH' },
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
@@ -98,13 +98,13 @@ describe('toDriverFuelSubmission', () => {
   it('#317 G1 — tram da chon di vao than yeu cau; khong chon thi gui null tuong minh', () => {
     const withStation = toDriverFuelSubmission({
       form: FORM,
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
     const withoutStation = toDriverFuelSubmission({
       form: { ...FORM, stationId: '' },
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
@@ -117,7 +117,7 @@ describe('toDriverFuelSubmission', () => {
   it('lai xe chon ghi no cay xang thi gui dung phuong thuc do', () => {
     const body = toDriverFuelSubmission({
       form: { ...FORM, paymentMethod: 'SUPPLIER_ACCOUNT' },
-      trip: TRIP,
+      context: TRIP,
       correlationKey: 'khoa-1',
       timeZone: 'Asia/Ho_Chi_Minh',
     });

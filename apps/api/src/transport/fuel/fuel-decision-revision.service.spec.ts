@@ -4,7 +4,9 @@ import { AuditLogService } from '../../audit/audit-log.service.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { DEFAULT_FUEL_STATEMENT_COLUMNS, type TransportFuelPolicy } from './fuel-policy.js';
 import { FuelReadService } from './fuel-read.service.js';
+import { MovementFuelRunContextAdapter } from './fuel-run-context.port.js';
 import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
+import { InMemoryMovementRepository } from '../movement/movement.repository.js';
 import { FuelReconciliationService } from './fuel-reconciliation.service.js';
 import { reviseDiscrepancySchema } from './fuel.schemas.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
@@ -79,6 +81,8 @@ const clock = (): Date => {
 async function createVerifiedEntry(key: string, amount: number, businessDate: string) {
   const entry = await repository.createEntry({
     tripId: 'chuyen-g0',
+    runId: null,
+    legId: null,
     vehicleId: VEHICLE,
     driverId: 'lai-xe-g0',
     supplierId: 'cay-xang-g0',
@@ -441,6 +445,7 @@ describe('G0 — ban lam viec doi soat noi ro quyet dinh nao da bi thay the', ()
       repository,
       new NoCoreFacts(),
       new InMemoryFuelStationRepository(),
+      new MovementFuelRunContextAdapter(new InMemoryMovementRepository()),
     ).reconciliationWorkspace(reconciliationId);
     expect(workspace.supersededDiscrepancyIds).toEqual([decision.id]);
     expect(workspace.supersededDiscrepancyIds).not.toContain(revised.revision.id);
