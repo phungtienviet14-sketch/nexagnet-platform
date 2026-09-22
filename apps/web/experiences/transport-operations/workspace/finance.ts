@@ -81,13 +81,28 @@ const SOURCE_LABEL: Readonly<Record<FinanceSource, string>> = {
   DRIVER_SETTLEMENT: 'Quyết toán lái xe',
 };
 
+/**
+ * MOI DONG DAN VE MUC TRA LOI DUNG CAU HOI CUA NO (#341).
+ *
+ * Truoc day hai duong dan nay bi DAO: dong khach hang dan sang `ar-ap` — man khong co tuoi no phai
+ * thu nao — con ba dong phai tra dan sang `settlement`, man chi giu cuoc khach hang. Bam "Còn nợ
+ * cây xăng" ra mot trang toan so tien khach no. Gio: phai thu → `Phải thu khách hàng`, phai tra →
+ * `Phải trả đối tác & cây xăng`.
+ */
+const FLOW_SECTION: Readonly<Record<SettlementFlow, TransportSectionId>> = {
+  CUSTOMER_FREIGHT: 'settlement',
+  FUEL_SUPPLIER: 'ar-ap',
+  CARRIER_SERVICE: 'ar-ap',
+  PARTNER_COMMISSION: 'ar-ap',
+};
+
 export function toFinance(view: FinanceSummaryView): FinanceModel {
   const flowRows = FLOW_ORDER.map((flow): FinanceMoneyRow => ({
     key: flow,
     label: FLOW_LABEL[flow],
     value: formatMoney(view.buckets.flows[flow]),
     direction: FLOW_DIRECTION[flow],
-    section: flow === 'CUSTOMER_FREIGHT' ? 'ar-ap' : 'settlement',
+    section: FLOW_SECTION[flow],
   }));
 
   /*

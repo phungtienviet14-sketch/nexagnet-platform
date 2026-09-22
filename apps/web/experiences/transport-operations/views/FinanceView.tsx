@@ -12,7 +12,8 @@ import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions
 import { toFinance } from '../workspace/finance';
 
 /**
- * BANG TAI CHINH — sau dong tien canh nhau, va KHONG mot o tong nao (#244 G5).
+ * TONG HOP TAI CHINH (ten cu: Bang tai chinh) — sau dong tien canh nhau, va KHONG mot o tong nao
+ * (#244 G5).
  *
  * ===========================================================================
  * CAU CONG BO DI CUNG CON SO, khong xuong chan trang.
@@ -31,7 +32,7 @@ export function FinanceView() {
   if (!hasOperationsScope(navigation.role)) {
     return (
       <>
-        <PageHeader title="Bảng tài chính" />
+        <PageHeader title="Tổng hợp tài chính" />
         <ErrorState message={operationsEmptyMessage(navigation.role)} />
       </>
     );
@@ -42,8 +43,9 @@ export function FinanceView() {
   return (
     <>
       <PageHeader
-        title="Bảng tài chính"
-        summary="Doanh thu, biên trực tiếp, và sáu dòng tiền giữ riêng — không cộng chung."
+        /* Ten trang = nhan o danh muc (#341) — ten cu `Bảng tài chính`. */
+        title="Tổng hợp tài chính"
+        summary="Chỉ phần tiền, cho cả công ty: doanh thu, biên trực tiếp và sáu dòng phải thu/phải trả đặt cạnh nhau — không cộng chung, mỗi dòng mở sang mục chi tiết."
         context={model === null ? undefined : `Số liệu ngày ${model.generatedFor}`}
       />
 
@@ -99,10 +101,11 @@ export function FinanceView() {
           <section className="tx-panel" aria-label="Công nợ quá hạn">
             <h2>Trong đó, quá hạn</h2>
             <div className="tx-cards">
+              {/* Tien KHACH no — nen mo `Phải thu khách hàng`, khong phai man phai tra (#341). */}
               <MetricCard
                 label="Khách hàng nợ quá hạn"
                 value={model.receivableOverdue}
-                href={buildSectionUrl('ar-ap')}
+                href={buildSectionUrl('settlement')}
               />
             </div>
           </section>
