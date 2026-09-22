@@ -74,6 +74,14 @@ export interface RunWriteScope {
    */
   readonly run: VehicleRun;
   /**
+   * CHANG cua vong chay, cung DOC LAI duoi khoa — `#354`.
+   *
+   * Cung ly le voi `run` o tren, va no dung vi MOT dieu: moi lan doi trang thai chang
+   * (`setLegStatus`) gianh CHINH khoa nay. Nen mot chang doc o day khong the cu hon lan hoan tat/huy
+   * chang cuoi cung da commit — con ban `findLeg()` doc truoc khoa thi van cu duoc.
+   */
+  readonly legs: readonly RunLeg[];
+  /**
    * GIAO DICH dang giu khoa. Kho cua capability phai ghi qua CHINH no.
    *
    * Ghi qua mot duong khac (client goc) thi lan ghi do muon mot ket noi THU HAI trong khi ket noi
@@ -207,6 +215,32 @@ export interface CreateLegInput {
   /** #276 L6 — km DU KIEN. Khong bao gio ghi de len `distanceKm`. */
   readonly plannedDistanceKm?: number | null;
   readonly note?: string | null;
+}
+
+/**
+ * MOT LAN DOI TRANG THAI CHANG — `#354`.
+ *
+ * `from` la trang thai ma nguoi goi DA PHAN XU tren do (`evaluateLegTransition`/`evaluateLegCancel`
+ * doc ban `findLeg()` TRUOC khoa). Lan ghi chi di tiep khi, DUOI khoa vong chay, chang VAN o dung
+ * trang thai do — neu khong thi phan xu kia da cu.
+ */
+export interface LegStatusWrite {
+  readonly legId: string;
+  readonly from: RunLegStatus;
+  readonly to: RunLegStatus;
+  readonly at: Date;
+}
+
+/**
+ * KET QUA — cung khuon `RunCloseAttempt`: `leg` la su that SAU lan goi, du lan ghi co di hay khong.
+ *
+ * `applied: false` KHONG phai mot loi o tang kho: no nghia la mot nguoi ghi khac da doi chang giua
+ * luc phan xu doc va luc khoa. Nguoi goi phan xu LAI tren `leg` va tra dung ma cua duong tuan tu.
+ */
+export interface LegStatusWriteResult {
+  readonly leg: RunLeg;
+  /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
+  readonly applied: boolean;
 }
 
 export interface AssignRunInput {
@@ -396,7 +430,32 @@ export abstract class MovementRepository {
   abstract findLeg(id: string): Promise<RunLeg | null>;
   abstract listLegs(runId: string): Promise<RunLeg[]>;
   abstract listLegsByOrder(orderId: string): Promise<RunLeg[]>;
-  abstract setLegStatus(id: string, status: RunLegStatus, at: Date): Promise<RunLeg | null>;
+  /**
+   * DOI TRANG THAI CHANG — duoi CUNG khoa hang vong chay, va CO DIEU KIEN — `#354`.
+   *
+   * ==========================================================================================
+   * VI SAO PHAI GIANH KHOA VONG CHAY
+   * ==========================================================================================
+   *
+   * Lan ghi moc (`CheckpointService`) gianh khoa hang vong chay roi moi hoi lai "chang con mo
+   * khong". Neu lan ket thuc chang KHONG gianh khoa do, hai viec van chong len nhau: moc doc thay
+   * chang `IN_TRANSIT`, chang sang `COMPLETED` va commit, roi moc ghi vao mot chang da ket thuc —
+   * dung hinh dang DB live 20/09 (`#332`). Mot cau `SELECT ... FOR UPDATE` rieng tren hang CHANG se
+   * la mot thu tu khoa THU HAI; khoa vong chay la ranh gioi DA CO, va moi chang thuoc dung mot vong
+   * chay.
+   *
+   * ==========================================================================================
+   * VI SAO CO DIEU KIEN (`status = from`)
+   * ==========================================================================================
+   *
+   * Phan xu doc chang TRUOC khoa. Hai lenh ("bat dau chay" va "huy") cung doc thay `PLANNED`, cung
+   * duoc phep, roi xep hang sau khoa: ghi khong dieu kien thi lenh sau de len lenh truoc, va mot
+   * chang DA HUY song lai thanh `IN_TRANSIT` — diem cuoi khong con la diem cuoi, va moc lai ghi duoc
+   * len no. Co dieu kien thi lenh sau nhan `applied: false` kem su that moi.
+   *
+   * `null` = khong co chang nao mang dinh danh do.
+   */
+  abstract setLegStatus(input: LegStatusWrite): Promise<LegStatusWriteResult | null>;
 
   abstract assignRun(runId: string, input: AssignRunInput): Promise<RunAssignmentChange>;
   abstract listRunAssignments(runId: string): Promise<RunAssignment[]>;
@@ -686,7 +745,8 @@ export class InMemoryMovementRepository extends MovementRepository {
     return this.withRunLock(runId, async () => {
       const run = this.runs.get(runId);
       if (!run) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
-      return write({ run, tx: null });
+      const legs = this.legsOf(runId).sort((left, right) => left.sequence - right.sequence);
+      return write({ run, legs, tx: null });
     });
   }
 
@@ -836,18 +896,30 @@ export class InMemoryMovementRepository extends MovementRepository {
       .sort((left, right) => left.sequence - right.sequence);
   }
 
-  async setLegStatus(id: string, status: RunLegStatus, at: Date): Promise<RunLeg | null> {
-    const current = this.legs.get(id);
-    if (!current) return null;
-    const next: RunLeg = {
-      ...current,
-      status,
-      startedAt: status === 'IN_TRANSIT' ? iso(at) : current.startedAt,
-      completedAt: status === 'COMPLETED' ? iso(at) : current.completedAt,
-      updatedAt: iso(at),
-    };
-    this.legs.set(id, next);
-    return next;
+  /**
+   * CUNG hang doi voi `underRunLock()` — ban trong bo nho cua khoa va cua dieu kien o ban Prisma.
+   *
+   * Dieu kien `status === from` KHONG thua o day du `Map` don luong: `await` cua hang doi la mot
+   * cho nhuong luot, va hai lenh xep hang deu da phan xu tren `PLANNED` truoc khi vao hang.
+   */
+  async setLegStatus(input: LegStatusWrite): Promise<LegStatusWriteResult | null> {
+    const owner = this.legs.get(input.legId);
+    if (!owner) return null;
+    return this.withRunLock(owner.runId, async () => {
+      const current = this.legs.get(input.legId);
+      if (!current) return null;
+      if (current.status !== input.from) return { leg: current, applied: false };
+
+      const next: RunLeg = {
+        ...current,
+        status: input.to,
+        startedAt: input.to === 'IN_TRANSIT' ? iso(input.at) : current.startedAt,
+        completedAt: input.to === 'COMPLETED' ? iso(input.at) : current.completedAt,
+        updatedAt: iso(input.at),
+      };
+      this.legs.set(next.id, next);
+      return { leg: next, applied: true };
+    });
   }
 
   async assignRun(runId: string, input: AssignRunInput): Promise<RunAssignmentChange> {

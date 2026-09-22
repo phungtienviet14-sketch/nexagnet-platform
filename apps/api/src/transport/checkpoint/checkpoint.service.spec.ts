@@ -11,6 +11,7 @@ import {
 import { DEFAULT_CHECKPOINT_POLICY } from './checkpoint-lifecycle.js';
 import { InMemoryCheckpointRepository } from './checkpoint.repository.js';
 import { CheckpointService } from './checkpoint.service.js';
+import type { RunLeg } from '../movement/movement.types.js';
 import { RunWriteGuard, type RunWriteScope } from '../movement/run-write-guard.port.js';
 
 /**
@@ -71,12 +72,33 @@ const errorOf = async (run: Promise<unknown>): Promise<TransportDomainError> => 
   throw new Error('NO_ERROR_THROWN');
 };
 
+/** Chang DAY DU cho `RunWriteScope.legs` — chi bon truong dau la su that cua bai kiem. */
+const runLegOf = (facts: CheckpointLegFacts, sequence: number): RunLeg => ({
+  id: facts.id,
+  runId: facts.runId,
+  sequence,
+  kind: facts.kind,
+  status: facts.status,
+  orderId: null,
+  originLabel: 'Kho A',
+  destinationLabel: 'Kho B',
+  businessDate: '2026-09-09',
+  distanceKm: null,
+  plannedDistanceKm: null,
+  startedAt: null,
+  completedAt: null,
+  note: null,
+  createdAt: '2026-09-09T00:00:00.000Z',
+  updatedAt: '2026-09-09T00:00:00.000Z',
+});
+
 /**
- * RANH GIOI SERIALIZE gia lap — doc trang thai vong chay TU CHINH `FakeCoreFacts`.
+ * RANH GIOI SERIALIZE gia lap — doc trang thai vong chay VA chang TU CHINH `FakeCoreFacts`.
  *
- * Khong khoa gi: mot bai kiem don luong khong co ai de xep hang, va `#293` R2 dat bang chung ve
- * khoa o `run-closure-concurrency.int.spec.ts` tren Postgres that. Nhung no DOC LAI that — mot bai
- * doi `runs.set(...)` sang `COMPLETED` giua chung se thay dung cai ma duong that thay.
+ * Khong khoa gi: mot bai kiem don luong khong co ai de xep hang, va `#293` R2 / `#354` dat bang
+ * chung ve khoa tren Postgres that (`run-closure-concurrency.int.spec.ts`,
+ * `checkpoint-terminal-leg.int.spec.ts`). Nhung no DOC LAI that — mot bai doi `runs.set(...)` hay
+ * `legs.set(...)` giua chung se thay dung cai ma duong that thay.
  */
 class FakeRunWriteGuard extends RunWriteGuard {
   constructor(private readonly core: FakeCoreFacts) {
@@ -86,7 +108,11 @@ class FakeRunWriteGuard extends RunWriteGuard {
   async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
     const facts = await this.core.findRun(runId);
     if (!facts) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+    const legs = [...this.core.legs.values()]
+      .filter((leg) => leg.runId === runId)
+      .map((leg, index) => runLegOf(leg, index + 1));
     return write({
+      legs,
       run: {
         id: facts.id,
         code: facts.code,
@@ -123,10 +149,10 @@ describe('CheckpointService', () => {
     core.drivers.set('u.cuong', { id: 'drv_b', fullName: 'Tran Van Cuong' });
     core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'ACTIVE' });
     core.runs.set('run_2', { id: 'run_2', code: 'VC-002', status: 'ACTIVE' });
-    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1', kind: 'LOADED' });
-    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2', kind: 'LOADED' });
+    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1', kind: 'LOADED', status: 'IN_TRANSIT' });
+    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2', kind: 'LOADED', status: 'IN_TRANSIT' });
     // Chang 1 RONG cua chinh `run_1` — hinh dang `EMPTY #1 -> LOADED #2` cua UAT `#332`.
-    core.legs.set('leg_e', { id: 'leg_e', runId: 'run_1', kind: 'EMPTY' });
+    core.legs.set('leg_e', { id: 'leg_e', runId: 'run_1', kind: 'EMPTY', status: 'IN_TRANSIT' });
     core.assignments.set('run_1', ['drv_a']);
     core.assignments.set('run_2', ['drv_b']);
     /*
@@ -138,7 +164,7 @@ describe('CheckpointService', () => {
      * vong chay kia.
      */
     core.runs.set('run_3', { id: 'run_3', code: 'VC-003', status: 'ACTIVE' });
-    core.legs.set('leg_3', { id: 'leg_3', runId: 'run_3', kind: 'LOADED' });
+    core.legs.set('leg_3', { id: 'leg_3', runId: 'run_3', kind: 'LOADED', status: 'IN_TRANSIT' });
     core.assignments.set('run_3', ['drv_a']);
 
     service = new CheckpointService(
@@ -561,6 +587,140 @@ describe('CheckpointService', () => {
       const again = await arriveAtPickup('evt_1');
       expect(again.id).toBe(first.id);
       expect(await repository.listForRun('run_1')).toHaveLength(1);
+    });
+  });
+
+  /**
+   * CHANG DA KET THUC — `#354`.
+   *
+   * DB live 20/09 (`#332`) co moc `DELIVERY_*` ghi len chang RONG #1 mot ngay sau khi chang do da
+   * `COMPLETED`. Truoc `#354` khong cong nao doc trang thai CHANG: `append()` chi hoi lai trang thai
+   * VONG CHAY duoi khoa. Bang chung khoa tren Postgres o `checkpoint-terminal-leg.int.spec.ts`.
+   */
+  describe('chang da ket thuc (#354)', () => {
+    const LEG_TERMINAL_MESSAGE = 'Chặng đã kết thúc — không ghi thêm mốc vào chặng này.';
+    const closeLeg = (legId: string, status: 'COMPLETED' | 'CANCELLED') =>
+      core.legs.set(legId, { ...core.legs.get(legId)!, status });
+
+    it('lai xe khong ghi duoc moc moi len chang COMPLETED: xung dot, tieng Viet co dau, khong mot dong nao', async () => {
+      await arriveAtPickup('evt_1');
+      closeLeg('leg_1', 'COMPLETED');
+
+      const error = await errorOf(
+        service.recordAsDriver({
+          type: 'LOADING',
+          runId: 'run_1',
+          legId: 'leg_1',
+          authUserId: 'u.binh',
+          clientEventId: 'evt_2',
+        }),
+      );
+      expect(error.kind).toBe('CONFLICT');
+      expect(error.reason).toBe('CHECKPOINT_LEG_TERMINAL');
+      expect(error.message).toBe(LEG_TERMINAL_MESSAGE);
+      expect((await repository.listForLeg('leg_1')).map((row) => row.type)).toEqual([
+        'PICKUP_ARRIVAL',
+      ]);
+    });
+
+    it('duong dieu hanh ghi ho cung bi chan bang CUNG ma', async () => {
+      closeLeg('leg_1', 'COMPLETED');
+      const reason = await reasonOf(
+        service.recordAsOperator({
+          type: 'PICKUP_ARRIVAL',
+          runId: 'run_1',
+          legId: 'leg_1',
+          authUserId: 'u.dieu-hanh',
+          clientEventId: 'evt_op',
+        }),
+      );
+      expect(reason).toBe('CHECKPOINT_LEG_TERMINAL');
+      expect(await repository.listForLeg('leg_1')).toEqual([]);
+    });
+
+    it('chang da HUY cung khong nhan moc moi', async () => {
+      closeLeg('leg_1', 'CANCELLED');
+      expect(await reasonOf(arriveAtPickup('evt_1'))).toBe('CHECKPOINT_LEG_TERMINAL');
+      expect(await repository.listForLeg('leg_1')).toEqual([]);
+    });
+
+    it('chang RONG da COMPLETED: moc hang hoa van la CHECKPOINT_CARGO_ON_EMPTY_LEG (#350 khong yeu di)', async () => {
+      closeLeg('leg_e', 'COMPLETED');
+      const reason = await reasonOf(
+        service.recordAsDriver({
+          type: 'DELIVERY_ARRIVAL',
+          runId: 'run_1',
+          legId: 'leg_e',
+          authUserId: 'u.binh',
+          clientEventId: 'evt_empty',
+        }),
+      );
+      expect(reason).toBe('CHECKPOINT_CARGO_ON_EMPTY_LEG');
+    });
+
+    it('gui lai DUNG lenh da ghi truoc khi chang ket thuc: tra dung moc cu, khong ban thu hai', async () => {
+      const first = await arriveAtPickup('evt_1');
+      closeLeg('leg_1', 'COMPLETED');
+      const again = await arriveAtPickup('evt_1');
+      expect(again.id).toBe(first.id);
+      expect(await repository.listForLeg('leg_1')).toHaveLength(1);
+    });
+
+    it('vong chay VA chang cung o diem cuoi: cau tra loi la vong chay (CHECKPOINT_RUN_TERMINAL)', async () => {
+      closeLeg('leg_1', 'COMPLETED');
+      core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+      expect(await reasonOf(arriveAtPickup('evt_1'))).toBe('CHECKPOINT_RUN_TERMINAL');
+    });
+
+    it('moc MUC VONG CHAY khong bi bia ra mot dieu kien chang', async () => {
+      closeLeg('leg_1', 'COMPLETED');
+      closeLeg('leg_e', 'COMPLETED');
+      const assigned = await service.recordAsOperator({
+        type: 'ASSIGNED',
+        runId: 'run_1',
+        authUserId: 'u.dieu-hanh',
+        clientEventId: 'evt_assigned',
+      });
+      expect(assigned.legId).toBeNull();
+    });
+
+    /*
+     * CUA SO: phep kiem som doc thay chang `IN_TRANSIT`, roi van phong hoan tat chang ngay truoc khi
+     * lenh ghi lay khoa. Chi CONG DUOI KHOA dung o khe do — no doc lai chang tren `scope.legs`.
+     */
+    it('van phong hoan tat chang ngay truoc khi lenh ghi lay khoa: cong duoi khoa van chan', async () => {
+      class LegClosesFirstGuard extends FakeRunWriteGuard {
+        override async underRunLock<T>(
+          runId: string,
+          write: (scope: RunWriteScope) => Promise<T>,
+        ): Promise<T> {
+          closeLeg('leg_1', 'COMPLETED');
+          return super.underRunLock(runId, write);
+        }
+      }
+      const racing = new CheckpointService(
+        repository,
+        core,
+        location,
+        new LegClosesFirstGuard(core),
+        { timeZone: TZ },
+        DEFAULT_CHECKPOINT_POLICY,
+        undefined,
+        () => now,
+      );
+
+      const error = await errorOf(
+        racing.recordAsDriver({
+          type: 'PICKUP_ARRIVAL',
+          runId: 'run_1',
+          legId: 'leg_1',
+          authUserId: 'u.binh',
+          clientEventId: 'evt_race',
+        }),
+      );
+      expect(error.kind).toBe('CONFLICT');
+      expect(error.reason).toBe('CHECKPOINT_LEG_TERMINAL');
+      expect(await repository.listForLeg('leg_1')).toEqual([]);
     });
   });
 

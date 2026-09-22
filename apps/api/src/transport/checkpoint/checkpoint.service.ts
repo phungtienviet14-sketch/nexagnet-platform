@@ -2,8 +2,8 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { toBusinessDate } from '../business-date.js';
 import { isTerminalRunStatus } from '../movement/movement-lifecycle.js';
-import type { RunLegKind } from '../movement/movement.types.js';
-import { RunWriteGuard } from '../movement/run-write-guard.port.js';
+import type { RunLegKind, RunLegStatus } from '../movement/movement.types.js';
+import { RunWriteGuard, type RunWriteScope } from '../movement/run-write-guard.port.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
   TRANSPORT_CLOCK,
@@ -21,6 +21,7 @@ import {
   DEFAULT_CHECKPOINT_POLICY,
   evaluateCheckpoint,
   isRunScoped,
+  legAcceptsNewCheckpoints,
   type CheckpointPolicy,
 } from './checkpoint-lifecycle.js';
 import {
@@ -165,6 +166,7 @@ export class CheckpointService {
 
     const legId = command.legId ?? null;
     let legKind: RunLegKind | null = null;
+    let legStatus: RunLegStatus | null = null;
     if (legId !== null) {
       const leg = await this.core.findLeg(legId);
       if (!leg) {
@@ -179,6 +181,7 @@ export class CheckpointService {
         );
       }
       legKind = leg.kind;
+      legStatus = leg.status;
     }
 
     // Pham vi dang xet: mot chang cu the, hoac muc vong chay. Doc dung pham vi do de mot chang
@@ -194,6 +197,7 @@ export class CheckpointService {
       runTerminal: runStatus === 'COMPLETED' || runStatus === 'CANCELLED',
       hasLeg: legId !== null,
       legKind,
+      legStatus,
       recordedTypes: scoped.map((row) => row.type),
       hasObservation: command.observationId !== undefined,
       policy: this.policy,
@@ -287,19 +291,11 @@ export class CheckpointService {
        * truong noi hang van tren thung.
        *
        * Duoi khoa thi chi con hai thu tu, va ca hai deu dung. Xem chu thich dai o
-       * `WaitingSessionService.append()`.
+       * `WaitingSessionService.append()`. `#354` mo rong cung khoa do sang CHANG — xem
+       * `revalidateUnderLock()`.
        */
       const checkpoint = await this.runs.underRunLock(command.runId, async (scope) => {
-        if (isTerminalRunStatus(scope.run.status)) {
-          this.deny('CHECKPOINT_RUN_TERMINAL', {
-            runId: command.runId,
-            legId,
-            type: command.type,
-            status: scope.run.status,
-            revalidated: true,
-          });
-          throw this.errorFor('CHECKPOINT_RUN_TERMINAL');
-        }
+        this.revalidateUnderLock(scope, command, legId);
 
         return this.checkpoints.create(
           {
@@ -351,6 +347,54 @@ export class CheckpointService {
   }
 
   /**
+   * CONG DUOI KHOA — vong chay (`#293` R2) roi CHANG (`#354`), doc lai tren `scope`.
+   *
+   * Ban doc o dau `append()` (`requireRun`, `findLeg`) co the da cu: luot quet co the da dong vong
+   * chay, van phong co the da hoan tat/huy chang trong khe truoc khi lenh nay lay khoa. Moi duong
+   * ghi hai su that do — `closeRunAsSystemSerialized()`, `setLegStatus()` — gianh CHINH khoa nay,
+   * nen o day chi con hai thu tu: ho truoc (va lenh nay thay trang thai cuoi roi tu choi), hoac lenh
+   * nay truoc (va ho xep hang sau lan ghi moc). Khong co thu tu thu ba.
+   *
+   * Vong chay TRUOC chang: vong chay da dong thi cau tra loi dung la "ca chuyen da xong", du chang
+   * cung da xong. Moc MUC VONG CHAY (`legId === null`) khong co chang nao de doc lai — khong bia ra
+   * mot dieu kien chang cho no.
+   */
+  private revalidateUnderLock(
+    scope: RunWriteScope,
+    command: RecordCheckpointCommand,
+    legId: string | null,
+  ): void {
+    if (isTerminalRunStatus(scope.run.status)) {
+      this.deny('CHECKPOINT_RUN_TERMINAL', {
+        runId: command.runId,
+        legId,
+        type: command.type,
+        status: scope.run.status,
+        revalidated: true,
+      });
+      throw this.errorFor('CHECKPOINT_RUN_TERMINAL');
+    }
+    if (legId === null) return;
+
+    const locked = scope.legs.find((leg) => leg.id === legId);
+    if (!locked) {
+      // Chang khong bao gio bi xoa va khong doi vong chay; mat o day la mot su that lech — dong.
+      this.deny('CHECKPOINT_LEG_NOT_FOUND', { runId: command.runId, legId, revalidated: true });
+      throw TransportDomainError.notFound('CHECKPOINT_LEG_NOT_FOUND', 'Khong tim thay chang');
+    }
+    if (!legAcceptsNewCheckpoints(locked.status)) {
+      this.deny('CHECKPOINT_LEG_TERMINAL', {
+        runId: command.runId,
+        legId,
+        type: command.type,
+        status: locked.status,
+        revalidated: true,
+      });
+      throw this.errorFor('CHECKPOINT_LEG_TERMINAL');
+    }
+  }
+
+  /**
    * DONG PHIEN CHO khi moc vua ghi la lan nguoi nhan nhan hang — `#279` O4.
    *
    * Goi o CA duong ghi moi LAN duong gui lai, va khong o mot duong nao khac. Loi cua cong nay
@@ -373,6 +417,12 @@ export class CheckpointService {
         return TransportDomainError.conflict(
           reason,
           'Vòng chạy đã kết thúc — không ghi thêm mốc được nữa.',
+        );
+      // Cau nay cung di NGUYEN VAN len man hinh lai xe, nen co dau nhu cau o tren (`#333`).
+      case 'CHECKPOINT_LEG_TERMINAL':
+        return TransportDomainError.conflict(
+          reason,
+          'Chặng đã kết thúc — không ghi thêm mốc vào chặng này.',
         );
       case 'CHECKPOINT_ALREADY_RECORDED':
         return TransportDomainError.conflict(reason, 'Moc nay da duoc ghi tu truoc');

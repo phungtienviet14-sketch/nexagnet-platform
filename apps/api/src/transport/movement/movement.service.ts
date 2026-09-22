@@ -22,6 +22,7 @@ import {
   evaluateRunTransition,
   evaluateSystemRunClose,
   isTerminalRunStatus,
+  type TransitionDecision,
 } from './movement-lifecycle.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
@@ -547,8 +548,16 @@ export class MovementService {
         : null;
 
     const at = new Date();
-    const after = await this.repository.setLegStatus(legId, to, at);
-    if (!after) throw TransportDomainError.notFound('RUN_LEG_NOT_FOUND', 'Khong tim thay chang.');
+    const written = await this.repository.setLegStatus({ legId, from: before.status, to, at });
+    if (!written) throw TransportDomainError.notFound('RUN_LEG_NOT_FOUND', 'Khong tim thay chang.');
+    if (!written.applied) {
+      throw this.staleLegWrite(
+        'run.leg_transition',
+        evaluateLegTransition(written.leg.status, to),
+        { legId, from: before.status, to, current: written.leg.status },
+      );
+    }
+    const after = written.leg;
 
     if (to === 'IN_TRANSIT' && run.status === 'PLANNED') {
       await this.repository.setRunStatus(run.id, 'ACTIVE', at);
@@ -599,8 +608,21 @@ export class MovementService {
       throw this.deny('run.leg_cancel', decision.reason, { legId, status: before.status });
     }
 
-    const after = await this.repository.setLegStatus(legId, 'CANCELLED', new Date());
-    if (!after) throw TransportDomainError.notFound('RUN_LEG_NOT_FOUND', 'Khong tim thay chang.');
+    const written = await this.repository.setLegStatus({
+      legId,
+      from: before.status,
+      to: 'CANCELLED',
+      at: new Date(),
+    });
+    if (!written) throw TransportDomainError.notFound('RUN_LEG_NOT_FOUND', 'Khong tim thay chang.');
+    if (!written.applied) {
+      throw this.staleLegWrite('run.leg_cancel', evaluateLegCancel(written.leg.status), {
+        legId,
+        from: before.status,
+        current: written.leg.status,
+      });
+    }
+    const after = written.leg;
 
     this.allow('run.leg_cancel', decision.reason, { legId, reason });
     await this.audit.append({
@@ -960,6 +982,30 @@ export class MovementService {
       );
     }
     return error;
+  }
+
+  /**
+   * CHANG DA DOI GIUA LAN DOC VA LAN KHOA — `#354`.
+   *
+   * Mot nguoi ghi khac (hoan tat, huy, bat dau chay) da lay khoa vong chay truoc. `decision` la phan
+   * xu LAI tren ban doc DUOI khoa, va ma tra ve la dung ma ma duong tuan tu se tra — cung ly le voi
+   * `addLeg`: nguoi dung khong duoc nhan hai cau tra loi khac nhau cho cung mot su that chi vi ho
+   * cham hon mot phan nghin giay.
+   *
+   * Phan xu lai LUON tu choi: moi trang thai dich chi co DUNG MOT trang thai nguon (`LEG_EDGES`,
+   * huy chi tu `PLANNED`), va lan ghi co dieu kien vua noi chang KHONG con o trang thai do. Nhanh
+   * `allowed` duoi day vi the la bat kha — chi xay ra khi trang thai chang DI LUI, mot loi luu tru
+   * chu khong phai mot yeu cau sai; no nem thay vi ghi theo mot phan xu da cu.
+   */
+  private staleLegWrite<Reason extends TransportMovementDecisionReason>(
+    point: DecisionPoint,
+    decision: TransitionDecision<Reason>,
+    detail: Record<string, unknown>,
+  ): TransportDomainError {
+    if (decision.allowed) {
+      throw new Error(`Chang ${String(detail.legId)} doi trang thai nguoc chieu may trang thai`);
+    }
+    return this.deny(point, decision.reason, { ...detail, by: 'ANOTHER_WRITER' });
   }
 
   private allow(
