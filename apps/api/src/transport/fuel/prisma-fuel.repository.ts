@@ -28,6 +28,7 @@ import {
   FUEL_MATCH_ENTRY_ONCE,
   FUEL_MATCH_LINE_ONCE,
   FUEL_STATEMENT_PERIOD,
+  costExpenseOnRunFirstEntry,
   isDriverCashNeedsTripViolation,
   isLegRunViolation,
   isRunVehicleViolation,
@@ -647,10 +648,19 @@ export class PrismaFuelRepository extends FuelRepository {
 
   async attachCostExpense(id: string, expenseId: string): Promise<FuelEntry | null> {
     const updated = await model(this.prisma, 'transportFuelEntry').updateMany({
-      where: { id, costExpenseId: null },
+      // `#364` — `tripId` NAM TRONG dieu kien ghi: lenh nay khong bao gio cham mot phieu Run-first, du
+      // nguoi goi co quen nhanh `tripId === null` cua `postFuelCost`. `CHECK
+      // TransportFuelEntry_cost_expense_needs_trip` la luoi sau no o tang CSDL.
+      where: { id, costExpenseId: null, tripId: { not: null } },
       data: { costExpenseId: expenseId },
     });
-    return updated.count === 0 ? null : this.findEntry(id);
+    if (updated.count > 0) return this.findEntry(id);
+
+    // Khong ghi duoc: phan loai de `null` chi con MOT nghia. `tripId` bat bien sau khi ghi, nen phep
+    // doc nay khong dua voi ai.
+    const current = await this.findEntry(id);
+    if (current?.tripId === null) throw costExpenseOnRunFirstEntry(id);
+    return null;
   }
 
   /* -------------------------- Bang chung -------------------------- */

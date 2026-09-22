@@ -729,6 +729,12 @@ export abstract class FuelRepository {
    *
    * Tra `null` khi da co — mot lan phat lai vo hai, khong phai mot loi. Cung voi unique tren cot
    * do, day la nua thu hai cua "chi phi dau vao gia thanh chuyen dung mot lan".
+   *
+   * `#364` — CHI phieu gan chuyen v1. Phieu Run-first (`tripId` NULL) thi NEM
+   * `costExpenseOnRunFirstEntry` va KHONG ghi gi: so cai cua no la `TransportFuelCostAttribution`
+   * (mot phieu, mot so cai). Nem chu khong tra `null` — `null` la "da co", va nguoi goi se tin mot
+   * khoan `TX-03` mo coi la cua mot phien khac. `CHECK TransportFuelEntry_cost_expense_needs_trip`
+   * giu dung dieu nay o tang CSDL.
    */
   abstract attachCostExpense(id: string, expenseId: string): Promise<FuelEntry | null>;
 

@@ -100,6 +100,28 @@ export const isDriverCashNeedsTripViolation = (error: unknown): boolean =>
   error instanceof Error && error.message.includes(FUEL_ENTRY_DRIVER_CASH_NEEDS_TRIP);
 
 /**
+ * `CHECK` — MOT PHIEU, MOT SO CAI, chieu `TX-03`: chan gia thanh chuyen v1 (`costExpenseId`) CHI tren
+ * phieu gan chuyen v1. Chieu con lai (phieu chuyen v1 khong co dong phan bo) la
+ * `FUEL_COST_ATTRIBUTION_TRIGGER.legacyTrip`.
+ *
+ * Hai kho NEM loi mang CHINH ten nay khi bi goi gan chan `TX-03` vao phieu Run-first — truoc khi
+ * lenh ghi toi CSDL. Khong co ma tu choi cho nguoi dung: khong duong goi hop le nao di toi day
+ * (`postFuelCost` dung phieu Run-first o `FUEL_COST_AWAITS_ATTRIBUTION`), nen gap no la mot loi LAP
+ * TRINH, va no phai la `500`, khong phai mot `4xx` bao nguoi dung sua dau vao.
+ */
+export const FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP = 'TransportFuelEntry_cost_expense_needs_trip';
+
+export const isCostExpenseNeedsTripViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP);
+
+/** Loi cua TANG KHO — cung ten voi `CHECK`, de nguoi doc log/trace nhan ra ngay cung mot bat bien. */
+export const costExpenseOnRunFirstEntry = (fuelEntryId: string): Error =>
+  new Error(
+    `${FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP}: phieu ${fuelEntryId} khong gan chuyen v1 — gia thanh cua no ` +
+      'nam o TransportFuelCostAttribution, khong gan duoc chan TX-03',
+  );
+
+/**
  * `#364` — mot dong phan bo gia thanh chi co MOT khoa chong ghi trung, va mot cap phat chi dao
  * duoc MOT lan.
  *

@@ -293,6 +293,35 @@ describe('#364 §3 — duyet phieu Run-first KHONG lot vao gia thanh chuyen hay 
     ]);
   });
 
+  /**
+   * MOT PHIEU, MOT SO CAI o TANG KHO — khong chi o nhanh `tripId === null` cua `postFuelCost`.
+   *
+   * Mot duong goi tuong lai goi thang `attachCostExpense` van khong gan duoc chan `TX-03` vao phieu
+   * Run-first. Kho NEM (khong tra `null`): `null` nghia la "da co, phat lai vo hai", va nguoi goi se
+   * tin mot khoan chi mo coi la cua mot phien khac. Ban Postgres: IT A8.
+   */
+  it('kho tu choi gan chan `TX-03` vao phieu Run-first: NEM loi co ten, khong ghi', async () => {
+    const entry = await world.fuel.submitFuelEntry(runFirstCommand(world), 'lx.binh');
+    await world.fuel.verifyFuelEntry(entry.id, 'ke-toan');
+
+    await expect(world.fuelRepo.attachCostExpense(entry.id, 'expense-lac')).rejects.toThrow(
+      /^TransportFuelEntry_cost_expense_needs_trip: /,
+    );
+    expect((await world.fuelRepo.findEntry(entry.id))?.costExpenseId).toBeNull();
+  });
+
+  it('phieu chuyen v1 van gan chan `TX-03` qua kho; gan lai la `null`, chan dau giu nguyen', async () => {
+    const legacy = await world.fuel.submitFuelEntry(
+      { ...runFirstCommand(world), runId: null, tripId: LEGACY_TRIP, vehicleId: VEHICLE_A },
+      'ke-toan',
+    );
+
+    const attached = await world.fuelRepo.attachCostExpense(legacy.id, 'expense-1');
+    expect(attached?.costExpenseId).toBe('expense-1');
+    expect(await world.fuelRepo.attachCostExpense(legacy.id, 'expense-2')).toBeNull();
+    expect((await world.fuelRepo.findEntry(legacy.id))?.costExpenseId).toBe('expense-1');
+  });
+
   it('phieu chuyen v1 thieu `vehicleId` -> 400 co ma, khong doan xe', async () => {
     expect(
       await reasonOf(

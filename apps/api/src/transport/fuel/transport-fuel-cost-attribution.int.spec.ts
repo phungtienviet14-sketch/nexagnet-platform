@@ -768,5 +768,123 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         await freshPrisma.$disconnect();
       }
     });
+
+    /* ============================== A8 ============================== */
+
+    /**
+     * A8 — MOT PHIEU, MOT SO CAI, chieu `TX-03`: phieu Run-first KHONG BAO GIO mang `costExpenseId`.
+     *
+     * A5 khoa chieu kia (phieu chuyen v1 khong nhan dong phan bo). Chieu nay truoc day chi co
+     * `postFuelCost()` giu, trong khi trigger phan bo chi hoi `tripId` — mot lan ghi THANG se de lai
+     * mot phieu nam o CA HAI so cai. Bai nay do:
+     *   · CSDL tu choi `UPDATE` qua Prisma, `UPDATE` bang SQL tho va `INSERT` tho — ca ba vi
+     *     `CHECK TransportFuelEntry_cost_expense_needs_trip`;
+     *   · kho (`attachCostExpense`) tu choi TRUOC CSDL bang loi CUA NO: thong diep MO DAU bang ten
+     *     `CHECK`, con loi Postgres boc trong Prisma thi mo dau bang "Invalid `prisma...`";
+     *   · phieu van co dung MOT so cai: phan bo van chay tren no;
+     *   · DOI CHUNG: CUNG khoan chi, CUNG lenh kho, tren phieu chuyen v1 -> gan duoc. Nen ly do bi tu
+     *     choi o tren la `tripId` NULL — khong phai unique `costExpenseId`, khong phai mot ma bia.
+     */
+    it('A8 — phieu Run-first khong mang duoc chan TX-03 (CSDL + kho); phieu chuyen v1 van gan', async () => {
+      const runFirst = await verifiedNativeEntry(500_000);
+      // Mot khoan chi `TX-03` THAT tren chuyen v1, CHUA thuoc phieu nao.
+      const expenseId = await new CostingFuelExpenseAdapter(costing).postFuelCost(
+        {
+          tripId: state.tripId,
+          driverId: null,
+          amount: 500_000,
+          businessDate: '2026-09-12',
+          fundedBy: 'COMPANY_DIRECT',
+          evidenceLocator: null,
+          note: 'IT A8',
+          correlationKey: `${PREFIX}-a8-${randomUUID()}`,
+        },
+        ACTOR,
+      );
+      const NEEDS_TRIP = /TransportFuelEntry_cost_expense_needs_trip/;
+
+      await expect(
+        prisma.transportFuelEntry.update({
+          where: { id: runFirst },
+          data: { costExpenseId: expenseId },
+        }),
+      ).rejects.toThrow(NEEDS_TRIP);
+      await expect(
+        prisma.$executeRaw`UPDATE "TransportFuelEntry" SET "costExpenseId" = ${expenseId} WHERE "id" = ${runFirst}`,
+      ).rejects.toThrow(NEEDS_TRIP);
+      await expect(
+        prisma.transportFuelEntry.create({
+          data: {
+            runId: state.runA,
+            vehicleId: state.vehicleA,
+            driverId: state.driver,
+            supplierId: state.supplierId,
+            businessDate: '2026-09-12',
+            occurredAt: new Date('2026-09-12T12:00:00Z'),
+            liters: '10.000',
+            amount: 200_000n,
+            odometerKm: 300_300,
+            paymentMethod: 'SUPPLIER_ACCOUNT',
+            correlationKey: `${PREFIX}-raw-${randomUUID()}`,
+            declaredBy: ACTOR,
+            costExpenseId: expenseId,
+          },
+        }),
+      ).rejects.toThrow(NEEDS_TRIP);
+
+      const storeFailure = await fuelRepo.attachCostExpense(runFirst, expenseId).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(storeFailure).toBeInstanceOf(Error);
+      expect((storeFailure as Error).message).toMatch(
+        /^TransportFuelEntry_cost_expense_needs_trip: /,
+      );
+
+      const row = await prisma.transportFuelEntry.findUnique({ where: { id: runFirst } });
+      expect(row?.costExpenseId).toBeNull();
+      expect(await prisma.transportFuelEntry.count({ where: { costExpenseId: expenseId } })).toBe(
+        0,
+      );
+
+      const view = await attribution.attribute(
+        runFirst,
+        {
+          target: { kind: 'RUN', runId: state.runA },
+          amount: 500_000,
+          correlationKey: `${PREFIX}-${randomUUID()}`,
+        },
+        ACTOR,
+      );
+      expect(view).toMatchObject({
+        ledger: 'FUEL_COST_ATTRIBUTION',
+        legacyTrip: null,
+        attributedAmount: 500_000,
+        unattributedAmount: 0,
+      });
+
+      // DOI CHUNG — cung khoan chi, cung lenh kho, tren phieu CHUYEN v1.
+      const legacy = await fuel.submitFuelEntry(
+        {
+          tripId: state.tripId,
+          vehicleId: state.vehicleA,
+          driverId: state.driver,
+          supplierId: state.supplierId,
+          liters: '25',
+          amount: 500_000,
+          odometerKm: 300_400,
+          occurredAt: '2026-09-12T20:00:00+07:00',
+          businessDate: '2026-09-12',
+          paymentMethod: 'SUPPLIER_ACCOUNT',
+          correlationKey: `${PREFIX}-${randomUUID()}`,
+        },
+        ACTOR,
+      );
+      const attached = await fuelRepo.attachCostExpense(legacy.id, expenseId);
+      expect(attached?.costExpenseId).toBe(expenseId);
+      expect(
+        (await prisma.transportFuelEntry.findUnique({ where: { id: legacy.id } }))?.costExpenseId,
+      ).toBe(expenseId);
+    });
   },
 );

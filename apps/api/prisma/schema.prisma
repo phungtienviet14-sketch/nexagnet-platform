@@ -2176,6 +2176,8 @@ model TransportFuelCandidate {
 ///   · `TransportFuelEntry_one_context_kind`      — chuyen cu HOAC vong chay, khong ca hai;
 ///   · `TransportFuelEntry_driver_cash_needs_trip` — tien mat lai xe ung CHI tren chuyen cu (so quy
 ///     theo chuyen); phieu Run-first khong bao gio cham Quy lai xe;
+///   · `TransportFuelEntry_cost_expense_needs_trip` — chan gia thanh `TX-03` (`costExpenseId`) CHI
+///     tren chuyen cu; phieu Run-first chi co so cai `TransportFuelCostAttribution`;
 ///   · trigger `transport_fuel_entry_run_context` — vong chay phai la cua CHINH xe tren phieu, chang
 ///     phai thuoc CHINH vong chay do.
 ///
@@ -2234,7 +2236,8 @@ model TransportFuelEntry {
   /// `INV-26` — bang ke da de ra phieu nay. NULL o moi phieu do lai xe khai.
   sourceStatementId    String?
   sourceStatement      TransportFuelSupplierStatement?   @relation(fields: [sourceStatementId], references: [id])
-  /// Chan gia thanh o `TX-03`. UNIQUE: mot khoan chi khong the thuoc hai phieu dau.
+  /// Chan gia thanh o `TX-03`. UNIQUE: mot khoan chi khong the thuoc hai phieu dau. `#364`: NULL
+  /// khi `tripId` NULL (`CHECK TransportFuelEntry_cost_expense_needs_trip`).
   costExpenseId        String?                           @unique
   /// Khoa chong ghi trung cua duong nop phieu.
   correlationKey       String                            @unique

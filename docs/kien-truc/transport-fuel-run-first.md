@@ -44,12 +44,13 @@ số tiền, phương thức thanh toán, chứng từ, `correlationKey`, trạn
 **B. Ngữ cảnh vận hành — trên chính phiếu, tuỳ chọn.** `tripId` (chỉ để tương thích) **hoặc**
 `runId` (kèm `legId` tuỳ chọn). Bất biến ở DB, không chỉ ở tầng miền:
 
-| Ràng buộc                                   | Nói gì                                                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------ |
-| `TransportFuelEntry_leg_needs_run`          | có chặng thì phải có vòng xe                                             |
-| `TransportFuelEntry_one_context_kind`       | `num_nonnulls(tripId, runId) <= 1` — không bao giờ cả chuyến lẫn vòng xe |
-| `TransportFuelEntry_driver_cash_needs_trip` | `DRIVER_CASH` chỉ trên phiếu chuyến cũ                                   |
-| trigger `transport_fuel_entry_run_context`  | vòng xe là của **chính xe** trên phiếu; chặng thuộc **chính vòng xe** đó |
+| Ràng buộc                                    | Nói gì                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `TransportFuelEntry_leg_needs_run`           | có chặng thì phải có vòng xe                                                               |
+| `TransportFuelEntry_one_context_kind`        | `num_nonnulls(tripId, runId) <= 1` — không bao giờ cả chuyến lẫn vòng xe                   |
+| `TransportFuelEntry_driver_cash_needs_trip`  | `DRIVER_CASH` chỉ trên phiếu chuyến cũ                                                     |
+| `TransportFuelEntry_cost_expense_needs_trip` | `costExpenseId IS NULL OR tripId IS NOT NULL` — chân `TX-03` chỉ trên phiếu chuyến cũ (§3) |
+| trigger `transport_fuel_entry_run_context`   | vòng xe là của **chính xe** trên phiếu; chặng thuộc **chính vòng xe** đó                   |
 
 Ngữ cảnh **bất biến sau khi ghi**: lệnh sửa phiếu (`AmendFuelEntryInput`) không có trường ngữ cảnh.
 Không có `orderId` — một vòng xe MULTI sau này mang nhiều đơn, và phiếu dầu không tự biết thuộc đơn
@@ -77,13 +78,20 @@ Khoá phân vùng là `tripId`, và nó bất biến sau khi ghi, nên một phi
 | `tripId ≠ NULL` (chuyến cũ) | `TransportTripExpense` (`TX-03`), trỏ bằng `costExpenseId` | `FuelService.postFuelCost` khi `VERIFIED` — **như trước** | biên chuyến, `runMargin` (qua `TransportTripRunLegLink`), Quỹ lái xe khi `DRIVER_CASH`                 |
 | `tripId = NULL` (Run-first) | `TransportFuelCostAttribution`                             | kế toán, qua lệnh phân bổ riêng                           | `GET /transport/fuel/runs/:runId/cost-attribution`, `GET /transport/fuel/entries/:id/cost-attribution` |
 
-Cưỡng chế ở **ba** chỗ, không chỉ quy ước:
+Cưỡng chế ở **cả hai chiều**, mỗi chiều có lưới ở tầng DB — không chỉ quy ước:
 
-- trigger `transport_fuel_cost_attribution_guard` từ chối mọi dòng phân bổ cho phiếu có `tripId`;
-- dịch vụ từ chối trước với `FUEL_COST_ATTRIBUTION_LEGACY_TRIP_PROJECTED`, khung nhìn chỉ trỏ sang
-  `TX-03`;
-- `postFuelCost` gặp phiếu `tripId = NULL` dừng ở `FUEL_COST_AWAITS_ATTRIBUTION` — **không bao giờ**
-  ghi `TX-03`.
+- **Phiếu chuyến cũ không có dòng phân bổ.** Trigger `transport_fuel_cost_attribution_guard` từ
+  chối mọi dòng phân bổ cho phiếu có `tripId`; dịch vụ từ chối trước với
+  `FUEL_COST_ATTRIBUTION_LEGACY_TRIP_PROJECTED`, khung nhìn chỉ trỏ sang `TX-03` (IT A5).
+- **Phiếu Run-first không có `costExpenseId`.** `CHECK TransportFuelEntry_cost_expense_needs_trip`
+  từ chối mọi `UPDATE`/`INSERT` thô; `attachCostExpense()` của cả hai kho chỉ ghi khi `tripId` khác
+  `NULL` và **ném** lỗi mang tên CHECK trên phiếu Run-first thay vì trả `null` ("đã có"), không ghi
+  gì; `postFuelCost` gặp phiếu `tripId = NULL` dừng ở `FUEL_COST_AWAITS_ATTRIBUTION` — **không bao
+  giờ** ghi `TX-03` (IT A8).
+
+Chiều thứ hai là cần thiết chứ không thừa: trigger phân bổ chỉ hỏi `tripId`, nên thiếu CHECK thì một
+phiếu Run-first mang `costExpenseId` (do một lần ghi thẳng) vẫn nhận dòng phân bổ — cùng một khoản
+dầu nằm ở hai sổ.
 
 Báo cáo vòng xe của lớp phân bổ mang cờ `legacyTripExpenseIncluded: false` để người đọc không
 tưởng nhầm nó đã gồm `TX-03`.
@@ -165,7 +173,7 @@ quyết định thì không cần migration.
 `20260922100000_transport_fuel_run_first`:
 
 - `tripId` bỏ `NOT NULL`; thêm `runId`, `legId` + FK `RESTRICT` + index; bảng
-  `TransportFuelCostAttribution` + hai enum; 3 CHECK + 1 trigger trên phiếu; 3 CHECK + 2 trigger trên
+  `TransportFuelCostAttribution` + hai enum; 4 CHECK + 1 trigger trên phiếu; 3 CHECK + 2 trigger trên
   bảng phân bổ. Mọi `ALTER`/`CREATE` chỉ nhắm `TransportFuel*` (spec lưu trữ khoá điều đó).
 - **Không backfill.** Hàng cũ giữ `tripId`, `runId`/`legId` để `NULL`; không viết lại đối soát hay
   công nợ. Việc suy vòng xe cho phiếu chuyến cũ từ `TransportTripRunLegLink` **cố ý không làm**:

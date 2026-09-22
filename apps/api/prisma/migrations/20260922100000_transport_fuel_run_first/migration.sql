@@ -8,9 +8,9 @@
 --     chuyen v1 cua no, khong doan vong chay/chang tu `TransportTripRunLegLink`;
 --   · them mot bang MOI (`TransportFuelCostAttribution`) va hai enum cua no;
 --   · them `CHECK` va trigger cho nhung bat bien Prisma khong khai duoc.
--- Moi hang dang co deu hop le ngay sau lan di: ba `CHECK` moi deu dung voi (`tripId` co, `runId`/
--- `legId` NULL), trigger chi kiem hang DUOC GHI sau thoi diem nay, va bang moi rong. Duong lui o
--- `README-rollback.sql` cung thu muc.
+-- Moi hang dang co deu hop le ngay sau lan di: bon `CHECK` moi tren phieu deu dung voi (`tripId` co,
+-- `runId`/`legId` NULL) bat ke `paymentMethod` hay `costExpenseId`, trigger chi kiem hang DUOC GHI sau
+-- thoi diem nay, va bang moi rong. Duong lui o `README-rollback.sql` cung thu muc.
 --
 -- PHAN 1 duoc SINH RA boi `prisma migrate diff` (tu mot DB dung bang chuoi migration cua `main`), roi
 -- GO BO moi cau KHONG thuoc `#364` — lenh diff keo theo do lech co san cua bang khac
@@ -121,6 +121,15 @@ ALTER TABLE "TransportFuelEntry"
   ADD CONSTRAINT "TransportFuelEntry_driver_cash_needs_trip"
   CHECK ("paymentMethod" <> 'DRIVER_CASH' OR "tripId" IS NOT NULL);
 
+-- MOT PHIEU, MOT SO CAI — chieu `TX-03`. Chan gia thanh chuyen v1 (`costExpenseId`) CHI co tren phieu
+-- gan chuyen v1. Trigger `transport_fuel_cost_attribution_guard` o PHAN 3 chi hoi `tripId`, nen mot
+-- phieu Run-first ma mang `costExpenseId` (mot lan ghi thang, mot script) van nhan duoc dong phan bo —
+-- va cung mot khoan dau nam o CA HAI so cai. `CHECK` nay khoa chieu do o tang CSDL; tang mien
+-- (`postFuelCost`) va tang kho (`attachCostExpense`) chan truoc no.
+ALTER TABLE "TransportFuelEntry"
+  ADD CONSTRAINT "TransportFuelEntry_cost_expense_needs_trip"
+  CHECK ("costExpenseId" IS NULL OR "tripId" IS NOT NULL);
+
 -- Vong chay phai la cua CHINH xe tren phieu; chang phai thuoc CHINH vong chay do. Hai dieu so hai
 -- bang nen song trong trigger — cung ly do voi `transport_fuel_entry_station_supplier` (`#317`).
 -- Tang mien kiem truoc (`FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE`, `FUEL_ENTRY_LEG_NOT_IN_RUN`); trigger
@@ -199,7 +208,8 @@ ALTER TABLE "TransportFuelCostAttribution"
 --      cung "thay con du" roi cung ghi. Ham `VOLATILE` + `READ COMMITTED`: moi cau lenh trong ham lay
 --      anh chup MOI, nen phep cong o buoc 6 nhin thay dong vua commit cua ben kia.
 --   2. Phieu gan CHUYEN v1 khong co dong nao o day: so cai phan bo cua no la `TransportTripExpense`
---      (`costExpenseId`). Mot phieu, mot so cai — khong the dem hai lan.
+--      (`costExpenseId`). Mot phieu, mot so cai — khong the dem hai lan. Chieu nguoc lai (phieu
+--      Run-first khong mang `costExpenseId`) la `CHECK TransportFuelEntry_cost_expense_needs_trip`.
 --   3. Chi phieu `VERIFIED` moi duoc CAP PHAT: so tien cua no khi do da bat bien (`GD-10`), nen tong
 --      da phan bo khong the bi mot lan sua phieu ve sau lam vuot.
 --   4. Cung tien te voi phieu — khong co phep doi ngoai te nao trong `transport`.

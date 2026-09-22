@@ -6,9 +6,12 @@ import {
   FUEL_COST_ATTRIBUTION_CORRELATION,
   FUEL_COST_ATTRIBUTION_REVERSED_ONCE,
   FUEL_COST_ATTRIBUTION_TRIGGER,
+  FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP,
   FUEL_ENTRY_DRIVER_CASH_NEEDS_TRIP,
   FUEL_ENTRY_LEG_RUN,
   FUEL_ENTRY_RUN_VEHICLE,
+  costExpenseOnRunFirstEntry,
+  isCostExpenseNeedsTripViolation,
   isDriverCashNeedsTripViolation,
   isFuelCostAttributionTriggerViolation,
   isLegRunViolation,
@@ -125,6 +128,22 @@ describe('#364 — phan bo gia thanh: lop rieng, chi ghi them, khong vuot so tie
     }
   });
 
+  /**
+   * MOT PHIEU, MOT SO CAI phai khoa CA HAI CHIEU o tang CSDL. Trigger phan bo chi hoi `tripId`, nen
+   * neu thieu `CHECK` thi mot phieu Run-first mang `costExpenseId` van nhan dong phan bo — cung mot
+   * khoan dau nam o hai so cai.
+   */
+  it('mot phieu, mot so cai: trigger chan phan bo cho phieu chuyen v1, `CHECK` chan `TX-03` tren phieu Run-first', () => {
+    expect(code).toContain(`'${FUEL_COST_ATTRIBUTION_TRIGGER.legacyTrip}: `);
+    expect(code).toContain(
+      [
+        'ALTER TABLE "TransportFuelEntry"',
+        `  ADD CONSTRAINT "${FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP}"`,
+        '  CHECK ("costExpenseId" IS NULL OR "tripId" IS NOT NULL);',
+      ].join('\n'),
+    );
+  });
+
   it('trigger chi-ghi-them chan CA `UPDATE` lan `DELETE`', () => {
     expect(code).toContain('CREATE TRIGGER "transport_fuel_cost_attribution_append_only"');
     expect(code).toContain('BEFORE UPDATE OR DELETE ON "TransportFuelCostAttribution"');
@@ -158,6 +177,7 @@ describe('#364 — migration chi cham doi tuong Fuel, co duong lui', () => {
       'DROP TRIGGER IF EXISTS "transport_fuel_cost_attribution_guard"',
       'DROP TABLE IF EXISTS "TransportFuelCostAttribution"',
       'DROP TRIGGER IF EXISTS "transport_fuel_entry_run_context"',
+      `DROP CONSTRAINT IF EXISTS "${FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP}"`,
       'DROP CONSTRAINT IF EXISTS "TransportFuelEntry_driver_cash_needs_trip"',
       'DROP CONSTRAINT IF EXISTS "TransportFuelEntry_one_context_kind"',
       'DROP CONSTRAINT IF EXISTS "TransportFuelEntry_leg_needs_run"',
@@ -184,10 +204,23 @@ describe('#364 — tang kho nhan ra loi CSDL bang ten, va khong nhan nham loi kh
       isDriverCashNeedsTripViolation,
       `new row violates check constraint "${FUEL_ENTRY_DRIVER_CASH_NEEDS_TRIP}"`,
     ],
+    [
+      isCostExpenseNeedsTripViolation,
+      `new row violates check constraint "${FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP}"`,
+    ],
   ])('%o', (detector, message) => {
     expect(detector(new Error(message))).toBe(true);
     expect(detector(new Error('mot loi mang binh thuong'))).toBe(false);
     expect(detector(null)).toBe(false);
+  });
+
+  it('loi cua TANG KHO khi gan chan `TX-03` vao phieu Run-first MO DAU bang ten `CHECK`', () => {
+    const error = costExpenseOnRunFirstEntry('phieu-1');
+    // `^` la phan biet duy nhat giua loi cua kho (bai IT A8) va loi Postgres boc trong Prisma.
+    expect(error.message).toMatch(
+      new RegExp(`^${FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP}: phieu phieu-1 `),
+    );
+    expect(isCostExpenseNeedsTripViolation(error)).toBe(true);
   });
 
   it('bay ten trigger phan bo — moi ten mot bo nhan dien rieng', () => {

@@ -18,6 +18,7 @@ import {
   lineStatusAfterRevision,
 } from './fuel-decision-revision.js';
 import { settlementResultFingerprint, sumAcceptedSettlement } from './fuel-settlement.js';
+import { costExpenseOnRunFirstEntry } from './fuel-storage-conflict.js';
 import {
   FuelRepository,
   type AmendFuelEntryGuard,
@@ -360,7 +361,10 @@ export class InMemoryFuelRepository extends FuelRepository {
 
   async attachCostExpense(id: string, expenseId: string): Promise<FuelEntry | null> {
     const current = this.entries.get(id);
-    if (!current || current.costExpenseId !== null) return null;
+    if (!current) return null;
+    // Ban sao cua `CHECK TransportFuelEntry_cost_expense_needs_trip` — CUNG loi voi kho Prisma.
+    if (current.tripId === null) throw costExpenseOnRunFirstEntry(id);
+    if (current.costExpenseId !== null) return null;
     const updated: FuelEntry = { ...current, costExpenseId: expenseId };
     this.entries.set(id, updated);
     return clone(updated);

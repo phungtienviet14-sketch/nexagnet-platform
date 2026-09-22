@@ -40,6 +40,7 @@ DROP TYPE IF EXISTS "TransportFuelCostTargetKind";
 DROP TRIGGER IF EXISTS "transport_fuel_entry_run_context" ON "TransportFuelEntry";
 DROP FUNCTION IF EXISTS "transport_fuel_entry_run_context"();
 
+ALTER TABLE "TransportFuelEntry" DROP CONSTRAINT IF EXISTS "TransportFuelEntry_cost_expense_needs_trip";
 ALTER TABLE "TransportFuelEntry" DROP CONSTRAINT IF EXISTS "TransportFuelEntry_driver_cash_needs_trip";
 ALTER TABLE "TransportFuelEntry" DROP CONSTRAINT IF EXISTS "TransportFuelEntry_one_context_kind";
 ALTER TABLE "TransportFuelEntry" DROP CONSTRAINT IF EXISTS "TransportFuelEntry_leg_needs_run";
