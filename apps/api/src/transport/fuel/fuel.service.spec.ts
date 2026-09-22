@@ -104,6 +104,12 @@ class RecordingCostingPort extends FuelCostingPort {
     // mot `correlationKey` da dung: no tra lai dong da ghi thay vi ghi them mot dong nua.
     return `expense-of-${command.correlationKey}`;
   }
+
+  // `#369` R-4 — tep nay chi chay phieu chuyen v1; duong Quy Run-first co bai rieng
+  // (`fuel-run-first-driver-cash.spec.ts`). Goi toi day la mot phieu v1 lot sang nhanh Run-first.
+  async postRunFirstDriverCash(): Promise<string> {
+    throw new Error('Phieu chuyen v1 khong bao gio ghi Quy lai xe Run-first');
+  }
 }
 
 const CORE_POLICY: TransportCorePolicy = { timeZone: 'Asia/Ho_Chi_Minh' };

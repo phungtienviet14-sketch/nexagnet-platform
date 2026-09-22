@@ -737,6 +737,16 @@ export abstract class FuelRepository {
    * giu dung dieu nay o tang CSDL.
    */
   abstract attachCostExpense(id: string, expenseId: string): Promise<FuelEntry | null>;
+  /**
+   * `#369` R-4 — gan CHAN QUY LAI XE vao phieu Run-first `DRIVER_CASH` da duyet, CHI KHI chua co.
+   *
+   * Cung khuon `attachCostExpense`, chieu nguoc lai: `null` = da co (lan phat lai vo hai). Phieu
+   * KHONG du dieu kien (gan chuyen v1, khong `DRIVER_CASH`, chua duyet) thi NEM
+   * `driverFundLegOnIneligibleEntry` va KHONG ghi gi — tra `null` o do se lam nguoi goi tin mot but
+   * toan quy mo coi la cua mot phien khac. `CHECK TransportFuelEntry_driver_fund_leg_shape` va trigger
+   * `transport_fuel_entry_driver_fund_leg` giu dung dieu nay o tang CSDL.
+   */
+  abstract attachDriverFundEntry(id: string, fundEntryId: string): Promise<FuelEntry | null>;
 
   /* --- Bang chung --- */
   /**

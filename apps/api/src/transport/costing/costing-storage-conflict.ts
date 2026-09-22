@@ -49,6 +49,19 @@ export const REVERSAL_ONCE_INDEXES: readonly UniqueIndexRef[] = [
 ];
 
 /**
+ * `#369` R-4 — tien to thong diep cua trigger `transport_driver_fund_entry_run_context`: chang cua
+ * but toan phai thuoc CHINH vong chay cua no.
+ *
+ * Tang mien (`RunExpenseService`) kiem truoc voi ma `RUN_EXPENSE_LEG_NOT_IN_RUN`, va `runId` cua chang
+ * khong doi sau khi tao — nen o duong ghi that trigger khong no. No con do cho moi lan ghi khong di
+ * qua tang mien; khi do nguoi goi van nhan DUNG ma, khong phai mot `500`.
+ */
+export const FUND_ENTRY_LEG_RUN = 'transport_driver_fund_entry_leg_run';
+
+export const isFundEntryLegRunViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUND_ENTRY_LEG_RUN);
+
+/**
  * EXCLUDE constraint chan hai ky quy chong lap cho cung mot so quy.
  *
  * Khong phai mot unique index, nen Prisma bao no bang mot ma KHAC (`P2010`/loi tho) chu khong phai

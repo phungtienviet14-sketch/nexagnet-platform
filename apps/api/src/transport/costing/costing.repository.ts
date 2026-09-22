@@ -19,6 +19,9 @@ export interface PostFundEntryInput {
   readonly signedAmount: number;
   readonly businessDate: BusinessDate;
   readonly tripId: string | null;
+  /** `#369` R-4 — ngu canh vong chay/chang. Bo trong = `null` (moi loai tru `RUN_EXPENSE`). */
+  readonly runId?: string | null;
+  readonly legId?: string | null;
   readonly reversalOfId?: string | null;
   readonly note?: string | null;
   readonly recordedBy: string;

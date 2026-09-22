@@ -7,6 +7,7 @@ import {
   CORRELATION_INDEXES,
   FUND_PERIOD_NO_OVERLAP,
   REVERSAL_ONCE_INDEXES,
+  isFundEntryLegRunViolation,
 } from './costing-storage-conflict.js';
 import {
   CostingRepository,
@@ -48,6 +49,9 @@ interface EntryRow {
   currencyCode: string;
   businessDate: string;
   tripId: string | null;
+  /** `#369` — co the vang o mot ban client sinh truoc migration R-4; doc qua `?? null`. */
+  runId?: string | null;
+  legId?: string | null;
   correlationKey: string;
   reversalOfId: string | null;
   note: string | null;
@@ -123,6 +127,8 @@ const toEntry = (row: EntryRow): DriverFundEntry => ({
   currencyCode: row.currencyCode,
   businessDate: row.businessDate,
   tripId: row.tripId,
+  runId: row.runId ?? null,
+  legId: row.legId ?? null,
   correlationKey: row.correlationKey,
   reversalOfId: row.reversalOfId,
   note: row.note,
@@ -262,6 +268,8 @@ export class PrismaCostingRepository extends CostingRepository {
                 currencyCode: TRANSPORT_CURRENCY,
                 businessDate: input.entry.businessDate,
                 tripId: input.entry.tripId,
+                runId: input.entry.runId ?? null,
+                legId: input.entry.legId ?? null,
                 correlationKey: input.correlationKey,
                 reversalOfId: input.entry.reversalOfId ?? null,
                 note: input.entry.note ?? null,
@@ -357,6 +365,12 @@ export class PrismaCostingRepository extends CostingRepository {
     // Ky dong bang KHONG phai mot va cham luu tru — no la mot cong nghiep vu da dong, va service
     // moi biet cong nao dang mo de dat ten cho no. Tra nguyen ven.
     if (error instanceof FundPeriodFrozenError) return error;
+    if (isFundEntryLegRunViolation(error)) {
+      return TransportDomainError.denied(
+        'RUN_EXPENSE_LEG_NOT_IN_RUN',
+        `Chang cua ${correlationKey} khong thuoc vong chay cua but toan`,
+      );
+    }
     for (const index of REVERSAL_ONCE_INDEXES) {
       if (isUniqueViolationOn(error, index)) {
         return TransportDomainError.conflict(

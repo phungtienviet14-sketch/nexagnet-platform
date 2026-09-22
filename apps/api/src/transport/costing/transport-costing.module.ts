@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { loadFoundationEnv } from '../../config/foundation-env.js';
 import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
-import { ExpenseClaimRepository, InMemoryExpenseClaimRepository } from '../claims/claim.repository.js';
+import {
+  ExpenseClaimRepository,
+  InMemoryExpenseClaimRepository,
+} from '../claims/claim.repository.js';
 import { ExpenseClaimService } from '../claims/claim.service.js';
 import { PrismaExpenseClaimRepository } from '../claims/prisma-claim.repository.js';
 import { TransportModule } from '../transport.module.js';
@@ -13,6 +16,11 @@ import { CostingService } from './costing.service.js';
 import { FundPeriodService } from './fund-period.service.js';
 import { InMemoryCostingRepository } from './in-memory-costing.repository.js';
 import { PrismaCostingRepository } from './prisma-costing.repository.js';
+import {
+  CostingRunContextFacts,
+  MovementCostingRunContextAdapter,
+} from './costing-run-context.port.js';
+import { RunExpenseService } from './run-expense.service.js';
 import { TransportCoreFacts, TransportCoreFactsAdapter } from './transport-core-facts.port.js';
 
 /**
@@ -41,6 +49,11 @@ import { TransportCoreFacts, TransportCoreFactsAdapter } from './transport-core-
       inject: [PrismaService],
     },
     { provide: TransportCoreFacts, useClass: TransportCoreFactsAdapter },
+    /*
+     * `#369` R-4 — CUA SO THU HAI, CHI DOC: vong chay / chang / phan cong lam ngu canh cua khoan chi
+     * Run-first tu quy. Qua `MovementRepository` cua `transport-core` (da `imports` o tren).
+     */
+    { provide: CostingRunContextFacts, useClass: MovementCostingRunContextAdapter },
     {
       provide: ExpenseClaimRepository,
       useFactory: (prisma: PrismaService): ExpenseClaimRepository =>
@@ -54,6 +67,7 @@ import { TransportCoreFacts, TransportCoreFactsAdapter } from './transport-core-
     CostingReadService,
     FundPeriodService,
     ExpenseClaimService,
+    RunExpenseService,
   ],
   exports: [
     CostingService,
@@ -61,6 +75,9 @@ import { TransportCoreFacts, TransportCoreFactsAdapter } from './transport-core-
     FundPeriodService,
     ExpenseClaimService,
     CostingRepository,
+    // `#369` R-4 — duong ghi Quy cho khoan chi Run-first. `transport-fuel` goi no qua
+    // `FuelCostingPort` (chan tien mat cua phieu `DRIVER_CASH` khong chuyen v1).
+    RunExpenseService,
   ],
 })
 export class TransportCostingModule {}

@@ -107,6 +107,13 @@ export interface FuelEntry {
   readonly sourceStatementId: string | null;
   /** Chan gia thanh o `TX-03`. Co gia tri = chi phi da vao gia thanh chuyen dung mot lan. */
   readonly costExpenseId: string | null;
+  /**
+   * `#369` R-4 — CHAN QUY LAI XE cua phieu Run-first `DRIVER_CASH`: but toan `RUN_EXPENSE` ma lan
+   * duyet da ghi. Doi xung `costExpenseId` cua phieu chuyen v1 — mot phieu co TOI DA MOT trong hai
+   * (`tripId` bat bien, hai `CHECK` loai tru nhau). KHONG phai gia thanh: gia thanh cua phieu Run-first
+   * van o `TransportFuelCostAttribution`.
+   */
+  readonly driverFundEntryId: string | null;
   readonly correlationKey: string;
   readonly invoiceNo: string | null;
   readonly note: string | null;

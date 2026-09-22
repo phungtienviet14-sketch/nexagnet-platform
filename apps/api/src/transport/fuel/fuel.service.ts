@@ -550,21 +550,6 @@ export class FuelService {
       );
     }
 
-    // `#364` — cung cong voi luc nop: phieu Run-first khong mang tien mat lai xe ung.
-    if (entry.tripId === null && command.paymentMethod === 'DRIVER_CASH') {
-      this.telemetry?.decision({
-        vocabulary: TRANSPORT_FUEL_DECISIONS,
-        point: 'fuel_entry.amend',
-        outcome: 'denied',
-        reason: 'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
-        detail: { fuelEntryId: entry.id, runId: entry.runId },
-      });
-      throw TransportDomainError.denied(
-        'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
-        decisionReasonLabel('FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP'),
-      );
-    }
-
     const businessDate = this.businessDate(command.businessDate);
     const occurredAt = this.parseInstant(command.occurredAt);
     const litersUnits = this.parseLiters(command.liters);
@@ -790,7 +775,7 @@ export class FuelService {
         reason: 'FUEL_COST_AWAITS_ATTRIBUTION',
         detail: { fuelEntryId: entry.id, runId: entry.runId, legId: entry.legId },
       });
-      return entry;
+      return this.postRunFirstDriverCash(entry, actor);
     }
 
     if (entry.costExpenseId !== null) {
@@ -829,6 +814,65 @@ export class FuelService {
     });
     // `attached === null` = mot phien khac vua gan xong. Doc lai de tra ve su that hien tai thay vi
     // ban da cu dang cam trong tay.
+    return attached ?? (await this.requireEntry(entry.id));
+  }
+
+  /**
+   * `#369` R-4 — TIEN MAT LAI XE UNG cho phieu Run-first vao Quy lai xe: MOT but toan `RUN_EXPENSE`.
+   *
+   * Cung thu tu va cung hai lop chan dem hai lan voi `postFuelCost` cua phieu chuyen v1:
+   *   · `fuelCostCorrelationKey(entry.id)` — khoa TAT DINH o `RunExpenseService`: goi lap (tuan tu hay
+   *     song song) tra lai CHINH but toan da ghi;
+   *   · `attachDriverFundEntry` chi ghi khi cot con `NULL` — chan mot lan GAN SAI.
+   *
+   * KHONG dong vao gia thanh: phieu van o `FUEL_COST_AWAITS_ATTRIBUTION`, va so tien cua no chi vao
+   * gia thanh khi ke toan phan bo (`TransportFuelCostAttribution`). Quy lai xe va gia thanh la HAI su
+   * that ve CUNG mot lan do dau — "lai xe da bo bao nhieu" va "cong viec nao chiu bao nhieu".
+   *
+   * CHAY LAI DUOC, cung ly le voi `verifyFuelEntry`: mot lan chet giua ghi quy va gan chan de lai but
+   * toan co khoa `fuel:<id>` ma phieu chua tro toi — lan duyet sau nhan lai CHINH but toan do va gan.
+   */
+  private async postRunFirstDriverCash(entry: FuelEntry, actor: string): Promise<FuelEntry> {
+    if (entry.paymentMethod !== 'DRIVER_CASH') return entry;
+
+    if (entry.driverFundEntryId !== null) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel.driver_cash_posting',
+        outcome: 'allowed',
+        reason: 'FUEL_DRIVER_CASH_ALREADY_POSTED',
+        detail: { fuelEntryId: entry.id, fundEntryId: entry.driverFundEntryId },
+      });
+      return entry;
+    }
+
+    if (entry.runId === null) {
+      // Phieu khong chuyen, khong vong chay (`R-3`) khong nop duoc qua tang mien (fail closed). Gap
+      // no o day la mot hang ghi thang — khong co ngu canh nao de Quy doi chieu phan cong.
+      throw new Error(`Phieu ${entry.id} khong co vong chay — khong ghi duoc Quy lai xe Run-first`);
+    }
+
+    const fundEntryId = await this.costing.postRunFirstDriverCash(
+      {
+        driverId: entry.driverId,
+        runId: entry.runId,
+        legId: entry.legId,
+        amount: entry.amount,
+        businessDate: entry.businessDate,
+        note: `Phieu do dau ${entry.id}`,
+        correlationKey: fuelCostCorrelationKey(entry.id),
+      },
+      actor,
+    );
+
+    const attached = await this.repository.attachDriverFundEntry(entry.id, fundEntryId);
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel.driver_cash_posting',
+      outcome: 'allowed',
+      reason: attached ? 'FUEL_DRIVER_CASH_POSTED' : 'FUEL_DRIVER_CASH_ALREADY_POSTED',
+      detail: { fuelEntryId: entry.id, fundEntryId, runId: entry.runId, legId: entry.legId },
+    });
     return attached ?? (await this.requireEntry(entry.id));
   }
 
@@ -1007,10 +1051,9 @@ export class FuelService {
       }
     }
 
-    if (command.paymentMethod === 'DRIVER_CASH') {
-      this.denySubmit('FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP', { runId: run.id });
-    }
-
+    // `#369` R-4 — `DRIVER_CASH` HOP LE tren vong chay: lan duyet ghi chan Quy `RUN_EXPENSE`
+    // (`postRunFirstDriverCash`), khong can chuyen v1 gia. Cong "tung duoc phan cong" o
+    // `requireAssignedToRun` la cung cau hoi ma Quy hoi lai luc ghi.
     return { kind: 'RUN', run, leg, vehicleId: run.vehicleId };
   }
 

@@ -18,7 +18,10 @@ import {
   lineStatusAfterRevision,
 } from './fuel-decision-revision.js';
 import { settlementResultFingerprint, sumAcceptedSettlement } from './fuel-settlement.js';
-import { costExpenseOnRunFirstEntry } from './fuel-storage-conflict.js';
+import {
+  costExpenseOnRunFirstEntry,
+  driverFundLegOnIneligibleEntry,
+} from './fuel-storage-conflict.js';
 import {
   FuelRepository,
   type AmendFuelEntryGuard,
@@ -199,6 +202,7 @@ export class InMemoryFuelRepository extends FuelRepository {
       reconciliationStatus: INITIAL_FUEL_RECONCILIATION_STATUS,
       sourceStatementId: input.sourceStatementId,
       costExpenseId: null,
+      driverFundEntryId: null,
       correlationKey: input.correlationKey,
       invoiceNo: input.invoiceNo,
       note: input.note,
@@ -311,7 +315,8 @@ export class InMemoryFuelRepository extends FuelRepository {
     // tren mot hanh vi ma Postgres khong co.
     if (current.verificationStatus !== guard.verification) return null;
     if (guard.lockedReconciliation.includes(current.reconciliationStatus)) return null;
-    assertEntryContextShape({ ...current, paymentMethod: patch.paymentMethod });
+    // Ngu canh khong nam trong lenh sua (`AmendFuelEntryInput`), nen hai `CHECK` ngu canh khong the
+    // doi ket luan o day. `#369` R-4 go luat cuoi cung phu thuoc `paymentMethod`.
     const updated: FuelEntry = {
       ...current,
       litersUnits: patch.litersUnits,
@@ -366,6 +371,23 @@ export class InMemoryFuelRepository extends FuelRepository {
     if (current.tripId === null) throw costExpenseOnRunFirstEntry(id);
     if (current.costExpenseId !== null) return null;
     const updated: FuelEntry = { ...current, costExpenseId: expenseId };
+    this.entries.set(id, updated);
+    return clone(updated);
+  }
+
+  async attachDriverFundEntry(id: string, fundEntryId: string): Promise<FuelEntry | null> {
+    const current = this.entries.get(id);
+    if (current && current.driverFundEntryId !== null) return null;
+    // Ban sao cua `CHECK TransportFuelEntry_driver_fund_leg_shape` — CUNG loi voi kho Prisma.
+    if (
+      !current ||
+      current.tripId !== null ||
+      current.paymentMethod !== 'DRIVER_CASH' ||
+      current.verificationStatus !== 'VERIFIED'
+    ) {
+      throw driverFundLegOnIneligibleEntry(id);
+    }
+    const updated: FuelEntry = { ...current, driverFundEntryId: fundEntryId };
     this.entries.set(id, updated);
     return clone(updated);
   }
@@ -1055,26 +1077,23 @@ const matchesInboxScope = (entry: FuelEntry, filter: FuelEntryInboxFilter): bool
 };
 
 /**
- * BA `CHECK` cua `#364` o ban trong bo nho — cung dau vao bi tu choi, cung ma voi kho Prisma.
+ * HAI `CHECK` ngu canh cua `#364` o ban trong bo nho — cung dau vao bi tu choi voi kho Prisma.
  *
- * Tang mien chan ca ba truoc khi toi day; ban sao nay ton tai de mot lan quen o tang mien khong
+ * Tang mien chan ca hai truoc khi toi day; ban sao nay ton tai de mot lan quen o tang mien khong
  * XANH tren kho trong bo nho trong khi Postgres tu choi (bai hoc cua `AmendFuelEntryGuard`).
  * Trigger vong chay/chang KHONG co ban sao: kho nay khong doc duoc vong chay.
+ *
+ * `#369` R-4: `CHECK TransportFuelEntry_driver_cash_needs_trip` da go — `DRIVER_CASH` tren vong chay
+ * hop le, va ban sao cua no bien mat CUNG luc.
  */
 const assertEntryContextShape = (
-  entry: Pick<CreateFuelEntryInput, 'tripId' | 'runId' | 'legId' | 'paymentMethod'>,
+  entry: Pick<CreateFuelEntryInput, 'tripId' | 'runId' | 'legId'>,
 ): void => {
   if (entry.legId !== null && entry.runId === null) {
     throw new Error('TransportFuelEntry_leg_needs_run: co chang thi phai co vong chay');
   }
   if (entry.tripId !== null && entry.runId !== null) {
     throw new Error('TransportFuelEntry_one_context_kind: chuyen cu HOAC vong chay, khong ca hai');
-  }
-  if (entry.paymentMethod === 'DRIVER_CASH' && entry.tripId === null) {
-    throw TransportDomainError.denied(
-      'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
-      'Tien mat lai xe ung chi ghi duoc tren chuyen cu',
-    );
   }
 };
 

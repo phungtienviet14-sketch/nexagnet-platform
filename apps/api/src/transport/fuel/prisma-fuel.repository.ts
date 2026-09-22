@@ -29,7 +29,7 @@ import {
   FUEL_MATCH_LINE_ONCE,
   FUEL_STATEMENT_PERIOD,
   costExpenseOnRunFirstEntry,
-  isDriverCashNeedsTripViolation,
+  driverFundLegOnIneligibleEntry,
   isLegRunViolation,
   isRunVehicleViolation,
   isSelfSourcedMatchViolation,
@@ -137,6 +137,8 @@ const toEntry = (row: any): FuelEntry => ({
   reconciliationStatus: row.reconciliationStatus,
   sourceStatementId: row.sourceStatementId,
   costExpenseId: row.costExpenseId,
+  // `?? null` — cung ly le voi `runId`/`legId`: client sinh truoc migration `#369` R-4 khong co khoa nay.
+  driverFundEntryId: row.driverFundEntryId ?? null,
   correlationKey: row.correlationKey,
   invoiceNo: row.invoiceNo,
   note: row.note,
@@ -322,12 +324,6 @@ const translateEntryWriteError = (error: unknown): unknown => {
     return TransportDomainError.denied(
       'FUEL_ENTRY_LEG_NOT_IN_RUN',
       'Chang tren phieu khong thuoc vong chay cua phieu',
-    );
-  }
-  if (isDriverCashNeedsTripViolation(error)) {
-    return TransportDomainError.denied(
-      'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
-      'Tien mat lai xe ung chi ghi duoc tren chuyen cu',
     );
   }
   return translateStationSupplierError(error);
@@ -661,6 +657,29 @@ export class PrismaFuelRepository extends FuelRepository {
     const current = await this.findEntry(id);
     if (current?.tripId === null) throw costExpenseOnRunFirstEntry(id);
     return null;
+  }
+
+  async attachDriverFundEntry(id: string, fundEntryId: string): Promise<FuelEntry | null> {
+    const updated = await model(this.prisma, 'transportFuelEntry').updateMany({
+      // MOT lenh `UPDATE` co dieu kien (CAS): du dieu kien cua `CHECK` NAM TRONG lenh ghi, va
+      // `driverFundEntryId: null` chan lan gan thu hai. Hai lan duyet song song gan CUNG mot but toan
+      // (khoa su kien tat dinh) — ben sau thay 0 hang va doc lai.
+      where: {
+        id,
+        driverFundEntryId: null,
+        tripId: null,
+        paymentMethod: 'DRIVER_CASH',
+        verificationStatus: 'VERIFIED',
+      },
+      data: { driverFundEntryId: fundEntryId },
+    });
+    if (updated.count > 0) return this.findEntry(id);
+
+    // Khong ghi duoc: phan loai de `null` chi con MOT nghia ("da co"). Ba dieu kien con lai deu bat
+    // bien voi mot phieu da duyet, nen phep doc nay khong dua voi ai.
+    const current = await this.findEntry(id);
+    if (current && current.driverFundEntryId !== null) return null;
+    throw driverFundLegOnIneligibleEntry(id);
   }
 
   /* -------------------------- Bang chung -------------------------- */

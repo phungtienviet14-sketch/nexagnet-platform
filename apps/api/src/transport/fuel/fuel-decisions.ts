@@ -78,15 +78,9 @@ export const FUEL_ENTRY_SUBMIT_REASONS = [
   'FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE',
   /** Chang khong ton tai, hoac thuoc mot vong chay KHAC — mot ma cho ca hai, khong lo su ton tai. */
   'FUEL_ENTRY_LEG_NOT_IN_RUN',
-  /**
-   * `DRIVER_CASH` tren phieu KHONG gan chuyen v1.
-   *
-   * Tien mat lai xe ung phai vao Quy lai xe, va duong ghi duy nhat vao quy la `TX-03`
-   * (`TransportTripExpense.tripId` NOT NULL). Nhan phieu nay se de lai mot khoan lai xe da bo tui ma
-   * so quy khong bao gio thay — va lai xe bi doi tra lai tien da tieu. Chan o day, co `CHECK`
-   * `TransportFuelEntry_driver_cash_needs_trip` lam luoi cuoi.
-   */
-  'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
+  // `#369` R-4 — `FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP` da GO: tien mat lai xe ung tren vong
+  // chay vao Quy bang but toan `RUN_EXPENSE` (`fuel.driver_cash_posting`), khong can chuyen v1.
+  // Mot ma khong con cong nao phat la mot ma noi doi tren bang loc trace.
 ] as const;
 export type FuelEntrySubmitReason = (typeof FUEL_ENTRY_SUBMIT_REASONS)[number];
 
@@ -117,8 +111,6 @@ export const FUEL_ENTRY_AMEND_REASONS = [
    * khong phai di dao mot phieu.
    */
   'FUEL_ENTRY_AMEND_STATE_RACE',
-  /** `#364` — sua mot phieu Run-first sang `DRIVER_CASH`. Cung cong voi luc nop. */
-  'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
 ] as const;
 export type FuelEntryAmendReason = (typeof FUEL_ENTRY_AMEND_REASONS)[number];
 
@@ -159,6 +151,24 @@ export const FUEL_COST_POSTING_REASONS = [
   'FUEL_COST_AWAITS_ATTRIBUTION',
 ] as const;
 export type FuelCostPostingReason = (typeof FUEL_COST_POSTING_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel.driver_cash_posting — chan Quy lai xe cua phieu Run-first `DRIVER_CASH` (`#369` R-4)
+ *
+ * DIEM RIENG chu khong dung lai `fuel.cost_posting`: phieu Run-first `DRIVER_CASH` da duyet phat CA
+ * HAI — `FUEL_COST_AWAITS_ATTRIBUTION` (gia thanh cho ke toan phan bo) VA ma o day (tien mat da vao
+ * Quy). Hai su that, hai so cai; gop mot diem se lam trace noi mot phieu "vua cho vua da ghi".
+ * ------------------------------------------------------------------ */
+export const FUEL_DRIVER_CASH_POSTING_REASONS = [
+  /** Lan duyet vua ghi but toan `RUN_EXPENSE` va gan no vao phieu. */
+  'FUEL_DRIVER_CASH_POSTED',
+  /**
+   * Phieu DA co chan Quy — lan duyet lai / lan duyet song song. Khong mot dong tien thu hai nao.
+   * Chinh ma nay chung minh "mot su kien, mot anh huong Quy": so lan phat no, so but toan van la mot.
+   */
+  'FUEL_DRIVER_CASH_ALREADY_POSTED',
+] as const;
+export type FuelDriverCashPostingReason = (typeof FUEL_DRIVER_CASH_POSTING_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
  * fuel.cost_attribution — phan bo gia thanh phieu Run-first (`#364`)
@@ -467,6 +477,7 @@ export type TransportFuelDecisionReason =
   | FuelEntryAmendReason
   | FuelEvidenceWithdrawReason
   | FuelCostPostingReason
+  | FuelDriverCashPostingReason
   | FuelCostAttributionReason
   | FuelStatementImportReason
   | FuelStatementRowReason
@@ -489,6 +500,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel_entry.amend',
     'fuel_entry.evidence_withdraw',
     'fuel.cost_posting',
+    'fuel.driver_cash_posting',
     'fuel.cost_attribution',
     'fuel_statement.import',
     'fuel_statement.import_row',
@@ -525,8 +537,6 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN: 'Lái xe chưa từng được phân công vào vòng xe này',
     FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE: 'Xe trên phiếu không phải xe của vòng xe',
     FUEL_ENTRY_LEG_NOT_IN_RUN: 'Chặng trên phiếu không thuộc vòng xe của phiếu',
-    FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP:
-      'Tiền mặt lái xe ứng chỉ ghi được trên chuyến cũ — sổ quỹ đi theo chuyến',
 
     FUEL_ENTRY_VERIFIED: 'Kế toán đã duyệt phiếu',
     FUEL_ENTRY_REJECTED: 'Kế toán trả lại phiếu kèm lý do',
@@ -551,6 +561,9 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_COST_ALREADY_POSTED: 'Phiếu này đã có chân giá thành — không ghi thêm lần hai',
     FUEL_COST_AWAITS_ATTRIBUTION:
       'Phiếu theo vòng xe đã duyệt — giá thành chờ kế toán phân bổ, không tự vào chuyến',
+
+    FUEL_DRIVER_CASH_POSTED: 'Tiền mặt lái xe ứng cho phiếu theo vòng xe đã vào sổ quỹ lái xe',
+    FUEL_DRIVER_CASH_ALREADY_POSTED: 'Phiếu này đã có chân quỹ lái xe — không trừ quỹ lần hai',
 
     FUEL_COST_ATTRIBUTED: 'Đã phân bổ giá thành nhiên liệu vào công việc',
     FUEL_COST_ATTRIBUTION_REPLAY: 'Gửi lại cùng khoá — trả lại dòng phân bổ đã ghi',
