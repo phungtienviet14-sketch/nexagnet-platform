@@ -1,5 +1,5 @@
 import type { CapabilityId } from '@netviet/tenant';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { NavigationInput } from '../../navigation';
 import type { ControlTowerView } from '../../transport-types';
 import { toControlTower } from '../control-tower';
@@ -8,12 +8,10 @@ import {
   boardCard,
   boardColumns,
   controlTowerView,
-  driver,
   order,
   queueItem,
   reconciliation,
   trip,
-  vehicle,
 } from './fixtures';
 
 const CORE: readonly CapabilityId[] = ['transport-core'];
@@ -25,8 +23,6 @@ const input = (over: Partial<DashboardInput> = {}): DashboardInput => ({
   orders: [],
   trips: [],
   tripsFailed: false,
-  vehicles: [],
-  drivers: [],
   reconciliations: [],
   navigation: ADMIN,
   ...over,
@@ -251,8 +247,6 @@ describe('#348 — duong dan: khong mot the/dong viec chinh nao con vao Chuyen x
   const busy = input({
     orders: [order()],
     trips: [trip({ status: 'PLANNED' }), trip({ id: 'b', status: 'DELIVERED' })],
-    vehicles: [vehicle()],
-    drivers: [driver()],
     reconciliations: [reconciliation()],
     tower: controlTowerView({
       fleet: running(1, 1),
@@ -316,35 +310,35 @@ describe('#348 — duong dan: khong mot the/dong viec chinh nao con vao Chuyen x
  * Ke ca khi du lieu thap dieu hanh DA nam trong tay (vd con trong cache tu mot phien truoc), nguoi
  * khong mo duoc `Bảng điều hành` khong duoc thay mot con so vong chay nao — ke ca so 0.
  */
+/** Bon cach KHONG mo duoc `Bảng điều hành` — vi vai, vi goi khach, hay vi nang luc dang bi chan. */
+const BLOCKED = [
+  {
+    name: 'MANAGER (chua duoc cap quyen van tai)',
+    navigation: { capabilities: CORE, role: 'MANAGER' },
+  },
+  { name: 'Lai xe (SALE)', navigation: { capabilities: CORE, role: 'SALE' } },
+  { name: 'khach chua bat transport-core', navigation: { capabilities: [], role: 'ADMIN' } },
+  {
+    name: 'transport-core dang bi chan',
+    navigation: { capabilities: CORE, role: 'ADMIN', blockedCapabilityKeys: ['transport-core'] },
+  },
+] satisfies readonly { name: string; navigation: NavigationInput }[];
+
 describe('#348 — vai/goi khong du quyen thi KHONG co con so vong chay', () => {
   const tower = controlTowerView({ fleet: running(3, 2), queue: [queueItem()], queueTotal: 1 });
 
-  it.each([
-    {
-      name: 'MANAGER (chua duoc cap quyen van tai)',
-      navigation: { capabilities: CORE, role: 'MANAGER' },
-    },
-    { name: 'Lai xe (SALE)', navigation: { capabilities: CORE, role: 'SALE' } },
-    { name: 'khach chua bat transport-core', navigation: { capabilities: [], role: 'ADMIN' } },
-    {
-      name: 'transport-core dang bi chan',
-      navigation: { capabilities: CORE, role: 'ADMIN', blockedCapabilityKeys: ['transport-core'] },
-    },
-  ] satisfies readonly { name: string; navigation: NavigationInput }[])(
-    '$name',
-    ({ navigation }) => {
-      const model = toDashboard(input({ tower, navigation }));
+  it.each(BLOCKED)('$name', ({ navigation }) => {
+    const model = toDashboard(input({ tower, navigation }));
 
-      expect(statOf(model, 'runs-running')).toBeUndefined();
-      expect(statOf(model, 'runs-planned')).toBeUndefined();
-      expect(model.work).toEqual([]);
-      expect(model.pendingTotal).toBe(0);
-      expect(model.headline).toBeNull();
-      expect(model.moreWork).toBeNull();
-      expect(model.generatedFor).toBeNull();
-      expect(model.operationsNotice).toContain('không hiện số vòng chạy');
-    },
-  );
+    expect(statOf(model, 'runs-running')).toBeUndefined();
+    expect(statOf(model, 'runs-planned')).toBeUndefined();
+    expect(model.work).toEqual([]);
+    expect(model.pendingTotal).toBe(0);
+    expect(model.headline).toBeNull();
+    expect(model.moreWork).toBeNull();
+    expect(model.generatedFor).toBeNull();
+    expect(model.operationsNotice).toContain('không hiện số vòng chạy');
+  });
 
   it.each([
     { name: 'Ke toan', navigation: { capabilities: CORE, role: 'ACCOUNTING' } },
@@ -379,8 +373,6 @@ describe('#348 — vai/goi khong du quyen thi KHONG co con so vong chay', () => 
         tower: null,
         orders: null,
         trips: null,
-        vehicles: null,
-        drivers: null,
         reconciliations: [],
         navigation: { capabilities: [], role: 'ADMIN' },
       }),
@@ -399,58 +391,238 @@ describe('#348 — vai/goi khong du quyen thi KHONG co con so vong chay', () => 
   });
 });
 
-describe('the doi xe, lai xe, ky doi soat — nguon giu nguyen, nhung fail-closed nhu moi the', () => {
-  it('chua co xe/lai xe trong tay thi KHONG co the — khong bia so 0 tu mot danh sach rong', () => {
-    const model = toDashboard(input({ vehicles: null, drivers: null }));
-    for (const key of ['vehicles-idle', 'vehicles-maintenance', 'drivers-active']) {
-      expect(statOf(model, key)).toBeUndefined();
-    }
+/**
+ * #351 — BA THE DOI XE LA `fleet` CUA BANG DIEU HANH, KHONG DEM LAI.
+ *
+ * Truoc #351, "Xe đang rỗi" / "Xe đang bảo dưỡng" / "Lái xe đang làm" dem lai hai danh sach: cot
+ * `TransportVehicle.status` nhap tay va danh sach lai xe. Luong Order-first khong ghi cot do (#336),
+ * nen mot xe dang chay vong chay `ACTIVE` ma cot van luu `IDLE` bi Tong quan dem la "rỗi" — ngay
+ * canh `Bảng điều hành` noi "Đang rảnh 0" tren cung du lieu.
+ *
+ * Moi kich ban duoi day la CAU TRA LOI cua phep chieu may chu (`countFleetPresence`) cho mot hinh
+ * dang du lieu — dung hinh dang ma `control-tower-projection.spec.ts` khoa o may chu. Web KHONG
+ * phan hoach lai doi xe: cac bai nay khoa rang Tong quan in DUNG con so ma `Bảng điều hành` in, tu
+ * CUNG mot doi tuong `controlTowerView()` — cung khuon voi khoi #348 o tren.
+ *
+ * Cot trang thai xe cua tung kich ban chi con nam trong TEN bai: `DashboardInput` khong con truong
+ * nao nhan danh sach xe hay lai xe, va bai cuoi khoi khoa dieu do o muc kieu.
+ */
+const FLEET_KEYS = ['vehicles-idle', 'vehicles-maintenance', 'drivers-active'] as const;
+
+describe('#351 — ba the doi xe la `fleet` cua Bang dieu hanh, khong dem lai cot trang thai xe', () => {
+  /** Con so ma `Bảng điều hành` IN RA cho cung doi tuong — khong phai mot hang so chep tay. */
+  const towerValue = (shared: ControlTowerView, key: string): string | undefined =>
+    toControlTower(shared).stats.find((stat) => stat.key === key)?.value;
+
+  it.each([
+    {
+      /* Xe luu IDLE — luong Order-first khong ghi cot do — va dang chay mot vong chay ACTIVE. */
+      name: 'xe luu IDLE ma dang chay 1 vong chay ACTIVE: 1 vong chay tren 1 xe, dang roi 0',
+      fleet: {
+        total: 1,
+        idle: 0,
+        onTrip: 1,
+        underMaintenance: 0,
+        activeDrivers: 1,
+        runningRuns: 1,
+      },
+      cards: [boardCard()],
+      expected: { runs: '1', vehicles: '1', idle: '0', maintenance: '0' },
+    },
+    {
+      /* Mot xe luu IDLE mo hai vong chay ACTIVE cung luc (#344): the dem XE, loi tom tat dem VONG. */
+      name: '1 xe mo 2 vong chay ACTIVE: 2 vong chay tren 1 xe, dang roi 0',
+      fleet: {
+        total: 1,
+        idle: 0,
+        onTrip: 1,
+        underMaintenance: 0,
+        activeDrivers: 1,
+        runningRuns: 2,
+      },
+      cards: [boardCard(), boardCard({ runId: 'run-2', runCode: 'VR-002' })],
+      expected: { runs: '2', vehicles: '1', idle: '0', maintenance: '0' },
+    },
+    {
+      /* Ba xe luu IDLE / UNDER_MAINTENANCE / ON_TRIP cu, khong vong chay nao ACTIVE. */
+      name: 'xe dang sua KHONG co vong chay ACTIVE: bao duong 1, xe luu ON_TRIP cu la xe roi',
+      fleet: {
+        total: 3,
+        idle: 2,
+        onTrip: 0,
+        underMaintenance: 1,
+        activeDrivers: 2,
+        runningRuns: 0,
+      },
+      cards: [],
+      expected: { runs: '0', vehicles: '0', idle: '2', maintenance: '1' },
+    },
+    {
+      /* Hai xe cung luu UNDER_MAINTENANCE, mot xe dang chay vong chay ACTIVE (#344 §5). */
+      name: 'xe dang sua CO vong chay ACTIVE: dem MOT lan, o vong chay — khong o bao duong',
+      fleet: {
+        total: 2,
+        idle: 0,
+        onTrip: 1,
+        underMaintenance: 1,
+        activeDrivers: 1,
+        runningRuns: 1,
+      },
+      cards: [boardCard()],
+      expected: { runs: '1', vehicles: '1', idle: '0', maintenance: '1' },
+    },
+  ])('$name', ({ fleet, cards, expected }) => {
+    const shared = controlTowerView({ fleet, board: boardColumns({ IN_TRANSIT: cards }) });
+    const overview = toDashboard(input({ tower: shared }));
+
+    expect(statOf(overview, 'runs-running')).toMatchObject({
+      value: expected.runs,
+      hint: `Trên ${expected.vehicles} xe.`,
+    });
+    expect(statOf(overview, 'vehicles-idle')?.value).toBe(expected.idle);
+    expect(statOf(overview, 'vehicles-maintenance')?.value).toBe(expected.maintenance);
+
+    /* Va dung con so `Bảng điều hành` in ra tren CUNG doi tuong. */
+    expect(statOf(overview, 'vehicles-idle')?.value).toBe(towerValue(shared, 'idle'));
+    expect(statOf(overview, 'vehicles-maintenance')?.value).toBe(towerValue(shared, 'maintenance'));
+    expect(statOf(overview, 'drivers-active')?.value).toBe(towerValue(shared, 'drivers'));
+    expect(statOf(overview, 'runs-running')?.hint).toBe(
+      `Trên ${towerValue(shared, 'on-trip')} xe.`,
+    );
   });
 
-  it('muc khong mo duoc thi the van la so that nhung khong dan di dau', () => {
+  it('lai xe dang lam la `fleet.activeDrivers` cua Bang dieu hanh, khong dem danh sach lai xe', () => {
+    const shared = controlTowerView({
+      fleet: {
+        total: 0,
+        idle: 0,
+        onTrip: 0,
+        underMaintenance: 0,
+        activeDrivers: 7,
+        runningRuns: 0,
+      },
+    });
+    const overview = toDashboard(input({ tower: shared }));
+
+    expect(statOf(overview, 'drivers-active')).toMatchObject({
+      label: 'Lái xe đang làm',
+      value: '7',
+    });
+    expect(statOf(overview, 'drivers-active')?.value).toBe(towerValue(shared, 'drivers'));
+  });
+
+  it('moi the doc DUNG truong cua no — sau truong, sau con so khac nhau', () => {
     const model = toDashboard(
       input({
-        vehicles: [vehicle()],
-        drivers: [driver()],
-        reconciliations: [reconciliation()],
-        navigation: {
-          capabilities: CORE,
-          role: 'ADMIN',
-          blockedCapabilityKeys: ['transport-core'],
-        },
+        tower: controlTowerView({
+          fleet: {
+            total: 9,
+            idle: 2,
+            onTrip: 3,
+            underMaintenance: 4,
+            activeDrivers: 5,
+            runningRuns: 6,
+          },
+        }),
       }),
     );
-    expect(statOf(model, 'vehicles-idle')).toMatchObject({ value: '1', section: null });
-    expect(statOf(model, 'drivers-active')).toMatchObject({ value: '1', section: null });
+
+    expect(statOf(model, 'runs-running')).toMatchObject({ value: '6', hint: 'Trên 3 xe.' });
+    expect(FLEET_KEYS.map((key) => statOf(model, key)?.value)).toEqual(['2', '4', '5']);
+  });
+
+  it('doi xe rong la so 0 THAT — ba the van hien, voi so 0, khac han luc chua doc duoc', () => {
+    const model = toDashboard(input({ tower: controlTowerView() }));
+    expect(FLEET_KEYS.map((key) => statOf(model, key)?.value)).toEqual(['0', '0', '0']);
+  });
+
+  it('giu nhan, thu tu va duong dan cua ba the — dan vao `Đội xe & lái xe`', () => {
+    const model = toDashboard(input({ tower: controlTowerView({ fleet: running(1, 1) }) }));
+
+    expect(model.stats.map((stat) => stat.key)).toEqual([
+      'orders-open',
+      'runs-running',
+      'runs-planned',
+      ...FLEET_KEYS,
+    ]);
+    expect(statOf(model, 'vehicles-idle')).toMatchObject({
+      label: 'Xe đang rỗi',
+      hint: null,
+      section: 'fleet',
+    });
+    expect(statOf(model, 'vehicles-maintenance')).toMatchObject({
+      label: 'Xe đang bảo dưỡng',
+      section: 'fleet',
+    });
+    expect(statOf(model, 'drivers-active')).toMatchObject({
+      label: 'Lái xe đang làm',
+      hint: null,
+      section: 'fleet',
+    });
+  });
+
+  it('the bao duong noi ro: doc tu trang thai xe, va xe co vong chay dang chay khong tinh o day', () => {
+    const hint = statOf(toDashboard(input()), 'vehicles-maintenance')?.hint;
+    expect(hint).toContain('chưa phải từ lịch bảo dưỡng');
+    expect(hint).toContain('vòng chạy đang chạy');
+  });
+
+  it('Bang dieu hanh chua co trong tay (dang doc, doc loi): KHONG the doi xe nao, KHONG so 0', () => {
+    const model = toDashboard(
+      input({ tower: null, orders: [order()], reconciliations: [reconciliation()] }),
+    );
+
+    for (const key of FLEET_KEYS) expect(statOf(model, key), key).toBeUndefined();
+    /* Nguon khac van song: the don va the ky doi soat van la so that. */
+    expect(statOf(model, 'orders-open')?.value).toBe('1');
+    expect(statOf(model, 'reconciliations-open')?.value).toBe('1');
+  });
+
+  it.each(BLOCKED)(
+    '$name: KHONG so doi xe nao — ke ca khi du lieu con trong cache',
+    ({ navigation }) => {
+      const model = toDashboard(
+        input({ tower: controlTowerView({ fleet: running(3, 2) }), navigation }),
+      );
+
+      for (const key of FLEET_KEYS) expect(statOf(model, key), key).toBeUndefined();
+      expect(model.operationsNotice).toContain('số liệu đội xe');
+    },
+  );
+
+  it.each([
+    { name: 'Ke toan', navigation: { capabilities: CORE, role: 'ACCOUNTING' } },
+    { name: 'chua biet vai (dang doi /auth/me)', navigation: { capabilities: CORE, role: null } },
+  ] satisfies readonly { name: string; navigation: NavigationInput }[])(
+    '$name mo duoc Bang dieu hanh nen thay so doi xe',
+    ({ navigation }) => {
+      const model = toDashboard(
+        input({ tower: controlTowerView({ fleet: running(3, 2) }), navigation }),
+      );
+      expect(FLEET_KEYS.map((key) => statOf(model, key)?.value)).toEqual(['0', '0', '2']);
+    },
+  );
+
+  it('Tong quan KHONG nhan danh sach xe hay lai xe — khong con duong nao de dem lai', () => {
+    expectTypeOf<Extract<keyof DashboardInput, 'vehicles' | 'drivers'>>().toBeNever();
+  });
+});
+
+describe('the ky doi soat — nguon giu nguyen', () => {
+  it('goi khong bat nhien lieu thi the van la so that nhung khong dan di dau', () => {
+    const model = toDashboard(input({ reconciliations: [reconciliation()] }));
     /* `fuel` doi `transport-fuel`, ma goi nay khong bat. */
-    expect(statOf(model, 'reconciliations-open')?.section).toBeNull();
+    expect(statOf(model, 'reconciliations-open')).toMatchObject({ value: '1', section: null });
   });
 
   it('muc mo duoc thi the dan dung muc', () => {
     const model = toDashboard(
       input({
-        vehicles: [vehicle()],
         reconciliations: [reconciliation()],
         navigation: { capabilities: ['transport-core', 'transport-fuel'], role: 'ADMIN' },
       }),
     );
-    expect(statOf(model, 'vehicles-idle')?.section).toBe('fleet');
     expect(statOf(model, 'reconciliations-open')?.section).toBe('fuel');
-  });
-
-  it('doi xe khong co du lieu thi la 0 that, khong phai o trong', () => {
-    const model = toDashboard(input({ vehicles: [vehicle({ status: 'UNDER_MAINTENANCE' })] }));
-    expect(statOf(model, 'vehicles-maintenance')?.value).toBe('1');
-    expect(statOf(model, 'vehicles-idle')?.value).toBe('0');
-  });
-
-  it('chi dem lai xe DANG LAM', () => {
-    const model = toDashboard(
-      input({
-        drivers: [driver({ id: 'd1', status: 'ACTIVE' }), driver({ id: 'd2', status: 'INACTIVE' })],
-      }),
-    );
-    expect(statOf(model, 'drivers-active')?.value).toBe('1');
   });
 
   it('the ky doi soat chi hien khi co du lieu ky — khong bay mot so 0 vo nghia', () => {
@@ -513,8 +685,6 @@ describe('tat dinh', () => {
     const source = input({
       orders: [order()],
       trips: [trip({ status: 'PLANNED' })],
-      vehicles: [vehicle()],
-      drivers: [driver()],
       tower: controlTowerView({ fleet: running(1, 1), queue: [queueItem()], queueTotal: 1 }),
     });
     expect(toDashboard(source)).toEqual(toDashboard(source));

@@ -7,11 +7,9 @@ import {
 } from '../navigation';
 import type {
   ControlTowerView,
-  Driver,
   FuelReconciliation,
   TransportOrder,
   Trip,
-  Vehicle,
 } from '../transport-types';
 import { toControlTower, type ControlTowerModel, type SeverityTone } from './control-tower';
 import { isTerminalTrip } from './trips';
@@ -41,11 +39,24 @@ import { isTerminalTrip } from './trips';
  *     chung voi vong chay, va la cho DUY NHAT tren man nay con dan vao `Chuyến xe`.
  *
  * ===========================================================================
+ * DOI XE CUNG LA `fleet` CUA THAP DIEU HANH (#351)
+ *
+ *   · "Xe đang rỗi" / "Xe đang bảo dưỡng" / "Lái xe đang làm" la `fleet.idle` /
+ *     `fleet.underMaintenance` / `fleet.activeDrivers` — DUNG ba con so ma `Bảng điều hành` in ra
+ *     ("Đang rảnh" / "Đang sửa chữa" / "Lái xe đang hoạt động"), tu cung mot lan goi. Phep chieu
+ *     may chu (`countFleetPresence`) dat moi xe vao DUNG MOT o: co vong chay `ACTIVE` thi vao o
+ *     dang chay truoc, roi moi den `UNDER_MAINTENANCE`, con lai la rỗi (#336/#344).
+ *   · Tep nay KHONG nhan danh sach xe hay lai xe, va KHONG dem `TransportVehicle.status`: do la cot
+ *     nhap tay ma luong Order-first khong ghi, nen mot xe dang chay van co the luu `IDLE`. Dem lai
+ *     o day la dinh nghia "xe rỗi" thu hai cua cong ty — dung cai lech ma #351 bat duoc.
+ *
+ * ===========================================================================
  * FAIL-CLOSED THEO HAI TRUC QUYEN
  *
  * Nguoi khong mo duoc `Bảng điều hành` — vi vai, vi goi khach, hay vi nang luc dang bi chan — KHONG
- * thay con so vong chay nao, ke ca so 0. So 0 o do doc ra la "khong xe nao chay", tuc mot cau
- * khang dinh ma man hinh khong co can cu; nen mo hinh tra mot CAU noi ro vi sao khong co so.
+ * thay con so vong chay hay con so doi xe nao, ke ca so 0. So 0 o do doc ra la "khong xe nao
+ * chay", tuc mot cau khang dinh ma man hinh khong co can cu; nen mo hinh tra mot CAU noi ro vi sao
+ * khong co so.
  */
 
 export interface DashboardStat {
@@ -113,7 +124,8 @@ export interface DashboardModel {
 export interface DashboardInput {
   /**
    * Read model cua `Bảng điều hành` — `null` khi chua co trong tay: dang doc, doc loi, hoac query bi
-   * chan tu dau. Ba truong hop do deu cho cung mot ket qua o day: KHONG co con so vong chay nao.
+   * chan tu dau. Ba truong hop do deu cho cung mot ket qua o day: KHONG co con so vong chay nao, va
+   * KHONG co con so doi xe nao (#351) — khong co so 0, va khong co phep dem thay the.
    */
   readonly tower: ControlTowerView | null;
   /** Don hang — `null` khi chua co trong tay hoac vai khong doc duoc don. */
@@ -128,28 +140,13 @@ export interface DashboardInput {
    * chan thi im lang la dung, con doc hong ma im lang thi doc ra y het "khong con chuyen nao".
    */
   readonly tripsFailed: boolean;
-  /** Xe va lai xe — `null` khi chua co trong tay. Chua co thi KHONG co the, khong co so 0. */
-  readonly vehicles: readonly Vehicle[] | null;
-  readonly drivers: readonly Driver[] | null;
   readonly reconciliations: readonly FuelReconciliation[];
-  /** Hai truc quyen. Moi duong dan va moi con so vong chay deu hoi qua day. */
+  /** Hai truc quyen. Moi duong dan, moi con so vong chay va doi xe deu hoi qua day. */
   readonly navigation: NavigationInput;
 }
 
 /** Bao nhieu viec bay ra tren bang truoc khi chuyen sang "xem du o Bang dieu hanh". */
 export const WORK_LIMIT = 6;
-
-const countBy = <T, K extends string>(
-  rows: readonly T[],
-  key: (row: T) => K,
-): Partial<Record<K, number>> => {
-  const counts: Partial<Record<K, number>> = {};
-  for (const row of rows) {
-    const bucket = key(row);
-    counts[bucket] = (counts[bucket] ?? 0) + 1;
-  }
-  return counts;
-};
 
 const OPEN_RECONCILIATION_STATES = new Set(['DRAFT', 'MATCHING', 'RESOLVED', 'REOPENED']);
 
@@ -210,61 +207,70 @@ const operationStats = (
 };
 
 /**
- * DOI XE, LAI XE, KY DOI SOAT — NGUON giu nguyen tu truoc #348: cac the nay khong doc chuyen lap tay,
- * va #348 co y khong doi chung sang doc thap dieu hanh.
+ * DOI XE VA LAI XE — `fleet` cua thap dieu hanh (#351), doc NGUYEN nhu the `runs-running` o tren.
  *
- * Cai #348 doi la HAI dieu cua luat fail-closed, ap cho moi the tren trang: chua co du lieu trong tay
- * thi KHONG co the (truoc day la mot so 0 bia ra tu `?? []`), va muc khong mo duoc thi the khong dan
- * di dau (truoc day dan vao mot muc se bi day nguoc ve Tong quan).
+ * `tower === null` (dang doc, doc loi, bi chan) thi KHONG co the nao: khong co so 0, va khong co
+ * phuong an du phong nao doc danh sach xe. Mot "Xe đang rỗi 3" dem tu cot trang thai xe trong luc
+ * `Bảng điều hành` chua tra loi chinh la con so sai ma #351 go di — chi sai vao mot luc khac.
+ *
+ * Nhan cua Tong quan giu nguyen; con so la con so cua bang. Muc `fleet` khong mo duoc thi the van
+ * la so that, chi khong dan di dau (luat #348).
  */
-const fleetStats = (input: DashboardInput): readonly DashboardStat[] => {
-  const stats: DashboardStat[] = [];
-  const fleet = linkIf('fleet', input.navigation);
-
-  if (input.vehicles !== null) {
-    const byVehicleStatus = countBy(input.vehicles, (vehicle) => vehicle.status);
-    stats.push(
-      {
-        key: 'vehicles-idle',
-        label: 'Xe đang rỗi',
-        value: formatCount(byVehicleStatus.IDLE ?? 0),
-        hint: null,
-        section: fleet,
-      },
-      {
-        key: 'vehicles-maintenance',
-        label: 'Xe đang bảo dưỡng',
-        value: formatCount(byVehicleStatus.UNDER_MAINTENANCE ?? 0),
-        hint: 'Đọc từ trạng thái xe, chưa phải từ lịch bảo dưỡng.',
-        section: fleet,
-      },
-    );
-  }
-
-  if (input.drivers !== null) {
-    stats.push({
+const fleetStats = (
+  input: DashboardInput,
+  tower: ControlTowerView | null,
+): readonly DashboardStat[] => {
+  if (tower === null) return [];
+  const section = linkIf('fleet', input.navigation);
+  return [
+    {
+      key: 'vehicles-idle',
+      label: 'Xe đang rỗi',
+      value: formatCount(tower.fleet.idle),
+      hint: null,
+      section,
+    },
+    {
+      key: 'vehicles-maintenance',
+      label: 'Xe đang bảo dưỡng',
+      value: formatCount(tower.fleet.underMaintenance),
+      /*
+       * `UNDER_MAINTENANCE` van la nguon DUY NHAT ve bao duong cua `transport-core` (#336). Cau thu
+       * hai noi thu tu uu tien cua phep chieu, de mot xe dang sua ma van chay khong lam ai di tim no.
+       */
+      hint: 'Đọc từ trạng thái xe, chưa phải từ lịch bảo dưỡng. Xe có vòng chạy đang chạy không tính ở đây.',
+      section,
+    },
+    {
       key: 'drivers-active',
       label: 'Lái xe đang làm',
-      value: formatCount(input.drivers.filter((driver) => driver.status === 'ACTIVE').length),
+      value: formatCount(tower.fleet.activeDrivers),
       hint: null,
-      section: fleet,
-    });
-  }
-
-  if (input.reconciliations.length > 0) {
-    stats.push({
-      key: 'reconciliations-open',
-      label: 'Kỳ đối soát đang mở',
-      value: formatCount(
-        input.reconciliations.filter((row) => OPEN_RECONCILIATION_STATES.has(row.state)).length,
-      ),
-      hint: null,
-      section: linkIf('fuel', input.navigation),
-    });
-  }
-
-  return stats;
+      section,
+    },
+  ];
 };
+
+/**
+ * KY DOI SOAT — NGUON giu nguyen: the nay khong doc chuyen lap tay va khong thuoc thap dieu hanh.
+ *
+ * Luat fail-closed cua #348 van ap: chua co ky nao trong tay thi KHONG co the (khong bay mot so 0 vo
+ * nghia), va muc `fuel` khong mo duoc thi the khong dan di dau.
+ */
+const reconciliationStats = (input: DashboardInput): readonly DashboardStat[] =>
+  input.reconciliations.length === 0
+    ? []
+    : [
+        {
+          key: 'reconciliations-open',
+          label: 'Kỳ đối soát đang mở',
+          value: formatCount(
+            input.reconciliations.filter((row) => OPEN_RECONCILIATION_STATES.has(row.state)).length,
+          ),
+          hint: null,
+          section: linkIf('fuel', input.navigation),
+        },
+      ];
 
 /**
  * BA NHANH, cung khuon `headlineFor` cua thap dieu hanh — va mot nhanh THEM.
@@ -318,7 +324,7 @@ const legacyNoteFor = (input: DashboardInput): DashboardLegacyNote | null => {
 };
 
 const operationsBlockedNotice = (): string =>
-  `Tổng quan không hiện số vòng chạy và hàng việc đang chờ: doanh nghiệp chưa bật hoặc chưa thiết lập xong nghiệp vụ vận hành xe, hoặc vai của bạn không mở được “${sectionLabel('control-tower')}”.`;
+  `Tổng quan không hiện số vòng chạy, số liệu đội xe và hàng việc đang chờ: doanh nghiệp chưa bật hoặc chưa thiết lập xong nghiệp vụ vận hành xe, hoặc vai của bạn không mở được “${sectionLabel('control-tower')}”.`;
 
 export const toDashboard = (input: DashboardInput): DashboardModel => {
   const canOpenTower = canNavigateTo('control-tower', input.navigation);
@@ -329,7 +335,11 @@ export const toDashboard = (input: DashboardInput): DashboardModel => {
 
   return {
     generatedFor: board?.generatedFor ?? null,
-    stats: [...operationStats(input, tower, board), ...fleetStats(input)],
+    stats: [
+      ...operationStats(input, tower, board),
+      ...fleetStats(input, tower),
+      ...reconciliationStats(input),
+    ],
     operationsNotice: canOpenTower ? null : operationsBlockedNotice(),
     work,
     pendingTotal,
