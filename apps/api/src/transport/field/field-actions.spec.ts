@@ -4,6 +4,7 @@ import {
   evaluateCheckpoint,
 } from '../checkpoint/checkpoint-lifecycle.js';
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
+import { evaluateWaitingStart } from '../waiting/waiting-lifecycle.js';
 import { fieldActionsFor } from './field-actions.js';
 
 /**
@@ -355,5 +356,64 @@ describe('Chang da ket thuc khong moi mot moc nao — #354', () => {
     expect(labels({ legStatus: 'COMPLETED', recordedTypes: delivered })).toEqual(
       expect.arrayContaining(['Chụp biên nhận giao hàng', 'Tôi đang giữ biên nhận']),
     );
+  });
+});
+
+/**
+ * NUT `Bat dau cho` TREN CHANG DA KET THUC — `#358`.
+ *
+ * `#354` go moi nut MOC khoi chang `COMPLETED`/`CANCELLED`, nhung `WAITING_START` khong di qua cong
+ * do: chang CO HANG da `Da den noi`, bi van phong hoan tat bang ghi de `#350`, van chao `Bat dau cho`
+ * — va lan bam do mo mot phien giu vong chay mai o `OPEN_WAITING_SESSION`.
+ */
+describe('Chang da ket thuc khong moi `Bat dau cho` — #358', () => {
+  const arrived = ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE', 'DELIVERY_ARRIVAL'] as const;
+  const waitingButtons = (over: Partial<Parameters<typeof fieldActionsFor>[0]>) =>
+    fieldActionsFor(input(over)).filter((action) => action.kind === 'WAITING_START');
+
+  it('chang da COMPLETED hay CANCELLED sau `Da den noi`: khong co nut `Bat dau cho`', () => {
+    for (const legStatus of ['COMPLETED', 'CANCELLED'] as const) {
+      expect({
+        legStatus,
+        buttons: waitingButtons({ legStatus, recordedTypes: [...arrived] }),
+      }).toEqual({ legStatus, buttons: [] });
+    }
+    // Doi chung: CUNG lich su tren chang chua ket thuc thi nut van o do.
+    for (const legStatus of ['PLANNED', 'IN_TRANSIT'] as const) {
+      expect(waitingButtons({ legStatus, recordedTypes: [...arrived] })).toHaveLength(1);
+    }
+  });
+
+  /**
+   * HAI BAN LUAT KHONG DUOC LECH — theo CA HAI chieu: nut `Bat dau cho` hien KHI VA CHI KHI
+   * `evaluateWaitingStart` (chinh ham `WaitingSessionService` dung de tu choi) cho mo, tren moi trang
+   * thai chang, moi lich su moc va ca khi da co mot phien dang mo.
+   */
+  it('nut `Bat dau cho` hien khi va chi khi may chu se cho mo phien, tren moi trang thai chang', () => {
+    const histories: readonly (readonly RunCheckpointType[])[] = [
+      [],
+      ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE'],
+      [...arrived],
+      [...arrived, 'DELIVERY_ACCEPTED'],
+    ];
+    for (const legStatus of ['PLANNED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED'] as const) {
+      for (const recordedTypes of histories) {
+        for (const hasOpenWaiting of [false, true]) {
+          const offered = waitingButtons({ legStatus, recordedTypes, hasOpenWaiting }).length > 0;
+          const decision = evaluateWaitingStart({
+            runTerminal: false,
+            legStatus,
+            legCheckpointTypes: recordedTypes,
+            hasOpenSession: hasOpenWaiting,
+          });
+          expect({ legStatus, recordedTypes, hasOpenWaiting, offered }).toEqual({
+            legStatus,
+            recordedTypes,
+            hasOpenWaiting,
+            offered: decision.allowed,
+          });
+        }
+      }
+    }
   });
 });

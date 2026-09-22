@@ -1,4 +1,6 @@
+import { legAcceptsNewCheckpoints } from '../checkpoint/checkpoint-lifecycle.js';
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
+import type { RunLegStatus } from '../movement/movement.types.js';
 import type { WaitingCloseDecisionReason, WaitingStartReason } from './waiting-decisions.js';
 
 /**
@@ -14,8 +16,9 @@ import type { WaitingCloseDecisionReason, WaitingStartReason } from './waiting-d
  *   · *"co duoc mo mot khoang cho o day, luc nay khong"*;
  *   · *"co duoc dong khoang cho nay bang moc kia khong"*.
  *
- * Trang thai vong chay chi vao day duoi dang MOT co doc (`runTerminal`), va chuoi moc duoi dang
- * mot danh sach loai da ghi. Khong ham nao o day GHI mot cai gi.
+ * Trang thai vong chay chi vao day duoi dang MOT co doc (`runTerminal`), trang thai chang duoi dang
+ * chinh gia tri cua no (`legStatus`, `#358`), va chuoi moc duoi dang mot danh sach loai da ghi.
+ * Khong ham nao o day GHI mot cai gi.
  *
  * ============================================================================================
  * NEO LA `DELIVERY_ARRIVAL`, VA DO LA CA CO CHE AN TOAN
@@ -39,6 +42,23 @@ export const WAITING_ANCHOR_CHECKPOINT: RunCheckpointType = 'DELIVERY_ARRIVAL';
 /** Moc DONG mot phien cho tren duong binh thuong. */
 export const WAITING_CLOSING_CHECKPOINT: RunCheckpointType = 'DELIVERY_ACCEPTED';
 
+/**
+ * Chang o trang thai nay con MO PHIEN CHO MOI duoc khong — `#358`.
+ *
+ * KHONG phai mot luat thu hai. Phien cho chi dong binh thuong bang moc `WAITING_CLOSING_CHECKPOINT`,
+ * va tu `#354` chang `COMPLETED`/`CANCELLED` khong nhan moc moi nao (`legAcceptsNewCheckpoints`).
+ * Mot phien mo tren chang do se khong bao gio dong duoc bang lan nhan hang — no chi con giu vong chay
+ * o `OPEN_WAITING_SESSION` cho toi khi van hanh don tay. Nen luat cua phien cho LA luat cua moc dong
+ * no, va ham nay chi dat ten cho su that do.
+ *
+ * Mot ham chung cho BA ben, cung ly le voi `legAcceptsNewCheckpoints`: `evaluateWaitingStart` (tu
+ * choi som), `WaitingSessionService` (tu choi DUOI khoa, tren chang doc lai) va `fieldActionsFor`
+ * (nut `Bat dau cho` co hien khong). Gui lai mot lenh DA thanh cong khong di qua day: `start()` tra
+ * ve phien cu truoc moi phep kiem.
+ */
+export const legAcceptsNewWaiting = (status: RunLegStatus): boolean =>
+  legAcceptsNewCheckpoints(status);
+
 export interface WaitingStartDecision {
   readonly allowed: boolean;
   readonly reason: WaitingStartReason;
@@ -56,6 +76,11 @@ const denyStart = (reason: WaitingStartReason): WaitingStartDecision => ({
 export interface WaitingStartEvaluation {
   /** Vong chay da o `COMPLETED`/`CANCELLED` chua. */
   readonly runTerminal: boolean;
+  /**
+   * TRANG THAI cua chang dang xet — `#358`. BAT BUOC: mot ben goi quen dien se lam cong nay im lang
+   * cho qua. Day la ban doc TRUOC khoa; cong that nam duoi khoa, tren `RunWriteScope.legs`.
+   */
+  readonly legStatus: RunLegStatus;
   /** Loai moc DA GHI tren dung chang dang xet. */
   readonly legCheckpointTypes: readonly RunCheckpointType[];
   /** Chang nay da co mot phien cho dang mo chua. */
@@ -66,9 +91,14 @@ export interface WaitingStartEvaluation {
  * Mot phien cho co duoc mo khong — tra ve LY DO, khong phai `boolean`.
  *
  * THU TU KIEM la mot phan cua hop dong, cung quy uoc voi `evaluateCheckpoint`: trang thai vong chay
- * truoc, roi den su ton tai cua lan den noi, roi den viec da nhan hang chua, cuoi cung moi den
- * trung lap. Mot yeu cau vua sai vong chay vua trung phien phai bao loi vong chay, vi do la cai
- * nguoi goi phai sua truoc.
+ * truoc, roi trang thai chang, roi den su ton tai cua lan den noi, roi den viec da nhan hang chua,
+ * cuoi cung moi den trung lap. Mot yeu cau vua sai vong chay vua trung phien phai bao loi vong chay,
+ * vi do la cai nguoi goi phai sua truoc.
+ *
+ * Chang da ket thuc (`#358`) dung SAU vong chay — vong chay da dong thi "ca chuyen da xong" la cau
+ * tra loi dung, du chang cung da xong — va TRUOC ba phep kiem con lai: "chang nay da xong" dung cho
+ * moi lenh mo con lai, ke ca khi chua co lan den noi (bao `Phai bam Da den noi` se day lai xe di ghi
+ * mot moc ma `#354` tu choi) hay khi da co mot phien dang mo.
  *
  * `WAITING_DELIVERY_ALREADY_ACCEPTED` dung TRUOC `WAITING_ALREADY_OPEN` co chu dich: neu khach da
  * nhan hang thi cau tra loi dung la *"khong con gi de cho"*, khong phai *"dang co mot phien mo"* —
@@ -76,6 +106,8 @@ export interface WaitingStartEvaluation {
  */
 export function evaluateWaitingStart(input: WaitingStartEvaluation): WaitingStartDecision {
   if (input.runTerminal) return denyStart('WAITING_RUN_TERMINAL');
+
+  if (!legAcceptsNewWaiting(input.legStatus)) return denyStart('WAITING_LEG_TERMINAL');
 
   if (!input.legCheckpointTypes.includes(WAITING_ANCHOR_CHECKPOINT)) {
     return denyStart('WAITING_ARRIVAL_NOT_FOUND');

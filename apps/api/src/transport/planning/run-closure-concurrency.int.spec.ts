@@ -754,9 +754,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     /**
      * Ket cuc cua lenh doi thu, bat NGAY khi no duoc gai.
      *
-     * Tu `#354`, moc tren chang da ket thuc bi tu choi o phep kiem SOM — truoc khi lan dong tra ve —
-     * nen mot `.then` gan sau `attempt()` de lai mot rejection chua ai bat, va vitest tinh do la loi
-     * cua ca lan chay du moi bai deu xanh.
+     * Tu `#354` (moc) va `#358` (phien cho), lenh tren chang da ket thuc bi tu choi o phep kiem SOM —
+     * truoc khi lan dong tra ve — nen mot `.then` gan sau `attempt()` de lai mot rejection chua ai
+     * bat, va vitest tinh do la loi cua ca lan chay du moi bai deu xanh.
      */
     interface RacerOutcome {
       readonly ok: boolean;
@@ -787,24 +787,25 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         note: null,
       });
 
-      let racer: Promise<unknown> = Promise.resolve();
+      // Bat ket cuc NGAY khi gai — tu `#358` lenh mo bi tu choi o phep kiem SOM, truoc khi lan dong
+      // tra ve (cung ly do voi `outcomeOf` o R-IT-11).
+      let racer: Promise<RacerOutcome> = Promise.resolve({ ok: false, reason: 'NOT_RACED' });
       const race = raceOnRecheck(stack.waitingBlockers, () => {
-        racer = stack.waitingService.start({
-          runId: run.id,
-          legId,
-          arrivalCheckpointId: anchor.id,
-          reason: 'RECEIVER_NOT_READY',
-          clientEventId: next('WAIT'),
-          authUserId: AUTH,
-        });
+        racer = outcomeOf(
+          stack.waitingService.start({
+            runId: run.id,
+            legId,
+            arrivalCheckpointId: anchor.id,
+            reason: 'RECEIVER_NOT_READY',
+            clientEventId: next('WAIT'),
+            authUserId: AUTH,
+          }),
+        );
       });
 
       const outcome = await race.closures.attempt(run.id, 'IDLE_SWEEP');
       expect(race.raced()).toBe(true);
-      const started = await racer.then(
-        () => ({ ok: true, reason: '' }) as const,
-        (error: unknown) => ({ ok: false, reason: reasonOfRejection(error) }) as const,
-      );
+      const started = await racer;
 
       const status = await statusOf(run.id);
       const open = await prisma.transportDeliveryWaitingSession.count({
@@ -818,19 +819,20 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        */
       expect(status === 'COMPLETED' && open > 0).toBe(false);
 
-      if (status === 'COMPLETED') {
-        // Lan dong thang: lenh mo phien bi TU CHOI, bang mot ly do that chu khong mot `500`.
-        expect(outcome.closed).toBe(true);
-        expect(open).toBe(0);
-        expect(started).toEqual({ ok: false, reason: 'WAITING_RUN_TERMINAL' });
-      } else {
-        // Phien thang: lan dong GIU LAI, va giu bang dung ma chan cua Lane O.
-        expect(started.ok).toBe(true);
-        expect(open).toBe(1);
-        expect(outcome.closed).toBe(false);
-        expect(outcome.verdict.blockers).toContain('OPEN_WAITING_SESSION');
-        expect(await closeAuditCount(run.id)).toBe(0);
-      }
+      /*
+       * `#358`: moi chang cua mot vong chay DONG DUOC deu da o diem cuoi, va chang o diem cuoi khong
+       * mo phien cho moi. Nen nhanh "phien thang, lan dong giu lai" cua cuoc dua nay KHONG con ton
+       * tai — bat bien o tren gio duoc giu boi HAI cong doc lap. Lenh mo bi tu choi o cong chang (neu
+       * no doc vong chay truoc khi lan dong commit) hoac o cong vong chay (neu sau); ca hai deu dung,
+       * va ca hai la mot ly do that chu khong mot `500`. Cua so khoa giua lenh mo va lan dong (chang
+       * roi vong chay ket thuc trong khe truoc khoa) van duoc do rieng o WL-IT-11 cua
+       * `waiting-terminal-leg.int.spec.ts`; nhanh "phien thang" cua CHANG con mo o WL-IT-06.
+       */
+      expect(status).toBe('COMPLETED');
+      expect(outcome.closed).toBe(true);
+      expect(open).toBe(0);
+      expect(started.ok).toBe(false);
+      expect(['WAITING_LEG_TERMINAL', 'WAITING_RUN_TERMINAL']).toContain(started.reason);
     });
 
     it('R-IT-11 — ghi moc hang-tren-thung DUNG LUC dong: khong vong chay dong nao con hang', async () => {

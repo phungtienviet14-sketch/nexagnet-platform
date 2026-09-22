@@ -5,7 +5,7 @@ import { CheckpointRepository } from '../checkpoint/checkpoint.repository.js';
 import { TransportCheckpointCoreFacts } from '../checkpoint/checkpoint-facts.port.js';
 import type { RunCheckpoint } from '../checkpoint/checkpoint.types.js';
 import { isTerminalRunStatus } from '../movement/movement-lifecycle.js';
-import { RunWriteGuard } from '../movement/run-write-guard.port.js';
+import { RunWriteGuard, type RunWriteScope } from '../movement/run-write-guard.port.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
   TRANSPORT_CLOCK,
@@ -22,6 +22,7 @@ import {
   WAITING_ANCHOR_CHECKPOINT,
   evaluateWaitingClose,
   evaluateWaitingStart,
+  legAcceptsNewWaiting,
 } from './waiting-lifecycle.js';
 import {
   WAITING_CLIENT_EVENT,
@@ -139,6 +140,8 @@ export class WaitingSessionService {
     const legCheckpoints = await this.checkpoints.listForLeg(leg.id);
     const decision = evaluateWaitingStart({
       runTerminal: run.status === 'COMPLETED' || run.status === 'CANCELLED',
+      // Ban doc TRUOC khoa — chi de tu choi som cho re. Cong that: `revalidateUnderLock()`.
+      legStatus: leg.status,
       legCheckpointTypes: legCheckpoints.map((row) => row.type),
       hasOpenSession: (await this.sessions.findOpenForLeg(leg.id)) !== null,
     });
@@ -217,24 +220,13 @@ export class WaitingSessionService {
        *                         no giu lai;
        *   · lan dong ghi TRUOC -> phep kiem ngay duoi day doc thay trang thai cuoi va tu choi.
        *
+       * `#358` mo rong cung khoa do sang CHANG — xem `revalidateUnderLock()`.
+       *
        * Lan ghi PHAI di qua `scope.tx`: ghi ra ngoai giao dich dang giu khoa thi khoa khong che
        * duoc gi — xem `RunWriteScope.tx`.
        */
       const session = await this.runs.underRunLock(runId, async (scope) => {
-        if (isTerminalRunStatus(scope.run.status)) {
-          /*
-           * `revalidated` phan biet mot lan tu choi o cong THU HAI voi mot lan tu choi o cong thu
-           * nhat. Hai cai giong het nhau khi doc ket qua, va khac han nhau khi doc nguyen nhan: cai
-           * nay nghia la vong chay vua dong TRONG LUC lai xe dang bam.
-           */
-          this.deny('waiting.start', 'WAITING_RUN_TERMINAL', {
-            runId,
-            legId: command.legId,
-            status: scope.run.status,
-            revalidated: true,
-          });
-          throw this.startErrorFor('WAITING_RUN_TERMINAL');
-        }
+        this.revalidateUnderLock(scope, runId, command.legId);
 
         return this.sessions.create(
           {
@@ -279,6 +271,48 @@ export class WaitingSessionService {
         );
       }
       throw error;
+    }
+  }
+
+  /**
+   * CONG DUOI KHOA — vong chay (`#293` R2) roi CHANG (`#358`), doc lai tren `scope`.
+   *
+   * Ban doc o dau `start()` (`findRun`, `findLeg`) co the da cu: luot quet co the da dong vong chay,
+   * van phong co the da hoan tat/huy chang trong khe truoc khi lenh nay lay khoa. Moi duong ghi hai
+   * su that do — `closeRunAsSystemSerialized()`, `setLegStatus()` (`#354`) — gianh CHINH khoa nay,
+   * nen o day chi con hai thu tu: ho truoc (va lenh nay thay trang thai cuoi roi tu choi), hoac lenh
+   * nay truoc (va ho xep hang sau lan mo phien — phien do la lich su that, van hanh don duoc). Khong
+   * co thu tu thu ba, va khong them mot khoa thu hai nao.
+   *
+   * `revalidated` phan biet mot lan tu choi o cong THU HAI voi mot lan tu choi o cong thu nhat. Hai
+   * cai giong het nhau khi doc ket qua, va khac han nhau khi doc nguyen nhan: cai nay nghia la vong
+   * chay/chang vua ket thuc TRONG LUC lai xe dang bam.
+   */
+  private revalidateUnderLock(scope: RunWriteScope, runId: string, legId: string): void {
+    if (isTerminalRunStatus(scope.run.status)) {
+      this.deny('waiting.start', 'WAITING_RUN_TERMINAL', {
+        runId,
+        legId,
+        status: scope.run.status,
+        revalidated: true,
+      });
+      throw this.startErrorFor('WAITING_RUN_TERMINAL');
+    }
+
+    const locked = scope.legs.find((leg) => leg.id === legId);
+    if (!locked) {
+      // Chang khong bao gio bi xoa va khong doi vong chay; mat o day la mot su that lech — dong.
+      this.deny('waiting.start', 'WAITING_LEG_NOT_FOUND', { runId, legId, revalidated: true });
+      throw TransportDomainError.notFound('WAITING_LEG_NOT_FOUND', 'Khong tim thay chang');
+    }
+    if (!legAcceptsNewWaiting(locked.status)) {
+      this.deny('waiting.start', 'WAITING_LEG_TERMINAL', {
+        runId,
+        legId,
+        status: locked.status,
+        revalidated: true,
+      });
+      throw this.startErrorFor('WAITING_LEG_TERMINAL');
     }
   }
 
@@ -427,6 +461,12 @@ export class WaitingSessionService {
         return TransportDomainError.conflict(
           reason,
           'Vòng chạy đã kết thúc — không mở phiên chờ được nữa.',
+        );
+      // Cau nay cung di NGUYEN VAN len man hinh lai xe, nen co dau nhu cau o tren (`#333`).
+      case 'WAITING_LEG_TERMINAL':
+        return TransportDomainError.conflict(
+          reason,
+          'Chặng đã kết thúc — không mở phiên chờ trên chặng này.',
         );
       case 'WAITING_ALREADY_OPEN':
         return TransportDomainError.conflict(reason, 'Chang nay dang co mot phien cho mo');

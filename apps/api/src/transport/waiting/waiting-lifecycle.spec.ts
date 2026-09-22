@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { legAcceptsNewCheckpoints } from '../checkpoint/checkpoint-lifecycle.js';
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
-import { evaluateWaitingClose, evaluateWaitingStart } from './waiting-lifecycle.js';
+import type { RunLegStatus } from '../movement/movement.types.js';
+import {
+  evaluateWaitingClose,
+  evaluateWaitingStart,
+  legAcceptsNewWaiting,
+} from './waiting-lifecycle.js';
 import { elapsedSecondsOf, type DeliveryWaitingSession } from './waiting.types.js';
 
 /**
@@ -18,6 +24,7 @@ const ARRIVED: readonly RunCheckpointType[] = [
 
 const startInput = (over: Partial<Parameters<typeof evaluateWaitingStart>[0]> = {}) => ({
   runTerminal: false,
+  legStatus: 'IN_TRANSIT' as RunLegStatus,
   legCheckpointTypes: ARRIVED,
   hasOpenSession: false,
   ...over,
@@ -77,6 +84,76 @@ describe('Mo mot phien cho — WT-010', () => {
       startInput({ hasOpenSession: true, legCheckpointTypes: [...ARRIVED, 'DELIVERY_ACCEPTED'] }),
     );
     expect(decision.reason).toBe('WAITING_DELIVERY_ALREADY_ACCEPTED');
+  });
+});
+
+/**
+ * CHANG DA KET THUC — `#358`.
+ *
+ * Hinh dang runtime: chang CO HANG da co `DELIVERY_ARRIVAL`, chua co `DELIVERY_ACCEPTED`, van phong
+ * hoan tat chang bang ghi de `#350`, vong chay van `ACTIVE`. Truoc `#358` ham nay chi doc trang thai
+ * VONG CHAY, nen no cho mo phien — va phien do giu vong chay mai o `OPEN_WAITING_SESSION`.
+ */
+describe('Chang da ket thuc khong mo phien cho moi — #358', () => {
+  it('chang COMPLETED hay CANCELLED: WAITING_LEG_TERMINAL, du lan den noi da co', () => {
+    for (const legStatus of ['COMPLETED', 'CANCELLED'] as const) {
+      expect(evaluateWaitingStart(startInput({ legStatus }))).toEqual({
+        allowed: false,
+        reason: 'WAITING_LEG_TERMINAL',
+      });
+    }
+  });
+
+  it('chang PLANNED hay IN_TRANSIT: giu nguyen luat cu', () => {
+    for (const legStatus of ['PLANNED', 'IN_TRANSIT'] as const) {
+      expect(evaluateWaitingStart(startInput({ legStatus }))).toEqual({
+        allowed: true,
+        reason: 'WAITING_STARTED',
+      });
+    }
+  });
+
+  it('vong chay o diem cuoi dung truoc chang: WAITING_RUN_TERMINAL giu nguyen', () => {
+    const decision = evaluateWaitingStart(
+      startInput({ runTerminal: true, legStatus: 'COMPLETED' }),
+    );
+    expect(decision.reason).toBe('WAITING_RUN_TERMINAL');
+  });
+
+  /**
+   * THU TU: "chang nay da xong" la cau tra loi dung cho moi lenh mo con lai — cung quy uoc voi
+   * `CHECKPOINT_LEG_TERMINAL` (`#354`). Bao `Phai bam Da den noi` tren mot chang da huy se day lai xe
+   * di ghi mot moc ma chinh `#354` se tu choi.
+   */
+  it('chang da ket thuc dung truoc lan den noi, da nhan hang va trung phien', () => {
+    const noArrival = evaluateWaitingStart(
+      startInput({ legStatus: 'CANCELLED', legCheckpointTypes: [] }),
+    );
+    const accepted = evaluateWaitingStart(
+      startInput({ legStatus: 'COMPLETED', legCheckpointTypes: [...ARRIVED, 'DELIVERY_ACCEPTED'] }),
+    );
+    const open = evaluateWaitingStart(startInput({ legStatus: 'COMPLETED', hasOpenSession: true }));
+    expect([noArrival.reason, accepted.reason, open.reason]).toEqual([
+      'WAITING_LEG_TERMINAL',
+      'WAITING_LEG_TERMINAL',
+      'WAITING_LEG_TERMINAL',
+    ]);
+  });
+
+  /**
+   * MOT LUAT, KHONG HAI: phien cho chi dong binh thuong bang moc `DELIVERY_ACCEPTED`, va tu `#354`
+   * chang da ket thuc khong nhan moc moi. Hai ham lech nhau o bat ky trang thai nao la mot phien mo
+   * duoc ma khong bao gio dong duoc — hoac mot nut bam vao thi bao loi.
+   */
+  it('luat cua phien cho LA luat cua moc dong no, tren ca bon trang thai chang', () => {
+    for (const status of ['PLANNED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED'] as const) {
+      expect({ status, waiting: legAcceptsNewWaiting(status) }).toEqual({
+        status,
+        waiting: legAcceptsNewCheckpoints(status),
+      });
+    }
+    expect(legAcceptsNewWaiting('COMPLETED')).toBe(false);
+    expect(legAcceptsNewWaiting('CANCELLED')).toBe(false);
   });
 });
 
