@@ -5,12 +5,10 @@ import { EmptyState, ErrorState, LoadingState } from '../components/SectionState
 import {
   toSectionQuery,
   useControlTower,
-  useDrivers,
   useNavigationInput,
   useReconciliations,
   useTransportOrders,
   useTrips,
-  useVehicles,
 } from '../hooks/useTransportWorkspace';
 import { buildSectionUrl } from '../navigation';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
@@ -27,6 +25,10 @@ import { toDashboard } from '../workspace/dashboard';
  * cache voi man `Bảng điều hành`, nen di tu Tong quan sang do la thay DUNG con so vua doc. Chuyen
  * lap tay chi con mot dong thong tin phu o cuoi trang.
  *
+ * #351: ba the doi xe cung doc tu thap dieu hanh (`fleet`), nen man nay KHONG con goi danh sach xe
+ * hay danh sach lai xe. Thap dieu hanh chua tra loi thi khong co the doi xe nao — khong co so 0, va
+ * khong co phep dem thay the tu cot trang thai xe.
+ *
  * Man hinh nay CHI SAP XEP: moi phep dem, moi cau chu, moi duong dan deu do `toDashboard` quyet.
  */
 export function OverviewView() {
@@ -34,8 +36,6 @@ export function OverviewView() {
   const tower = toSectionQuery(useControlTower(navigation));
   const orders = toSectionQuery(useTransportOrders(navigation));
   const trips = toSectionQuery(useTrips(navigation));
-  const vehicles = toSectionQuery(useVehicles(navigation));
-  const drivers = toSectionQuery(useDrivers(navigation));
   const reconciliations = toSectionQuery(useReconciliations(navigation));
 
   if (!hasOperationsScope(navigation.role)) {
@@ -52,7 +52,7 @@ export function OverviewView() {
    * thong tin phu noi "chua doc duoc" (`tripsFailed`), khong day mot loi do len tren nhung con so van
    * dang dung — va cung khong im lang, vi im lang doc ra y het "khong con chuyen nao chua khep".
    */
-  const primary = [tower, orders, vehicles, drivers];
+  const primary = [tower, orders];
   const firstError = primary.find((query) => query.errorMessage !== null)?.errorMessage ?? null;
   const isLoading = [...primary, trips].some((query) => query.isLoading);
   const retryFailed = () => {
@@ -64,8 +64,6 @@ export function OverviewView() {
     orders: orders.data ?? null,
     trips: trips.data ?? null,
     tripsFailed: trips.errorMessage !== null,
-    vehicles: vehicles.data ?? null,
-    drivers: drivers.data ?? null,
     reconciliations: reconciliations.data ?? [],
     navigation,
   });

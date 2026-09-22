@@ -2276,3 +2276,102 @@ test.describe('#348 — Tong quan lay so tu don va vong chay', () => {
     expect(overflow).toBeLessThanOrEqual(1);
   });
 });
+
+/**
+ * `#351` — BA THE DOI XE CUA TONG QUAN LA SO CUA BANG DIEU HANH, tren trinh duyet that.
+ *
+ * Bo mock co san cho hai nguon noi KHAC nhau, va chinh su khac do lam cac bai nay phan biet duoc:
+ * `VEHICLES` luu `IDLE` / `ON_TRIP` / `UNDER_MAINTENANCE` va `DRIVERS` co hai lai xe `ACTIVE`, nen
+ * dem lai tu hai danh sach do ra "rỗi 1 · bảo dưỡng 1 · lái xe 2"; con `CONTROL_TOWER.fleet` — cau
+ * tra loi cua phep chieu may chu — noi "rảnh 0 · sửa chữa 0 · lái xe 1".
+ *
+ * Bai `.ts` da khoa mo hinh. O day do nhung thu chi trinh duyet that do duoc: con so THAT tren ca
+ * hai man, va viec Tong quan KHONG con goi hai duong doc cu — ke ca de lam "phuong an du phong" luc
+ * `Bảng điều hành` chua tra loi.
+ */
+test.describe('#351 — ba the doi xe cua Tong quan la so cua Bang dieu hanh', () => {
+  const FLEET_CARD = /Xe đang rỗi|Xe đang bảo dưỡng|Lái xe đang làm/;
+
+  /** Ghi lai moi lan goi hai duong doc cu cua ba the. Dang ky TRUOC `goto`. */
+  const legacyFleetReads = (page: Page): string[] => {
+    const reads: string[] = [];
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (/\/transport\/(vehicles|drivers)$/.test(path)) reads.push(path);
+    });
+    return reads;
+  };
+
+  test('Tong quan va Bang dieu hanh noi cung ba con so doi xe — khong dem cot trang thai xe', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    const reads = legacyFleetReads(page);
+    await page.goto('/');
+
+    const stats = page.getByRole('region', { name: 'Số liệu vận hành' });
+    await expect(stats.getByRole('link', { name: /^Xe đang rỗi\s*0$/ })).toHaveAttribute(
+      'href',
+      '/?section=fleet',
+    );
+    await expect(
+      stats.getByRole('link', { name: /^Xe đang bảo dưỡng\s*0\s*Đọc từ trạng thái xe/ }),
+    ).toBeVisible();
+    await expect(stats.getByRole('link', { name: /^Lái xe đang làm\s*1$/ })).toBeVisible();
+    expect(reads).toEqual([]);
+
+    /* Sang `Bảng điều hành` tu the vong chay: CUNG ba con so, doc tu cung mot read model. */
+    await stats.getByRole('link', { name: /^Vòng chạy đang chạy/ }).click();
+    await expect(page).toHaveURL(/\?section=control-tower$/);
+    const tower = page.getByRole('region', { name: 'Đội xe và việc đang chờ' });
+    await expect(tower.getByRole('link', { name: /^Đang rảnh\s*0$/ })).toBeVisible();
+    await expect(tower.getByRole('link', { name: /^Đang sửa chữa\s*0$/ })).toBeVisible();
+    await expect(tower.getByRole('link', { name: /^Lái xe đang hoạt động\s*1$/ })).toBeVisible();
+  });
+
+  test('Bang dieu hanh hong: KHONG the doi xe nao, ke ca so 0, va khong doc cot trang thai xe thay the', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.route('**/transport/control-tower', (route) =>
+      json(route, { message: 'Không đọc được bảng điều hành' }, 500),
+    );
+    const reads = legacyFleetReads(page);
+    await page.goto('/');
+
+    await expect(page.locator('#tx-main').getByRole('alert')).toContainText(
+      'Không đọc được bảng điều hành',
+    );
+    const stats = page.getByRole('region', { name: 'Số liệu vận hành' });
+    /* Nguon khac van song: the don van la mot con so that. */
+    await expect(stats.getByRole('link', { name: /^Đơn đang mở\s*1/ })).toBeVisible();
+    await expect(stats.getByText(FLEET_CARD)).toHaveCount(0);
+    expect(reads).toEqual([]);
+  });
+
+  test('Bang dieu hanh dang doc: chua co the doi xe nao — doc xong moi hien so cua bang', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    let release: () => void = () => undefined;
+    const answered = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/transport/control-tower', async (route) => {
+      await answered;
+      await json(route, CONTROL_TOWER);
+    });
+    await page.goto('/');
+
+    const stats = page.getByRole('region', { name: 'Số liệu vận hành' });
+    await expect(page.getByText('Đang đọc số liệu vận hành…')).toBeVisible();
+    await expect(stats.getByRole('link', { name: /^Đơn đang mở\s*1/ })).toBeVisible();
+    /* "Chua doc duoc" khong phai "0": khong the nao, thay vi ba the so 0. */
+    await expect(stats.getByText(FLEET_CARD)).toHaveCount(0);
+
+    release();
+    await expect(stats.getByRole('link', { name: /^Xe đang rỗi\s*0$/ })).toBeVisible();
+    await expect(stats.getByRole('link', { name: /^Lái xe đang làm\s*1$/ })).toBeVisible();
+    await expect(page.getByText('Đang đọc số liệu vận hành…')).toHaveCount(0);
+  });
+});
