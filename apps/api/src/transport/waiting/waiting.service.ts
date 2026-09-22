@@ -426,7 +426,7 @@ export class WaitingSessionService {
       case 'WAITING_RUN_TERMINAL':
         return TransportDomainError.conflict(
           reason,
-          'Vong chay da o trang thai cuoi, khong mo phien cho duoc',
+          'Vòng chạy đã kết thúc — không mở phiên chờ được nữa.',
         );
       case 'WAITING_ALREADY_OPEN':
         return TransportDomainError.conflict(reason, 'Chang nay dang co mot phien cho mo');

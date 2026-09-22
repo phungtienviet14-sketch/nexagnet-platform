@@ -60,7 +60,31 @@ import { ensureLocationProof, type LocationProofSlot } from './driver-location';
  * + kich thuoc + lan sua cuoi), khong phai nhan hien thi — cung mot ly do voi `eventKeys` o tren.
  * Bam lai sau mot loi ghi chung tu dung lai `fileId` da co; chon sang tep khac thi la mot lan tai
  * moi va mot khoa moi.
+ *
+ * ============================================================================================
+ * MOT MO HINH CU LA MOT NUT SAI — `#333` (UAT BUG-03)
+ * ============================================================================================
+ *
+ * `nextActions` chi dung TAI LUC may chu tinh no. Vong chay duoc dong BAT DONG BO — luot quet
+ * `RunClosureSweepScheduler` chay sau lan bam cuoi cua lai xe — nen mot man hinh khong bao gio doc
+ * lai se giu mai o chon tep `Chup bien nhan giao hang` cua mot vong chay da ket thuc. Bam vao thi
+ * may chu moi tu choi: dung trieu chung chu xe gap tren `transport-preview`.
+ *
+ * Ung dung tat `refetchOnWindowFocus` o cap goc (`app/providers.tsx`), nen man hinh nay bat lai no
+ * cho RIENG minh, cong mot nhip `FIELD_WORK_REFRESH_MS`, va doc lai sau MOI lan ghi — ke ca lan bi
+ * tu choi. Con mot khe giua lan doc va lan bam; khe do la viec cua cong o may chu
+ * (`DOCUMENT_RUN_TERMINAL`, `CHECKPOINT_RUN_TERMINAL` duoi khoa), va cong do KHONG duoc noi long.
  */
+
+/**
+ * NHIP LAM MOI man hinh hien truong khi lai xe dung yen tren no.
+ *
+ * Nua chu ky mac dinh cua luot quet dong vong chay (`DEFAULT_RUN_CLOSURE_SWEEP_INTERVAL_SECONDS` =
+ * 60): mot vong chay vua dong khong nam tren man hinh qua mot nhip quet. react-query KHONG lam moi
+ * khi tab bi an (`refetchIntervalInBackground` mac dinh tat), nen nhip nay khong ton pin/mang cua
+ * mot chiec dien thoai dang nam trong tui.
+ */
+const FIELD_WORK_REFRESH_MS = 30_000;
 
 /**
  * DANH TINH CUA MOT NUT — ma nghiep vu, khong phai nhan hien thi.
@@ -84,6 +108,9 @@ export function DriverFieldWork() {
   const work = useQuery({
     queryKey: ['transport', 'me', 'field-work'],
     queryFn: () => transportApi.me.fieldWork(),
+    // Xem khoi `MOT MO HINH CU LA MOT NUT SAI` dau tep — `#333`.
+    refetchOnWindowFocus: true,
+    refetchInterval: FIELD_WORK_REFRESH_MS,
   });
 
   const keyFor = (slot: string): string => {
@@ -165,21 +192,33 @@ export function DriverFieldWork() {
       }
       throw new Error('Việc này chưa bấm được — thiếu dữ liệu neo.');
     },
-    onSuccess: () => {
-      setFailure(null);
-      void queryClient.invalidateQueries({ queryKey: ['transport', 'me'] });
-    },
+    onSuccess: () => setFailure(null),
     // KHONG xoa khoa: lan thu lai phai mang DUNG khoa cu.
     onError: (error: Error) => setFailure(error.message),
+    /*
+     * DOC LAI SAU MOI LAN GHI — thanh cong HAY bi tu choi (`#333`).
+     *
+     * Mot lan tu choi la MAY CHU dang noi mo hinh tren man hinh da cu: `DOCUMENT_RUN_TERMINAL` nghia
+     * la vong chay da dong tu luc lan doc truoc. Chi doc lai khi thanh cong se giu nguyen cai nut
+     * vua bi tu choi, va lai xe se bam no lan nua. Doc lai KHONG dung vao khoa chong lap: ba cai
+     * `useRef` o tren song qua moi lan doc, nen lan thu lai (neu nut van con) mang DUNG khoa cu.
+     */
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['transport', 'me'] }),
   });
 
   if (work.isLoading) return <LoadingState label="Đang đọc việc hiện trường…" />;
-  if (work.error !== null) {
-    return (
+  /*
+   * TRANG LOI chi khi CHUA TUNG doc duoc. Man hinh nay tu lam moi (`#333`), nen mot lan lam moi
+   * hong o vung mat song la chuyen thuong ngay — bien no thanh mot trang loi se xoa the dang lam va
+   * tep vua chon cua lai xe. Da co mot lan doc thi giu no, kem dong bao `field-refresh-failed`.
+   */
+  if (work.data === undefined) {
+    return work.error !== null ? (
       <ErrorState message={(work.error as Error).message} onRetry={() => void work.refetch()} />
+    ) : (
+      <EmptyState title="Chưa đọc được việc hiện trường." />
     );
   }
-  if (work.data === undefined) return <EmptyState title="Chưa đọc được việc hiện trường." />;
 
   const model = toFieldScreen(work.data);
 
@@ -189,6 +228,11 @@ export function DriverFieldWork() {
       <p className="tx-driver__lead" data-testid="field-headline">
         {model.headline}
       </p>
+      {work.error === null ? null : (
+        <p className="tx-note tx-note--warn" role="status" data-testid="field-refresh-failed">
+          Chưa làm mới được việc hiện trường — đang hiện lần đọc trước.
+        </p>
+      )}
       {failure === null ? null : <ErrorState message={failure} />}
 
       {model.current === null ? (

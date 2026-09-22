@@ -82,7 +82,31 @@ export const PHASE_DERIVED_COLUMNS: readonly OperationsBoardColumn[] = [
  * Nen cot nay mang mot ma ly do RIENG. Gop no vao `AWAITING_CHECKPOINT_SOURCE` sau khi moc da co
  * that se noi doi: nguon moc DA co, cai thieu la mot nguon KHAC.
  */
-export const WAITING_COLUMN: OperationsBoardColumn = 'WAITING';
+export const WAITING_COLUMN = 'WAITING' satisfies OperationsBoardColumn;
+
+/**
+ * NAM COT CUA MOT VONG CHAY DANG CHAY — `#336`.
+ *
+ * "Đang chạy" tren thap dieu hanh co DUNG MOT dinh nghia: mot `VehicleRun` o `ACTIVE`
+ * (`isRunningRunStatus`). Tren bang, tap do KHONG nam o mot cot: no trai tu `PICKUP` den `WAITING`,
+ * tuy giai doan chang doc tu moc. Cot `IN_TRANSIT` chi la MOT trong nam cot — cho ve mac dinh cua
+ * vong chay chua co giai doan cu the hon — nen no khong phai "so xe dang chay".
+ *
+ * `columnForRun` tra ve mot phan tu cua danh sach nay CHO MOI vong chay dang chay va KHONG cho vong
+ * chay nao khac; kieu `RunningBoardColumn` giu nua dau, `control-tower-projection.spec.ts` giu nua
+ * sau. Nho vay tong the o nam cot nay LUON bang `FleetPresenceView.runningRuns`.
+ */
+export const RUNNING_BOARD_COLUMNS = [
+  'PICKUP',
+  'LOADING',
+  'IN_TRANSIT',
+  'ARRIVED',
+  'WAITING',
+] as const satisfies readonly OperationsBoardColumn[];
+export type RunningBoardColumn = (typeof RUNNING_BOARD_COLUMNS)[number];
+
+export const isRunningBoardColumn = (column: OperationsBoardColumn): column is RunningBoardColumn =>
+  (RUNNING_BOARD_COLUMNS as readonly OperationsBoardColumn[]).includes(column);
 
 export const BOARD_COLUMN_UNAVAILABLE_REASONS = [
   /** Capability `transport-checkpoint` dang TAT o khach nay — khong co moc hien truong nao. */
@@ -382,17 +406,44 @@ export type ControlTowerSource = (typeof CONTROL_TOWER_SOURCES)[number];
 /**
  * DOI XE nhin tu thap dieu hanh — DEM, khong phai ho so.
  *
- * `underMaintenance` doc thang tu `VehicleStatus`, KHONG tu `effectiveFleetStatus()` cua
+ * ===========================================================================
+ * "ĐANG CHẠY" DAN XUAT TU `VehicleRun` — `#336`.
+ *
+ * `onTrip` TUNG dem cot `TransportVehicle.status === 'ON_TRIP'`. Cot do la cot CHINH TAY (chi
+ * `PATCH /transport/vehicles/:id` ghi no) va luong Order-first khong co duong ghi nao dat `ON_TRIP`,
+ * nen UAT thay the so "Đang chạy 0" canh mot bang co hai vong chay dang chay. §7.2 cua hop dong mien
+ * da noi tu dau: `ON_TRIP` la DAN XUAT, khong phai co chinh tay.
+ *
+ * Bay gio moi xe roi vao DUNG MOT o, theo thu tu:
+ *
+ *   co it nhat mot vong chay `isRunningRunStatus`   => onTrip
+ *   nguoc lai, cot luu la `UNDER_MAINTENANCE`        => underMaintenance
+ *   nguoc lai                                        => idle
+ *
+ * Nen `total = onTrip + idle + underMaintenance` — khong xe nao bi dem hai lan, va mot cot luu
+ * `ON_TRIP` cu khong con keo mot xe ranh vao "Đang chạy".
+ *
+ * `underMaintenance` van doc tu `VehicleStatus`, KHONG tu `effectiveFleetStatus()` cua
  * `transport-asset-compliance`: cai sau la mot phep hop thanh thuoc capability khac va co the dang
- * tat. Khi capability do BAT, mau thuan giua hai cach doc se hien ra o hang viec duoi ma
- * `VEHICLE_STATE_INCONSISTENT` — tuc bang khong giau mau thuan, no phoi mau thuan ra.
+ * tat. Thu tu "dang chay truoc dang sua" o day KHAC `§18.2` va do la co y: `§18.2` tra loi "xe nay
+ * co dieu duoc khong", con the so tra loi "xe nay dang lam gi" — va cau tra loi do phai trung voi
+ * bang, noi vong chay cua xe dang hien ra.
  */
 export interface FleetPresenceView {
   readonly total: number;
   readonly idle: number;
+  /** SO XE co it nhat mot vong chay dang chay. */
   readonly onTrip: number;
   readonly underMaintenance: number;
   readonly activeDrivers: number;
+  /**
+   * SO VONG CHAY dang chay — BANG tong the o `RUNNING_BOARD_COLUMNS`.
+   *
+   * Tach khoi `onTrip` vi hai don vi khac nhau: khong rang buoc nao cam mot xe mo hai vong chay
+   * `ACTIVE` cung luc (vong chay cu cho ve bai, vong chay moi da bat dau). Luc do the so dem 1 xe,
+   * bang co 2 the, va man hinh phai noi ca hai con so thay vi de chung trong nhu mau thuan.
+   */
+  readonly runningRuns: number;
 }
 
 /* ------------------------------------------------------------------ *

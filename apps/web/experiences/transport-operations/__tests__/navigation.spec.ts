@@ -10,10 +10,14 @@ import {
   parseNavigationFromSearch,
   resolveNavigation,
   resolveSection,
+  SUPERSEDED_HEADING,
+  supersededEntries,
+  supersededNote,
   TRANSPORT_SECTIONS,
   visibleDriverScreens,
   visibleSections,
   type NavigationInput,
+  type TransportSection,
 } from '../navigation';
 
 /**
@@ -73,7 +77,7 @@ describe('nang luc toi thieu — chi bat transport-core', () => {
 
   it('khach chi bat transport-core khong thay muc chi phi, nhien lieu hay quyet toan', () => {
     const visible = idsOf(director(MINIMUM));
-    expect(visible).toContain('trips');
+    expect(visible).toContain('movement');
     expect(visible).toContain('fleet');
     expect(visible).not.toContain('driver-fund');
     expect(visible).not.toContain('fuel');
@@ -142,11 +146,12 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
   it('Giam doc thay moi muc van hanh khach da bat', () => {
     expect(idsOf(director())).toEqual([
       'overview',
-      'control-tower',
-      'trips',
+      // #339 — nhom DIEU HANH doc theo mot ngay lam viec, va `trips` KHONG con o day: no da xuong
+      // loi phu "Cach lam truoc day". Khoi `#339` ben duoi khoa phan do.
       'movement',
-      'fleet',
+      'control-tower',
       'dispatch',
+      'fleet',
       'driver-fund',
       'expense-claims',
       'fuel',
@@ -408,5 +413,205 @@ describe('loc danh muc theo chu go vao', () => {
 
   it('khong khop gi thi tra ve rong, de vo noi ro thay vi ve mot cot trang', () => {
     expect(filterNavigationGroups(groups, 'khong-co-muc-nao-ten-the-nay')).toEqual([]);
+  });
+});
+
+/**
+ * ====================================================================================================
+ * #339 — DON HANG & VONG CHAY LA DUONG CHINH, CHUYEN XE KHONG CON CANH TRANH
+ * ====================================================================================================
+ *
+ * First-UAT cho thay hai muc `Chuyến xe` (TransportTrip, the he truoc) va `Đơn hàng & vòng chạy`
+ * (Order → VehicleRun) dung canh nhau lam nguoi dung bat dau sai luong. Bon dieu duoc khoa o day:
+ *
+ *   1. danh muc chinh khong con HAI duong canh tranh, voi moi vai co pham vi van hanh;
+ *   2. dia chi cu toi `Chuyến xe` van mo DUNG man do khi du quyen, va roi co chu dich khi khong;
+ *   3. doi nhom danh muc khong cap them, cung khong tuoc mat, mot muc nao;
+ *   4. quy tac la mot hop dong tren HAI muc (`supersededBy`), khong phai mot cau so vai.
+ */
+describe('#339 — danh muc chinh bat dau tu Don hang, Chuyen xe chi con o loi phu', () => {
+  const WITH_ACCEPTANCE: readonly CapabilityId[] = [...FULL, 'transport-acceptance'];
+  const primaryIds = (input: NavigationInput): readonly string[] => idsOf(input);
+  const olderIds = (input: NavigationInput): readonly string[] =>
+    supersededEntries(input).map((entry) => entry.section.id);
+  const reachableIds = (input: NavigationInput): readonly string[] =>
+    TRANSPORT_SECTIONS.filter((section) => canNavigateTo(section.id, input)).map(
+      (section) => section.id,
+    );
+
+  describe('acceptance 1 — khong con hai duong canh tranh tren danh muc chinh', () => {
+    it.each([
+      ['ADMIN', director()],
+      ['ADMIN + ket thuc don', director(WITH_ACCEPTANCE)],
+      ['ACCOUNTING', accountant()],
+      ['vai chua biet', unknownRole()],
+      ['goi toi thieu', director(MINIMUM)],
+    ])('%s: co `Đơn hàng & vòng chạy`, khong co `Chuyến xe`', (_name, input) => {
+      expect(primaryIds(input)).toContain('movement');
+      expect(primaryIds(input)).not.toContain('trips');
+    });
+
+    it('MANAGER van fail-closed: khong muc chinh, khong loi phu — #339 KHONG bia quyen cho MANAGER', () => {
+      expect(primaryIds(manager())).toEqual([]);
+      expect(olderIds(manager())).toEqual([]);
+    });
+
+    it('nhom DIEU HANH doc theo mot ngay lam viec: don → toan canh → chon xe → doi xe', () => {
+      const dispatch = navigationGroups(director()).find((entry) => entry.group.id === 'dispatch');
+      expect(dispatch?.sections.map((section) => section.id)).toEqual([
+        'movement',
+        'control-tower',
+        'dispatch',
+        'fleet',
+      ]);
+    });
+
+    it('`Chuyến xe` xuong loi phu, kem cau chi duong bang NHAN cua muc moi', () => {
+      const entries = supersededEntries(director());
+      expect(entries.map((entry) => [entry.section.id, entry.successor.id])).toEqual([
+        ['trips', 'movement'],
+      ]);
+      expect(supersededNote(entries[0]!)).toBe('Việc mới bắt đầu ở “Đơn hàng & vòng chạy”.');
+    });
+
+    /**
+     * Chu tren man hinh la chu cua nguoi van hanh. `legacy`, `TransportTrip`, `v1` la chu cua kien
+     * truc may chu — dung dieu #339 cam dua ra giao dien.
+     */
+    it('tieu de va cau chi duong khong dung mot chu ky thuat nao', () => {
+      const shown = [SUPERSEDED_HEADING, ...supersededEntries(director()).map(supersededNote)]
+        .join(' ')
+        .toLowerCase();
+      for (const jargon of ['legacy', 'transporttrip', 'trip', 'run', 'v1', 'v2', 'deprecated']) {
+        expect(shown, jargon).not.toMatch(new RegExp(`\\b${jargon}\\b`));
+      }
+    });
+  });
+
+  describe('acceptance 2 — `Đơn hàng & vòng chạy` van theo dung hai truc quyen', () => {
+    it('can `transport-core`: goi khach khong bat thi khong co muc do', () => {
+      expect(canNavigateTo('movement', director([]))).toBe(false);
+      expect(primaryIds(director([]))).not.toContain('movement');
+    });
+
+    it('lai xe va MANAGER khong thay, ke ca khi khach bat du', () => {
+      expect(primaryIds(driver(WITH_ACCEPTANCE))).not.toContain('movement');
+      expect(primaryIds(manager(WITH_ACCEPTANCE))).not.toContain('movement');
+    });
+
+    it('van doi `transport.run.read` — #339 khong doi truc quyen cua muc nay', () => {
+      const movement = TRANSPORT_SECTIONS.find((section) => section.id === 'movement');
+      expect(movement?.requiredAction).toBe('transport.run.read');
+      expect(movement?.requiredCapabilities).toEqual(['transport-core']);
+    });
+  });
+
+  describe('acceptance 3 — dia chi cu toi Chuyen xe mo co chu dich, khong ra trang trang', () => {
+    const LEGACY_LINK = '?section=trips&selected=VT-2026-0912&q=VT-2026-0912&status=IN_TRANSIT';
+
+    it.each([
+      ['ADMIN', director()],
+      ['ACCOUNTING', accountant()],
+      ['vai chua biet', unknownRole()],
+    ])('%s: mo DUNG man Chuyen xe, giu ca lua chon lan bo loc', (_name, input) => {
+      const parsed = parseNavigationFromSearch(LEGACY_LINK, input);
+      expect(parsed.surface).toBe('operations');
+      expect(parsed.section).toBe('trips');
+      expect(parsed.selection).toBe('VT-2026-0912');
+      expect(parsed.tripFilter).toEqual({
+        search: 'VT-2026-0912',
+        status: 'IN_TRANSIT',
+        kind: null,
+      });
+    });
+
+    it.each([
+      ['MANAGER', manager()],
+      ['lai xe', driver()],
+      ['khach khong bat transport-core', director([])],
+    ])('%s: roi ve Tong quan, va bo loc chuyen khong theo sang', (_name, input) => {
+      const parsed = parseNavigationFromSearch(LEGACY_LINK, input);
+      expect(parsed.surface).toBe('operations');
+      expect(parsed.section).toBe('overview');
+      expect(parsed.tripFilter).toEqual({ search: null, status: null, kind: null });
+    });
+
+    it('dia chi dung lai tu ket qua van la dia chi cu — tai lai/back/forward khong doi nghia', () => {
+      const once = parseNavigationFromSearch(LEGACY_LINK, director());
+      expect(buildSectionUrl(once.section, once.selection, once.tripFilter)).toBe(
+        '/?section=trips&selected=VT-2026-0912&q=VT-2026-0912&status=IN_TRANSIT',
+      );
+      const rebuilt = buildSectionUrl(once.section, once.selection, once.tripFilter).slice(1);
+      expect(parseNavigationFromSearch(rebuilt, director())).toEqual(once);
+    });
+  });
+
+  describe('acceptance 4 — doi nhom khong cap them, khong tuoc mat', () => {
+    it.each([
+      ['ADMIN', director()],
+      ['ADMIN + T6 + ket thuc don', director([...WITH_ACCEPTANCE, ...T6_CAPABILITIES])],
+      ['ACCOUNTING', accountant()],
+      ['ACCOUNTING + ket thuc don', accountant(WITH_ACCEPTANCE)],
+      ['MANAGER', manager()],
+      ['lai xe', driver()],
+      ['vai chua biet', unknownRole()],
+      ['goi toi thieu', director(MINIMUM)],
+      ['First-UAT chan ETC', { ...director(FIRST_UAT), blockedCapabilityKeys: ['transport-toll'] }],
+    ])('%s: danh muc chinh + loi phu = DUNG tap muc mo duoc, va khong trung', (_name, input) => {
+      const primary = primaryIds(input);
+      const older = olderIds(input);
+      expect([...primary, ...older].sort()).toEqual([...reachableIds(input)].sort());
+      expect(primary.filter((id) => older.includes(id))).toEqual([]);
+    });
+
+    it('ACCOUNTING khong regress: van thay dung tap muc cua Giam doc, tren ca hai loi', () => {
+      expect(primaryIds(accountant(WITH_ACCEPTANCE))).toEqual(
+        primaryIds(director(WITH_ACCEPTANCE)),
+      );
+      expect(olderIds(accountant())).toEqual(['trips']);
+    });
+  });
+
+  describe('hop dong `supersededBy` — mot quy tac tren hai muc, khong phai mot cau so vai', () => {
+    it('moi `supersededBy` tro vao mot muc CO THAT, khac chinh no, va khong tu no bi thay', () => {
+      const sections: readonly TransportSection[] = TRANSPORT_SECTIONS;
+      for (const section of sections) {
+        if (section.supersededBy === undefined) continue;
+        const successor = sections.find((entry) => entry.id === section.supersededBy);
+        expect(successor, section.id).toBeDefined();
+        expect(successor?.id).not.toBe(section.id);
+        // Khong co chuoi thay the: loi phu chi dan mot buoc toi muc chinh, khong dan toi mot muc
+        // cu khac.
+        expect(successor?.supersededBy, section.id).toBeUndefined();
+      }
+    });
+
+    it('`Chuyến xe` giu nguyen hai truc quyen — rut khoi danh muc khong doi ai duoc mo no', () => {
+      const trips = TRANSPORT_SECTIONS.find((section) => section.id === 'trips');
+      expect(trips?.requiredAction).toBe('transport.trip.read');
+      expect(trips?.requiredCapabilities).toEqual(['transport-core']);
+      expect(canNavigateTo('trips', director())).toBe(true);
+      expect(canNavigateTo('trips', accountant())).toBe(true);
+    });
+  });
+
+  describe('acceptance 5 — o Loc danh muc van chay, va khong keo muc cu len lai', () => {
+    const groups = navigationGroups(director());
+
+    it('go "chuyen xe" KHONG dua `Chuyến xe` len canh don hang', () => {
+      expect(filterNavigationGroups(groups, 'chuyen xe')).toEqual([]);
+    });
+
+    it('go "don hang" van tim ra muc chinh', () => {
+      const found = filterNavigationGroups(groups, 'don hang').flatMap((entry) =>
+        entry.sections.map((section) => section.id),
+      );
+      expect(found).toEqual(['movement']);
+    });
+
+    it('danh muc Giam doc van du dai de o loc hien ra (nguong 12 cua vo)', () => {
+      const total = groups.reduce((sum, entry) => sum + entry.sections.length, 0);
+      expect(total).toBeGreaterThanOrEqual(12);
+    });
   });
 });

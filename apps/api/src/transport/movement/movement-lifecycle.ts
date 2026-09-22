@@ -6,7 +6,8 @@ import type {
   RunLegTransitionReason,
   RunTransitionReason,
 } from './movement-decisions.js';
-import type { OrderStatus, RunLegStatus, VehicleRunStatus } from './movement.types.js';
+import type { LegFieldDelivery } from './leg-field-truth.port.js';
+import type { OrderStatus, RunLegKind, RunLegStatus, VehicleRunStatus } from './movement.types.js';
 
 /**
  * HAI MAY TRANG THAI, HAI TRUC.
@@ -35,6 +36,17 @@ export const isTerminalOrderStatus = (status: OrderStatus): boolean =>
 
 export const isTerminalRunStatus = (status: VehicleRunStatus): boolean =>
   status === 'COMPLETED' || status === 'CANCELLED';
+
+/**
+ * "ĐANG CHẠY" — MOT dinh nghia, va no song o day, canh may trang thai cua vong chay (`#336`).
+ *
+ * Vong chay dang chay = da vao `ACTIVE`, chua dong, chua huy. Khong doc giai doan chang, khong doc
+ * cot `TransportVehicle.status`, khong doc `TransportTrip`: giai doan chi quyet mot vong chay dang
+ * chay NAM O COT NAO tren bang, con cot trang thai xe la cot chinh tay ma luong Order-first khong
+ * ghi. The so "Đang chạy" va nam cot dang chay cua thap dieu hanh cung goi ham nay — do la cach
+ * hai con so do khong the lech nhau.
+ */
+export const isRunningRunStatus = (status: VehicleRunStatus): boolean => status === 'ACTIVE';
 
 const ORDER_EDGES: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   OPEN: ['FULFILLED', 'CANCELLED'],
@@ -129,7 +141,9 @@ export function evaluateRunTransition(
  * — *"da du dieu kien dong chua"* — thuoc `evaluateRunClosure()`, va do la thu phai tra loi TRUOC.
  * `MovementService.closeRunAsSystem()` vi vay la mot phep THI HANH, khong phai mot phep PHAN XU.
  */
-export function evaluateSystemRunClose(from: VehicleRunStatus): TransitionDecision<RunTransitionReason> {
+export function evaluateSystemRunClose(
+  from: VehicleRunStatus,
+): TransitionDecision<RunTransitionReason> {
   if (isTerminalRunStatus(from)) return deny('RUN_ALREADY_TERMINAL');
   if (!RUN_EDGES[from].includes('COMPLETED')) return deny('RUN_TRANSITION_NOT_PERMITTED');
   return allow('RUN_TRANSITION_APPLIED');
@@ -204,4 +218,32 @@ export function evaluateLegCancel(from: RunLegStatus): TransitionDecision<RunLeg
   if (from === 'COMPLETED') return deny('LEG_CANCEL_ALREADY_COMPLETED');
   if (from === 'IN_TRANSIT') return deny('LEG_CANCEL_ALREADY_STARTED');
   return allow('LEG_CANCEL_RECORDED');
+}
+
+export interface LegCompletionEvidence {
+  readonly kind: RunLegKind;
+  readonly to: RunLegStatus;
+  /** So ghi hien truong cua chang — `null` khi khach khong co nguon hien truong nao. */
+  readonly field: LegFieldDelivery | null;
+  /** Ly do GHI DE tuong minh cua nguoi goi — `null` khi khong ghi de. */
+  readonly overrideReason: string | null;
+}
+
+/**
+ * HOAN TAT CHANG CO HANG PHAI KHOP HIEN TRUONG — `#332`. Chay SAU `evaluateLegTransition`.
+ *
+ * Bat bien: khong co `LOADED` + `COMPLETED` trong khi hien truong chua ghi nguoi nhan da nhan hang,
+ * tru mot lan GHI DE tuong minh co ly do. Chang `EMPTY` va buoc `IN_TRANSIT` khong doi bang chung:
+ * khong co hang thi khong co gi de giao, va lan banh khong khang dinh da giao.
+ *
+ * Ly do ghi de chi co hieu luc khi THAT SU ghi de. Hien truong da noi "da giao" thi lan hoan tat do
+ * la binh thuong — dan nhan ghi de len no se lam so quyet dinh dem sai so lan dong trai hien truong.
+ */
+export function evaluateLegCompletionEvidence(
+  input: LegCompletionEvidence,
+): TransitionDecision<RunLegTransitionReason> {
+  if (input.to !== 'COMPLETED' || input.kind !== 'LOADED') return allow('LEG_TRANSITION_APPLIED');
+  if (input.field === null || input.field.delivered) return allow('LEG_TRANSITION_APPLIED');
+  if (input.overrideReason !== null) return allow('LEG_COMPLETED_BY_OVERRIDE');
+  return deny('LEG_FIELD_DELIVERY_NOT_RECORDED');
 }

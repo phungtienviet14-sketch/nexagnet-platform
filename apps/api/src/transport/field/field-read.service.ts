@@ -12,6 +12,7 @@ import {
 import { OperationalDocumentRepository } from '../document/document.repository.js';
 import type { OperationalDocument } from '../document/document.types.js';
 import { PhysicalReceiptHandoverRepository } from '../document/handover.repository.js';
+import { isTerminalRunStatus } from '../movement/movement-lifecycle.js';
 import { TRANSPORT_CLOCK } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { WaitingSessionRepository } from '../waiting/waiting.repository.js';
@@ -92,7 +93,9 @@ export class DriverFieldReadService {
           await this.buildLeg({
             leg,
             orderCode: leg.orderId === null ? null : (orderCodes.get(leg.orderId) ?? null),
-            runTerminal: run.status === 'COMPLETED' || run.status === 'CANCELLED',
+            // CUNG dinh nghia ma cong duoi khoa cua moc/phien cho doc (`#333`): mot nut chi hien khi
+            // lenh cua no con qua duoc. Lop loc o kho da bo vong chay terminal; day la lop thu hai.
+            runTerminal: isTerminalRunStatus(run.status),
             checkpoints: runCheckpoints.filter((row) => row.legId === leg.id),
             documents: runDocuments.filter((row) => row.legId === leg.id),
             now,
@@ -152,6 +155,7 @@ export class DriverFieldReadService {
       missingDocumentTypes: loaded ? missingDocumentTypes(this.documentPolicy, documentTypes) : [],
       receiptHandover: handovers.at(-1)?.state ?? null,
       nextActions: fieldActionsFor({
+        legKind: input.leg.kind,
         recordedTypes,
         documentTypes,
         requiredDocumentTypes: loaded ? this.documentPolicy.requiredOnLoadedLeg : [],

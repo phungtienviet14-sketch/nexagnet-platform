@@ -11,8 +11,10 @@ import {
   TRANSPORT_MOVEMENT_DECISIONS,
   type TransportMovementDecisionReason,
 } from './movement-decisions.js';
+import type { LegFieldTruthSource } from './leg-field-truth.port.js';
 import {
   evaluateLegCancel,
+  evaluateLegCompletionEvidence,
   evaluateLegTransition,
   evaluateOrderCancel,
   evaluateOrderTransition,
@@ -100,6 +102,20 @@ export interface AddLegCommand {
 
 export interface AssignRunCommand {
   readonly driverId: string;
+}
+
+/**
+ * Cai nguoi goi MANG THEO khi doi trang thai mot chang — `#332`.
+ *
+ * `fieldTruth` den tu tang ghep (`RunsController`, noi `app-composition.ts` noi san ban hien thuc
+ * cua `transport-checkpoint`), khong tiem vao service nay: `MovementService` song trong
+ * `TransportModule`, noi cong do khong nhin thay. Cung khuon `closeRunAsSystem(..., revalidate)`.
+ * Vang mat = khong co so ghi hien truong de doi chieu, dung nhu mot khach chi bat `transport-core`.
+ */
+export interface LegTransitionOptions {
+  readonly fieldTruth?: LegFieldTruthSource;
+  /** Ghi de TUONG MINH khi hien truong chua ghi giao xong. Chi co hieu luc khi that su ghi de. */
+  readonly overrideReason?: string;
 }
 
 type DecisionPoint = (typeof TRANSPORT_MOVEMENT_DECISIONS)['points'][number];
@@ -473,8 +489,22 @@ export class MovementService {
    * Buoc tu dong nay im lang khi that bai CO CHU DICH: neu vong chay vi ly do nao do khong sang
    * `ACTIVE` duoc, chang van duoc ghi la dang chay. Mot chang khong ghi duoc vi mot cot trang thai
    * o cap tren la kieu hong lam lai xe bo luon buoc ghi.
+   *
+   * ============================================================================================
+   * CHANG CO HANG KHONG "XONG" TRAI HIEN TRUONG — `#332`
+   * ============================================================================================
+   *
+   * `LOADED` -> `COMPLETED` hoi `options.fieldTruth` truoc: hien truong chua ghi nguoi nhan da nhan
+   * hang thi tu choi (`LEG_FIELD_DELIVERY_NOT_RECORDED`), tru khi nguoi goi GHI DE tuong minh bang
+   * `overrideReason` — khi do lan hoan tat mang hanh dong kiem toan rieng. Xem
+   * `evaluateLegCompletionEvidence()`.
    */
-  async transitionLeg(legId: string, to: RunLegStatus, actor: string): Promise<RunLeg> {
+  async transitionLeg(
+    legId: string,
+    to: RunLegStatus,
+    actor: string,
+    options: LegTransitionOptions = {},
+  ): Promise<RunLeg> {
     const before = await this.requireLeg(legId);
     const run = await this.requireRun(before.runId);
     if (run.status === 'COMPLETED' || run.status === 'CANCELLED') {
@@ -485,6 +515,36 @@ export class MovementService {
     if (!decision.allowed) {
       throw this.deny('run.leg_transition', decision.reason, { legId, from: before.status, to });
     }
+
+    /*
+     * HIEN TRUONG CHAN CHANG CO HANG — `#332`. Chi hoi khi THAT SU can (`LOADED` -> `COMPLETED`):
+     * moi lan hoi la mot lan doc kho moc, va chang rong/lan lan banh khong co gi de doi chieu.
+     *
+     * Nguon hong thi loi di THANG ra — that bai dong. Nuot no se bien "khong doc duoc hien truong"
+     * thanh "hien truong khong phan doi", dung kieu hong ma `collectBlockers()` cua lan dong cam.
+     */
+    const needsFieldTruth = to === 'COMPLETED' && before.kind === 'LOADED';
+    const field =
+      needsFieldTruth && options.fieldTruth ? await options.fieldTruth.deliveryOf(legId) : null;
+    const overrideReason = options.overrideReason ?? null;
+    const evidence = evaluateLegCompletionEvidence({
+      kind: before.kind,
+      to,
+      field,
+      overrideReason,
+    });
+    if (!evidence.allowed) {
+      throw this.deny('run.leg_transition', evidence.reason, {
+        legId,
+        kind: before.kind,
+        to,
+        fieldPhase: field?.phase ?? null,
+      });
+    }
+    const fieldOverride =
+      evidence.reason === 'LEG_COMPLETED_BY_OVERRIDE' && overrideReason !== null
+        ? { reason: overrideReason, fieldPhase: field?.phase ?? null }
+        : null;
 
     const at = new Date();
     const after = await this.repository.setLegStatus(legId, to, at);
@@ -500,14 +560,25 @@ export class MovementService {
       });
     }
 
-    this.allow('run.leg_transition', decision.reason, { legId, from: before.status, to });
+    this.allow('run.leg_transition', evidence.reason, {
+      legId,
+      from: before.status,
+      to,
+      ...(fieldOverride ? { fieldPhase: fieldOverride.fieldPhase } : {}),
+    });
+    /*
+     * Mot lan dong TRAI hien truong co HANH DONG kiem toan rieng — ai, luc nao, VI SAO, va hien truong
+     * dang o dau luc do. Cung khuon `cancelLeg`: ly do nam trong `after`, khong thanh mot cot moi.
+     */
     await this.audit.append({
       actor,
-      action: 'transport.run.leg.transition',
+      action: fieldOverride
+        ? 'transport.run.leg.complete.override'
+        : 'transport.run.leg.transition',
       entityType: 'TransportRunLeg',
       entityId: legId,
       before,
-      after,
+      after: fieldOverride ? { ...after, fieldOverride } : after,
     });
     return after;
   }

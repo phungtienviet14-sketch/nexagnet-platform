@@ -39,7 +39,7 @@ class FakeCoreFacts extends TransportCheckpointCoreFacts {
   }
 
   async findLeg(legId: string): Promise<CheckpointLegFacts | null> {
-    return legId === LEG_ID ? { id: LEG_ID, runId: RUN_ID } : null;
+    return legId === LEG_ID ? { id: LEG_ID, runId: RUN_ID, kind: 'LOADED' } : null;
   }
 
   async wasDriverEverAssignedToRun(): Promise<boolean> {

@@ -1,11 +1,13 @@
 import {
   DEFAULT_CHECKPOINT_POLICY,
+  isCheckpointAllowedOnLeg,
   isRepeatable,
   requiredPredecessor,
   type CheckpointPolicy,
 } from '../checkpoint/checkpoint-lifecycle.js';
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
 import type { OperationalDocumentType } from '../document/document.types.js';
+import type { RunLegKind } from '../movement/movement.types.js';
 import type { DriverFieldAction } from './field.types.js';
 
 /**
@@ -117,6 +119,12 @@ const DOCUMENT_AFTER: Readonly<Partial<Record<RunCheckpointType, OperationalDocu
 };
 
 export interface FieldActionInput {
+  /**
+   * Chang CO HANG hay CHAY RONG. Chang rong khong duoc moi mot moc hang hoa nao — `#332`: runtime
+   * 19/09/2026 chon chang 1 RONG lam "chang dang lam" vi no la chang dau tien con nut, va ca chuoi
+   * lay hang roi vao chang khong cho hang.
+   */
+  readonly legKind: RunLegKind;
   /** Loai moc DA GHI tren chinh chang nay. */
   readonly recordedTypes: readonly RunCheckpointType[];
   /** Loai chung tu CON HIEU LUC da ghi tren chang nay. */
@@ -152,8 +160,10 @@ export function fieldActionsFor(input: FieldActionInput): readonly DriverFieldAc
     const predecessor = requiredPredecessor(type);
     const predecessorDone = predecessor === null || recorded.has(predecessor);
     const alreadyDone = recorded.has(type) && !isRepeatable(type);
+    // Cung ham ma `evaluateCheckpoint` dung de tu choi `CHECKPOINT_CARGO_ON_EMPTY_LEG`.
+    const allowedHere = isCheckpointAllowedOnLeg(type, input.legKind);
 
-    if (predecessorDone && !alreadyDone && !stageClosed(type, recorded)) {
+    if (allowedHere && predecessorDone && !alreadyDone && !stageClosed(type, recorded)) {
       actions.push({
         kind: 'CHECKPOINT',
         label: CHECKPOINT_LABEL[type],

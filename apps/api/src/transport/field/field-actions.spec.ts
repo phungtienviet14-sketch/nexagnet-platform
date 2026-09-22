@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import {
+  DEFAULT_CHECKPOINT_POLICY,
+  evaluateCheckpoint,
+} from '../checkpoint/checkpoint-lifecycle.js';
+import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
 import { fieldActionsFor } from './field-actions.js';
 
 /**
@@ -11,6 +16,7 @@ import { fieldActionsFor } from './field-actions.js';
  */
 
 const input = (over: Partial<Parameters<typeof fieldActionsFor>[0]> = {}) => ({
+  legKind: 'LOADED' as const,
   recordedTypes: [],
   documentTypes: [],
   requiredDocumentTypes: ['DELIVERY_RECEIPT' as const],
@@ -209,5 +215,99 @@ describe('Vong chay da ket thuc — FD-013', () => {
    */
   it('khong con viec gi de bam', () => {
     expect(labels({ recordedTypes: ['PICKUP_ARRIVAL'], runTerminal: true })).toEqual([]);
+  });
+
+  /**
+   * HINH DANG CUA UAT BUG-03 (`#333`): chang da giao xong, CHUA chup bien nhan, CO don de ban giao.
+   *
+   * Dung luc vong chay con chay, ba nut deu hop le (bai dau). Vong chay ket thuc thi `document`
+   * (`DOCUMENT_RUN_TERMINAL`) va moi moc deu bi tu choi — nen khong mot nut nao duoc chao, ke ca
+   * o chon tep cua `Chup bien nhan giao hang`.
+   */
+  const deliveredWithoutReceipt = {
+    recordedTypes: [
+      'PICKUP_ARRIVAL',
+      'PICKUP_DEPARTURE',
+      'DELIVERY_ARRIVAL',
+      'DELIVERY_ACCEPTED',
+    ] as const,
+    documentTypes: [],
+    hasOrder: true,
+    receiptHandoverRecorded: false,
+  };
+
+  it('con chay: bien nhan va ban giao duoc chao — diem xuat phat cua UAT (#333)', () => {
+    expect(labels(deliveredWithoutReceipt)).toEqual(
+      expect.arrayContaining(['Chụp biên nhận giao hàng', 'Tôi đang giữ biên nhận']),
+    );
+  });
+
+  it('da ket thuc: KHONG DOCUMENT, KHONG RECEIPT_HANDOVER, KHONG moc nao (#333)', () => {
+    expect(fieldActionsFor(input({ ...deliveredWithoutReceipt, runTerminal: true }))).toEqual([]);
+  });
+});
+
+/**
+ * CHANG CHAY RONG — `#332`.
+ *
+ * Runtime 19/09/2026: vong chay `EMPTY #1 -> LOADED #2`, va man hinh dua chang 1 RONG len lam "chang
+ * dang lam" vi no la chang DAU TIEN con nut de bam (`toFieldScreen`). Nut dau tien tren the do la
+ * `Da toi diem lay hang` — nen chuoi lay hang duoc ghi tren chang KHONG cho hang, con chang co hang
+ * nam trong voi cot "Hien truong" la "—".
+ */
+describe('Chang chay rong khong moi viec hang hoa — #332', () => {
+  it('chang RONG chua bam gi thi KHONG co nut nao', () => {
+    expect(labels({ legKind: 'EMPTY', hasOrder: false })).toEqual([]);
+  });
+
+  it('ke ca du lieu cu da lo ghi moc lay hang tren chang rong: khong moi them moc nao', () => {
+    const actions = fieldActionsFor(
+      input({
+        legKind: 'EMPTY',
+        hasOrder: false,
+        recordedTypes: ['PICKUP_ARRIVAL', 'GATE_ENTRY', 'LOADING'],
+        documentTypes: ['GATE_PASS'],
+      }),
+    );
+    expect(actions.filter((action) => action.kind === 'CHECKPOINT')).toEqual([]);
+  });
+
+  it('chang CO HANG giu nguyen viec dau tien', () => {
+    expect(labels({ legKind: 'LOADED' })).toEqual(['Đã tới điểm lấy hàng']);
+  });
+
+  /**
+   * HAI BAN LUAT KHONG DUOC LECH: moi nut `CHECKPOINT` ma man hinh hien phai la mot lan bam ma
+   * `evaluateCheckpoint` — chinh ham `CheckpointService` dung — se cho qua, tren CA hai loai chang.
+   */
+  it('moi nut moc duoc hien deu la mot lan bam may chu chap nhan, tren ca hai loai chang', () => {
+    const histories: readonly (readonly RunCheckpointType[])[] = [
+      [],
+      ['PICKUP_ARRIVAL'],
+      ['PICKUP_ARRIVAL', 'GATE_ENTRY', 'LOADING'],
+      ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE'],
+      ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE', 'DELIVERY_ARRIVAL'],
+    ];
+    for (const legKind of ['EMPTY', 'LOADED'] as const) {
+      for (const recordedTypes of histories) {
+        const offered = fieldActionsFor(input({ legKind, recordedTypes })).filter(
+          (action) => action.kind === 'CHECKPOINT',
+        );
+        for (const action of offered) {
+          const decision = evaluateCheckpoint({
+            type: action.checkpointType!,
+            runTerminal: false,
+            hasLeg: true,
+            legKind,
+            recordedTypes,
+            hasObservation: action.requiresLocation,
+            policy: DEFAULT_CHECKPOINT_POLICY,
+          });
+          expect({ legKind, recordedTypes, type: action.checkpointType, decision }).toMatchObject({
+            decision: { allowed: true },
+          });
+        }
+      }
+    }
   });
 });

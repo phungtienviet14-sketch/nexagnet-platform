@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { toBusinessDate } from '../business-date.js';
 import { isTerminalRunStatus } from '../movement/movement-lifecycle.js';
+import type { RunLegKind } from '../movement/movement.types.js';
 import { RunWriteGuard } from '../movement/run-write-guard.port.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
@@ -163,6 +164,7 @@ export class CheckpointService {
     }
 
     const legId = command.legId ?? null;
+    let legKind: RunLegKind | null = null;
     if (legId !== null) {
       const leg = await this.core.findLeg(legId);
       if (!leg) {
@@ -176,6 +178,7 @@ export class CheckpointService {
           'Chang do khong thuoc vong chay nay',
         );
       }
+      legKind = leg.kind;
     }
 
     // Pham vi dang xet: mot chang cu the, hoac muc vong chay. Doc dung pham vi do de mot chang
@@ -190,6 +193,7 @@ export class CheckpointService {
       type: command.type,
       runTerminal: runStatus === 'COMPLETED' || runStatus === 'CANCELLED',
       hasLeg: legId !== null,
+      legKind,
       recordedTypes: scoped.map((row) => row.type),
       hasObservation: command.observationId !== undefined,
       policy: this.policy,
@@ -199,6 +203,7 @@ export class CheckpointService {
       this.deny(decision.reason, {
         runId: command.runId,
         legId,
+        legKind,
         type: command.type,
         ...(decision.requires ? { requires: decision.requires } : {}),
       });
@@ -367,7 +372,7 @@ export class CheckpointService {
       case 'CHECKPOINT_RUN_TERMINAL':
         return TransportDomainError.conflict(
           reason,
-          'Vong chay da o trang thai cuoi, khong ghi them moc duoc',
+          'Vòng chạy đã kết thúc — không ghi thêm mốc được nữa.',
         );
       case 'CHECKPOINT_ALREADY_RECORDED':
         return TransportDomainError.conflict(reason, 'Moc nay da duoc ghi tu truoc');
@@ -384,6 +389,11 @@ export class CheckpointService {
         return TransportDomainError.invalid(
           reason,
           'Moc nay thuoc muc vong chay, khong gan vao chang',
+        );
+      case 'CHECKPOINT_CARGO_ON_EMPTY_LEG':
+        return TransportDomainError.invalid(
+          reason,
+          'Chang chay rong khong cho hang — ghi moc nay tren chang co hang',
         );
       default:
         return TransportDomainError.invalid(reason, 'Khong ghi duoc moc van hanh');

@@ -1,3 +1,4 @@
+import type { RunLegKind } from '../movement/movement.types.js';
 import type { CheckpointRecordReason } from './checkpoint-decisions.js';
 import type { RunCheckpointType } from './checkpoint.types.js';
 
@@ -32,6 +33,42 @@ import type { RunCheckpointType } from './checkpoint.types.js';
 const RUN_SCOPED: readonly RunCheckpointType[] = ['ASSIGNED', 'DEPARTED', 'COMPLETED'];
 
 export const isRunScoped = (type: RunCheckpointType): boolean => RUN_SCOPED.includes(type);
+
+/**
+ * MOC NAO MANG NGHIA HANG HOA — `#332`.
+ *
+ * Mot chang `EMPTY` khong cho hang (bat bien cua `TransportRunLeg`: no khong mang don). Moc noi ve
+ * viec lay/boc/giao hang ma neo vao chang do thi noi mot dieu khong the xay ra — va tu chinh no sinh
+ * ra "hang tren thung" o mot chang rong, trong khi chang CO HANG that thi khong con moc nao.
+ * Runtime 19/09/2026 da ghi dung hinh dang do.
+ *
+ * Mot `Record` chu khong mot danh sach: them mot loai moc moi ma quen phan loai la loi BIEN DICH.
+ * Hom nay sau moc muc chang deu thuoc chuoi hang hoa; mot moc muc chang khong mang hang (vd "ve toi
+ * bai") phai duoc khai `false` o day — co y, khong tu dong.
+ */
+const CARRIES_CARGO: Readonly<Record<RunCheckpointType, boolean>> = {
+  ASSIGNED: false,
+  DEPARTED: false,
+  PICKUP_ARRIVAL: true,
+  GATE_ENTRY: true,
+  LOADING: true,
+  PICKUP_DEPARTURE: true,
+  DELIVERY_ARRIVAL: true,
+  DELIVERY_ACCEPTED: true,
+  COMPLETED: false,
+};
+
+export const carriesCargoMeaning = (type: RunCheckpointType): boolean => CARRIES_CARGO[type];
+
+/**
+ * Loai moc nay co duoc neo vao mot chang loai `kind` khong.
+ *
+ * Mot ham chung cho HAI ben: `evaluateCheckpoint` (cai tu choi) va `fieldActionsFor` (cai quyet
+ * nut nao hien). Hai ban luat se lech nhau o lan sua thu ba — xem khoi chu thich cua
+ * `field-actions.ts`.
+ */
+export const isCheckpointAllowedOnLeg = (type: RunCheckpointType, kind: RunLegKind): boolean =>
+  kind === 'LOADED' || !carriesCargoMeaning(type);
 
 /**
  * Dieu kien truc tiep truoc mot moc. `null` = khong doi gi.
@@ -110,6 +147,11 @@ export interface CheckpointEvaluation {
   readonly runTerminal: boolean;
   /** Co kem `legId` khong. */
   readonly hasLeg: boolean;
+  /**
+   * LOAI cua chang duoc kem — `null` khi khong kem chang nao. BAT BUOC (`| null`, khong phai `?`):
+   * mot ben goi quen dien se lam cong `#332` im lang cho qua.
+   */
+  readonly legKind: RunLegKind | null;
   /** Loai moc DA GHI tren dung pham vi dang xet (chang do, hoac muc vong chay). */
   readonly recordedTypes: readonly RunCheckpointType[];
   /** Co kem ban dinh vi khong. */
@@ -130,6 +172,10 @@ export function evaluateCheckpoint(input: CheckpointEvaluation): CheckpointDecis
   const runScoped = isRunScoped(input.type);
   if (runScoped && input.hasLeg) return deny('CHECKPOINT_LEG_NOT_APPLICABLE');
   if (!runScoped && !input.hasLeg) return deny('CHECKPOINT_LEG_REQUIRED');
+  // Van la PHAM VI — chang nao duoc nhan moc nay — nen dung truoc thu tu (`#332`).
+  if (input.legKind !== null && !isCheckpointAllowedOnLeg(input.type, input.legKind)) {
+    return deny('CHECKPOINT_CARGO_ON_EMPTY_LEG');
+  }
 
   const predecessor = requiredPredecessor(input.type);
   if (predecessor !== null && !input.recordedTypes.includes(predecessor)) {
