@@ -176,7 +176,18 @@ const inboxScopeWhere = (filter: FuelEntryInboxFilter): Record<string, any> => {
   const where: Record<string, any> = {};
   // `null` = khong loc; `[]` = co loc va khong chuyen nao khop. Xem `FuelEntryInboxFilter`.
   if (filter.tripIds !== null) where.tripId = { in: [...filter.tripIds] };
-  if (filter.runIds !== null) where.runId = { in: [...filter.runIds] };
+  /*
+   * `#369` R-5 — loc theo VONG CHAY la mot phep HOAC: phieu khai thang vong chay do, HOAC phieu
+   * chuyen v1 da duoc chieu sang mot chang cua no. Mot `AND` o day se lam bo loc luon rong (mot phieu
+   * khong bao gio mang ca hai ngu canh — `CHECK TransportFuelEntry_one_context_kind`).
+   */
+  if (filter.runIds !== null) {
+    const runTripIds = filter.runTripIds ?? [];
+    where.OR = [
+      { runId: { in: [...filter.runIds] } },
+      ...(runTripIds.length > 0 ? [{ tripId: { in: [...runTripIds] } }] : []),
+    ];
+  }
   if (filter.driverId !== null) where.driverId = filter.driverId;
   if (filter.vehicleId !== null) where.vehicleId = filter.vehicleId;
   if (filter.supplierId !== null) where.supplierId = filter.supplierId;
@@ -467,6 +478,14 @@ export class PrismaFuelRepository extends FuelRepository {
   async listEntriesByTrip(tripId: string): Promise<FuelEntry[]> {
     const rows = await model(this.prisma, 'transportFuelEntry').findMany({
       where: { tripId },
+      orderBy: [{ businessDate: 'asc' }, { occurredAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(toEntry);
+  }
+
+  async listEntriesByRun(runId: string): Promise<FuelEntry[]> {
+    const rows = await model(this.prisma, 'transportFuelEntry').findMany({
+      where: { runId },
       orderBy: [{ businessDate: 'asc' }, { occurredAt: 'asc' }, { id: 'asc' }],
     });
     return rows.map(toEntry);

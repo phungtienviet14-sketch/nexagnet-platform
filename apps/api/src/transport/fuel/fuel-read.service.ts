@@ -13,13 +13,14 @@ import {
 } from './driver-fuel.view.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import { supersededDecisionIds } from './fuel-decision-revision.js';
-import { FuelRunContextFacts } from './fuel-run-context.port.js';
+import { FuelRunContextFacts, type FuelDerivedRunContext } from './fuel-run-context.port.js';
 import { FuelStationRepository } from './fuel-station.repository.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
 import type { FuelEntryInboxFilter } from './fuel.repository.js';
 import { toFuelReceiptEvidenceView } from './fuel.types.js';
 import type {
+  FuelDerivedRunView,
   FuelEntry,
   FuelEntryDetail,
   FuelEntryInboxPage,
@@ -35,7 +36,10 @@ import type {
  * Nguoi dung loc bang MA CHUYEN (`tripCode`), tang kho loc bang `tripIds`. Phep doi giua hai thu do
  * la mot lan doc `transport-core`, va no thuoc tang nay chu khong thuoc tang kho (§4.1 luat 4).
  */
-export interface FuelEntryInboxRequest extends Omit<FuelEntryInboxFilter, 'tripIds' | 'runIds'> {
+export interface FuelEntryInboxRequest extends Omit<
+  FuelEntryInboxFilter,
+  'tripIds' | 'runIds' | 'runTripIds'
+> {
   readonly tripCode: string | null;
   /** `#364` — MA VONG CHAY, doi sang `runIds` o day, cung quy uoc voi `tripCode`. */
   readonly runCode: string | null;
@@ -135,12 +139,19 @@ export class FuelReadService {
       this.resolveTripFilter(query.tripCode),
       this.resolveRunFilter(query.runCode),
     ]);
+    /*
+     * `#369` R-5 — loc theo MA VONG CHAY phai thay CA phieu chuyen v1 da chieu sang vong chay do.
+     * Phep doi `runIds -> tripIds da chieu` thuoc `transport-core`, nen no di qua cong o TANG NAY;
+     * tang kho chi nhan ket qua da doi (§4.1 luat 4).
+     */
+    const runTripIds = runIds === null ? null : await this.runs.listTripsProjectedToRuns(runIds);
 
     const page = await this.repository.listEntriesForInbox({
       verification: query.verification,
       reconciliation: query.reconciliation,
       tripIds,
       runIds,
+      runTripIds,
       driverId: query.driverId,
       vehicleId: query.vehicleId,
       supplierId: query.supplierId,
@@ -150,7 +161,7 @@ export class FuelReadService {
       offset: query.offset,
     });
 
-    const [trips, runs, legs, drivers, vehicles, suppliers, evidence, stationName] =
+    const [trips, runs, legs, drivers, vehicles, suppliers, evidence, stationName, derivedRuns] =
       await Promise.all([
         this.core.listTripsByIds(presentIds(page.entries.map((entry) => entry.tripId))),
         this.runs.listRunsByIds(presentIds(page.entries.map((entry) => entry.runId))),
@@ -162,6 +173,9 @@ export class FuelReadService {
         // hinh — dung kieu N+1 ma #222 cam, chi la doi cho tu trinh duyet xuong may chu.
         this.repository.listEvidenceForEntries(page.entries.map((entry) => entry.id)),
         this.stationNames(page.entries),
+        // `#369` R-5 — MOT lan doc cho ca trang, va chi cho phieu CHUYEN v1: phieu Run-first da co
+        // ngu canh THAT, khong co gi de suy.
+        this.runs.listDerivedRunContexts(presentIds(page.entries.map((entry) => entry.tripId))),
       ]);
 
     const tripCode = new Map(trips.map((trip) => [trip.id, trip.code]));
@@ -173,6 +187,7 @@ export class FuelReadService {
     );
     const supplierName = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
     const evidenceByEntry = evidence;
+    const derivedByTrip = new Map(derivedRuns.map((context) => [context.tripId, context]));
 
     return {
       rows: page.entries.map((entry) => {
@@ -189,6 +204,9 @@ export class FuelReadService {
           runCode: entry.runId === null ? null : (runCode.get(entry.runId) ?? entry.runId),
           legId: entry.legId,
           legSequence: entry.legId === null ? null : (legSequence.get(entry.legId) ?? null),
+          // `#369` R-5 — SUY RA, khong ghi de: phieu Run-first khong co truong nay, phieu chuyen v1
+          // chua duoc chieu cung khong. Xem `FuelDerivedRunView`.
+          derivedRun: derivedRunViewOf(entry.tripId, derivedByTrip),
           driverId: entry.driverId,
           driverName: driverName.get(entry.driverId) ?? null,
           vehicleId: entry.vehicleId,
@@ -537,3 +555,22 @@ export class FuelReadService {
 /** `#364` — ngu canh tuy chon: bo `null` truoc khi doi `id -> ma`, khong hoi kho ve mot id rong. */
 const presentIds = (ids: readonly (string | null)[]): string[] =>
   ids.filter((id): id is string => id !== null);
+
+/**
+ * `#369` R-5 — ngu canh SUY RA cua mot phieu, o dang khung nhin. `null` khi phieu khong co chuyen v1
+ * (da co ngu canh that) hoac chuyen do chua duoc chieu sang vong chay nao.
+ */
+const derivedRunViewOf = (
+  tripId: string | null,
+  derived: ReadonlyMap<string, FuelDerivedRunContext>,
+): FuelDerivedRunView | null => {
+  const context = tripId === null ? undefined : derived.get(tripId);
+  if (!context) return null;
+  return {
+    runId: context.runId,
+    runCode: context.runCode,
+    legId: context.legId,
+    legSequence: context.legSequence,
+    via: 'TRIP_RUN_LEG_LINK',
+  };
+};

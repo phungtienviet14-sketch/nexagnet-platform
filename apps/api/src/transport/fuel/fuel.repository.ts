@@ -235,6 +235,21 @@ export interface FuelEntryInboxFilter {
    * doi ra id qua `FuelRunContextFacts`, tang kho chi nhan ket qua da doi.
    */
   readonly runIds: readonly string[] | null;
+  /**
+   * `#369` R-5 — CHUYEN v1 da duoc chieu sang chinh cac vong chay o `runIds`.
+   *
+   * Loc theo MA VONG CHAY phai thay CA hai loai phieu cua vong chay do: phieu Run-first (khai thang
+   * `runId`) VA phieu chuyen v1 da chieu sang mot chang cua no. Nen hai truong nay hop bang HOAC:
+   *
+   * ```text
+   * runId IN (runIds) OR tripId IN (runTripIds)
+   * ```
+   *
+   * Tang UNG DUNG doi `runCode -> runIds -> runTripIds` (`FuelRunContextFacts`); tang kho chi nhan ket
+   * qua da doi — §4.1 luat 4. `null` khi khong loc theo vong chay; `[]` khi loc ma khong chuyen nao da
+   * chieu sang vong chay do.
+   */
+  readonly runTripIds: readonly string[] | null;
   readonly driverId: string | null;
   readonly vehicleId: string | null;
   readonly supplierId: string | null;
@@ -659,6 +674,14 @@ export abstract class FuelRepository {
   abstract findEntry(id: string): Promise<FuelEntry | null>;
   abstract findEntryByCorrelation(correlationKey: string): Promise<FuelEntry | null>;
   abstract listEntriesByTrip(tripId: string): Promise<FuelEntry[]>;
+  /**
+   * `#369` R-2 — phieu khai TREN mot vong chay (`runId` cua CHINH phieu), theo thu tu thoi gian.
+   *
+   * Doi xung `listEntriesByTrip`, va HAI tap ROI NHAU: `CHECK TransportFuelEntry_one_context_kind`
+   * cam mot phieu mang ca hai ngu canh. Nen mot dong thoi gian gop hai duong doc nay khong the hien
+   * mot phieu hai lan — khong can mot phep khu trung nao.
+   */
+  abstract listEntriesByRun(runId: string): Promise<FuelEntry[]>;
   abstract listEntriesByDriver(driverId: string): Promise<FuelEntry[]>;
   /**
    * Moi phieu dang mang it nhat MOT ly do can kiem tra (`INV-06`, VT-046 vuot dinh muc).

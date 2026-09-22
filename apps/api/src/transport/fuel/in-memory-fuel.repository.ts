@@ -233,6 +233,10 @@ export class InMemoryFuelRepository extends FuelRepository {
     return sortedById([...this.entries.values()].filter((entry) => entry.tripId === tripId));
   }
 
+  async listEntriesByRun(runId: string): Promise<FuelEntry[]> {
+    return sortedById([...this.entries.values()].filter((entry) => entry.runId === runId));
+  }
+
   async listEntriesByDriver(driverId: string): Promise<FuelEntry[]> {
     return sortedById([...this.entries.values()].filter((entry) => entry.driverId === driverId));
   }
@@ -1062,8 +1066,11 @@ const matchesInboxScope = (entry: FuelEntry, filter: FuelEntryInboxFilter): bool
   ) {
     return false;
   }
-  if (filter.runIds !== null && (entry.runId === null || !filter.runIds.includes(entry.runId))) {
-    return false;
+  if (filter.runIds !== null) {
+    // `#369` R-5 — HOAC: khai thang vong chay, hoac la phieu cua mot chuyen da chieu sang vong chay do.
+    const declared = entry.runId !== null && filter.runIds.includes(entry.runId);
+    const derived = entry.tripId !== null && (filter.runTripIds ?? []).includes(entry.tripId);
+    if (!declared && !derived) return false;
   }
   if (filter.driverId !== null && entry.driverId !== filter.driverId) return false;
   if (filter.vehicleId !== null && entry.vehicleId !== filter.vehicleId) return false;

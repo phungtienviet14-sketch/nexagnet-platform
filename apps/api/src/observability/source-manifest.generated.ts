@@ -1103,12 +1103,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NOT_OWNED": {
       "functionName": "FuelReadService.getMyFuelSlip",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 334
+      "line": 352
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NO_DRIVER_BINDING": {
       "functionName": "FuelReadService.requireDriverBinding",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 463
+      "line": 481
     },
     "driver.self_fund_scope|SELF_FUND_SCOPE_GRANTED": {
       "functionName": "CostingReadService.selfFundStatement",

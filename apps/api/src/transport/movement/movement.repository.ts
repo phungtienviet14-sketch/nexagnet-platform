@@ -503,6 +503,15 @@ export abstract class MovementRepository {
    * va cai gia do roi dung vao bao cao — cho de ai cung goi trong mot vong lap.
    */
   abstract findTripLinksByLegs(legIds: readonly string[]): Promise<TripRunLegLink[]>;
+  /**
+   * CHIEU XUOI theo LO: tu CHUYEN ra CHANG. `#369` R-5.
+   *
+   * Cung ly le voi `findTripLinksByLegs`: mot trang hop thu co hang chuc phieu chuyen v1, va hoi
+   * `findTripLink(tripId)` trong mot vong lap la dung kieu N+1 ma `#222` cam. Quan he la MOT-MOT
+   * (`tripId` khoa chinh, `legId` unique), nen ket qua toi da mot dong moi chuyen — khong co cho nao
+   * cho mot phep doan "chuyen nay co the thuoc vong chay nao".
+   */
+  abstract findTripLinksByTrips(tripIds: readonly string[]): Promise<TripRunLegLink[]>;
   abstract findProjection(tripId: string): Promise<TripProjection | null>;
   /** Ghi ca bon hang (don tuy chon, vong chay, chang, lien ket) trong MOT giao dich. */
   abstract projectTrip(input: ProjectTripInput): Promise<TripProjection>;
@@ -1006,6 +1015,11 @@ export class InMemoryMovementRepository extends MovementRepository {
   async findTripLinksByLegs(legIds: readonly string[]): Promise<TripRunLegLink[]> {
     const wanted = new Set(legIds);
     return [...this.links.values()].filter((link) => wanted.has(link.legId));
+  }
+
+  async findTripLinksByTrips(tripIds: readonly string[]): Promise<TripRunLegLink[]> {
+    const wanted = new Set(tripIds);
+    return [...this.links.values()].filter((link) => wanted.has(link.tripId));
   }
 
   async findProjection(tripId: string): Promise<TripProjection | null> {
