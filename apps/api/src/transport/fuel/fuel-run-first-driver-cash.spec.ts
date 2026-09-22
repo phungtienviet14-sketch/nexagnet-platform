@@ -349,7 +349,9 @@ describe('#369 R-4 — chuoi that: mot su kien, MOT anh huong Quy', () => {
 
     await fuel.verifyFuelEntry(entry.id, 'ke-toan');
     const statement = await fundRead.driverFundStatement(DRIVER);
-    expect(statement.entries.map((row) => row.kind)).toEqual(['RUN_EXPENSE', 'REVERSAL']);
+    // SAP XEP truoc khi so: hai but toan cung ngay nghiep vu va cung khoanh khac ghi, nen thu tu doc
+    // ra do `id` quyet — mot khang dinh theo thu tu se xanh/do theo may.
+    expect(statement.entries.map((row) => row.kind).sort()).toEqual(['REVERSAL', 'RUN_EXPENSE']);
     expect(statement.balance).toBe(0);
   });
 });

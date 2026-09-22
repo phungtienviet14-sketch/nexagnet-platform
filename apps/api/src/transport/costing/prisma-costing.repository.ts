@@ -5,6 +5,7 @@ import { isUniqueViolationOn } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   CORRELATION_INDEXES,
+  FUND_ACCOUNT_DRIVER,
   FUND_PERIOD_NO_OVERLAP,
   REVERSAL_ONCE_INDEXES,
   isFundEntryLegRunViolation,
@@ -215,13 +216,30 @@ export class PrismaCostingRepository extends CostingRepository {
    * chi vi ai do bam nhanh hon nua giay.
    */
   async ensureAccount(driverId: string, at: Date): Promise<DriverFundAccount> {
-    return toAccount(
-      await model(this.prisma, 'transportDriverFundAccount').upsert({
-        where: { driverId },
-        create: { driverId, currencyCode: TRANSPORT_CURRENCY, updatedAt: at },
-        update: {},
-      }),
-    );
+    try {
+      return toAccount(
+        await model(this.prisma, 'transportDriverFundAccount').upsert({
+          where: { driverId },
+          create: { driverId, currencyCode: TRANSPORT_CURRENCY, updatedAt: at },
+          update: {},
+        }),
+      );
+    } catch (error) {
+      /*
+       * `#369` — `upsert` voi phan `update` RONG khong phai luon la mot cau `INSERT ... ON CONFLICT`:
+       * Prisma co the chay "doc roi tao", va hai lan ghi Quy DAU TIEN cua cung mot lai xe chay song
+       * song deu thay "chua co" roi deu `INSERT`. Ben thua dam unique `driverId` — do la unique lam
+       * DUNG viec cua no, khong phai mot loi dau vao. Doc lai la du: so quy khong co gi de hoa giai,
+       * no chi la mot hang danh tinh.
+       *
+       * Do duoc o `transport-fuel-run-first-driver-cash.int.spec.ts` (D4b): hai lenh ghi Quy song song
+       * cho mot lai xe CHUA co so quy.
+       */
+      if (!isUniqueViolationOn(error, FUND_ACCOUNT_DRIVER)) throw error;
+      const existing = await this.findAccountByDriver(driverId);
+      if (existing) return existing;
+      throw error;
+    }
   }
 
   async findAccount(id: string): Promise<DriverFundAccount | null> {

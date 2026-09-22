@@ -452,7 +452,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         [{ driverId: state.driverB }, 'DENIED:FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN'],
         [{ runId: null }, 'DENIED:FUEL_ENTRY_CONTEXT_REQUIRED'],
         [{ runId: `${PREFIX}-khong-co` }, 'NOT_FOUND:FUEL_ENTRY_RUN_NOT_FOUND'],
-        [{ paymentMethod: 'DRIVER_CASH' }, 'DENIED:FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP'],
+        // `#369` R-4 — `DRIVER_CASH` tren vong chay THOI bi tu choi: no vao Quy bang but toan
+        // `RUN_EXPENSE`. Duong do co bai rieng (`transport-fuel-run-first-driver-cash.int.spec.ts`).
       ];
       for (const [patch, expected] of cases) {
         expect(await reasonOf(fuel.submitFuelEntry(command(patch), 'lx.a')), expected).toBe(
@@ -503,9 +504,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await expect(raw({ tripId: `${PREFIX}-chuyen-khong-co`, runId: state.runA })).rejects.toThrow(
         /TransportFuelEntry_one_context_kind/,
       );
-      await expect(raw({ runId: state.runA, paymentMethod: 'DRIVER_CASH' })).rejects.toThrow(
-        /TransportFuelEntry_driver_cash_needs_trip/,
-      );
+      /*
+       * `#369` R-4 da GO `CHECK TransportFuelEntry_driver_cash_needs_trip`: mot phieu Run-first
+       * `DRIVER_CASH` la hang HOP LE o tang du lieu. Cai thay cho no la `CHECK
+       * TransportFuelEntry_driver_fund_leg_shape` + trigger `transport_fuel_entry_driver_fund_leg`,
+       * do o `transport-fuel-run-first-driver-cash.int.spec.ts` (D5).
+       */
+      const cashRow = await raw({ runId: state.runA, paymentMethod: 'DRIVER_CASH' });
+      expect(cashRow.driverFundEntryId).toBeNull();
+      await prisma.transportFuelEntry.delete({ where: { id: cashRow.id } });
     });
 
     it('R5 — anh chung tu gan va doc lai duoc tren phieu khong chuyen', async () => {

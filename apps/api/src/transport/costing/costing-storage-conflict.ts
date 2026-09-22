@@ -13,6 +13,17 @@ import type { UniqueIndexRef } from '../storage-conflict.js';
  * khai CA `indexName` LAN cap `(model, column)`, va `isUniqueViolationOn` doi chieu ca hai duong.
  */
 
+/**
+ * MOT LAI XE, MOT SO QUY. `#369` — ten nay can den o `ensureAccount`: hai lan ghi Quy DAU TIEN cua
+ * cung mot lai xe chay song song deu thay "chua co" roi deu `INSERT`, va ben thua phai DOC LAI so quy
+ * vua ra doi thay vi nem mot loi Prisma tho ra tan HTTP.
+ */
+export const FUND_ACCOUNT_DRIVER: UniqueIndexRef = {
+  indexName: 'TransportDriverFundAccount_driverId_key',
+  model: 'TransportDriverFundAccount',
+  column: 'driverId',
+};
+
 export const FUND_ENTRY_CORRELATION: UniqueIndexRef = {
   indexName: 'TransportDriverFundEntry_correlationKey_key',
   model: 'TransportDriverFundEntry',
