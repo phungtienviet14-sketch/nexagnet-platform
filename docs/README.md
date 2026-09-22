@@ -56,7 +56,14 @@ Nguồn nghiệp vụ của nó nằm bên khách:
 Ranh giới giữ nguyên như mọi chỗ khác trong `docs/`: **sự kiện của khách ở `khach-hang/`, thiết kế
 của chúng ta ở `kien-truc/`**.
 
-### Autopilot — official-first (15/09/2026)
+### Autopilot V3 — GitHub-native, Claude Max trên cloud (22/09/2026)
+
+| File | Là gì | Không phải gì |
+| ---- | ----- | ------------- |
+| [`phat-trien/van-hanh/autopilot-v3-cloud-builder.md`](phat-trien/van-hanh/autopilot-v3-cloud-builder.md) | **Vận hành Phase A (#362)**: Issue của chủ repo + nhãn `agent:claude` → cổng xác minh theo ID → `claude-code-action` trên runner GitHub-hosted (gói Claude Max) → nhánh → PR draft → CI. Ranh giới tin cậy, quyền, tắt khẩn cấp, kiểm kê legacy | Chưa chạy trên GitHub: pilot chỉ chạy được sau khi merge (sự kiện `issues` dùng workflow của nhánh mặc định) |
+| [`kien-truc/adr-0002-autopilot-v3-github-native.md`](kien-truc/adr-0002-autopilot-v3-github-native.md) | **ADR — `GITHUB_NATIVE_CONTROL_PLANE + SWAPPABLE_EXECUTION_ADAPTER`** (#361). Thay phần "nền thực thi = gh-aw" của ADR-0001 | Không xoá legacy — việc đó là Phase D |
+
+### Autopilot — official-first (15/09/2026) — **nền thực thi gh-aw bị thay bởi ADR-0002**
 
 | File                                                                                                      | Là gì                                                                                                                                                                                  | Không phải gì                                                                                                                              |
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
