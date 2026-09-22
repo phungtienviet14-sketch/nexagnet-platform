@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MovementRepository } from '../movement/movement.repository.js';
-import type { RunLegKind, VehicleRunStatus } from '../movement/movement.types.js';
+import type { RunLegKind, RunLegStatus, VehicleRunStatus } from '../movement/movement.types.js';
 
 /**
  * MOT CUA SO tu man hinh hien truong nhin sang `transport-core` — CHI DOC.
@@ -25,6 +25,11 @@ export interface FieldLegFacts {
   readonly runId: string;
   readonly sequence: number;
   readonly kind: RunLegKind;
+  /**
+   * Chang da `COMPLETED`/`CANCELLED` thi khong con nut moc nao (`#354`) — cung luat ma
+   * `CheckpointService` dung de tu choi. Chi di vao phep suy nut, khong len payload lai xe.
+   */
+  readonly status: RunLegStatus;
   readonly originLabel: string;
   readonly destinationLabel: string;
   readonly orderId: string | null;
@@ -62,6 +67,7 @@ export class TransportFieldCoreFactsAdapter extends TransportFieldCoreFacts {
       runId: leg.runId,
       sequence: leg.sequence,
       kind: leg.kind,
+      status: leg.status,
       originLabel: leg.originLabel,
       destinationLabel: leg.destinationLabel,
       orderId: leg.orderId,

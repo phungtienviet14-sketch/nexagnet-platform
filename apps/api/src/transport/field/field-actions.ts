@@ -2,12 +2,13 @@ import {
   DEFAULT_CHECKPOINT_POLICY,
   isCheckpointAllowedOnLeg,
   isRepeatable,
+  legAcceptsNewCheckpoints,
   requiredPredecessor,
   type CheckpointPolicy,
 } from '../checkpoint/checkpoint-lifecycle.js';
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
 import type { OperationalDocumentType } from '../document/document.types.js';
-import type { RunLegKind } from '../movement/movement.types.js';
+import type { RunLegKind, RunLegStatus } from '../movement/movement.types.js';
 import type { DriverFieldAction } from './field.types.js';
 
 /**
@@ -125,6 +126,12 @@ export interface FieldActionInput {
    * lay hang roi vao chang khong cho hang.
    */
   readonly legKind: RunLegKind;
+  /**
+   * Trang thai CHANG — `#354`. Chang da `COMPLETED`/`CANCELLED` khong duoc moi mot moc nao: truoc
+   * `#354` mot chang CO HANG da ket thuc ma chua co `DELIVERY_ACCEPTED` van la "chang dang lam" dau
+   * tien con nut (`toFieldScreen`), va nut do bam vao se ghi mot moc len mot chang da dong.
+   */
+  readonly legStatus: RunLegStatus;
   /** Loai moc DA GHI tren chinh chang nay. */
   readonly recordedTypes: readonly RunCheckpointType[];
   /** Loai chung tu CON HIEU LUC da ghi tren chang nay. */
@@ -154,6 +161,8 @@ export function fieldActionsFor(input: FieldActionInput): readonly DriverFieldAc
   const actions: DriverFieldAction[] = [];
   const recorded = new Set(input.recordedTypes);
   const captured = new Set(input.documentTypes);
+  // Cung ham ma `CheckpointService` dung de tu choi `CHECKPOINT_LEG_TERMINAL`, truoc VA duoi khoa.
+  const legOpen = legAcceptsNewCheckpoints(input.legStatus);
 
   for (const type of LEG_CHECKPOINT_ORDER) {
     // MOC: chi hien khi `evaluateCheckpoint` that su se cho qua. Xem khoi chu thich dau tep.
@@ -163,7 +172,7 @@ export function fieldActionsFor(input: FieldActionInput): readonly DriverFieldAc
     // Cung ham ma `evaluateCheckpoint` dung de tu choi `CHECKPOINT_CARGO_ON_EMPTY_LEG`.
     const allowedHere = isCheckpointAllowedOnLeg(type, input.legKind);
 
-    if (allowedHere && predecessorDone && !alreadyDone && !stageClosed(type, recorded)) {
+    if (legOpen && allowedHere && predecessorDone && !alreadyDone && !stageClosed(type, recorded)) {
       actions.push({
         kind: 'CHECKPOINT',
         label: CHECKPOINT_LABEL[type],

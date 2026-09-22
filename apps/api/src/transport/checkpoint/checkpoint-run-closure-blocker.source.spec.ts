@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CheckpointRunClosureBlockerSource } from './checkpoint-run-closure-blocker.source.js';
 import { InMemoryCheckpointRepository } from './checkpoint.repository.js';
 import { CheckpointService } from './checkpoint.service.js';
+import type { RunLeg } from '../movement/movement.types.js';
 import { RunWriteGuard, type RunWriteScope } from '../movement/run-write-guard.port.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type { RunCheckpointType } from './checkpoint.types.js';
@@ -39,7 +40,9 @@ class FakeCoreFacts extends TransportCheckpointCoreFacts {
   }
 
   async findLeg(legId: string): Promise<CheckpointLegFacts | null> {
-    return legId === LEG_ID ? { id: LEG_ID, runId: RUN_ID, kind: 'LOADED' } : null;
+    return legId === LEG_ID
+      ? { id: LEG_ID, runId: RUN_ID, kind: 'LOADED', status: 'IN_TRANSIT' }
+      : null;
   }
 
   async wasDriverEverAssignedToRun(): Promise<boolean> {
@@ -52,6 +55,26 @@ class FakeLocationFacts extends TransportCheckpointLocationFacts {
     return null;
   }
 }
+
+/** Chang DAY DU cho `RunWriteScope.legs` — chi bon truong dau la su that cua bai kiem. */
+const runLegOf = (facts: CheckpointLegFacts, sequence: number): RunLeg => ({
+  id: facts.id,
+  runId: facts.runId,
+  sequence,
+  kind: facts.kind,
+  status: facts.status,
+  orderId: null,
+  originLabel: 'Kho A',
+  destinationLabel: 'Kho B',
+  businessDate: '2026-09-09',
+  distanceKm: null,
+  plannedDistanceKm: null,
+  startedAt: null,
+  completedAt: null,
+  note: null,
+  createdAt: '2026-09-09T00:00:00.000Z',
+  updatedAt: '2026-09-09T00:00:00.000Z',
+});
 
 /**
  * RANH GIOI SERIALIZE gia lap — doc trang thai vong chay TU CHINH `FakeCoreFacts`.
@@ -68,7 +91,10 @@ class FakeRunWriteGuard extends RunWriteGuard {
   async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
     const facts = await this.core.findRun(runId);
     if (!facts) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+    // Chang cung doc lai TU fake (`#354`) — cong duoi khoa cua moc tim chang o day.
+    const leg = await this.core.findLeg(LEG_ID);
     return write({
+      legs: leg !== null && leg.runId === runId ? [runLegOf(leg, 1)] : [],
       run: {
         id: facts.id,
         code: facts.code,

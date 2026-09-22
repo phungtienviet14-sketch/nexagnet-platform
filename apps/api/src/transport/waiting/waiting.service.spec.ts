@@ -10,6 +10,7 @@ import {
 } from '../checkpoint/checkpoint-facts.port.js';
 import { DEFAULT_CHECKPOINT_POLICY } from '../checkpoint/checkpoint-lifecycle.js';
 import { InMemoryCheckpointRepository } from '../checkpoint/checkpoint.repository.js';
+import type { RunLeg } from '../movement/movement.types.js';
 import { RunWriteGuard, type RunWriteScope } from '../movement/run-write-guard.port.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { InMemoryWaitingSessionRepository } from './waiting.repository.js';
@@ -45,6 +46,26 @@ class FakeCoreFacts extends TransportCheckpointCoreFacts {
   }
 }
 
+/** Chang DAY DU cho `RunWriteScope.legs` — chi bon truong dau la su that cua bai kiem. */
+const runLegOf = (facts: CheckpointLegFacts, sequence: number): RunLeg => ({
+  id: facts.id,
+  runId: facts.runId,
+  sequence,
+  kind: facts.kind,
+  status: facts.status,
+  orderId: null,
+  originLabel: 'Kho A',
+  destinationLabel: 'Kho B',
+  businessDate: '2026-09-09',
+  distanceKm: null,
+  plannedDistanceKm: null,
+  startedAt: null,
+  completedAt: null,
+  note: null,
+  createdAt: '2026-09-09T00:00:00.000Z',
+  updatedAt: '2026-09-09T00:00:00.000Z',
+});
+
 /**
  * RANH GIOI SERIALIZE gia lap — doc trang thai vong chay TU CHINH `FakeCoreFacts`.
  *
@@ -63,7 +84,11 @@ class FakeRunWriteGuard extends RunWriteGuard {
   async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
     const facts = await this.core.findRun(runId);
     if (!facts) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+    const legs = [...this.core.legs.values()]
+      .filter((leg) => leg.runId === runId)
+      .map((leg, index) => runLegOf(leg, index + 1));
     return write({
+      legs,
       run: {
         id: facts.id,
         code: facts.code,
@@ -164,8 +189,8 @@ describe('WaitingSessionService — WT-020', () => {
     core.drivers.set('u.cuong', { id: 'drv_b', fullName: 'Tran Van Cuong' });
     core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'ACTIVE' });
     core.runs.set('run_2', { id: 'run_2', code: 'VC-002', status: 'ACTIVE' });
-    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1', kind: 'LOADED' });
-    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2', kind: 'LOADED' });
+    core.legs.set('leg_1', { id: 'leg_1', runId: 'run_1', kind: 'LOADED', status: 'IN_TRANSIT' });
+    core.legs.set('leg_9', { id: 'leg_9', runId: 'run_2', kind: 'LOADED', status: 'IN_TRANSIT' });
     core.assignments.set('run_1', ['drv_a']);
     core.assignments.set('run_2', ['drv_b']);
 

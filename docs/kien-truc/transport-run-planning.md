@@ -394,6 +394,20 @@ Mọi đường **ghi** đều bắt đầu bằng một **đơn**, không bằn
 >
 > Ngữ nghĩa đóng vòng chạy (`LEG_STILL_OPEN`, `PLAN_STILL_OPEN`, `CARGO_STILL_CARRIED`) không đổi.
 
+> **Chặng đã kết thúc không nhận mốc mới — `#354` (22/09/2026).** Chặng `COMPLETED`/`CANCELLED` từ
+> chối mọi mốc **mới** bằng `CHECKPOINT_LEG_TERMINAL` (409, _"Chặng đã kết thúc — không ghi thêm mốc
+> vào chặng này."_), qua cả đường lái xe lẫn đường điều hành; màn Hiện trường không mời nút mốc trên
+> chặng đó. Gửi lại **đúng** lệnh đã thành công trước khi chặng kết thúc vẫn trả mốc cũ. Mốc hàng hoá
+> trên chặng `EMPTY` vẫn là `CHECKPOINT_CARGO_ON_EMPTY_LEG` (phạm vi đứng trước trạng thái chặng), và
+> vòng chạy đã đóng vẫn là `CHECKPOINT_RUN_TERMINAL`.
+>
+> **Một ranh giới serialize:** khoá hàng `TransportVehicleRun` (`FOR UPDATE`) sẵn có. Lần đổi trạng
+> thái chặng (`setLegStatus`, gọi từ `transitionLeg`/`cancelLeg`) giành chính khoá đó và ghi **có
+> điều kiện** (`WHERE status = <trạng thái đã phân xử>`); lần ghi mốc đọc lại chặng dưới khoá
+> (`RunWriteScope.legs`). Chặng bị người khác đổi trong khe đọc→khoá thì lệnh sau nhận đúng mã của
+> đường tuần tự (`LEG_ALREADY_TERMINAL`, `LEG_CANCEL_ALREADY_STARTED`…), nên một chặng đã huỷ không
+> bao giờ sống lại. Bằng chứng Postgres: `checkpoint-terminal-leg.int.spec.ts`.
+
 `idempotencyKey` là **bắt buộc** ở đường chốt. Không có khoá thì không có gì để nhận ra lần thứ hai
 là lần thứ hai, và #276 L9 bài 1 không thể đạt được.
 
