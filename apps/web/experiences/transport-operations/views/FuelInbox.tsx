@@ -20,6 +20,7 @@ import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { transportApi } from '../transport-api';
 import { monthRangeOf } from '../workspace/fuel-consumption';
 import type { ConsumptionFocus } from './FuelConsumptionDrilldown';
+import { FuelCostAttributionPanel } from './FuelCostAttributionPanel';
 import { FuelEvidenceExtraction } from './FuelEvidenceExtraction';
 import {
   FUEL_RECONCILIATION_STATUSES,
@@ -72,6 +73,8 @@ export function FuelInbox({
    * dung ngung go.
    */
   const [tripCodeInput, setTripCodeInput] = useState('');
+  /** `#364` — ma vong xe, cung khuon go-roi-moi-hoi voi ma chuyen. */
+  const [runCodeInput, setRunCodeInput] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [pending, setPending] = useState<FuelInboxAction | null>(null);
   const [reason, setReason] = useState('');
@@ -84,14 +87,17 @@ export function FuelInbox({
   useEffect(() => {
     const timer = setTimeout(() => {
       setQuery((current) => {
-        const next = tripCodeInput.trim() === '' ? null : tripCodeInput.trim();
-        if ((current.tripCode ?? null) === next) return current;
+        const nextTrip = tripCodeInput.trim() === '' ? null : tripCodeInput.trim();
+        const nextRun = runCodeInput.trim() === '' ? null : runCodeInput.trim();
+        if ((current.tripCode ?? null) === nextTrip && (current.runCode ?? null) === nextRun) {
+          return current;
+        }
         // Doi bo loc thi ve TRANG DAU — xem `patchQuery`.
-        return { ...current, tripCode: next, offset: 0 };
+        return { ...current, tripCode: nextTrip, runCode: nextRun, offset: 0 };
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [tripCodeInput]);
+  }, [tripCodeInput, runCodeInput]);
 
   const inbox = toSectionQuery(useFuelInbox(navigation, query));
 
@@ -149,6 +155,15 @@ export function FuelInbox({
             placeholder="Ví dụ: UAT-VIET-01"
             value={tripCodeInput}
             onChange={(event) => setTripCodeInput(event.target.value)}
+          />
+        </label>
+        <label className="tx-field">
+          <span>Mã vòng xe</span>
+          <input
+            type="search"
+            placeholder="Ví dụ: RUN-DH-0001"
+            value={runCodeInput}
+            onChange={(event) => setRunCodeInput(event.target.value)}
           />
         </label>
         <label className="tx-field">
@@ -228,6 +243,7 @@ export function FuelInbox({
               className="tx-btn"
               onClick={() => {
                 setTripCodeInput('');
+                setRunCodeInput('');
                 setQuery({ offset: 0 });
               }}
             >
@@ -248,10 +264,11 @@ export function FuelInbox({
             onShowAll={() => setOpenId(null)}
             columns={[
               {
-                key: 'trip',
-                header: 'Mã chuyến',
+                // `#364` — phieu cu hien ma chuyen, phieu Run-first hien vong xe (+ chang).
+                key: 'context',
+                header: 'Chuyến / vòng xe',
                 isRowHeader: true,
-                render: (row) => row.tripCode,
+                render: (row) => row.contextLabel,
               },
               { key: 'date', header: 'Ngày', render: (row) => row.businessDateLabel },
               { key: 'driver', header: 'Lái xe', render: (row) => row.driverLabel },
@@ -410,11 +427,11 @@ function FuelInboxDetail({
   return (
     <section
       className="tx-detail"
-      aria-label={`Phiếu đổ dầu ${row.tripCode} ngày ${row.businessDateLabel}`}
+      aria-label={`Phiếu đổ dầu ${row.contextLabel} ngày ${row.businessDateLabel}`}
       ref={reveal}
     >
       <h4>
-        {row.tripCode} · {row.driverLabel} · {row.vehicleLabel}
+        {row.contextLabel} · {row.driverLabel} · {row.vehicleLabel}
       </h4>
 
       <dl className="tx-detail__grid">
@@ -488,6 +505,9 @@ function FuelInboxDetail({
         declared={declared}
         role={navigation.role}
       />
+
+      {/* `#364` — gia thanh la mot lop RIENG: chi doc khi ke toan mo khoi nay. */}
+      <FuelCostAttributionPanel entryId={row.id} role={navigation.role} />
 
       <div className="tx-detail__actions">
         {onOpenConsumption === undefined ? null : (

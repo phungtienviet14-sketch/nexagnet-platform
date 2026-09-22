@@ -88,7 +88,9 @@ import type {
   SiteIntakeResult,
   SettlementDocumentChain,
   SettlementFlow,
+  DriverFuelRunView,
   DriverFuelSlipView,
+  FuelEntryCostAttributionView,
   DriverFuelStation,
   DriverFuelSupplier,
   DriverFundEntry,
@@ -554,18 +556,36 @@ export interface FuelEntryFields {
   readonly note?: string | null;
 }
 
-export interface SubmitFuelEntryInput extends FuelEntryFields {
-  readonly tripId: string;
-  readonly vehicleId: string;
+/**
+ * `#364` — NGU CANH cua lenh nop: chuyen v1 (tuong thich) HOAC vong xe (+ chang). May chu kiem lai
+ * tat ca; phieu theo vong xe khong can `vehicleId` (xe LA xe cua vong xe).
+ */
+export interface FuelEntryContextFields {
+  readonly tripId?: string | null;
+  readonly runId?: string | null;
+  readonly legId?: string | null;
+  readonly vehicleId?: string | null;
+}
+
+export interface SubmitFuelEntryInput extends FuelEntryFields, FuelEntryContextFields {
   readonly driverId: string;
   readonly correlationKey?: string;
 }
 
 /** Duong cua LAI XE: khong co `driverId` — danh tinh den tu phien dang nhap. */
-export interface DriverFuelSubmitInput extends FuelEntryFields {
-  readonly tripId: string;
-  readonly vehicleId: string;
+export interface DriverFuelSubmitInput extends FuelEntryFields, FuelEntryContextFields {
   readonly correlationKey?: string;
+}
+
+/** `#364` — CAP PHAT gia thanh mot phieu Run-first vao MOT vong xe hoac MOT chang. */
+export interface RecordFuelCostAttributionInput {
+  readonly target:
+    | { readonly kind: 'RUN'; readonly runId: string }
+    | { readonly kind: 'LEG'; readonly legId: string };
+  readonly amount: number;
+  readonly note?: string | null;
+  /** BAT BUOC — mot lan bam lai khong duoc thanh mot dong phan bo thu hai. */
+  readonly correlationKey: string;
 }
 
 /**
@@ -983,6 +1003,7 @@ export const transportApi = {
           verification: query.verification,
           reconciliation: query.reconciliation,
           tripCode: query.tripCode,
+          runCode: query.runCode,
           driverId: query.driverId,
           vehicleId: query.vehicleId,
           supplierId: query.supplierId,
@@ -1009,6 +1030,24 @@ export const transportApi = {
     /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`), be mat VAN HANH. */
     resubmitEntry: (id: string): Promise<FuelEntry> =>
       send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/resubmit`),
+    /** `#364` — tien cua MOT phieu dang nam o dau (so cai chuyen v1, hoac cac dong phan bo). */
+    costAttribution: (id: string): Promise<FuelEntryCostAttributionView> =>
+      get(`/transport/fuel/entries/${encodeURIComponent(id)}/cost-attribution`),
+    attributeCost: (
+      id: string,
+      input: RecordFuelCostAttributionInput,
+    ): Promise<FuelEntryCostAttributionView> =>
+      send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/cost-attributions`, input),
+    /** DAO mot dong phan bo — them dong am, lich su giu nguyen. */
+    reverseCostAttribution: (
+      attributionId: string,
+      reason: string,
+    ): Promise<FuelEntryCostAttributionView> =>
+      send(
+        'POST',
+        `/transport/fuel/cost-attributions/${encodeURIComponent(attributionId)}/reverse`,
+        { reason },
+      ),
 
     /*
      * CHUNG TU MAY DOC + UNG VIEN (`#313`). Moi duong duoi day da co tren may chu tu Lane C;
@@ -1293,6 +1332,11 @@ export const transportApi = {
      */
     fuelStations: (supplierId: string): Promise<readonly DriverFuelStation[]> =>
       get(`/transport/me/fuel/stations${toQuery({ supplierId })}`),
+    /**
+     * `#364` — VIEC DUOC DIEU lai xe khai phieu dau duoc (vong xe dang mo + bien so + chang).
+     * Chi de DE XUAT tren o khai phieu; lenh nop van bi may chu kiem lai.
+     */
+    fuelRuns: (): Promise<readonly DriverFuelRunView[]> => get('/transport/me/fuel/runs'),
     fuelSlips: (): Promise<readonly DriverFuelSlipView[]> => get('/transport/me/fuel/slips'),
     fuelSlip: (id: string): Promise<DriverFuelSlipView> =>
       get(`/transport/me/fuel/slips/${encodeURIComponent(id)}`),
