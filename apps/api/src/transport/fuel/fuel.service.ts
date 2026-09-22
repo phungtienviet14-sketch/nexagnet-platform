@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { AuditLogService } from '../../audit/audit-log.service.js';
+import { decisionReasonLabel } from '../../observability/decision-vocabulary.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { BusinessDateError, assertBusinessDate, toBusinessDate } from '../business-date.js';
 import type { ExpenseFundingSource } from '../costing/driver-fund-ledger.js';
@@ -11,7 +12,12 @@ import {
 } from '../transport-policy.js';
 import { isTransportEvidenceLocator } from '../evidence/evidence-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
-import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
+import { TRANSPORT_FUEL_DECISIONS, type FuelEntrySubmitReason } from './fuel-decisions.js';
+import {
+  FuelRunContextFacts,
+  type FuelLegFacts,
+  type FuelRunFacts,
+} from './fuel-run-context.port.js';
 import {
   EVIDENCE_FROZEN_FUEL_RECONCILIATION_STATUSES,
   LOCKED_FUEL_RECONCILIATION_STATUSES,
@@ -54,9 +60,29 @@ import type {
   FuelSupplier,
 } from './fuel.types.js';
 
+/**
+ * NOP MOT PHIEU — `#364`: su kien cua XE, ngu canh TUY CHON nhung PHAI chung minh duoc.
+ *
+ * Ba hinh dang hop le cua bo ngu canh, va chi ba:
+ *
+ * ```text
+ * tripId + vehicleId            chuyen v1 — duong CU, giu nguyen tung cong (`INV-04`, `GD-01`, ...)
+ * runId [+ legId] [+ vehicleId] vong chay v2 — xe LAY TU vong chay; `vehicleId` gui kem thi phai khop
+ * (khong gi)                    -> FAIL CLOSED `FUEL_ENTRY_CONTEXT_REQUIRED`
+ * ```
+ *
+ * `driverId` do BEN GOI dat: be mat lai xe lay tu PHIEN (`DriverFuelController`), be mat van hanh
+ * lay tu than yeu cau cua mot nguoi co quyen van hanh. Service kiem ca hai nhu nhau.
+ */
 export interface SubmitFuelEntryCommand {
-  readonly tripId: string;
-  readonly vehicleId: string;
+  /** Chuyen v1 — chi de TUONG THICH. Loai tru voi `runId`/`legId`. */
+  readonly tripId?: string | null;
+  /** `#364` — vong chay lam NGU CANH. Khong phai phan bo gia thanh. */
+  readonly runId?: string | null;
+  /** `#364` — chang cua CHINH `runId`. Tuy chon ngay ca khi co `runId`. */
+  readonly legId?: string | null;
+  /** BAT BUOC voi `tripId`. Voi `runId` thi tuy chon: bo trong = xe cua vong chay. */
+  readonly vehicleId?: string | null;
   readonly driverId: string;
   readonly supplierId: string;
   /** `#317` G1 — tram/diem do. `null`/bo trong = khong khai. */
@@ -73,11 +99,37 @@ export interface SubmitFuelEntryCommand {
   readonly correlationKey?: string;
 }
 
-/** SUA mot phieu con `DECLARED` — `GD-10`. Cung tap truong voi luc nop, tru danh tinh chuyen/xe. */
+/** SUA mot phieu con `DECLARED` — `GD-10`. Cung tap truong voi luc nop, tru danh tinh ngu canh/xe. */
 export type AmendFuelEntryCommand = Omit<
   SubmitFuelEntryCommand,
-  'tripId' | 'vehicleId' | 'driverId' | 'correlationKey'
+  'tripId' | 'runId' | 'legId' | 'vehicleId' | 'driverId' | 'correlationKey'
 >;
+
+/**
+ * NGU CANH DA DUOC CHUNG MINH — cai duy nhat duoc phep di xuong kho.
+ *
+ * Mot kieu hop chu khong ba truong tuy chon: nhanh chuyen v1 va nhanh vong chay mang hai bo facts
+ * khac nhau, va phep kiem phan cong cua nhanh nay KHONG duoc chay nham tren nhanh kia.
+ */
+type ResolvedFuelContext =
+  | {
+      readonly kind: 'LEGACY_TRIP';
+      readonly trip: FuelTripFacts;
+      readonly vehicleId: string;
+    }
+  | {
+      readonly kind: 'RUN';
+      readonly run: FuelRunFacts;
+      readonly leg: FuelLegFacts | null;
+      readonly vehicleId: string;
+    };
+
+const contextColumns = (
+  context: ResolvedFuelContext,
+): { tripId: string | null; runId: string | null; legId: string | null } =>
+  context.kind === 'LEGACY_TRIP'
+    ? { tripId: context.trip.id, runId: null, legId: null }
+    : { tripId: null, runId: context.run.id, legId: context.leg?.id ?? null };
 
 export interface AttachFuelEvidenceCommand {
   readonly locator: string;
@@ -115,6 +167,8 @@ export class FuelService {
     /** `#317` G1 — CHI DOC: kiem tram tren to khai. Danh muc tram thuoc `FuelStationService`. */
     private readonly stations: FuelStationRepository,
     private readonly core: TransportFuelCoreFacts,
+    /** `#364` — CHI DOC: vong chay / chang / phan cong lam ngu canh cua phieu Run-first. */
+    private readonly runs: FuelRunContextFacts,
     private readonly costing: FuelCostingPort,
     private readonly audit: AuditLogService,
     @Inject(TRANSPORT_CORE_POLICY) private readonly corePolicy: TransportCorePolicy,
@@ -132,15 +186,13 @@ export class FuelService {
     const amount = this.parseAmount(command.amount);
     const odometerKm = this.parseOdometer(command.odometerKm);
 
-    const trip = await this.requireTrip(command.tripId);
-    this.guardTripAcceptsFuel(trip);
+    const context = await this.resolveContext(command);
+    const vehicleId = context.vehicleId;
+    const columns = contextColumns(context);
 
-    const vehicle = await this.core.findVehicle(command.vehicleId);
+    const vehicle = await this.core.findVehicle(vehicleId);
     if (!vehicle) {
-      throw TransportDomainError.notFound(
-        'VEHICLE_NOT_FOUND',
-        `Khong tim thay xe ${command.vehicleId}`,
-      );
+      throw TransportDomainError.notFound('VEHICLE_NOT_FOUND', `Khong tim thay xe ${vehicleId}`);
     }
     if (!(await this.core.findDriver(command.driverId))) {
       throw TransportDomainError.notFound(
@@ -149,38 +201,30 @@ export class FuelService {
       );
     }
     await this.requireSupplier(command.supplierId);
-    await this.requireAssignedToTrip(trip, command.driverId, command.vehicleId);
+    if (context.kind === 'LEGACY_TRIP') {
+      await this.requireAssignedToTrip(context.trip, command.driverId, vehicleId);
+    } else {
+      await this.requireAssignedToRun(context.run, command.driverId);
+    }
 
     const correlationKey = command.correlationKey ?? this.newCorrelationKey();
-    const replay = await this.repository.findEntryByCorrelation(correlationKey);
-    if (replay) {
-      this.assertSameEntry(
-        replay,
-        fuelEntryIdentityOf({
-          tripId: command.tripId,
-          vehicleId: command.vehicleId,
-          driverId: command.driverId,
-          supplierId: command.supplierId,
-          stationId: command.stationId,
-          businessDate,
-          occurredAt,
-          litersUnits,
-          amount,
-          odometerKm,
-          paymentMethod: command.paymentMethod,
-          invoiceNo: command.invoiceNo,
-          note: command.note,
-        }),
-      );
-      this.telemetry?.decision({
-        vocabulary: TRANSPORT_FUEL_DECISIONS,
-        point: 'fuel_entry.submit',
-        outcome: 'allowed',
-        reason: 'FUEL_ENTRY_IDEMPOTENT_REPLAY',
-        detail: { correlationKey, fuelEntryId: replay.id },
-      });
-      return replay;
-    }
+    const identity = fuelEntryIdentityOf({
+      ...columns,
+      vehicleId,
+      driverId: command.driverId,
+      supplierId: command.supplierId,
+      stationId: command.stationId,
+      businessDate,
+      occurredAt,
+      litersUnits,
+      amount,
+      odometerKm,
+      paymentMethod: command.paymentMethod,
+      invoiceNo: command.invoiceNo,
+      note: command.note,
+    });
+    const replay = await this.replayOf(correlationKey, identity);
+    if (replay) return replay;
 
     /*
      * TRAM duoc kiem SAU lan do phat lai, co y: mot tram vua bi ngung hop tac giua lan gui dau va lan
@@ -194,8 +238,10 @@ export class FuelService {
       previousStationId: null,
     });
 
+    // Tieu hao la su that cua XE + ODO + THOI GIAN (`#364` §6), khong phai cua chuyen: phep tim odo
+    // truoc chi theo `vehicleId`, nen phieu Run-first khong mat so L/100km.
     const consumption = await this.measureConsumption({
-      vehicleId: command.vehicleId,
+      vehicleId,
       vehicleClass: vehicle.vehicleClass,
       businessDate,
       occurredAt,
@@ -203,30 +249,44 @@ export class FuelService {
       odometerKm,
     });
 
-    const entry = await this.repository.createEntry({
-      tripId: command.tripId,
-      vehicleId: command.vehicleId,
-      driverId: command.driverId,
-      supplierId: command.supplierId,
-      stationId,
-      businessDate,
-      occurredAt,
-      litersUnits,
-      amount,
-      odometerKm,
-      previousOdometerKm: consumption.previousOdometerKm,
-      consumptionUnits: consumption.consumptionUnits,
-      reviewReasons: consumption.reviewReasons,
-      paymentMethod: command.paymentMethod,
-      // Phieu do LAI XE khai KHONG BAO GIO co nguon bang ke — `INV-26` chi chan cac phieu de ra tu
-      // mot lan nhap bang ke, va duong do khong di qua ham nay.
-      sourceStatementId: null,
-      correlationKey,
-      invoiceNo: command.invoiceNo ?? null,
-      note: command.note ?? null,
-      declaredBy: actor,
-      at: this.now(),
-    });
+    let entry: FuelEntry;
+    try {
+      entry = await this.repository.createEntry({
+        ...columns,
+        vehicleId,
+        driverId: command.driverId,
+        supplierId: command.supplierId,
+        stationId,
+        businessDate,
+        occurredAt,
+        litersUnits,
+        amount,
+        odometerKm,
+        previousOdometerKm: consumption.previousOdometerKm,
+        consumptionUnits: consumption.consumptionUnits,
+        reviewReasons: consumption.reviewReasons,
+        paymentMethod: command.paymentMethod,
+        // Phieu do LAI XE khai KHONG BAO GIO co nguon bang ke — `INV-26` chi chan cac phieu de ra
+        // tu mot lan nhap bang ke, va duong do khong di qua ham nay.
+        sourceStatementId: null,
+        correlationKey,
+        invoiceNo: command.invoiceNo ?? null,
+        note: command.note ?? null,
+        declaredBy: actor,
+        at: this.now(),
+      });
+    } catch (error) {
+      /*
+       * HAI LAN GUI CUNG MOT PHIEU chay SONG SONG (mang chap chon, hai tab): phep doc `replayOf` o
+       * tren khong thay ban kia vi no chua commit; unique `correlationKey` thi thay. Doc lai: cung
+       * noi dung la lan gui lai cua CHINH phieu vua ghi — tra ve no, khong bao loi cho mot viec da
+       * thanh cong. Khac noi dung thi `assertSameEntry` nem dung `FUEL_CORRELATION_KEY_REUSED`.
+       */
+      if (!isCorrelationKeyConflict(error)) throw error;
+      const converged = await this.replayOf(correlationKey, identity);
+      if (!converged) throw error;
+      return converged;
+    }
 
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
@@ -236,6 +296,8 @@ export class FuelService {
       detail: {
         fuelEntryId: entry.id,
         tripId: entry.tripId,
+        runId: entry.runId,
+        legId: entry.legId,
         businessDate,
         reviewReasons: [...entry.reviewReasons],
       },
@@ -488,6 +550,21 @@ export class FuelService {
       );
     }
 
+    // `#364` — cung cong voi luc nop: phieu Run-first khong mang tien mat lai xe ung.
+    if (entry.tripId === null && command.paymentMethod === 'DRIVER_CASH') {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel_entry.amend',
+        outcome: 'denied',
+        reason: 'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
+        detail: { fuelEntryId: entry.id, runId: entry.runId },
+      });
+      throw TransportDomainError.denied(
+        'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
+        decisionReasonLabel('FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP'),
+      );
+    }
+
     const businessDate = this.businessDate(command.businessDate);
     const occurredAt = this.parseInstant(command.occurredAt);
     const litersUnits = this.parseLiters(command.liters);
@@ -695,6 +772,27 @@ export class FuelService {
    *   · `attachCostExpense` chi ghi khi cot con `NULL` — chan mot lan GAN SAI.
    */
   private async postFuelCost(entry: FuelEntry, actor: string): Promise<FuelEntry> {
+    /*
+     * `#364` — MOT PHIEU, MOT SO CAI PHAN BO, chon theo `tripId`:
+     *
+     *   co chuyen v1   -> `TransportTripExpense` qua `TX-03` (duong CU ben duoi, khong doi gi)
+     *   khong chuyen   -> `TransportFuelCostAttribution`, do ke toan QUYET rieng
+     *
+     * Phieu Run-first vi vay KHONG vao `TX-03` o day, va KHONG tu phan bo 100% vao vong chay chi vi
+     * no co ngu canh vong chay (`OWNER_DECISIONS_2026_09_22`). Hai so cai khong bao gio cung giu mot
+     * phieu — trigger `transport_fuel_cost_attribution_guard` chan phia kia o tang CSDL.
+     */
+    if (entry.tripId === null) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel.cost_posting',
+        outcome: 'allowed',
+        reason: 'FUEL_COST_AWAITS_ATTRIBUTION',
+        detail: { fuelEntryId: entry.id, runId: entry.runId, legId: entry.legId },
+      });
+      return entry;
+    }
+
     if (entry.costExpenseId !== null) {
       this.telemetry?.decision({
         vocabulary: TRANSPORT_FUEL_DECISIONS,
@@ -843,6 +941,129 @@ export class FuelService {
         `Xe ${vehicleId} chua tung duoc phan cong vao chuyen ${trip.code}`,
       );
     }
+  }
+
+  /**
+   * NGU CANH cua lenh nop — `#364`. Tra ve MOT trong hai hinh dang DA CHUNG MINH, hoac nem mot ly
+   * do CO MA. Khong nhanh nao tin `vehicleId`/`runId`/`legId` chi vi client gui len.
+   *
+   * ===========================================================================
+   * NHANH VONG CHAY KHONG GIU KHOA VONG CHAY — va do la co y
+   *
+   * Moi dieu duoc kiem o day KHONG DOI sau khi tao: `vehicleId` cua vong chay, `runId` cua chang,
+   * va lich su phan cong (chi them — "tung" duoc phan cong thi mai mai "tung"). Khong co trang
+   * thai nao de mot lenh khac doi giua luc doc va luc ghi, nen khong co cua so nao can
+   * `underRunLock` dong lai.
+   *
+   * CO Y KHONG chan theo TRANG THAI vong chay/chang (`COMPLETED`/`CANCELLED`): lan do dau la mot su
+   * that da xay ra. Mot lan do dau trong mot vong chay sau do bi huy van la lan do dau cua vong
+   * chay do, va mot phieu khai MUON sau khi vong chay xong van la phieu cua vong chay do. Chan theo
+   * trang thai se day nhung su that nay ra khoi he thong — ma ngu canh khong sinh ra tien nao
+   * (phan bo la mot quyet dinh RIENG cua ke toan, `FuelCostAttributionService`).
+   */
+  private async resolveContext(command: SubmitFuelEntryCommand): Promise<ResolvedFuelContext> {
+    const tripId = command.tripId ?? null;
+    const runId = command.runId ?? null;
+    const legId = command.legId ?? null;
+
+    if (tripId !== null && (runId !== null || legId !== null)) {
+      this.denySubmit('FUEL_ENTRY_CONTEXT_CONFLICT', { tripId, runId, legId });
+    }
+
+    if (tripId !== null) {
+      const trip = await this.requireTrip(tripId);
+      this.guardTripAcceptsFuel(trip);
+      if (!command.vehicleId) {
+        throw TransportDomainError.invalid(
+          'FUEL_ENTRY_VEHICLE_REQUIRED',
+          `Phieu theo chuyen ${trip.code} phai ghi ro xe`,
+        );
+      }
+      return { kind: 'LEGACY_TRIP', trip, vehicleId: command.vehicleId };
+    }
+
+    if (runId === null) {
+      // Chang ma khong vong chay: chang do khong the thuoc vong chay (vang mat) cua phieu.
+      if (legId !== null) this.denySubmit('FUEL_ENTRY_LEG_NOT_IN_RUN', { legId, runId: null });
+      this.denySubmit('FUEL_ENTRY_CONTEXT_REQUIRED', { driverId: command.driverId });
+    }
+
+    const run = await this.runs.findRun(runId);
+    if (!run) this.denySubmit('FUEL_ENTRY_RUN_NOT_FOUND', { runId });
+
+    if (command.vehicleId && command.vehicleId !== run.vehicleId) {
+      this.denySubmit('FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE', {
+        runId: run.id,
+        vehicleId: command.vehicleId,
+        runVehicleId: run.vehicleId,
+      });
+    }
+
+    let leg: FuelLegFacts | null = null;
+    if (legId !== null) {
+      leg = await this.runs.findLeg(legId);
+      if (!leg || leg.runId !== run.id) {
+        this.denySubmit('FUEL_ENTRY_LEG_NOT_IN_RUN', { runId: run.id, legId });
+      }
+    }
+
+    if (command.paymentMethod === 'DRIVER_CASH') {
+      this.denySubmit('FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP', { runId: run.id });
+    }
+
+    return { kind: 'RUN', run, leg, vehicleId: run.vehicleId };
+  }
+
+  /**
+   * LAI XE phai TUNG duoc phan cong vao vong chay — cung ly le voi `requireAssignedToTrip`.
+   *
+   * KHONG co cong "xe tung duoc phan cong" nhu nhanh chuyen v1: xe cua phieu Run-first LA xe cua
+   * vong chay (`resolveContext`), nen cau hoi do da duoc tra loi bang cau truc.
+   */
+  private async requireAssignedToRun(run: FuelRunFacts, driverId: string): Promise<void> {
+    if (await this.runs.wasDriverEverAssignedToRun(run.id, driverId)) return;
+    this.denySubmit('FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN', { runId: run.id, driverId });
+  }
+
+  /**
+   * PHAT LAI — `null` khi khoa chua duoc dung; phieu cu khi CUNG noi dung; nem khi KHAC noi dung.
+   *
+   * Mot ham cho ca hai cho goi: lan doc truoc khi ghi, va lan doc lai sau khi unique cua kho bat
+   * duoc mot lan gui song song. Hai cho mot luat — khong the lech nhau.
+   */
+  private async replayOf(
+    correlationKey: string,
+    identity: FuelEntryIdentity,
+  ): Promise<FuelEntry | null> {
+    const replay = await this.repository.findEntryByCorrelation(correlationKey);
+    if (!replay) return null;
+    this.assertSameEntry(replay, identity);
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel_entry.submit',
+      outcome: 'allowed',
+      reason: 'FUEL_ENTRY_IDEMPOTENT_REPLAY',
+      detail: { correlationKey, fuelEntryId: replay.id },
+    });
+    return replay;
+  }
+
+  /** Tu choi lenh nop voi MOT ly do co ma — `RUN_NOT_FOUND` la 404, moi ma con lai la 403. */
+  private denySubmit(
+    reason: FuelEntrySubmitReason,
+    detail: Readonly<Record<string, unknown>>,
+  ): never {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel_entry.submit',
+      outcome: 'denied',
+      reason,
+      detail,
+    });
+    const message = decisionReasonLabel(reason);
+    throw reason === 'FUEL_ENTRY_RUN_NOT_FOUND'
+      ? TransportDomainError.notFound(reason, message)
+      : TransportDomainError.denied(reason, message);
   }
 
   private async requireTrip(tripId: string): Promise<FuelTripFacts> {
@@ -1078,3 +1299,7 @@ export class FuelService {
  */
 const fundingSourceFor = (method: FuelPaymentMethod): ExpenseFundingSource =>
   method === 'DRIVER_CASH' ? 'DRIVER_FUND' : 'COMPANY_DIRECT';
+
+/** Lan ghi vua dam unique `correlationKey` — kho da dich loi do sang ma nay (`createEntry`). */
+const isCorrelationKeyConflict = (error: unknown): boolean =>
+  error instanceof TransportDomainError && error.reason === 'FUEL_CORRELATION_KEY_REUSED';

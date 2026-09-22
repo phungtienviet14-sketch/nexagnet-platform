@@ -19,7 +19,9 @@ import {
   type FuelVehicleFacts,
 } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
+import { MovementFuelRunContextAdapter } from './fuel-run-context.port.js';
 import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
+import { InMemoryMovementRepository } from '../movement/movement.repository.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
 
 /**
@@ -113,6 +115,7 @@ beforeEach(async () => {
     repository,
     new InMemoryFuelStationRepository(),
     new StubCoreFacts(),
+    new MovementFuelRunContextAdapter(new InMemoryMovementRepository()),
     new SilentCostingPort(),
     audit,
     CORE_POLICY,

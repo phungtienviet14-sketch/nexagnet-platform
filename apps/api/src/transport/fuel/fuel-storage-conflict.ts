@@ -74,6 +74,73 @@ export const FUEL_ENTRY_STATION_SUPPLIER = 'TransportFuelEntry_station_supplier'
 export const isStationSupplierViolation = (error: unknown): boolean =>
   error instanceof Error && error.message.includes(FUEL_ENTRY_STATION_SUPPLIER);
 
+/* ------------------------------------------------------------------ *
+ * `#364` — Fuel Event Run-first (`20260922100000_transport_fuel_run_first`)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Hai TIEN TO thong diep cua trigger `transport_fuel_entry_run_context` — mot cho moi cau hoi.
+ *
+ * Hai tien to chu khong mot: "vong chay khong phai cua xe nay" va "chang khong thuoc vong chay nay"
+ * doi nguoi dung sua hai thu khac nhau, nen tang kho phai tra ve hai ma khac nhau.
+ */
+export const FUEL_ENTRY_RUN_VEHICLE = 'transport_fuel_entry_run_vehicle';
+export const FUEL_ENTRY_LEG_RUN = 'transport_fuel_entry_leg_run';
+
+export const isRunVehicleViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUEL_ENTRY_RUN_VEHICLE);
+
+export const isLegRunViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUEL_ENTRY_LEG_RUN);
+
+/** `CHECK` — tien mat lai xe ung chi tren chuyen v1 (Quy lai xe di theo chuyen). */
+export const FUEL_ENTRY_DRIVER_CASH_NEEDS_TRIP = 'TransportFuelEntry_driver_cash_needs_trip';
+
+export const isDriverCashNeedsTripViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUEL_ENTRY_DRIVER_CASH_NEEDS_TRIP);
+
+/**
+ * `#364` — mot dong phan bo gia thanh chi co MOT khoa chong ghi trung, va mot cap phat chi dao
+ * duoc MOT lan.
+ *
+ * KHONG nam trong `FUEL_UNIQUE_INDEXES` — cung ly do voi `FUEL_DECISION_SUPERSEDED_ONCE`: danh sach
+ * do doi chieu voi migration GOC cua T4. `transport-fuel-run-first-storage.spec.ts` khoa hai index
+ * nay o migration cua chinh chung.
+ */
+export const FUEL_COST_ATTRIBUTION_CORRELATION: UniqueIndexRef = {
+  indexName: 'TransportFuelCostAttribution_correlationKey_key',
+  model: 'TransportFuelCostAttribution',
+  column: 'correlationKey',
+};
+
+export const FUEL_COST_ATTRIBUTION_REVERSED_ONCE: UniqueIndexRef = {
+  indexName: 'TransportFuelCostAttribution_reversalOfId_key',
+  model: 'TransportFuelCostAttribution',
+  column: 'reversalOfId',
+};
+
+/**
+ * Tien to thong diep cua trigger `transport_fuel_cost_attribution_guard` — luoi cuoi sau tang mien.
+ *
+ * Tang mien doc tong + kiem tren hang phieu DA KHOA truoc khi ghi, nen o duong ghi that nhung ma
+ * nay khong no. Chung con do cho moi lan ghi khong di qua tang mien (va cho bai kiem Postgres chung
+ * minh luoi do la THAT).
+ */
+export const FUEL_COST_ATTRIBUTION_TRIGGER = {
+  exceedsEntry: 'transport_fuel_cost_attribution_exceeds_entry',
+  legacyTrip: 'transport_fuel_cost_attribution_legacy_trip',
+  notVerified: 'transport_fuel_cost_attribution_not_verified',
+  targetVehicle: 'transport_fuel_cost_attribution_target_vehicle',
+  legRun: 'transport_fuel_cost_attribution_leg_run',
+  reversalShape: 'transport_fuel_cost_attribution_reversal_shape',
+  appendOnly: 'transport_fuel_cost_attribution_append_only',
+} as const;
+
+export const isFuelCostAttributionTriggerViolation = (
+  error: unknown,
+  name: keyof typeof FUEL_COST_ATTRIBUTION_TRIGGER,
+): boolean => error instanceof Error && error.message.includes(FUEL_COST_ATTRIBUTION_TRIGGER[name]);
+
 /**
  * `INV-26` — ten cua TRIGGER, khong phai cua mot unique.
  *

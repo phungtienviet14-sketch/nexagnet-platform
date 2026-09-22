@@ -28,6 +28,9 @@ import {
   FUEL_MATCH_ENTRY_ONCE,
   FUEL_MATCH_LINE_ONCE,
   FUEL_STATEMENT_PERIOD,
+  isDriverCashNeedsTripViolation,
+  isLegRunViolation,
+  isRunVehicleViolation,
   isSelfSourcedMatchViolation,
   isStationSupplierViolation,
 } from './fuel-storage-conflict.js';
@@ -110,7 +113,11 @@ const toSupplier = (row: any): FuelSupplier => ({
 
 const toEntry = (row: any): FuelEntry => ({
   id: row.id,
-  tripId: row.tripId,
+  tripId: row.tripId ?? null,
+  // `?? null` chu khong doc thang: mot ban client sinh truoc migration `#364` khong co hai khoa nay,
+  // va `undefined` di ra ngoai se lam phep so danh tinh coi "khong ngu canh" la mot gia tri khac.
+  runId: row.runId ?? null,
+  legId: row.legId ?? null,
   vehicleId: row.vehicleId,
   driverId: row.driverId,
   supplierId: row.supplierId,
@@ -166,6 +173,7 @@ const inboxScopeWhere = (filter: FuelEntryInboxFilter): Record<string, any> => {
   const where: Record<string, any> = {};
   // `null` = khong loc; `[]` = co loc va khong chuyen nao khop. Xem `FuelEntryInboxFilter`.
   if (filter.tripIds !== null) where.tripId = { in: [...filter.tripIds] };
+  if (filter.runIds !== null) where.runId = { in: [...filter.runIds] };
   if (filter.driverId !== null) where.driverId = filter.driverId;
   if (filter.vehicleId !== null) where.vehicleId = filter.vehicleId;
   if (filter.supplierId !== null) where.supplierId = filter.supplierId;
@@ -295,6 +303,35 @@ const translateStationSupplierError = (error: unknown): unknown =>
       )
     : error;
 
+/**
+ * `#364` — luoi cuoi cua NGU CANH vong chay, cung ma voi cong o tang mien.
+ *
+ * Tang mien kiem truoc (`FuelService`), va `vehicleId` cua vong chay lan `runId` cua chang deu
+ * KHONG doi sau khi tao — nen o duong ghi that trigger khong bao gio no. No con do cho moi lan ghi
+ * khong di qua tang mien; khi do nguoi goi van nhan dung ma, khong phai mot `500`.
+ */
+const translateEntryWriteError = (error: unknown): unknown => {
+  if (isRunVehicleViolation(error)) {
+    return TransportDomainError.denied(
+      'FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE',
+      'Xe tren phieu khong phai xe cua vong chay',
+    );
+  }
+  if (isLegRunViolation(error)) {
+    return TransportDomainError.denied(
+      'FUEL_ENTRY_LEG_NOT_IN_RUN',
+      'Chang tren phieu khong thuoc vong chay cua phieu',
+    );
+  }
+  if (isDriverCashNeedsTripViolation(error)) {
+    return TransportDomainError.denied(
+      'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
+      'Tien mat lai xe ung chi ghi duoc tren chuyen cu',
+    );
+  }
+  return translateStationSupplierError(error);
+};
+
 /** Dau van tay cua mot ban giao DA PHAT — de so voi ket qua vua tinh (T4R §2). */
 const handoffFingerprint = (handoff: FuelSettlementHandoff): string =>
   settlementResultFingerprint({
@@ -380,6 +417,8 @@ export class PrismaFuelRepository extends FuelRepository {
         await model(this.prisma, 'transportFuelEntry').create({
           data: {
             tripId: input.tripId,
+            runId: input.runId,
+            legId: input.legId,
             vehicleId: input.vehicleId,
             driverId: input.driverId,
             supplierId: input.supplierId,
@@ -412,7 +451,7 @@ export class PrismaFuelRepository extends FuelRepository {
           `Khoa chong ghi trung ${input.correlationKey} vua duoc dung boi mot lan ghi khac`,
         );
       }
-      throw translateStationSupplierError(error);
+      throw translateEntryWriteError(error);
     }
   }
 
@@ -577,7 +616,7 @@ export class PrismaFuelRepository extends FuelRepository {
         },
       });
     } catch (error) {
-      throw translateStationSupplierError(error);
+      throw translateEntryWriteError(error);
     }
     return updated.count === 0 ? null : this.findEntry(id);
   }

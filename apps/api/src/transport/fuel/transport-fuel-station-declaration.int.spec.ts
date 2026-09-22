@@ -15,7 +15,9 @@ import { driverFuelSubmitSchema } from './fuel.schemas.js';
 import { CostingFuelExpenseAdapter, TransportFuelCoreFactsAdapter } from './fuel.ports.js';
 import { FuelService } from './fuel.service.js';
 import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
+import { MovementFuelRunContextAdapter } from './fuel-run-context.port.js';
 import { PrismaFuelRepository } from './prisma-fuel.repository.js';
+import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 
 /**
  * `#317` G1 + thanh toan mac dinh — TRAM TREN TO KHAI, TREN POSTGRES THAT.
@@ -60,16 +62,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       COSTING_POLICY,
     );
     const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
+    const fuelRuns = new MovementFuelRunContextAdapter(new PrismaMovementRepository(prisma));
     const fuel = new FuelService(
       fuelRepo,
       stationRepo,
       fuelCore,
+      fuelRuns,
       new CostingFuelExpenseAdapter(costing),
       audit,
       CORE_POLICY,
       FUEL_POLICY,
     );
-    const read = new FuelReadService(fuelRepo, fuelCore, stationRepo);
+    const read = new FuelReadService(fuelRepo, fuelCore, stationRepo, fuelRuns);
 
     // Tien to RIENG, khong long voi tien to nao dang co.
     const SUPPLIER_CODE = 'IT-G1S-CX';

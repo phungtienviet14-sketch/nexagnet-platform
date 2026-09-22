@@ -22,6 +22,7 @@ import {
 import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
 import type {
+  DriverFuelRunView,
   DriverFuelSlipView,
   DriverFuelStationView,
   DriverFuelSupplierView,
@@ -83,6 +84,21 @@ export class DriverFuelController {
   listStations(@Query() query: unknown): Promise<DriverFuelStationView[]> {
     const { supplierId } = this.parse(driverFuelStationQuerySchema, query);
     return this.guard(() => this.read.listStationsForDriver(supplierId));
+  }
+
+  /**
+   * VIEC DUOC DIEU ma lai xe khai phieu dau duoc tren do — `#364`.
+   *
+   * Cung cong voi `suppliers`/`stations` (`transport.driver.self.fuel.submit`): day la thu mot lai
+   * xe PHAI co de nop duoc phieu Run-first — o chon viec cua ho. Khong phu thuoc capability
+   * `transport-checkpoint` cua man Hien truong: vong chay thuoc `transport-core`, ma fuel da phu
+   * thuoc san.
+   */
+  @Get('runs')
+  @RequiresTransportAction('transport.driver.self.fuel.submit')
+  listRuns(@Req() request: AuthenticatedRequest): Promise<DriverFuelRunView[]> {
+    const authUserId = requireAuthUserId(request);
+    return this.guard(() => this.read.listMyFuelRuns(authUserId));
   }
 
   @Get('slips')

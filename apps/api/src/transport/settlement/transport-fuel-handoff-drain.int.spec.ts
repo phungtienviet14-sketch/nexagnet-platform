@@ -14,7 +14,9 @@ import { FuelStatementService } from '../fuel/fuel-statement.service.js';
 import { CostingFuelExpenseAdapter, TransportFuelCoreFactsAdapter } from '../fuel/fuel.ports.js';
 import { FuelService } from '../fuel/fuel.service.js';
 import { deleteFuelDiscrepanciesForTest } from '../fuel/fuel-test-cleanup.js';
+import { MovementFuelRunContextAdapter } from '../fuel/fuel-run-context.port.js';
 import { PrismaFuelRepository } from '../fuel/prisma-fuel.repository.js';
+import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 import { PrismaFuelStationRepository } from '../fuel/prisma-fuel-station.repository.js';
 import type { TransportCorePolicy } from '../transport-policy.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
@@ -89,10 +91,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       COSTING_POLICY,
     );
     const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
+    const fuelRuns = new MovementFuelRunContextAdapter(new PrismaMovementRepository(prisma));
     const fuel = new FuelService(
       fuelRepo,
       new PrismaFuelStationRepository(prisma),
       fuelCore,
+      fuelRuns,
       new CostingFuelExpenseAdapter(costing),
       audit,
       CORE_POLICY,

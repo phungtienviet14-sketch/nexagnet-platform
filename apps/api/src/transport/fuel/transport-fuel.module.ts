@@ -5,7 +5,15 @@ import { PrismaService } from '../../config/prisma.service.js';
 import { TransportCostingModule } from '../costing/transport-costing.module.js';
 import { TransportModule } from '../transport.module.js';
 import { FuelConsumptionReadService } from './fuel-consumption.service.js';
+import { FuelCostAttributionReadService } from './fuel-cost-attribution-read.service.js';
+import {
+  FuelCostAttributionRepository,
+  InMemoryFuelCostAttributionRepository,
+} from './fuel-cost-attribution.repository.js';
+import { FuelCostAttributionService } from './fuel-cost-attribution.service.js';
 import { FuelReadService } from './fuel-read.service.js';
+import { FuelRunContextFacts, MovementFuelRunContextAdapter } from './fuel-run-context.port.js';
+import { PrismaFuelCostAttributionRepository } from './prisma-fuel-cost-attribution.repository.js';
 import { FuelReconciliationService } from './fuel-reconciliation.service.js';
 import { TRANSPORT_FUEL_POLICY, tenantTransportFuelPolicy } from './fuel-policy.js';
 import { FuelStationRepository, InMemoryFuelStationRepository } from './fuel-station.repository.js';
@@ -123,6 +131,28 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
       },
     },
     { provide: TransportFuelCoreFacts, useClass: TransportFuelCoreFactsAdapter },
+    /*
+     * `#364` — CUA SO THU BA, CHI DOC: vong chay / chang / phan cong lam NGU CANH cua phieu. Qua
+     * `MovementRepository` cua `transport-core` (da `imports` o tren), khong them phu thuoc nao.
+     */
+    { provide: FuelRunContextFacts, useClass: MovementFuelRunContextAdapter },
+    /*
+     * `#364` — PHAN BO GIA THANH: mot kho RIENG, cung cong tac `PERSISTENCE` voi kho phieu va cung
+     * mot the gioi — ban trong bo nho doc phieu qua CHINH `FuelRepository` dang chay.
+     */
+    {
+      provide: FuelCostAttributionRepository,
+      useFactory: (
+        prisma: PrismaService,
+        entries: FuelRepository,
+      ): FuelCostAttributionRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaFuelCostAttributionRepository(prisma)
+          : new InMemoryFuelCostAttributionRepository(entries),
+      inject: [PrismaService, FuelRepository],
+    },
+    FuelCostAttributionService,
+    FuelCostAttributionReadService,
     { provide: FuelCostingPort, useClass: CostingFuelExpenseAdapter },
     { provide: FuelStatementSource, useClass: FileFuelStatementSource },
     { provide: TRANSPORT_FUEL_POLICY, useFactory: tenantTransportFuelPolicy },
@@ -144,6 +174,9 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
     FuelStationService,
     FuelDocumentService,
     FuelConsumptionReadService,
+    // `#364` — EXPORT vi controller cua chung dang ky o `app-composition.ts` ngoai module nay.
+    FuelCostAttributionService,
+    FuelCostAttributionReadService,
     FuelRepository,
     FuelStationRepository,
     FuelDocumentRepository,
