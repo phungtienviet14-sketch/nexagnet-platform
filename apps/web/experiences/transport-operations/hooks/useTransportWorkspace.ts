@@ -57,6 +57,12 @@ export const TRANSPORT_QUERY_KEYS = {
   tollProviders: ['transport', 'toll', 'providers'],
   tollAccounts: ['transport', 'toll', 'accounts'],
   driverTrips: ['transport', 'me', 'trips'],
+  /**
+   * `#340` — viec hien truong (vong chay) cua CHINH lai xe. PHAI trung khoa ma man Hien truong
+   * (`driver/FieldScreen.tsx`) dung: trang chu va man do la MOT lan doc, mot o nho — khong phai hai
+   * anh chup lech nhau cua cung mot cau hoi "toi co viec gi".
+   */
+  driverFieldWork: ['transport', 'me', 'field-work'],
   driverFund: ['transport', 'me', 'fund'],
   driverFuel: ['transport', 'me', 'fuel'],
   driverPayslips: ['transport', 'me', 'payslips'],
@@ -598,6 +604,25 @@ export function useDriverTrips(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.driverTrips,
     queryFn: () => transportApi.me.trips(),
     enabled: allowed(input, 'transport-core', 'transport.driver.self.trip.read'),
+  });
+}
+
+/**
+ * VIEC DUOC DIEU cua chinh lai xe — `#340`: trang chu doc CUNG nguon voi man Hien truong.
+ *
+ * Gac bang DUNG cap (nang luc, hanh dong) cua muc `field` trong `DRIVER_SCREENS` va cua
+ * `DriverFieldController`: khach khong bat `transport-checkpoint` thi tuyen khong duoc gan, va mot
+ * yeu cau o day chi nhan ve trang 404 cua Next.js.
+ *
+ * `refetchOnWindowFocus` bat rieng o day (ung dung tat no o cap goc, `app/providers.tsx`): lai xe
+ * mo lai app sau khi van phong vua dieu viec phai thay viec do, khong phai mot trang chu cu.
+ */
+export function useDriverFieldWork(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.driverFieldWork,
+    queryFn: () => transportApi.me.fieldWork(),
+    enabled: allowed(input, 'transport-checkpoint', 'transport.driver.self.checkpoint.record'),
+    refetchOnWindowFocus: true,
   });
 }
 
