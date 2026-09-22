@@ -408,6 +408,26 @@ Mọi đường **ghi** đều bắt đầu bằng một **đơn**, không bằn
 > đường tuần tự (`LEG_ALREADY_TERMINAL`, `LEG_CANCEL_ALREADY_STARTED`…), nên một chặng đã huỷ không
 > bao giờ sống lại. Bằng chứng Postgres: `checkpoint-terminal-leg.int.spec.ts`.
 
+> **Chặng đã kết thúc không mở phiên chờ mới — `#358` (22/09/2026).** Lệnh mở phiên chờ người nhận
+> trên chặng `COMPLETED`/`CANCELLED` bị từ chối bằng `WAITING_LEG_TERMINAL` (409, _"Chặng đã kết thúc
+> — không mở phiên chờ trên chặng này."_) — mã riêng, không dùng lại `WAITING_RUN_TERMINAL`: vòng chạy
+> vẫn `ACTIVE`, chỉ chặng đã xong. Màn Hiện trường không mời nút "Bắt đầu chờ" trên chặng đó.
+>
+> Lý do: phiên chờ chỉ đóng bình thường bằng mốc `DELIVERY_ACCEPTED`, mà từ `#354` chặng đã kết thúc
+> không nhận mốc mới — một phiên mở ở đó không bao giờ tự đóng, chỉ còn giữ vòng chạy ở
+> `OPEN_WAITING_SESSION`. Nên luật của phiên chờ **là** luật của mốc đóng nó: `legAcceptsNewWaiting`
+> uỷ thác cho `legAcceptsNewCheckpoints`, và được dùng ở cả kiểm sớm, dưới khoá lẫn màn Hiện trường.
+>
+> Cùng **một** ranh giới serialize với `#354`, không thêm khoá: lệnh mở đọc lại chặng dưới khoá hàng
+> vòng chạy (`RunWriteScope.legs`), còn lần hoàn tất/huỷ chặng (`setLegStatus`) giành chính khoá đó.
+> Dưới khoá, vòng chạy đứng trước chặng (`WAITING_RUN_TERMINAL` giữ nguyên). Gửi lại **đúng** lệnh đã
+> thành công trước khi chặng kết thúc vẫn trả phiên cũ. Một phiên đã mở hợp lệ trước khi chặng kết
+> thúc là lịch sử thật: nó vẫn chặn đóng vòng chạy (`OPEN_WAITING_SESSION`, thất bại đóng) và điều
+> hành vẫn đóng được bằng tay. Bằng chứng Postgres: `waiting-terminal-leg.int.spec.ts`.
+>
+> **Chưa quyết ở `#358`:** chứng từ trên chặng đã kết thúc vẫn được mời ở màn Hiện trường và vẫn ghi
+> được (`evaluateDocumentRecord` chỉ chặn theo vòng chạy) — chính sách đó để một issue riêng.
+
 `idempotencyKey` là **bắt buộc** ở đường chốt. Không có khoá thì không có gì để nhận ra lần thứ hai
 là lần thứ hai, và #276 L9 bài 1 không thể đạt được.
 

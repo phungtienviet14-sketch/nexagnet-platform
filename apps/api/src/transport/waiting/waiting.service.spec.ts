@@ -124,6 +124,17 @@ const reasonOf = async (run: Promise<unknown>): Promise<string> => {
   }
 };
 
+/** Nguyen loi — de khang dinh ca LOAI loi va CAU CHU len man hinh, khong chi ma may loc. */
+const errorOf = async (run: Promise<unknown>): Promise<TransportDomainError> => {
+  try {
+    await run;
+  } catch (error) {
+    if (error instanceof TransportDomainError) return error;
+    throw error;
+  }
+  throw new Error('NO_ERROR_THROWN');
+};
+
 describe('WaitingSessionService — WT-020', () => {
   let checkpoints: InMemoryCheckpointRepository;
   let sessions: InMemoryWaitingSessionRepository;
@@ -506,5 +517,121 @@ describe('WaitingSessionService — WT-020', () => {
     for (const forbidden of ['amount', 'freight', 'revenue', 'price', 'vnd', 'allowance']) {
       expect(keys).not.toContain(forbidden);
     }
+  });
+
+  /**
+   * CHANG DA KET THUC — `#358`.
+   *
+   * Hinh dang: chang CO HANG da `Da den noi`, chua `Khach da nhan hang`; van phong hoan tat chang
+   * bang ghi de `#350`; vong chay van `ACTIVE`. Truoc `#358`, `start()` chi hoi trang thai VONG CHAY
+   * (ca truoc lan duoi khoa), nen phien mo duoc — va giu vong chay mai o `OPEN_WAITING_SESSION`.
+   * Bang chung khoa tren Postgres o `waiting-terminal-leg.int.spec.ts`.
+   */
+  describe('chang da ket thuc (#358)', () => {
+    const LEG_TERMINAL_MESSAGE = 'Chặng đã kết thúc — không mở phiên chờ trên chặng này.';
+    const closeLeg = (status: 'COMPLETED' | 'CANCELLED') =>
+      core.legs.set('leg_1', { ...core.legs.get('leg_1')!, status });
+
+    it('chang CO HANG da COMPLETED sau `Da den noi`: xung dot, tieng Viet co dau, khong phien nao', async () => {
+      const arrivalId = await arriveAtDelivery();
+      closeLeg('COMPLETED');
+
+      const error = await errorOf(startWaiting({ arrivalCheckpointId: arrivalId }));
+      expect(error.kind).toBe('CONFLICT');
+      expect(error.reason).toBe('WAITING_LEG_TERMINAL');
+      expect(error.message).toBe(LEG_TERMINAL_MESSAGE);
+      expect(await sessions.listForLeg('leg_1')).toEqual([]);
+    });
+
+    it('chang da HUY cung khong mo duoc phien moi', async () => {
+      const arrivalId = await arriveAtDelivery();
+      closeLeg('CANCELLED');
+
+      expect(await reasonOf(startWaiting({ arrivalCheckpointId: arrivalId }))).toBe(
+        'WAITING_LEG_TERMINAL',
+      );
+      expect(await sessions.listForLeg('leg_1')).toEqual([]);
+    });
+
+    it('gui lai DUNG lenh da mo truoc khi chang ket thuc: tra dung phien cu; lenh MOI bi chan', async () => {
+      const arrivalId = await arriveAtDelivery();
+      const first = await startWaiting({ arrivalCheckpointId: arrivalId, clientEventId: 'w.1' });
+      closeLeg('COMPLETED');
+
+      const again = await startWaiting({ arrivalCheckpointId: arrivalId, clientEventId: 'w.1' });
+      expect(again.id).toBe(first.id);
+      // Gui lai khong phai cua sau: mot `clientEventId` MOI tren chang da xong thi bi chan.
+      expect(
+        await reasonOf(startWaiting({ arrivalCheckpointId: arrivalId, clientEventId: 'w.2' })),
+      ).toBe('WAITING_LEG_TERMINAL');
+      expect(await sessions.listForLeg('leg_1')).toHaveLength(1);
+    });
+
+    it('vong chay VA chang cung o diem cuoi: lenh moi van la WAITING_RUN_TERMINAL', async () => {
+      const arrivalId = await arriveAtDelivery();
+      closeLeg('COMPLETED');
+      core.runs.set('run_1', { id: 'run_1', code: 'VC-001', status: 'COMPLETED' });
+
+      expect(await reasonOf(startWaiting({ arrivalCheckpointId: arrivalId }))).toBe(
+        'WAITING_RUN_TERMINAL',
+      );
+    });
+
+    /*
+     * CUA SO: phep kiem som doc thay chang `IN_TRANSIT`, roi van phong hoan tat chang ngay truoc khi
+     * lenh mo lay khoa. Chi CONG DUOI KHOA dung o khe do — no doc lai chang tren `scope.legs`.
+     */
+    it('van phong hoan tat chang ngay truoc khi lenh mo lay khoa: cong duoi khoa van chan', async () => {
+      const arrivalId = await arriveAtDelivery();
+      class LegClosesFirstGuard extends FakeRunWriteGuard {
+        override async underRunLock<T>(
+          runId: string,
+          write: (scope: RunWriteScope) => Promise<T>,
+        ): Promise<T> {
+          closeLeg('COMPLETED');
+          return super.underRunLock(runId, write);
+        }
+      }
+      const racing = new WaitingSessionService(
+        sessions,
+        checkpoints,
+        core,
+        new LegClosesFirstGuard(core),
+        { timeZone: TZ },
+        undefined,
+        () => now,
+      );
+
+      const error = await errorOf(
+        racing.start({
+          runId: 'run_1',
+          legId: 'leg_1',
+          arrivalCheckpointId: arrivalId,
+          reason: 'RECEIVER_NOT_READY',
+          clientEventId: 'w.race',
+          authUserId: 'u.binh',
+        }),
+      );
+      expect(error.kind).toBe('CONFLICT');
+      expect(error.reason).toBe('WAITING_LEG_TERMINAL');
+      expect(await sessions.listForLeg('leg_1')).toEqual([]);
+    });
+
+    /** Phien mo HOP LE truoc khi chang ket thuc la lich su that — van hanh van dong duoc no. */
+    it('phien mo truoc khi chang ket thuc: van hanh van dong duoc, dung ma cu', async () => {
+      const arrivalId = await arriveAtDelivery();
+      const session = await startWaiting({ arrivalCheckpointId: arrivalId });
+      closeLeg('COMPLETED');
+
+      now = new Date('2026-09-09T04:00:00.000Z');
+      const closed = await waiting.closeByOperator({
+        sessionId: session.id,
+        note: 'Chang da chot, lai xe quen bam',
+        authUserId: 'u.admin',
+      });
+      expect(closed.status).toBe('CLOSED');
+      expect(closed.closeReason).toBe('OPERATOR_CLOSED');
+      expect(closed.endedAt).toEqual(new Date('2026-09-09T04:00:00.000Z'));
+    });
   });
 });

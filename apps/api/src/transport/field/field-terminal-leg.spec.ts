@@ -174,4 +174,38 @@ describe('Hien truong cua chang da ket thuc — #354', () => {
 
     expect(after?.nextActions).toEqual([]);
   });
+
+  /*
+   * `#358` — CUNG hai hinh dang, nut `Bat dau cho`. `#354` go nut MOC; nut CHO khong di qua cong do,
+   * nen chang da dong van chao mot phien cho moi — phien se giu vong chay `ACTIVE` mai.
+   */
+  const waitingActionsOf = (leg: DriverFieldLeg | undefined) =>
+    (leg?.nextActions ?? []).filter((action) => action.kind === 'WAITING_START');
+
+  it('#358 — chang CO HANG da COMPLETED sau `Da den noi`: khong con nut `Bat dau cho`', async () => {
+    await move(closingLegId, 'PLANNED', 'IN_TRANSIT');
+    for (const type of ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE', 'DELIVERY_ARRIVAL'] as const) {
+      await record(type, closingLegId);
+    }
+    const before = (await legsNow()).find((leg) => leg.legId === closingLegId);
+    expect(waitingActionsOf(before)).toHaveLength(1);
+
+    await move(closingLegId, 'IN_TRANSIT', 'COMPLETED');
+    const after = (await legsNow()).find((leg) => leg.legId === closingLegId);
+
+    expect(waitingActionsOf(after)).toEqual([]);
+  });
+
+  it('#358 — chang da HUY khi con PLANNED du da `Da den noi`: khong con nut `Bat dau cho`', async () => {
+    for (const type of ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE', 'DELIVERY_ARRIVAL'] as const) {
+      await record(type, closingLegId);
+    }
+    const before = (await legsNow()).find((leg) => leg.legId === closingLegId);
+    expect(waitingActionsOf(before)).toHaveLength(1);
+
+    await move(closingLegId, 'PLANNED', 'CANCELLED');
+    const after = (await legsNow()).find((leg) => leg.legId === closingLegId);
+
+    expect(waitingActionsOf(after)).toEqual([]);
+  });
 });

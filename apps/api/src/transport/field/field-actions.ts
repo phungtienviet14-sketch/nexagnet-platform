@@ -9,6 +9,7 @@ import {
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
 import type { OperationalDocumentType } from '../document/document.types.js';
 import type { RunLegKind, RunLegStatus } from '../movement/movement.types.js';
+import { legAcceptsNewWaiting } from '../waiting/waiting-lifecycle.js';
 import type { DriverFieldAction } from './field.types.js';
 
 /**
@@ -130,6 +131,8 @@ export interface FieldActionInput {
    * Trang thai CHANG — `#354`. Chang da `COMPLETED`/`CANCELLED` khong duoc moi mot moc nao: truoc
    * `#354` mot chang CO HANG da ket thuc ma chua co `DELIVERY_ACCEPTED` van la "chang dang lam" dau
    * tien con nut (`toFieldScreen`), va nut do bam vao se ghi mot moc len mot chang da dong.
+   *
+   * `#358`: cung chang do khong duoc moi `Bat dau cho` — mot phien mo o do giu vong chay mai.
    */
   readonly legStatus: RunLegStatus;
   /** Loai moc DA GHI tren chinh chang nay. */
@@ -163,6 +166,8 @@ export function fieldActionsFor(input: FieldActionInput): readonly DriverFieldAc
   const captured = new Set(input.documentTypes);
   // Cung ham ma `CheckpointService` dung de tu choi `CHECKPOINT_LEG_TERMINAL`, truoc VA duoi khoa.
   const legOpen = legAcceptsNewCheckpoints(input.legStatus);
+  // Cung ham ma `WaitingSessionService` dung de tu choi `WAITING_LEG_TERMINAL`, truoc VA duoi khoa.
+  const waitingOpen = legAcceptsNewWaiting(input.legStatus);
 
   for (const type of LEG_CHECKPOINT_ORDER) {
     // MOC: chi hien khi `evaluateCheckpoint` that su se cho qua. Xem khoi chu thich dau tep.
@@ -187,9 +192,11 @@ export function fieldActionsFor(input: FieldActionInput): readonly DriverFieldAc
      * bam den noi, roi moi biet nguoi nhan chua san sang.
      *
      * No BIEN MAT khi nguoi nhan da nhan hang — `evaluateWaitingStart` tra
-     * `WAITING_DELIVERY_ALREADY_ACCEPTED`, nen hien no se la mot nut bam vao thi bao loi.
+     * `WAITING_DELIVERY_ALREADY_ACCEPTED`, nen hien no se la mot nut bam vao thi bao loi. Va khi
+     * chang da ket thuc (`#358`, `WAITING_LEG_TERMINAL`) — cung ly do.
      */
     if (
+      waitingOpen &&
       type === 'DELIVERY_ARRIVAL' &&
       recorded.has('DELIVERY_ARRIVAL') &&
       !recorded.has('DELIVERY_ACCEPTED') &&
