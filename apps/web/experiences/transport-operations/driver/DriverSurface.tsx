@@ -8,7 +8,7 @@ import { expenseCategoryLabel, FUEL_PAYMENT_METHOD_LABEL, formatMoney } from '..
 import { FUEL_PAYMENT_METHODS, type FuelPaymentMethod } from '../transport-types';
 import {
   DEFAULT_DRIVER_PAYMENT_METHOD,
-  allowsDriverCash,
+  DRIVER_PAYMENT_METHOD_HINT,
   driverFuelContextOptions,
   occurredAtProblem,
   toDateTimeLocalValue,
@@ -276,11 +276,6 @@ function DriverFuel() {
     mutationFn: async () => {
       if (fuelContext === null) {
         throw new Error('Chưa có việc được điều nào để ghi phiếu — báo điều hành.');
-      }
-      if (form.paymentMethod === 'DRIVER_CASH' && !allowsDriverCash(fuelContext)) {
-        throw new Error(
-          'Tiền mặt lái xe ứng chỉ ghi được trên chuyến cũ. Với việc được điều, chọn cây xăng ghi nợ.',
-        );
       }
       const problem = occurredAtProblem(form.occurredAtLocal, new Date());
       if (problem !== null) throw new Error(problem);
@@ -588,20 +583,16 @@ function DriverFuel() {
                   }))
                 }
               >
+                {/* `#369` R-4 — ca chuyen cu lan vong xe deu nhan hai cach tra; khong khoa theo ngu canh. */}
                 {FUEL_PAYMENT_METHODS.map((method) => (
-                  <option
-                    key={method}
-                    value={method}
-                    // `#364` — tien mat ung chi ghi duoc tren chuyen cu (so quy di theo chuyen).
-                    disabled={method === 'DRIVER_CASH' && !allowsDriverCash(fuelContext)}
-                  >
+                  <option key={method} value={method}>
                     {FUEL_PAYMENT_METHOD_LABEL[method]}
-                    {method === 'DRIVER_CASH' && !allowsDriverCash(fuelContext)
-                      ? ' (chỉ chuyến cũ)'
-                      : ''}
                   </option>
                 ))}
               </select>
+              <span className="tx-note" role="note">
+                {DRIVER_PAYMENT_METHOD_HINT[form.paymentMethod]}
+              </span>
             </label>
             <label className="tx-field tx-field--file">
               <span>Ảnh phiếu (nếu có)</span>

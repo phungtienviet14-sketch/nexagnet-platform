@@ -1349,25 +1349,30 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/files/file.service.ts",
       "line": 658
     },
+    "finance.margin|FINANCE_MARGIN_COMPILED": {
+      "functionName": "FinanceReadService.margin",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 123
+    },
     "finance.summary|FINANCE_CURRENCY_MIXED": {
       "functionName": "FinanceReadService.summary",
       "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
-      "line": 73
+      "line": 79
     },
     "finance.summary|FINANCE_SOURCE_FAILED": {
       "functionName": "FinanceReadService.readDriverBalances",
       "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
-      "line": 121
+      "line": 170
     },
     "finance.summary|FINANCE_SOURCE_UNAVAILABLE": {
       "functionName": "FinanceReadService.summary",
       "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
-      "line": 83
+      "line": 89
     },
     "finance.summary|FINANCE_SUMMARY_COMPILED": {
       "functionName": "FinanceReadService.summary",
       "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
-      "line": 92
+      "line": 98
     },
     "fleet.effective_vehicle_state|*": {
       "functionName": "AssetComplianceReadService.emitStateDecision",

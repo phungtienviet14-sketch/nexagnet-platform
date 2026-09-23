@@ -231,6 +231,10 @@ import {
   FinanceSettlementFacts,
   FinanceSettlementFactsAdapter,
 } from './transport/finance/finance-facts.port.js';
+import {
+  FinanceRunFirstFacts,
+  FinanceRunFirstFactsAdapter,
+} from './transport/finance/finance-run-first.port.js';
 import { ControlTowerReadService } from './transport/control-tower/control-tower-read.service.js';
 import {
   ControlTowerAlertFacts,
@@ -827,6 +831,15 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-settlement', {
     provide: FinanceSettlementFacts,
     useClass: FinanceSettlementFactsAdapter,
+  }),
+  /*
+   * `#385` — cua so VIEC Run-first. Cung `transport-settlement`: capability do phu thuoc core,
+   * costing lan fuel, nen ca bon thu adapter tiem (`MovementRepository`, `OperatingMetricsReadService`,
+   * hai kho nhien lieu) luon co mat khi bang tai chinh co mat.
+   */
+  owned('transport-settlement', {
+    provide: FinanceRunFirstFacts,
+    useClass: FinanceRunFirstFactsAdapter,
   }),
   owned('transport-workforce', {
     provide: FinanceDriverBalanceFacts,

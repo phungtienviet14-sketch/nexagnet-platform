@@ -2,35 +2,44 @@
 
 import { useMemo, useState } from 'react';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
-import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
+import {
+  DataTable,
+  MetricCard,
+  PageHeader,
+  StatusBadge,
+  type DataColumn,
+} from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
-import { EMPTY_VALUE } from '../customer-view';
+import { EMPTY_VALUE, formatBusinessDate } from '../customer-view';
 import { buildSectionUrl, findSection } from '../navigation';
 import {
   toSectionQuery,
   useApByFlow,
   useArAging,
   useCustomers,
-  useDirectMarginRollup,
+  useFinanceMargin,
   useNavigationInput,
   usePartnerPosition,
   usePartners,
-  useTripDirectMargin,
-  useTrips,
 } from '../hooks/useTransportWorkspace';
 import { SETTLEMENT_FLOWS, type SettlementFlow } from '../transport-types';
 import {
-  REVENUE_MISSING_NOTE,
-  ROLLUP_BATCH_LIMIT,
+  filterMarginRows,
+  marginFilterOptions,
+  toMarginRow,
+  toMarginTotals,
+  type MarginFilter,
+  type MarginRowModel,
+} from '../workspace/company-margin';
+import {
   toApFlow,
   toArAging,
-  toDirectMargin,
-  toDirectMarginRollup,
   toPartnerPosition,
   toSettlementDirectory,
 } from '../workspace/settlement';
 import { businessTodayIn } from './business-today';
 import { useCustomerArBook } from './customer-ar-book';
+import { MarginNotes, MarginSourceSplit } from './CompanyMarginParts';
 import { CustomerArWorkspace } from './CustomerArWorkspace';
 
 /**
@@ -413,114 +422,177 @@ export function ArApView() {
 }
 
 /* ------------------------------------------------------------------ *
- * Hieu qua tung chuyen — bien truc tiep (ten cu: Bien truc tiep)
+ * Hieu qua tung chuyen — `#381`/`#385`: chuyen cu CONG don theo vong xe
  * ------------------------------------------------------------------ */
 
+/**
+ * HIEU QUA — cho giam doc/ke toan doc NGAY: tong, doanh thu den tu nguon nao, dieu gi lam tong chua
+ * du, roi tung don/chuyen kem nguon cua con so.
+ *
+ * Ban cu chon "tung chuyen" bang `useTrips` roi goi route cong don theo lo `tripId`: don giao theo vong
+ * xe khong bao gio hien ra (`#381`), va trinh duyet quyet tap nao duoc cong. Gio MOT lan doc
+ * `GET /transport/finance/margin`: dong va tong deu cua may chu, cung ham gop voi `Tổng hợp tài chính`.
+ */
 export function MarginView() {
   const navigation = useNavigationInput();
-  const trips = toSectionQuery(useTrips(navigation));
-  const [tripId, setTripId] = useState<string | null>(null);
+  const margin = toSectionQuery(useFinanceMargin(navigation));
+  const [filter, setFilter] = useState<MarginFilter>('ALL');
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  // Cong don chay tren DUNG danh sach chuyen dang xem. Tran mot lo la cua may chu (route cong don
-  // lap tung chuyen); o day chi lay lo dau, va cau duoi NOI RA dieu do thay vi im lang cat bot.
-  const tripIds = useMemo(
-    () => (trips.data ?? []).map((trip) => trip.id).slice(0, ROLLUP_BATCH_LIMIT),
-    [trips.data],
-  );
-  const rollup = toSectionQuery(useDirectMarginRollup(navigation, tripIds));
-  const margin = toSectionQuery(useTripDirectMargin(navigation, tripId));
-
-  const rollupModel = toDirectMarginRollup(rollup.data ?? null);
-  const marginModel = toDirectMargin(margin.data ?? null);
-  const totalTrips = (trips.data ?? []).length;
+  const totals = margin.data === undefined ? null : toMarginTotals(margin.data.totals);
+  const allRows = useMemo(() => margin.data?.rows ?? [], [margin.data]);
+  const rows = useMemo(() => filterMarginRows(allRows, filter).map(toMarginRow), [allRows, filter]);
+  const selected = rows.find((row) => row.key === selectedKey) ?? null;
 
   return (
     <>
       <PageHeader
         title="Hiệu quả từng chuyến"
-        summary="Chuyến nào làm ra tiền: biên trực tiếp của từng chuyến — doanh thu trừ chi phí trực tiếp, chưa gồm chi phí cố định."
+        summary="Mỗi đơn giao theo vòng xe và mỗi chuyến cũ là một dòng: doanh thu, chi phí trực tiếp và biên. Tổng do máy chủ cộng, chưa gồm chi phí cố định."
+        context={
+          margin.data === undefined
+            ? undefined
+            : `Số liệu ngày ${formatBusinessDate(margin.data.generatedFor)}`
+        }
       />
 
-      {rollup.errorMessage === null ? null : (
-        <ErrorState message={rollup.errorMessage} onRetry={rollup.refetch} />
+      {margin.errorMessage === null ? null : (
+        <ErrorState message={margin.errorMessage} onRetry={margin.refetch} />
       )}
-      {rollup.isLoading ? <LoadingState label="Đang cộng dồn biên trực tiếp…" /> : null}
+      {margin.isLoading ? <LoadingState label="Đang cộng doanh thu và biên…" /> : null}
 
-      {rollupModel === null ? null : (
+      {totals === null ? null : (
         <section className="tx-panel" aria-label="Cộng dồn biên trực tiếp">
-          <h2>Cộng dồn</h2>
-          <div className="tx-cards">
-            <MetricCard label="Doanh thu" value={rollupModel.revenueLabel} />
-            <MetricCard label="Trừ chi phí trực tiếp" value={rollupModel.deductionLabel} />
+          <h2>Toàn công ty</h2>
+          <div className="tx-cards tx-cards--lead">
+            <MetricCard label="Doanh thu" value={totals.revenueLabel} />
+            <MetricCard label="Chi phí trực tiếp" value={totals.deductionLabel} />
             <MetricCard
               label="Biên trực tiếp"
-              value={rollupModel.marginLabel}
-              hint={rollupModel.disclosure}
+              value={totals.marginLabel}
+              hint={totals.disclosure}
+              tone={totals.isNegative ? 'stop' : undefined}
             />
-            <MetricCard label="Tỷ suất" value={rollupModel.marginRateLabel} />
+            <MetricCard label="Tỷ suất biên" value={totals.rateLabel} />
           </div>
-          <p className="tx-note">{rollupModel.coverageNote}</p>
-          {totalTrips > tripIds.length ? (
-            <p className="tx-note tx-note--warn">
-              Đang cộng trên {tripIds.length} chuyến đầu tiên trong {totalTrips} chuyến đang xem.
-            </p>
-          ) : null}
+          <p className="tx-note">{totals.coverage}</p>
+          <MarginSourceSplit sources={totals.sources} />
+          <MarginNotes notes={totals.notes} />
         </section>
       )}
 
-      <section className="tx-panel" aria-label="Biên của một chuyến">
-        <h2>Theo từng chuyến</h2>
-        <label className="tx-field">
-          <span>Chuyến</span>
-          <select
-            aria-label="Chuyến"
-            value={tripId ?? ''}
-            onChange={(event) => setTripId(event.target.value === '' ? null : event.target.value)}
-          >
-            <option value="">Chọn một chuyến</option>
-            {(trips.data ?? []).map((trip) => (
-              <option key={trip.id} value={trip.id}>
-                {trip.code} · {trip.originLabel} → {trip.destinationLabel}
-              </option>
+      {margin.data === undefined ? null : (
+        <section className="tx-panel" aria-label="Từng đơn và chuyến">
+          <h2>Từng đơn và chuyến</h2>
+          <p className="tx-panel__lead">
+            Mới nhất trước. Đơn giao theo vòng xe hiện bằng mã đơn, kèm mã vòng xe đã chạy nó. Bấm
+            một dòng để xem con số đến từ sổ nào.
+          </p>
+          <div className="tx-tabs" role="group" aria-label="Lọc theo nguồn">
+            {marginFilterOptions(allRows).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className="tx-tab"
+                aria-pressed={filter === option.value}
+                onClick={() => {
+                  setFilter(option.value);
+                  setSelectedKey(null);
+                }}
+              >
+                {option.label}
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+          {rows.length === 0 ? (
+            <EmptyState title="Chưa có đơn hay chuyến nào có doanh thu." />
+          ) : (
+            <DataTable<MarginRowModel>
+              caption="Hiệu quả từng đơn và chuyến"
+              rows={rows}
+              rowKey={(row) => row.key}
+              selectedKey={selectedKey}
+              onSelect={(row) => setSelectedKey(row.key)}
+              onShowAll={() => setSelectedKey(null)}
+              columns={MARGIN_COLUMNS}
+            />
+          )}
+        </section>
+      )}
 
-        {margin.isLoading ? <LoadingState label="Đang đọc biên của chuyến…" /> : null}
-        {margin.errorMessage === null ? null : (
-          <ErrorState message={margin.errorMessage} onRetry={margin.refetch} />
-        )}
-
-        {marginModel === null ? (
-          tripId === null ? (
-            <EmptyState title="Chọn một chuyến để xem biên trực tiếp." />
-          ) : null
-        ) : (
-          <>
-            <div className="tx-cards">
-              <MetricCard label="Loại chuyến" value={marginModel.tripKindLabel} />
-              <MetricCard label="Doanh thu" value={marginModel.revenueLabel} />
-              <MetricCard label="Chi phí trực tiếp" value={marginModel.directCostLabel} />
-              <MetricCard label="Cước nhà xe" value={marginModel.carrierPayableLabel} />
-              <MetricCard label="Hoa hồng nguồn đơn" value={marginModel.commissionLabel} />
-              <MetricCard
-                label="Biên trực tiếp"
-                value={marginModel.marginLabel}
-                hint={marginModel.disclosure}
-              />
-              <MetricCard label="Tỷ suất" value={marginModel.marginRateLabel} />
-            </div>
-            {marginModel.isRevenueMissing ? (
-              <p className="tx-note tx-note--warn">{REVENUE_MISSING_NOTE}</p>
-            ) : null}
-            {marginModel.inconsistencyNote === null ? null : (
-              <p className="tx-note tx-note--warn" role="alert">
-                {marginModel.inconsistencyNote}
-              </p>
-            )}
-          </>
-        )}
-      </section>
+      {selected === null ? null : (
+        <MarginRowDetail row={selected} disclosure={totals?.disclosure} />
+      )}
     </>
+  );
+}
+
+const MARGIN_COLUMNS: readonly DataColumn<MarginRowModel>[] = [
+  {
+    key: 'code',
+    header: 'Mã',
+    isRowHeader: true,
+    render: (row) => (
+      <span className="tx-margin__code">
+        <span>{row.code}</span>
+        <span className="tx-margin__context">{row.context}</span>
+      </span>
+    ),
+  },
+  {
+    key: 'source',
+    header: 'Nguồn',
+    render: (row) => <StatusBadge label={row.sourceLabel} tone={row.sourceTone} />,
+  },
+  { key: 'date', header: 'Ngày', render: (row) => row.dateLabel },
+  { key: 'route', header: 'Tuyến', render: (row) => row.routeLabel },
+  { key: 'revenue', header: 'Doanh thu', isNumeric: true, render: (row) => row.revenueLabel },
+  { key: 'cost', header: 'Chi phí', isNumeric: true, render: (row) => row.costLabel },
+  {
+    key: 'margin',
+    header: 'Biên',
+    isNumeric: true,
+    render: (row) => (
+      <span className={row.isNegative ? 'tx-amount--out' : undefined}>{row.marginLabel}</span>
+    ),
+  },
+  { key: 'rate', header: 'Tỷ suất', isNumeric: true, render: (row) => row.rateLabel },
+  {
+    key: 'flag',
+    header: 'Ghi chú',
+    render: (row) =>
+      row.flag === null ? EMPTY_VALUE : <StatusBadge label={row.flag.label} tone={row.flag.tone} />,
+  },
+];
+
+/** NGUON CUA CON SO cua mot dong: tung khoan, kem so cai no den tu. */
+function MarginRowDetail({
+  row,
+  disclosure,
+}: {
+  readonly row: MarginRowModel;
+  readonly disclosure: string | undefined;
+}) {
+  return (
+    <section className="tx-detail" aria-label={`Nguồn con số ${row.code}`}>
+      <div className="tx-detail__head">
+        <div>
+          <h2>{row.code}</h2>
+          <p>{row.detail.title}</p>
+        </div>
+        <StatusBadge label={row.sourceLabel} tone={row.sourceTone} />
+      </div>
+      <dl className="tx-costlines">
+        {row.detail.lines.map((line) => (
+          <div key={line.label} className="tx-costlines__row">
+            <dt>{line.label}</dt>
+            <dd className="tx-costlines__value">{line.value}</dd>
+            <dd className="tx-costlines__source">{line.source}</dd>
+          </div>
+        ))}
+      </dl>
+      {disclosure === undefined ? null : <p className="tx-note">{disclosure}</p>}
+      <MarginNotes notes={row.detail.notes} />
+    </section>
   );
 }
