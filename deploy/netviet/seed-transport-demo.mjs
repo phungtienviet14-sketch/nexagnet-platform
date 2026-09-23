@@ -4,6 +4,7 @@ import process from 'node:process';
 import { PrismaClient } from '../../apps/api/node_modules/@prisma/client/default.js';
 import { argon2id, hash } from '../../apps/api/node_modules/argon2/argon2.cjs';
 import { DemoTenantGuardError } from '../../apps/api/dist/transport/demo/demo-guard.js';
+import { backfillDemoPlaceMarkers } from '../../apps/api/dist/transport/demo/demo-places.js';
 import {
   backfillDemoPersonaLogins,
   seedTransportDemoMonth,
@@ -31,7 +32,43 @@ import {
  * ro dieu do ra log. Du lieu van tai day du van co gia tri de xem; rieng be mat lai xe thi chua ai
  * dang nhap duoc. Mot mat khau mac dinh nhung san trong tep nay se la mot thong tin dang nhap
  * duoc cong bo cong khai tren mot stack co that.
+ *
+ * ---------------------------------------------------------------------------
+ * DIEM DIA DIEM MAU (#379) CHAY O CA HAI NHANH — VA KHONG BAO GIO CHAN API KHOI DONG.
+ *
+ * Bai xe + dia diem cua phap nhan (hang rao, phap nhan, dia diem) KHONG bi lenh reset xoa, va
+ * stack xem truoc da co ca thang du lieu tu truoc #379 — nen nhanh "bo qua" cung phai tao bu. Moi
+ * diem gieo toi da mot lan (xem `demo-places.ts`): lan chay thu hai khong tao gi.
+ *
+ * Railway chay tep nay o MOI lan khoi dong, noi voi lenh chay api bang `&&`. Diem mau chi la tien
+ * ich cho buoi trinh dien; mot lan gieo diem hong (DB cham, xung dot lap lai) ma lam ca api khong
+ * len la doi mot tien ich lay ca stack. Nen buoc nay GHI LOI ra stderr roi di tiep voi ma thoat 0 —
+ * khac han buoc gieo thang van hanh o tren, noi mot loi that van phai lam do lan deploy.
  */
+
+/** Chi in khi co gi dang noi: vua tao, hoac bo qua vi mot ly do KHAC "da gieo tu truoc". */
+function reportPlaceMarkers(result) {
+  const created = Object.entries(result.created).filter(([, count]) => count > 0);
+  if (created.length > 0) {
+    const summary = created.map(([key, count]) => `${key}=${count}`).join(' ');
+    process.stdout.write(`Da tao bu diem dia diem mau: ${summary}\n`);
+  }
+  for (const entry of result.skipped) {
+    if (entry.reason === 'MARKER_ALREADY_SEEDED') continue;
+    process.stdout.write(`Bo qua diem dia diem mau "${entry.label}": ${entry.reason}\n`);
+  }
+}
+
+async function backfillPlaceMarkersWithoutBlocking(client) {
+  try {
+    reportPlaceMarkers(await backfillDemoPlaceMarkers(client));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(
+      `Khong gieo duoc diem dia diem mau (bo qua, api van khoi dong; thu lai o lan khoi dong sau): ${reason}`,
+    );
+  }
+}
 
 const prisma = new PrismaClient();
 try {
@@ -55,6 +92,7 @@ try {
     process.stdout.write(`Da gieo thang van hanh mau (moc ${result.anchor}): ${summary}\n`);
     if (result.driverLoginNote !== null) process.stdout.write(`${result.driverLoginNote}\n`);
   }
+  await backfillPlaceMarkersWithoutBlocking(prisma);
 } catch (error) {
   if (error instanceof DemoTenantGuardError) {
     process.stdout.write('Goi khach nay khong phai goi mau — bo qua buoc gieo du lieu van tai.\n');

@@ -16,6 +16,7 @@ import { DriverFundController } from '../transport/costing/driver-fund.controlle
 import { DriverFundSelfController } from '../transport/costing/driver-fund-self.controller.js';
 import { TripExpensesController } from '../transport/costing/trip-expenses.controller.js';
 import { FleetController } from '../transport/fleet/fleet.controller.js';
+import { TransportPlacesController } from '../transport/places/places.controller.js';
 import { DriverTripsController } from '../transport/trips/driver-trips.controller.js';
 import { TripsController } from '../transport/trips/trips.controller.js';
 import { UsersController } from './users.controller.js';
@@ -50,6 +51,9 @@ const CONTROLLERS = [
   TripExpensesController,
   DriverFundController,
   DriverFundSelfController,
+  // Van tai #379: hai `POST` chi doc (tim/tim nguoc dia diem) — POST de chuoi tim va toa do khong
+  // nam trong URL, nhung moi lan goi co the thanh mot lan hoi ben thu ba, nen van phai co vai.
+  TransportPlacesController,
 ];
 
 /**
@@ -79,7 +83,9 @@ function mutatingRoutes(controller: NewableFunction): RouteInfo[] {
     .filter((name) => name !== 'constructor')
     .map((name) => prototype[name])
     .filter((value): value is (...args: never[]) => unknown => typeof value === 'function')
-    .filter((handler) => MUTATING.has(Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod))
+    .filter((handler) =>
+      MUTATING.has(Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod),
+    )
     .map((handler) => ({
       label: `${controller.name}.${handler.name} ${String(Reflect.getMetadata(PATH_METADATA, handler))}`,
       handler,
@@ -112,7 +118,10 @@ describe('RBAC coverage (§9)', () => {
   });
 
   it('cong tac van hanh nhay cam chi danh cho MANAGER/ADMIN', () => {
-    const rolesOf = (controller: NewableFunction, method: string): readonly UserRole[] | undefined =>
+    const rolesOf = (
+      controller: NewableFunction,
+      method: string,
+    ): readonly UserRole[] | undefined =>
       reflector.getAllAndOverride<readonly UserRole[]>(ROLES_KEY, [
         (controller.prototype as Record<string, (...args: never[]) => unknown>)[method]!,
         controller,

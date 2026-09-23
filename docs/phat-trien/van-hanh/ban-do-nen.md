@@ -30,7 +30,13 @@ JourneyMapModel (API) ──buildJourneyLayers──▶ lớp deck.gl (tuyến /
   máy chủ trả về** — cùng một hàm dựng lớp cho mọi nền (`journey-layers.ts`).
 - `distanceKm`, trạng thái Run/Leg, mốc, vệt GPS thô, tiền: **không đổi theo nền**. Không "bám
   đường" theo hình học của nhà cung cấp, không tính lại quãng đường.
-- Không Directions, routing, Places, Geocoding, tối ưu tuyến — ở bất kỳ nhà cung cấp nào.
+- Không Directions, routing, Places, Geocoding, tối ưu tuyến — ở bất kỳ nhà cung cấp **nền** nào.
+- **Tìm địa điểm (#379) không phải việc của nền.** Ô tìm của màn tạo đơn gọi API của chính mình
+  (`POST /transport/places/search` / `reverse`), và máy chủ đi qua cổng
+  `TransportPlaceSearchPort` — mặc định **TẮT**, không một lần gọi mạng nào. Trình duyệt không bao
+  giờ gọi thẳng một dịch vụ geocoding, và đổi nhà cung cấp nền không đổi gì ở tìm kiếm (và ngược
+  lại). Tìm kiếm tắt vẫn tạo đơn được: bấm trên bản đồ, chọn địa điểm đã biết, hoặc "Vị trí của
+  tôi". Biến môi trường và vận hành: §9.
 
 ## 2. Biến môi trường (lúc BUILD)
 
@@ -241,3 +247,56 @@ lại, rồi xoá khoá cũ.
   được trình đọc màn hình đọc riêng; nội dung nghiệp vụ nằm ở bảng chặng và dòng thời gian bên dưới.
 - Google: **chưa có ảnh ROADMAP/TERRAIN với khoá hợp lệ** — không còn là điều kiện của #374; chỉ là
   bằng chứng tuỳ chọn nếu sau này có khoá được duyệt.
+
+## 9. Tìm địa điểm phía máy chủ (#379) — biến môi trường của API
+
+> Khác §2: đây là biến **lúc CHẠY của api** (đọc `process.env` trong
+> `apps/api/src/transport/places/place-search-provider.factory.ts`), không phải biến `NEXT_PUBLIC_*`
+> lúc build web. Đổi giá trị = khởi động lại api, không build lại gì. Không nằm trong
+> `foundation-env`: đây là biến của một capability (`transport-core`), cùng lý lẽ với
+> `TRANSPORT_ROUTING_PROVIDER`.
+
+| Biến                                   | Giá trị                                     | Ghi chú                                                                                                                   |
+| -------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `TRANSPORT_PLACE_SEARCH_PROVIDER`      | `none` (mặc định) \| `nominatim`            | Để trống = `none`. Tên lạ → `none` + một dòng cảnh báo lúc khởi động mang mã `PROVIDER_UNKNOWN`                           |
+| `TRANSPORT_PLACE_SEARCH_BASE_URL`      | URL gốc http(s)                             | Mặc định `https://nominatim.openstreetmap.org`. Có truy vấn/mảnh/userinfo → `none` + `BASE_URL_INVALID`                   |
+| `TRANSPORT_PLACE_SEARCH_USER_AGENT`    | chuỗi ASCII in được, ≤ 200 ký tự            | Mặc định `NexagnetTransport/1.0 (+https://github.com/phungtienviet14-sketch/nexagnet-platform)`; sai dạng → dùng mặc định |
+| `TRANSPORT_PLACE_SEARCH_CONTACT_EMAIL` | email **liên hệ của người vận hành**        | Tuỳ chọn → tham số `email=` (chính sách Nominatim khuyên có). Không phải email của người dùng                             |
+| `DATA_CLASSIFICATION`                  | `test` \| `customer` (biến nền tảng sẵn có) | `customer` + `nominatim` → **TẮT** với `PROVIDER_NOT_APPROVED_FOR_CUSTOMER_DATA`                                          |
+
+**Bật trên stack xem trước** (dữ liệu thử nghiệm): `TRANSPORT_PLACE_SEARCH_PROVIDER=nominatim` trên
+service api — không cần khoá, không cần thanh toán. **Không bật trên stack khách thật**: Nominatim
+chưa nằm trong danh sách bên thứ ba được duyệt (chỉ KiotViet + Claude API); `DATA_CLASSIFICATION=customer`
+tự chặn nó, và muốn đổi thì phải bổ sung vào thoả thuận xử lý dữ liệu trước, không phải sửa biến.
+
+Hành vi cố định (không có biến nào để nới):
+
+- **Chỉ chuỗi người dùng gõ đi ra ngoài.** Tìm: `q`, `format=jsonv2`, `accept-language=vi,en`,
+  `countrycodes=vn`, `limit=5` (+ `email`). Tìm ngược: `lat`, `lon` (làm tròn 5 chữ số), `format`,
+  `accept-language`, `zoom=17` (+ `email`). Không mã khách, mã đơn, mã người dùng, tên gói khách.
+- **Một lần gọi / 1100 ms cho cả tiến trình api**: 1 lần gọi đang chạy + tối đa 3 yêu cầu chờ;
+  người chờ thứ tư nhận `BUSY` ngay. Khoảng cách đo bằng đồng hồ đơn điệu, mỗi lần chờ không quá
+  1100 ms dù đồng hồ máy bị chỉnh lùi. `@Throttle` 20/phút (tìm) và 30/phút (tìm ngược) cho từng người gọi chỉ chặn một
+  người chiếm hết cổng — trần toàn ứng dụng nằm ở cổng. Chạy nhiều bản sao api thì mỗi bản một cổng:
+  cần một kho dùng chung trước khi nhân bản.
+- **Hết giờ 8 giây, không thử lại.** 429 → `UNAVAILABLE`/`PROVIDER_RATE_LIMITED`; mạng/5xx/sai hình
+  dạng → `UNAVAILABLE`/`PROVIDER_UNAVAILABLE`. Màn hình nói "tìm kiếm tạm ngưng — chọn trên bản đồ".
+- **Đệm 24 giờ / 500 mục trong bộ nhớ** — 500 là tổng của tìm **và** tìm ngược (một bộ nhớ đệm
+  dùng chung), chết cùng tiến trình; thất bại không đệm.
+- **Log và trace không chứa chuỗi tìm hay toạ độ.** Telemetry chỉ ghi `operation`, `providerId`,
+  `queryLength`, `resultCount`, `reason`; lỗi mạng của `fetch` (chứa URL có `q=`) không được bắt vào
+  biến nào.
+- **Ghi nguồn** `© OpenStreetMap contributors` đi kèm mọi kết quả thành công và phải hiện dưới danh
+  sách gợi ý (ODbL).
+
+Kiểm nhanh sau khi bật (phiên ADMIN/ACCOUNTING, cần `x-csrf-token` ở chế độ phiên):
+`POST /transport/places/search` thân `{"query":"Khu công nghiệp Đình Vũ"}` → `status: "OK"` và
+`attribution` khác `null`. `status: "DISABLED"` + `reason` cho biết vì sao còn tắt; log khởi động
+có dòng `Tim dia diem TAT do cau hinh: <MÃ>` khi cấu hình hỏng.
+
+Địa điểm đã biết (`GET /transport/places/known`) không dùng biến nào: nó đọc hàng rào đang hoạt động
+(cần `transport-proof`). Bản xem trước được gieo sẵn ba điểm **toạ độ tổng hợp** (bãi xe `DEPOT-HN`,
+`Nhà máy thép Đình Vũ`, `Kho Nhựa Tân Phú Hưng`) bởi `deploy/netviet/seed-transport-demo.mjs`.
+Mỗi điểm gieo tối đa một lần: đã có hàng rào của máy gieo cùng nhãn (kể cả đã nghỉ) thì bỏ qua, nên
+sửa/nghỉ điểm trên màn hình là giữ nguyên qua mọi lần khởi động. Gieo điểm hỏng chỉ in một dòng
+`Khong gieo duoc diem dia diem mau ...` ra stderr — api **vẫn** khởi động.

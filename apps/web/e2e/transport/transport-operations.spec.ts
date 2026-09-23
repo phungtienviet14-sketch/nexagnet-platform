@@ -891,14 +891,15 @@ const DISPATCH_SUGGESTION = {
   orderId: 'ord-e2e-1',
   orderCode: 'DH-E2E-1',
   pickup: {
+    /* `#379` — diem lay hang la TOA DO cua don, khong con suy tu nhan hang rao. */
     place: {
       point: { latitude: 20.8449, longitude: 106.6881 },
-      source: 'GEOFENCE_LABEL_EXACT',
+      source: 'ORDER_PICKUP_POINT',
       label: 'Kho Hải Phòng',
-      geofenceId: 'gf-1',
+      geofenceId: null,
       siteId: null,
     },
-    resolution: 'PICKUP_FROM_GEOFENCE_LABEL',
+    resolution: 'PICKUP_FROM_ORDER_COORDINATES',
   },
   requiredPickupAt: null,
   generatedAt: '2026-09-12T03:00:00.000Z',

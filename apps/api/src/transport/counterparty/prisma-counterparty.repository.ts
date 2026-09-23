@@ -99,6 +99,14 @@ export class PrismaCounterpartyRepository extends CounterpartyRepository {
     return row ? toCounterparty(row) : null;
   }
 
+  async findMany(ids: readonly string[]): Promise<Counterparty[]> {
+    if (ids.length === 0) return [];
+    const rows: CounterpartyRow[] = await model(this.prisma, 'transportCounterparty').findMany({
+      where: { id: { in: [...new Set(ids)] } },
+    });
+    return rows.map(toCounterparty);
+  }
+
   async findByTaxCode(taxCode: string): Promise<Counterparty | null> {
     const row = await model(this.prisma, 'transportCounterparty').findUnique({
       where: { taxCode },

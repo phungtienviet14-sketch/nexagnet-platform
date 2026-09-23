@@ -5,7 +5,6 @@ import Map, {
   NavigationControl,
   ScaleControl,
   useControl,
-  type ErrorEvent as MapErrorEvent,
   type MapRef,
   type ViewState,
 } from 'react-map-gl/maplibre';
@@ -13,12 +12,8 @@ import { setWorkerUrl, type StyleSpecification } from 'maplibre-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { buildJourneyLayers } from './journey-layers';
 import { MAPLIBRE_WORKER_URL } from './maplibre-worker-url';
-import {
-  watchExternalBasemap,
-  type BasemapErrorEvent,
-  type ExternalBasemapStatus,
-  type ExternalBasemapWatch,
-} from './maplibre-basemap-watch';
+import type { ExternalBasemapStatus } from './maplibre-basemap-watch';
+import { toWatchError, useExternalBasemapWatch } from './use-external-basemap-watch';
 import type { ChartPalette } from './chart-options';
 import type { MapCamera } from './map-camera';
 import type { JourneyMapModel } from '../workspace/journey';
@@ -92,39 +87,10 @@ const initialViewStateFor = (
         fitBoundsOptions: { padding: camera.paddingPx, maxZoom: camera.maxZoom },
       };
 
-/**
- * Su kien `error` cua MapLibre → dieu watch can: loi cua NGUON nao (o tile / TileJSON co `tile` /
- * `sourceId`; sprite, phong chu thi khong), va luc do moi o dang xin da xong het chua. MapLibre dat
- * `tile.state = 'errored'` TRUOC khi phat loi, nen cau hoi nay dung ngay o loi cuoi cung.
+/*
+ * `toWatchError` + `useExternalBasemapWatch` nam o `use-external-basemap-watch.ts` tu `#379`: ban do
+ * chon diem cua man tao don lui nen theo DUNG phan loai nay.
  */
-const toWatchError = (event: MapErrorEvent): BasemapErrorEvent => {
-  const detail = event as unknown as { readonly tile?: unknown; readonly sourceId?: string };
-  return {
-    tile: detail.tile,
-    sourceId: detail.sourceId,
-    tilesSettled: event.target.areTilesLoaded(),
-  };
-};
-
-/**
- * Watch song TRONG effect, khong trong luc ve: tao no la bat dong ho. Cac handler su kien doc watch
- * dang song qua `ref`; `reactStrictMode` gan-go-gan thi watch thu nhat da `dispose` va im lang.
- */
-function useExternalBasemapWatch(
-  onStatus: ((status: ExternalBasemapStatus) => void) | undefined,
-): React.RefObject<ExternalBasemapWatch | null> {
-  const watch = useRef<ExternalBasemapWatch | null>(null);
-  useEffect(() => {
-    if (onStatus === undefined) return undefined;
-    const current = watchExternalBasemap(onStatus);
-    watch.current = current;
-    return () => {
-      watch.current = null;
-      current.dispose();
-    };
-  }, [onStatus]);
-  return watch;
-}
 
 export function MapLibreBasemap({
   style,

@@ -218,7 +218,7 @@ const D_STROKE = /[Đđ]/g;
  * Tim theo ma chuyen, hai dau tuyen, va mo ta hang — BO DAU truoc khi so.
  * Nguoi dieu hanh go nhanh va thuong khong bo dau; go "thai nguyen" phai tim ra "Thái Nguyên".
  */
-const normalise = (value: string): string =>
+export const normalise = (value: string): string =>
   value.normalize('NFD').replace(COMBINING_MARKS, '').replace(D_STROKE, 'd').toLowerCase().trim();
 
 export const filterTrips = (trips: readonly Trip[], filter: TripFilter): readonly Trip[] => {

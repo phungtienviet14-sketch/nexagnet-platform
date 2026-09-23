@@ -70,19 +70,23 @@ export class CounterpartySiteService {
   }
 
   /**
-   * KHUNG NHIN theo LO — mot truy van cho danh sach dia diem, roi mot lan doc phap nhan cho moi
-   * phap nhan RIENG BIET.
+   * KHUNG NHIN theo LO — DUNG HAI truy van: mot cho danh sach dia diem, mot cho moi phap nhan cua
+   * chung (`findMany`), bat ke bao nhieu dia diem.
    *
-   * Vong lap doc phap nhan bi CHAN TREN boi so ung vien ma tang goi da cat (`maxCandidates`), nen
-   * no khong phai mot truy van N+1 mo. Mot dia diem tro toi mot phap nhan khong doc duoc thi BI BO
-   * QUA — mot the "Ban dang o ???" te hon mot the khong hien ra.
+   * Truoc #379 buoc thu hai la mot vong doc tung phap nhan NOI TIEP; chap nhan duoc khi nguoi goi
+   * duy nhat (`site-intake`) da cat danh sach xuong vai ung vien, nhung "dia diem da biet" cua man
+   * tao don doc MOI hang rao dia diem — va mot vong N lan hoi o do lon theo so khach. Mot dia diem
+   * tro toi mot phap nhan khong doc duoc thi BI BO QUA — mot the "Ban dang o ???" te hon mot the
+   * khong hien ra.
    */
   async activeViews(ids: readonly string[]): Promise<readonly CounterpartySiteView[]> {
     const sites = await this.sites.findManyActive(ids);
-    const parties = new Map<string, Awaited<ReturnType<CounterpartyRepository['find']>>>();
-    for (const partyId of new Set(sites.map((site) => site.counterpartyId))) {
-      parties.set(partyId, await this.counterparties.find(partyId));
-    }
+    const partyIds = [...new Set(sites.map((site) => site.counterpartyId))];
+    const parties = new Map(
+      (partyIds.length === 0 ? [] : await this.counterparties.findMany(partyIds)).map(
+        (party) => [party.id, party] as const,
+      ),
+    );
     return sites.flatMap((site) => {
       const counterparty = parties.get(site.counterpartyId);
       if (!counterparty) return [];

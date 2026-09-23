@@ -1879,14 +1879,85 @@ export interface TransportOrder {
   readonly status: TransportOrderStatus;
   readonly businessDate: BusinessDate;
   readonly customerId: string | null;
+  /** Chi de HIEN THI. Su that cua diem lay la `originPoint` (#379). */
   readonly originLabel: string;
+  /** Chi de HIEN THI. Su that cua diem giao la `destinationPoint` (#379). */
   readonly destinationLabel: string;
+  /**
+   * TOA DO diem lay hang (#379). `null` = don tao truoc khi he thong luu toa do (don cu, don chieu
+   * tu chuyen v1, du lieu mau) — man hinh noi dung dieu do va KHONG BAO GIO bia mot diem.
+   *
+   * TUY CHON o phia web (khac may chu): bo mock e2e cu khong co truong nay, nen `undefined` phai
+   * doc ra y het `null`. Dung `orderPointOf()` thay vi doc truc tiep.
+   */
+  readonly originPoint?: GeoPoint | null;
+  /** Toa do diem giao hang (#379) — cung quy uoc voi `originPoint`. */
+  readonly destinationPoint?: GeoPoint | null;
   readonly cargoDescription: string | null;
   readonly freightAmount: number | null;
   readonly currencyCode: string;
   readonly note: string | null;
   readonly cancelledAt: string | null;
   readonly cancellationReason: string | null;
+}
+
+/* ------------------------------------------------------------------ *
+ * DIA DIEM — tim kiem, tim nguoc va dia diem da biet (#379)
+ *
+ * Ban guong cua `apps/api/src/transport/places/place-search.types.ts`. Ket qua tim kiem la mot GOI
+ * Y: no chi thanh toa do cua don khi nguoi dung bam chon. That bai la mot TRANG THAI co kieu trong
+ * than 200, khong phai mot loi HTTP — man hinh tao don van chay khi tim kiem tat hay hong.
+ * ------------------------------------------------------------------ */
+
+export type PlaceLookupStatus = 'OK' | 'DISABLED' | 'BUSY' | 'UNAVAILABLE';
+
+export type PlaceLookupFailureReason =
+  | 'PROVIDER_UNCONFIGURED'
+  | 'PROVIDER_NOT_APPROVED_FOR_CUSTOMER_DATA'
+  | 'PROVIDER_BUSY'
+  | 'PROVIDER_RATE_LIMITED'
+  | 'PROVIDER_UNAVAILABLE';
+
+export interface PlaceCandidate {
+  readonly label: string;
+  readonly address: string | null;
+  readonly point: GeoPoint;
+}
+
+export interface PlaceSearchResponse {
+  readonly status: PlaceLookupStatus;
+  readonly reason: PlaceLookupFailureReason | null;
+  readonly results: readonly PlaceCandidate[];
+  readonly attribution: string | null;
+  readonly fromCache: boolean;
+}
+
+export interface PlaceReverseResponse {
+  readonly status: PlaceLookupStatus;
+  readonly reason: PlaceLookupFailureReason | null;
+  readonly result: PlaceCandidate | null;
+  readonly attribution: string | null;
+  readonly fromCache: boolean;
+}
+
+/** Ba loai hang rao la "cho ta hay lay/giao hang". Cay xang va hang rao tam CO Y vang mat. */
+export type KnownPlaceKind = 'DEPOT' | 'COUNTERPARTY_SITE' | 'CUSTOMER';
+
+export interface KnownPlace {
+  /** `TransportGeofence.id` — hang rao LA dia diem da biet, khong co kho thu hai. */
+  readonly id: string;
+  readonly kind: KnownPlaceKind;
+  readonly name: string;
+  /** Ten phap nhan so huu (chi `COUNTERPARTY_SITE`), con lai `null`. */
+  readonly detail: string | null;
+  readonly point: GeoPoint;
+  readonly radiusMetres: number;
+}
+
+export interface KnownPlacesResponse {
+  /** `false` = khach khong co so hang rao; KHAC voi `true` kem danh sach rong. */
+  readonly available: boolean;
+  readonly places: readonly KnownPlace[];
 }
 
 export interface VehicleRun {

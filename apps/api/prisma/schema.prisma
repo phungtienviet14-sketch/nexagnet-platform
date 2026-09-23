@@ -4256,6 +4256,19 @@ model TransportDriverCashoutAllocation {
 //   · `TransportOrder_code_not_blank` / `TransportVehicleRun_code_not_blank`
 //   · `TransportRunAssignment_activeRun_key`    — unique MOT PHAN, mot ban phan cong DANG hieu luc
 //     cho moi vong chay. Cung mau va cung ly do voi `TransportTripAssignment_activeTrip_key`.
+//
+// #379 — TOA DO DIEM LAY / DIEM GIAO cua `TransportOrder`, xem
+// `20260923140000_transport_order_location_points/migration.sql` va
+// `transport-order-location-storage.spec.ts`:
+//
+//   · `TransportOrder_origin_point_paired` / `TransportOrder_destination_point_paired`
+//     — vi do va kinh do cung co hoac cung NULL. Nua cap toa do la mot diem khong ton tai.
+//   · `TransportOrder_origin_latitude_range` / `_origin_longitude_range`
+//     `TransportOrder_destination_latitude_range` / `_destination_longitude_range`
+//     — [-90, 90] va [-180, 180], cung khoang voi `parseGeoPoint`.
+//   · `TransportOrder_origin_not_null_island` / `TransportOrder_destination_not_null_island`
+//     — tu choi (0, 0): dau hieu cua mot dinh vi CHUA CO, khong phai mot diem lay hang. Bieu thuc
+//     `abs(lat) >= 1e-9 OR abs(lng) >= 1e-9` la phu dinh DUNG CHU cua `parseGeoPoint` (ca dau `>=`).
 // -----------------------------------------------------------------------------------------------
 
 /// VONG DOI cua mot NGHIA VU THUONG MAI. Ba trang thai, khong hon.
@@ -4305,27 +4318,38 @@ enum TransportRunLegStatus {
 /// phap nhan da co duong doc rieng qua `TransportCounterpartyLink` (R1-A). Them mot khoa ngoai
 /// danh tinh thu hai o day la tao hai duong tra loi cung mot cau hoi "don nay cua ai".
 model TransportOrder {
-  id                 String               @id @default(cuid())
+  id                   String               @id @default(cuid())
   /// MA DOC DUOC ma nguoi dung go, khong phai `cuid`. Cung vai tro voi `TransportTrip.code`.
-  code               String               @unique
-  status             TransportOrderStatus @default(OPEN)
+  code                 String               @unique
+  status               TransportOrderStatus @default(OPEN)
   /// `YYYY-MM-DD` theo mui gio tenant — tinh MOT LAN luc ghi (`INV-25`).
-  businessDate       String               @db.VarChar(10)
-  customerId         String?
-  customer           TransportCustomer?   @relation(fields: [customerId], references: [id])
-  originLabel        String
-  destinationLabel   String
-  cargoDescription   String?
+  businessDate         String               @db.VarChar(10)
+  customerId           String?
+  customer             TransportCustomer?   @relation(fields: [customerId], references: [id])
+  /// Nhan de HIEN THI cho nguoi doc. Tu #379 KHONG con la su that ve vi tri — xem cac cot toa do.
+  originLabel          String
+  destinationLabel     String
+  /// #379: DIEM LAY HANG THAT, WGS84 do thap phan (`DOUBLE PRECISION`, cung kieu voi
+  /// `TransportGeofence`, de sau nay them duoc cot `geography` sinh tu hai cot nay ma khong doi
+  /// du lieu). NULL KHI VA CHI KHI don khong duoc tao qua duong co toa do: don cu truoc #379, don
+  /// chieu tu chuyen v1, don seed mau. KHONG backfill, KHONG geocode nhan cu — mot toa do doan sai
+  /// con te hon khong co, vi dieu xe se tin no. Rang buoc cap/khoang/null island o SQL tho.
+  originLatitude       Float?
+  originLongitude      Float?
+  /// #379: DIEM GIAO HANG THAT. Cung quy tac voi cap `origin*` o tren.
+  destinationLatitude  Float?
+  destinationLongitude Float?
+  cargoDescription     String?
   /// DOANH THU — gia cuoc thu khach, SO NGUYEN DONG. `BigInt` = `BIGINT` chu khong `INTEGER`, cung
   /// ly do da ghi o `TransportTrip.freightAmount`: `INTEGER` tran o 2.147.483.647 dong.
-  freightAmount      BigInt?
-  currencyCode       String               @default("VND") @db.VarChar(3)
-  note               String?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  freightAmount        BigInt?
+  currencyCode         String               @default("VND") @db.VarChar(3)
+  note                 String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
   /// `GD-02` — huy THAY CHO xoa. Khong co duong xoa cung nao cho mot nghia vu.
-  cancelledAt        DateTime?
-  cancellationReason String?
+  cancelledAt          DateTime?
+  cancellationReason   String?
 
   legs                     TransportRunLeg[]
   /// #276 L2/L3: lan lap ke hoach da gan don nay vao mot vong chay. TOI DA MOT ban con hieu luc —

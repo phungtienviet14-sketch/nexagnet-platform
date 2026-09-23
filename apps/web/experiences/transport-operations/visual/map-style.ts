@@ -273,6 +273,21 @@ export function effectiveBasemap(
 }
 
 /**
+ * Nen cho BAN DO CHON DIEM cua man tao don (`#379`) — mot quy tac, mot ngoai le.
+ *
+ * Moi cau hinh giu NGUYEN nen cua no (OpenFreeMap, style tu khai, cuc bo), tru Google: nen Google
+ * cua ta (`GoogleBasemap`) tu dung `google.maps.Map` va khong co duong bam-de-lay-toa-do hay ghim
+ * keo duoc. Thay vi dung mot ban do chon diem thu hai tren API Google, ban do chon diem dung
+ * OpenFreeMap — nen MAC DINH, khong khoa, khong thanh toan. Ban do bao cao van theo Google.
+ *
+ * Khong them gia tri nao vao `MAP_PROVIDERS`/`MAP_BASEMAP_SOURCES`/`BASEMAP_FALLBACK_REASONS`:
+ * ngoai le nay la cua mot BE MAT, khong phai mot nha cung cap moi.
+ */
+export function pickerBasemap(configured: TransportBasemap): TransportBasemap {
+  return configured.source === 'GOOGLE_MAPS' ? OPENFREEMAP : configured;
+}
+
+/**
  * Doc bien moi truong — TUNG TEN VIET DU.
  *
  * Next.js thay `process.env.NEXT_PUBLIC_*` bang gia tri luc BUILD, va chi khi ten duoc viet nguyen

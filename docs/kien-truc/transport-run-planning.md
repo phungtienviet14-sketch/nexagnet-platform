@@ -144,6 +144,15 @@ biệt hoa/thường). **Không bỏ dấu**: bỏ dấu sẽ gộp "Ha Noi" và
 thừa mà người đọc nhìn thấy và sửa được, thay vì nuốt mất một di chuyển thật. Khi Lane M mang về
 khoá địa điểm/toạ độ thật, `sameSite()` đổi hiện thực — không đổi chữ ký.
 
+> **Ghi chú #379 (23/09/2026):** đơn hàng nay **mang toạ độ** điểm lấy/giao
+> (`Order.originPoint`/`destinationPoint`), và điều xe dùng toạ độ đó
+> ([transport-dispatch-intelligence.md](transport-dispatch-intelligence.md) `D-01`). **Lập kế hoạch
+> vẫn so nhãn**: `sameSite()` và `planOrderAssignment()` không đổi trong #379, vì một phía của phép
+> so — điểm cuối chặng trước (`RunLeg`) và bãi xe (`TransportPlanningPolicy.depots`) — vẫn chỉ có
+> nhãn, không có toạ độ. So toạ độ của đơn với nhãn của chặng sẽ là một phép so lệch hệ; đổi hiện
+> thực khi chặng/bãi có toạ độ. `plannedDistanceKm` cũng **không** được lấp tự động từ toạ độ đơn:
+> một ước lượng tổng hợp ghi vào cột số nguyên sẽ mất nhãn `SYNTHETIC` (`#277 M5`).
+
 ---
 
 ## 4. Đã đi vs Dự định (#276 L6)
@@ -520,7 +529,7 @@ không ràng buộc nào bị gỡ. Đường lui nằm ở `README-rollback.sql
 | `CARGO_STILL_CARRIED` chưa có nguồn                  | **ĐÃ ĐÓNG.** `CheckpointRunClosureBlockerSource` suy ra nó từ `buildRunTimeline()` của `#243` F6 (giai đoạn `LOADING`/`IN_TRANSIT`/`ARRIVED` = hàng còn trên thùng). `transport-core` vẫn không phụ thuộc ngược: cổng `RunClosureBlockerSource` do `transport-core` khai, `transport-checkpoint` ghi đè ở tầng composition |
 | `OPEN_WAITING_SESSION` chưa có nguồn                 | **CHỜ LANE O.** Cổng đã có và đã kiểm bằng adapter giả; `TransportDeliveryWaitingSession` (#243 F3) vẫn chưa vào `main`, và lane này **không** dựng một bảng giả. Xem `WAITING_SESSION_BINDING` ở báo cáo cuối lane                                                                                                        |
 | `IDLE_TIMEOUT` cần một lần quét                      | **ĐÃ ĐÓNG.** `RunClosureSweepScheduler` + `RunClosureService.sweep()` — bền vững, có trần, khôi phục được sau khi tiến trình chết, và không đóng hai lần dưới hai worker                                                                                                                                                   |
-| So sánh địa điểm bằng nhãn chữ                       | **CÒN.** Chưa có khoá địa điểm/toạ độ ở grain chặng. Lane M sở hữu phần đó                                                                                                                                                                                                                                                 |
+| So sánh địa điểm bằng nhãn chữ                       | **CÒN.** Chưa có khoá địa điểm/toạ độ ở grain chặng. Lane M sở hữu phần đó. #379 đưa toạ độ vào **đơn** (điều xe dùng), nhưng lập kế hoạch vẫn so nhãn — xem ghi chú ở §3                                                                                                                                                  |
 | Vòng chạy mồ côi khi hai yêu cầu song song cùng thua | **CÒN.** Bản thua ở `plans.create` để lại một vòng chạy `PLANNED` rỗng việc; nó được dọn bằng đường huỷ bình thường. Cùng khuôn với `SiteIntakeService`                                                                                                                                                                    |
 
 ### Nguồn sự thật bên ngoài — cổng, không phải một DI tuỳ nghi

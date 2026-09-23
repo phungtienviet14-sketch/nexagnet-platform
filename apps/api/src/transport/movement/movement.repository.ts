@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { AuditLogRepository, type AppendAuditLogInput } from '../../audit/audit-log.repository.js';
+import type { GeoPoint } from '../geo/geo-point.js';
 import { storageUniqueViolation } from '../proof/proof-storage-conflict.js';
 import type { UniqueIndexRef } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
@@ -171,6 +172,13 @@ export interface CreateOrderInput {
   readonly businessDate: string;
   readonly originLabel: string;
   readonly destinationLabel: string;
+  /**
+   * TUY CHON o tang nay (#379), BAT BUOC o bien HTTP (`createOrderSchema`). Tuy chon vi cac duong
+   * noi bo -- chieu don tu chuyen v1, fixture -- khong co toa do that va phai ghi `null` chu khong
+   * duoc bia. Gia tri vao day DA qua `parseGeoPoint` o `MovementService`.
+   */
+  readonly originPoint?: GeoPoint | null;
+  readonly destinationPoint?: GeoPoint | null;
   readonly customerId?: string | null;
   readonly cargoDescription?: string | null;
   readonly freightAmount?: number | null;
@@ -524,6 +532,13 @@ export abstract class MovementRepository {
 
 const iso = (value: Date): string => value.toISOString();
 
+/**
+ * Cap toa do la MOT gia tri: hoac du ca hai so, hoac `null` -- dung hinh cua CHECK
+ * `TransportOrder_*_point_paired` ben Postgres. `undefined` (duong noi bo khong co toa do) ve `null`.
+ */
+const copyPoint = (point: GeoPoint | null | undefined): GeoPoint | null =>
+  point ? { latitude: point.latitude, longitude: point.longitude } : null;
+
 export class InMemoryMovementRepository extends MovementRepository {
   private readonly orders = new Map<string, Order>();
   private readonly runs = new Map<string, VehicleRun>();
@@ -583,6 +598,9 @@ export class InMemoryMovementRepository extends MovementRepository {
       customerId: input.customerId ?? null,
       originLabel: input.originLabel,
       destinationLabel: input.destinationLabel,
+      // Sao chep gia tri, khong giu tham chieu cua nguoi goi: Order la bat bien.
+      originPoint: copyPoint(input.originPoint),
+      destinationPoint: copyPoint(input.destinationPoint),
       cargoDescription: input.cargoDescription ?? null,
       freightAmount: input.freightAmount ?? null,
       currencyCode: 'VND',
