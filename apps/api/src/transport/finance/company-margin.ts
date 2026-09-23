@@ -191,6 +191,12 @@ export interface CompanyMarginBasis {
   readonly runFirstOrders: MarginSubtotal & {
     readonly counted: number;
     readonly excluded: Readonly<Record<MarginExclusion, number>>;
+    /**
+     * Don DA vao tong ma CHUA co mot dong chi phi nao (khong phan bo, khong phieu treo). Bien 100%
+     * cua chung la "chua ai ghi chi phi", khong phai "khong ton chi phi" — noi ra de khong ai doc
+     * nham, nhung KHONG loai khoi tong: chi phi da ghi (0) la su that cua so cai hom nay.
+     */
+    readonly withoutRecordedCost: number;
   };
   readonly projectedOrderCount: number;
   /** Tong phan chua phan bo cua cac dong DA vao tong — bien that co the thap hon toi da so nay. */
@@ -381,6 +387,9 @@ export function buildCompanyMargin(input: CompanyMarginInput): CompanyMarginView
           ...subtotal(runFirstCountedRows),
           counted: runFirstCountedRows.length,
           excluded,
+          withoutRecordedCost: runFirstCountedRows.filter(
+            (row) => row.deductionAmount === 0 && row.pendingFuelCost.entryCount === 0,
+          ).length,
         },
         projectedOrderCount: input.projectedOrderCount,
         pendingFuelCost: {

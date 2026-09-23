@@ -41,6 +41,7 @@ const totals = (over: Partial<CompanyMarginRollup['basis']> = {}): CompanyMargin
     runFirstOrders: {
       counted: 1,
       excluded: EMPTY_EXCLUDED,
+      withoutRecordedCost: 0,
       revenueAmount: 6_000_000,
       deductionAmount: 1_320_000,
       marginAmount: 4_680_000,
@@ -94,6 +95,8 @@ describe('tong + nguon', () => {
     expect(digits(model.sources[0]!.marginLabel)).toBe('4680000');
     // 6.000.000 / 279.300.000 = 2,1% — HINH cua phan doanh thu, khong phai mot tong moi.
     expect(model.sources[0]!.revenueShare).toBe(2.1);
+    // Dau thap phan kieu Viet, nhu moi ty le khac tren man (`#385`: ban dau in "13.4%").
+    expect(model.sources[0]!.revenueShareLabel).toBe('2,1%');
     expect(model.disclosure).toBe('Chưa gồm chi phí cố định');
   });
 
@@ -129,6 +132,15 @@ describe('loi canh bao truoc khi tin tong', () => {
     const text = notes.map((note) => note.text).join(' ');
     expect(text).toContain('2 chưa có vòng xe nào chạy đơn');
     expect(text).toContain('1 vòng xe chở cả việc khác');
+  });
+
+  it('don da vao tong nhung chua ghi chi phi nao: noi ra, bien 100% khong phai that', () => {
+    const notes = marginNotes(
+      totals({ runFirstOrders: { ...totals().basis.runFirstOrders, withoutRecordedCost: 7 } }),
+    );
+    expect(notes.map((note) => note.text).join(' ')).toContain(
+      '7 đơn theo vòng xe chưa có khoản chi phí nào được ghi',
+    );
   });
 
   it('khong co gi dang lo thi chi con dong giai thich don chieu', () => {
@@ -170,6 +182,31 @@ describe('tung dong', () => {
       ['Doanh thu', model.revenueLabel],
       ['Chi phí trực tiếp', 'Chưa biết'],
     ]);
+  });
+
+  it('don da vao tong ma chua ghi chi phi nao: nhan "Chưa ghi chi phí", khong im lang 100%', () => {
+    const model = toMarginRow(
+      row({
+        costs: { tripExpense: 0, carrierPayable: 0, commission: 0, fuelAttribution: 0 },
+        deductionAmount: 0,
+        marginAmount: 6_000_000,
+        marginBasisPoints: 10000,
+      }),
+    );
+    expect(model.flag).toEqual({ label: 'Chưa ghi chi phí', tone: 'wait' });
+    expect(model.detail.notes[0]?.text).toContain('không phải "không tốn chi phí"');
+    // Chuyen cu bang 0 la mot su that khac — khong gan nhan nay.
+    expect(
+      toMarginRow(
+        row({
+          source: 'LEGACY_TRIP',
+          key: 'TRIP:1',
+          tripKind: 'OWN_DIRECT',
+          deductionAmount: 0,
+          costs: { tripExpense: 0, carrierPayable: 0, commission: 0, fuelAttribution: 0 },
+        }),
+      ).flag,
+    ).toBeNull();
   });
 
   it('phieu dau chua phan bo co mot nhan rieng tren dong', () => {

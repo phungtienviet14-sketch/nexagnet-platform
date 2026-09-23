@@ -533,7 +533,7 @@ function FuelInboxDetail({
               onAct({
                 id: 'verify',
                 entryId: row.id,
-                detail: 'Sau khi xác thực, phiếu vào được kỳ đối soát bảng kê.',
+                detail: row.verifyConsequence,
               })
             }
           >

@@ -73,6 +73,8 @@ export interface MarginSourceModel {
   readonly marginLabel: string;
   /** Phan doanh thu cua nguon nay tren tong, `0..100` — de ve thanh ti le. `null` khi tong = 0. */
   readonly revenueShare: number | null;
+  /** Cung con so, viet kieu Viet (`13,4%`) — dau thap phan la dau PHAY nhu moi ty le khac. */
+  readonly revenueShareLabel: string | null;
 }
 
 export interface MarginNote {
@@ -96,6 +98,10 @@ export interface MarginTotalsModel {
 
 const share = (part: number, whole: number): number | null =>
   whole === 0 ? null : Math.round((part * 1000) / whole) / 10;
+
+const shareFormatter = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
+const shareLabel = (value: number | null): string | null =>
+  value === null ? null : `${shareFormatter.format(value)}%`;
 
 /**
  * Cau CO SO — noi DUNG don vi cua ca hai nguon (`#381`: "Tính trên 44 chuyến" noi mot nua). Chuyen cu
@@ -134,6 +140,15 @@ export function marginNotes(totals: CompanyMarginRollup): readonly MarginNote[] 
     notes.push({
       tone: 'warn',
       text: `Đơn theo vòng xe chưa vào tổng: ${excluded.join('; ')}.`,
+    });
+  }
+  if (basis.runFirstOrders.withoutRecordedCost > 0) {
+    notes.push({
+      tone: 'warn',
+      text:
+        `${formatCount(basis.runFirstOrders.withoutRecordedCost)} đơn theo vòng xe chưa có khoản chi ` +
+        'phí nào được ghi (chưa có phiếu dầu nào được phân bổ) — biên 100% của các đơn này chưa ' +
+        'phản ánh chi phí thật.',
     });
   }
   if (basis.unassignedRunFirstCost.runCount > 0) {
@@ -175,6 +190,7 @@ export function toMarginTotals(totals: CompanyMarginRollup): MarginTotalsModel {
         deductionLabel: formatMoney(runFirstOrders.deductionAmount),
         marginLabel: formatMoney(runFirstOrders.marginAmount),
         revenueShare: share(runFirstOrders.revenueAmount, totals.revenueAmount),
+        revenueShareLabel: shareLabel(share(runFirstOrders.revenueAmount, totals.revenueAmount)),
       },
       {
         source: 'LEGACY_TRIP',
@@ -184,6 +200,7 @@ export function toMarginTotals(totals: CompanyMarginRollup): MarginTotalsModel {
         deductionLabel: formatMoney(legacyTrips.deductionAmount),
         marginLabel: formatMoney(legacyTrips.marginAmount),
         revenueShare: share(legacyTrips.revenueAmount, totals.revenueAmount),
+        revenueShareLabel: shareLabel(share(legacyTrips.revenueAmount, totals.revenueAmount)),
       },
     ],
     notes: marginNotes(totals),
@@ -241,8 +258,19 @@ const flagOf = (row: CompanyMarginRow): MarginRowModel['flag'] => {
       tone: 'wait',
     };
   }
+  if (hasNoRecordedCost(row)) return { label: 'Chưa ghi chi phí', tone: 'wait' };
   return null;
 };
+
+/**
+ * Don DA vao tong nhung so cai chua co mot dong chi phi nao. Chi don theo vong xe: chuyen cu mang
+ * chi phi TX-03 tu luc chot, va mot chuyen cu bang 0 la mot su that khac (van hien 0 ₫ nhu truoc).
+ */
+const hasNoRecordedCost = (row: CompanyMarginRow): boolean =>
+  row.source === 'RUN_FIRST_ORDER' &&
+  row.counted &&
+  row.deductionAmount === 0 &&
+  row.pendingFuelCost.entryCount === 0;
 
 const detailLines = (row: CompanyMarginRow): readonly MarginDetailLine[] => {
   const revenue: MarginDetailLine = {
@@ -320,6 +348,14 @@ const detailNotes = (row: CompanyMarginRow): readonly MarginNote[] => {
       text:
         `${formatCount(row.pendingFuelCost.entryCount)} phiếu dầu (${formatMoney(row.pendingFuelCost.amount)}) ` +
         'đã khai trên vòng xe nhưng chưa phân bổ vào chi phí — phân bổ ở mục Nhiên liệu.',
+    });
+  }
+  if (hasNoRecordedCost(row)) {
+    notes.push({
+      tone: 'warn',
+      text:
+        'Vòng xe của đơn chưa có khoản chi phí nào được ghi — chưa có phiếu dầu nào được phân bổ. ' +
+        'Biên 100% ở đây là "chưa ghi chi phí", không phải "không tốn chi phí".',
     });
   }
   if (row.unexpectedInternalCost) {
