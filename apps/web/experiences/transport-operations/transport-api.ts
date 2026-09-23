@@ -74,6 +74,10 @@ import type {
   RunPlanProposal,
   RunLeg,
   RunLegKind,
+  GeoPoint,
+  KnownPlacesResponse,
+  PlaceReverseResponse,
+  PlaceSearchResponse,
   TransportOrder,
   TransportPlanningPolicyView,
   VehicleRun,
@@ -375,6 +379,24 @@ export interface PlanTripInput {
 
 /** `code`, `kind`, `businessDate` KHONG sua duoc sau khi lap chuyen. */
 export type UpdateTripInput = Partial<Omit<PlanTripInput, 'code' | 'kind' | 'businessDate'>>;
+
+/**
+ * TAO DON (`#379`). Hai toa do la su that cua hai dau tuyen; hai nhan la chu in tren don.
+ *
+ * `originPoint`/`destinationPoint` BAT BUOC o day chu khong tuy chon: bien HTTP cua may chu doi ca
+ * hai, va mot kieu tuy chon o client la mot loi moi de mot man hinh nao do gui don chi co chu.
+ */
+export interface CreateOrderInput {
+  readonly code: string;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly originPoint: GeoPoint;
+  readonly destinationPoint: GeoPoint;
+  readonly businessDate?: BusinessDate;
+  readonly customerId?: string | null;
+  readonly cargoDescription?: string | null;
+  readonly freightAmount?: number | null;
+}
 
 /**
  * KHOAN CHI CUA CHINH LAI XE (`#168 B3`).
@@ -1564,15 +1586,12 @@ export const transportApi = {
     orders: (): Promise<readonly TransportOrder[]> => get('/transport/orders'),
     order: (id: string): Promise<TransportOrder> =>
       get(`/transport/orders/${encodeURIComponent(id)}`),
-    createOrder: (input: {
-      code: string;
-      originLabel: string;
-      destinationLabel: string;
-      businessDate?: string;
-      customerId?: string | null;
-      cargoDescription?: string | null;
-      freightAmount?: number | null;
-    }): Promise<TransportOrder> => send('POST', '/transport/orders', input),
+    /**
+     * `#379` — hai TOA DO la BAT BUOC: may chu (`createOrderSchema`) tu choi mot don moi chi co nhan
+     * chu. Nhan chi con de hien thi; dieu xe doc toa do cua don, khong suy tu chu.
+     */
+    createOrder: (input: CreateOrderInput): Promise<TransportOrder> =>
+      send('POST', '/transport/orders', input),
     fulfilOrder: (id: string): Promise<TransportOrder> =>
       send('POST', `/transport/orders/${encodeURIComponent(id)}/transition`, { to: 'FULFILLED' }),
     cancelOrder: (id: string, reason: string): Promise<TransportOrder> =>
@@ -1761,6 +1780,27 @@ export const transportApi = {
    * `assign()` la mot LENH KHAC: ma quyen khac (`transport.run.manage`), va no chi duoc goi sau khi
    * mot con nguoi bam. Man hinh khong bao gio goi no thay nguoi dung.
    */
+  /**
+   * DIA DIEM cho man tao don (`#379`) — ca ba deu CHI chay khi nguoi dung mo man tao don.
+   *
+   * `search`/`reverse` la `POST` du chi doc: moi lan co the goi mot nha cung cap ngoai co gioi han
+   * luot (`@Throttle` + cong 1 lan/giay o may chu), nen chung khong duoc nam trong mot URL de trinh
+   * duyet tu goi lai. Than chi co CHUOI nguoi dung go hoac TOA DO nguoi dung bam — khong mot ma
+   * khach, ma don hay ma nguoi dung nao di theo ra nha cung cap.
+   *
+   * That bai (tat, ban, nha cung cap sap) la mot `status` trong than 200, khong phai mot loi HTTP.
+   */
+  places: {
+    known: (): Promise<KnownPlacesResponse> => get('/transport/places/known'),
+    search: (query: string): Promise<PlaceSearchResponse> =>
+      send('POST', '/transport/places/search', { query }),
+    reverse: (point: GeoPoint): Promise<PlaceReverseResponse> =>
+      send('POST', '/transport/places/reverse', {
+        latitude: point.latitude,
+        longitude: point.longitude,
+      }),
+  },
+
   dispatch: {
     suggest: (
       orderId: string,

@@ -12,8 +12,14 @@ import {
   useTransportOrders,
   useTransportPlanningPolicy,
 } from '../hooks/useTransportWorkspace';
+import type { TransportApiError } from '../transport-api';
 import { boundsOf } from '../workspace/journey';
-import { toDispatch, toDispatchMap, type DispatchCandidateRow } from '../workspace/dispatch';
+import {
+  dispatchErrorMessage,
+  toDispatch,
+  toDispatchMap,
+  type DispatchCandidateRow,
+} from '../workspace/dispatch';
 
 /**
  * BAN DO DIEU XE (#278 N3) — de nghi cua Lane M (#277), quyet dinh cua CON NGUOI.
@@ -159,7 +165,9 @@ export function DispatchView(): React.ReactElement {
         </section>
       ) : null}
 
-      {suggestions.isError ? <ErrorState message={(suggestions.error as Error).message} /> : null}
+      {suggestions.isError ? (
+        <ErrorState message={dispatchErrorMessage(suggestions.error as TransportApiError)} />
+      ) : null}
       {assignment.isError ? <ErrorState message={(assignment.error as Error).message} /> : null}
       {suggestions.isPending ? <LoadingState label="Đang tìm xe phù hợp…" /> : null}
       {assignment.isSuccess ? (

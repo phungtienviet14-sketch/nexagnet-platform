@@ -60,10 +60,17 @@ describe('transport-preview process boot contract', () => {
       const { PlanningService } = await import('./src/transport/planning/planning.service.ts');
       const { MovementService } = await import('./src/transport/movement/movement.service.ts');
       const { FuelConsumptionController } = await import('./src/transport/fuel/fuel-consumption.controller.ts');
+      const { TransportPlacesController } = await import('./src/transport/places/places.controller.ts');
+      const { TransportPlaceSearchPort } = await import('./src/transport/places/place-search.port.ts');
+      const { TransportPlaceService } = await import('./src/transport/places/place.service.ts');
+      const { KnownPlacesFacts } = await import('./src/transport/places/known-places.port.ts');
 
       const capabilities = loadTenantConfig().capabilities;
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
       const has = (token) => { try { context.get(token, { strict: false }); return true; } catch { return false; } };
+      // Doc dia diem da biet QUA injector that: adapter o goc tiem hai token cua hai module khac
+      // (GeofenceRepository, CounterpartySiteService) — dung kieu tiem chi boot that bat duoc.
+      const knownPlaces = await context.get(TransportPlaceService, { strict: false }).known();
 
       const proof = {
         capabilityCount: capabilities.length,
@@ -76,6 +83,12 @@ describe('transport-preview process boot contract', () => {
         // Controller dang ky o GOC doc mot service cua \`TransportFuelModule\` — dung kieu hong ma
         // chi mot lan boot that bat duoc (#313).
         fuelConsumption: has(FuelConsumptionController),
+        // Tim dia diem (#379): controller o goc + cong tim kiem (transport-core) + so hang rao
+        // (transport-proof, goi nay co bat).
+        placesController: has(TransportPlacesController),
+        placeSearchPort: has(TransportPlaceSearchPort),
+        knownPlacesFacts: has(KnownPlacesFacts),
+        knownPlacesAvailable: knownPlaces.available,
       };
       await context.close();
       process.stdout.write('<<PREVIEW_BOOT_PROOF>>' + JSON.stringify(proof));
@@ -106,6 +119,10 @@ describe('transport-preview process boot contract', () => {
       // Dong nay la ly do bai test ton tai. Xem khoi chu thich dau tep.
       expect(parsed.acceptance).toBe(true);
       expect(parsed.fuelConsumption).toBe(true);
+      expect(parsed.placesController).toBe(true);
+      expect(parsed.placeSearchPort).toBe(true);
+      expect(parsed.knownPlacesFacts).toBe(true);
+      expect(parsed.knownPlacesAvailable).toBe(true);
       // Goi that co 11 capability; con so chi de bai noi ra rang no dang boot MOT DOI HINH DAY DU,
       // khong phai mot goi rong tinh co xanh.
       expect(parsed.capabilityCount).toBeGreaterThanOrEqual(10);

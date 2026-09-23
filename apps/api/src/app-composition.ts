@@ -268,6 +268,11 @@ import { DispatchController } from './transport/dispatch/dispatch.controller.js'
 import { DispatchService } from './transport/dispatch/dispatch.service.js';
 import { createRoutingPort } from './transport/dispatch/routing/routing-provider.factory.js';
 import { TransportRoutingPort } from './transport/dispatch/routing/transport-routing.port.js';
+import { KnownPlacesFacts, KnownPlacesFactsAdapter } from './transport/places/known-places.port.js';
+import { TransportPlaceService } from './transport/places/place.service.js';
+import { createPlaceSearchPort } from './transport/places/place-search-provider.factory.js';
+import { TransportPlaceSearchPort } from './transport/places/place-search.port.js';
+import { TransportPlacesController } from './transport/places/places.controller.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
 import { TripsController } from './transport/trips/trips.controller.js';
@@ -455,6 +460,12 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
    * mot be mat ma ho VAN dung duoc.
    */
   owned('transport-core', DispatchController),
+  /*
+   * TIM DIA DIEM cho man tao don (#379) — cung `transport-core`: tao don la viec cua capability
+   * loi, va tim diem lay/giao la mot phan cua tao don. Nha cung cap tim kiem mac dinh TAT; so dia
+   * diem da biet la mot cong TUY CHON cua `transport-proof` (xem khoi PROVIDERS).
+   */
+  owned('transport-core', TransportPlacesController),
   /*
    * LAP KE HOACH VONG CHAY DO HE THONG QUAN (Lane L, #276) — cung `transport-core`, khong mot
    * capability moi.
@@ -694,6 +705,20 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: PlanningDispatchAssignmentPlanner,
   }),
   owned('transport-core', DispatchService),
+  /*
+   * TIM DIA DIEM (#379). Cung khuon dieu xe: cong tim kiem duoc dung bang `useFactory` doc bien
+   * moi truong CUC BO (`TRANSPORT_PLACE_SEARCH_*`, xem `place-search-provider.factory.ts`) —
+   * mac dinh TAT, khong goi mang, tat dinh trong CI.
+   *
+   * `KnownPlacesFacts` doc so hang rao cua `transport-proof`, nen den/di cung capability do.
+   * Vang mat thi `TransportPlaceService` nhan `undefined` va man hinh noi "chua co so dia diem".
+   */
+  owned('transport-core', {
+    provide: TransportPlaceSearchPort,
+    useFactory: () => createPlaceSearchPort(process.env),
+  }),
+  owned('transport-core', TransportPlaceService),
+  owned('transport-proof', { provide: KnownPlacesFacts, useClass: KnownPlacesFactsAdapter }),
   /**
    * DONG VONG CHAY DO HE THONG QUAN (`#293` Lane R).
    *

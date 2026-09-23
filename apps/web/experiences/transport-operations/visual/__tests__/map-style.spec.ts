@@ -10,6 +10,7 @@ import {
   OPENFREEMAP_LIBERTY_STYLE_URL,
   effectiveBasemap,
   isExternalStyle,
+  pickerBasemap,
   readBasemapEnv,
   resolveBasemap,
   type TransportBasemap,
@@ -303,5 +304,24 @@ describe('doc cau hinh tu moi truong', () => {
     vi.stubEnv('NEXT_PUBLIC_TRANSPORT_MAP_STYLE_URL', undefined);
 
     expect(resolveBasemap(readBasemapEnv())).toEqual(OPENFREEMAP);
+  });
+});
+
+describe('#379 — nen cua BAN DO CHON DIEM', () => {
+  it('Google -> OpenFreeMap: nen Google cua ta khong co duong bam-lay-toa-do hay ghim keo', () => {
+    const google = resolveBasemap({ provider: 'google', googleMapsApiKey: KEY });
+    expect(google.source).toBe('GOOGLE_MAPS');
+    expect(pickerBasemap(google)).toEqual(OPENFREEMAP);
+  });
+
+  it('moi nen khac giu NGUYEN — ke ca nen cuc bo cua CI', () => {
+    const local = resolveBasemap({ provider: 'local' });
+    const configured = resolveBasemap({ provider: 'maplibre', styleUrl: STYLE });
+    const openFreeMap = resolveBasemap({});
+    const googleMissingKey = resolveBasemap({ provider: 'google' });
+    expect(pickerBasemap(local)).toBe(local);
+    expect(pickerBasemap(configured)).toBe(configured);
+    expect(pickerBasemap(openFreeMap)).toBe(openFreeMap);
+    expect(pickerBasemap(googleMissingKey)).toBe(googleMissingKey);
   });
 });

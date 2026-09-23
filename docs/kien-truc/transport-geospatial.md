@@ -255,13 +255,70 @@ MapLibre sẵn có** — không khoá, không GCP, không thanh toán. Quyết �
 - **Lớp nghiệp vụ chung mọi nền.** Tuyến, chặng RỖNG, mốc, vệt GPS thô là lớp deck.gl vẽ thẳng từ
   toạ độ máy chủ. Hình học của nền **không bao giờ** là sự thật quãng đường: `distanceKm` vẫn là số
   của nghiệp vụ, không tính lại, không ghi đè, không "bám đường".
-- **Chỉ nền.** Không routing, Directions, Places, Geocoding, tối ưu tuyến.
+- **Chỉ nền.** Không routing, Directions, Places, Geocoding, tối ưu tuyến — ở tầng nền. Tìm địa
+  điểm cho màn tạo đơn (#379) **không** đi qua nhà cung cấp nền: nó là một cổng phía máy chủ riêng
+  (§7.1).
 
 Nhận xét của R0 về PMTiles vẫn đứng nguyên: kích thước tile Việt Nam **≈ 215 MB là ước tính suy từ
 tỷ lệ của Hà Lan**, chưa dựng, chưa đo — đừng đưa con số đó vào một bảng chi phí.
 
 Biến môi trường, phán quyết dự phòng, ghi nguồn, quyền riêng tư, đường nâng cấp, Google tuỳ chọn:
 [`phat-trien/van-hanh/ban-do-nen.md`](../phat-trien/van-hanh/ban-do-nen.md).
+
+### 7.1. Tìm địa điểm cho màn tạo đơn — cổng phía máy chủ, mặc định TẮT (#379)
+
+*As-built 23/09/2026.* Đơn mới lưu **toạ độ** điểm lấy/giao (`TransportOrder.origin*`/
+`destination*`); nhãn chữ chỉ để hiển thị. Người dùng có bốn cách đặt một điểm: bấm trên bản đồ,
+chọn **địa điểm đã biết**, "Vị trí của tôi", hoặc **tìm theo chữ**. Chỉ cách cuối cần một bên thứ ba,
+và nó là cách duy nhất được phép tắt mà màn hình vẫn tạo đơn được.
+
+- **Cổng `TransportPlaceSearchPort`** (`apps/api/src/transport/places/`), capability
+  `transport-core`. HTTP: `POST /transport/places/search` `{ query }` và
+  `POST /transport/places/reverse` `{ latitude, longitude }` — **POST** để chuỗi tìm và toạ độ nằm
+  trong thân, không nằm trong URL, nhật ký máy chủ hay `Referer` (cùng lý do `DispatchController`).
+  Quyền: dùng lại `transport.order.manage` (ADMIN + ACCOUNTING), không thêm mã quyền mới.
+- **Luôn 200, trạng thái có kiểu.** `OK | DISABLED | BUSY | UNAVAILABLE` kèm lý do
+  (`PROVIDER_UNCONFIGURED`, `PROVIDER_NOT_APPROVED_FOR_CUSTOMER_DATA`, `PROVIDER_BUSY`,
+  `PROVIDER_RATE_LIMITED`, `PROVIDER_UNAVAILABLE`). Tắt/bận/sập là trạng thái của tìm kiếm, không
+  phải lỗi của người gọi; 400 chỉ cho đầu vào sai (chuỗi 2..200 ký tự, khoá lạ, điểm hỏng →
+  `PLACE_POINT_INVALID`).
+- **Mặc định TẮT** (`none`, không một lần gọi mạng). Nominatim chỉ bật khi khai tường minh **và**
+  `DATA_CLASSIFICATION` khác `customer`: Nominatim **chưa** nằm trong danh sách bên thứ ba được duyệt
+  cho dữ liệu khách thật (chỉ KiotViet + Claude API). Chỉ **chuỗi người dùng gõ** (hoặc điểm cần
+  tìm ngược) đi ra ngoài — không mã khách, mã đơn, mã người dùng; danh sách tham số là đóng và có
+  bài kiểm khoá cả tập khoá.
+- **Cổng giới hạn toàn ứng dụng + bộ nhớ đệm.** Tối đa 1 lần gọi / 1100 ms cho cả tiến trình (chính
+  sách Nominatim công khai: ≤ 1/giây): **1 lần gọi đang chạy + tối đa 3 yêu cầu chờ**; người chờ thứ
+  tư nhận `BUSY` ngay, không ngủ vô hạn. Khoảng cách đo bằng đồng hồ đơn điệu (`performance.now`)
+  và mỗi lần chờ bị kẹp ở 1100 ms — đồng hồ máy nhảy lùi không biến thành một lần chờ dài. Kết quả
+  thành công được đệm 24 giờ trong **một** bộ nhớ đệm dùng chung cho tìm và tìm ngược (tổng tối đa
+  500 mục, khoá `search|…` / `reverse|…`), khoá đã chuẩn hoá (NFC, gom khoảng trắng, chữ thường;
+  tìm ngược làm tròn 5 chữ số); thất bại không đệm. Một tiến trình, một cổng — chạy nhiều
+  bản sao api thì cần một kho dùng chung, và đó phải là một thay đổi có chủ đích.
+- **Kết quả là GỢI Ý.** Toạ độ của một `PlaceCandidate` chỉ vào đơn khi người dùng bấm chọn; tầng
+  này không ghi gì. Toạ độ nhà cung cấp đi qua `parseGeoPoint`, kết quả hỏng bị bỏ. Ghi nguồn
+  `© OpenStreetMap contributors` (ODbL) đi kèm mọi kết quả thành công.
+- **Địa điểm đã biết = hàng rào**, không phải một kho địa điểm thứ hai.
+  `GET /transport/places/known` đọc `TransportGeofence` đang hoạt động qua cổng tuỳ chọn
+  `KnownPlacesFacts` (adapter thuộc `transport-proof`): `DEPOT`, `COUNTERPARTY_SITE` (tên địa điểm
+  + tên pháp nhân), `CUSTOMER`; bỏ `FUEL_SUPPLIER` và `AD_HOC`. Khách không bật `transport-proof`
+  nhận `{ available: false }` — khác với "có sổ, chưa khai địa điểm nào".
+- **Telemetry**: bước `place.search` / `place.reverse`, quyết định `place.lookup` (từ vựng
+  `places/place-decisions.ts`). `detail` chỉ có `operation`, `providerId`, `queryLength`,
+  `resultCount`, `reason` — **không** chuỗi tìm, **không** toạ độ.
+- **Đơn cũ không được geocode.** Đơn tạo trước #379, đơn chiếu từ chuyến v1 và đơn của bộ dữ liệu
+  mẫu giữ toạ độ `NULL`; không đường nào suy toạ độ từ nhãn chữ cũ.
+- **Điểm mẫu của bản xem trước** (`transport/demo/demo-places.ts`): bãi xe `DEPOT-HN` + hai địa điểm
+  của hai pháp nhân mẫu, toạ độ **tổng hợp** (ghi chú nói rõ không phải toạ độ khảo sát), gieo từ
+  `deploy/netviet/seed-transport-demo.mjs` và `reset-transport-demo.mjs`. Railway chạy bước này ở
+  **mọi** lần khởi động, nên: mỗi điểm gieo **tối đa một lần** (hàng rào `recordedBy = demo-seed`
+  cùng nhãn, mọi trạng thái, là dấu vết "đã gieo" — người vận hành đổi tên địa điểm hay mã số thuế
+  thì lần sau không tạo bản sao); trùng nhãn chuẩn hoá với một hàng rào **đang hoạt động** thì bỏ qua
+  (`LABEL_TAKEN_BY_ACTIVE_GEOFENCE`) thay vì tạo nhãn mơ hồ; **không** tạo liên kết khách; mỗi điểm
+  chạy trong giao dịch `Serializable`, xung đột (P2034/P2002) thử lại đúng một lần; lỗi còn lại chỉ
+  ghi log, không chặn api khởi động.
+
+Biến môi trường và vận hành: [`ban-do-nen.md` §9](../phat-trien/van-hanh/ban-do-nen.md#9-tìm-địa-điểm-phía-máy-chủ-379--biến-môi-trường-của-api).
 
 ---
 

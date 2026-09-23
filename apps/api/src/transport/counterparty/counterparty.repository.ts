@@ -39,6 +39,12 @@ export abstract class CounterpartyRepository {
   abstract create(input: CreateCounterpartyInput): Promise<Counterparty>;
   abstract update(id: string, patch: UpdateCounterpartyInput): Promise<Counterparty | null>;
   abstract find(id: string): Promise<Counterparty | null>;
+  /**
+   * Nhieu phap nhan trong MOT lan doc. Ma khong ton tai thi vang mat trong ket qua (khong `null`),
+   * thu tu khong bao dam — nguoi goi tra theo `id`. Ton tai de mot danh sach dia diem khong thanh
+   * N lan hoi noi tiep (`CounterpartySiteService.activeViews`).
+   */
+  abstract findMany(ids: readonly string[]): Promise<Counterparty[]>;
   abstract findByTaxCode(taxCode: string): Promise<Counterparty | null>;
   abstract list(): Promise<Counterparty[]>;
 
@@ -103,6 +109,13 @@ export class InMemoryCounterpartyRepository extends CounterpartyRepository {
 
   async find(id: string): Promise<Counterparty | null> {
     return this.parties.get(id) ?? null;
+  }
+
+  async findMany(ids: readonly string[]): Promise<Counterparty[]> {
+    return [...new Set(ids)].flatMap((id) => {
+      const row = this.parties.get(id);
+      return row ? [row] : [];
+    });
   }
 
   async findByTaxCode(taxCode: string): Promise<Counterparty | null> {

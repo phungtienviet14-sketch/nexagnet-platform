@@ -218,6 +218,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "MovementService.transitionOrder",
       "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
+    "order.location": {
+      "functionName": "MovementService.recordOrderLocation",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts",
+      "line": 1075
+    },
     "order.manual_approve": {
       "functionName": "OrdersService.approveTurn",
       "filePath": "apps/api/src/orders/orders.service.ts"
@@ -267,6 +272,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "parser.production": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
+      "line": 57
+    },
+    "place.reverse": {
+      "functionName": "TransportPlaceService.reverse",
+      "filePath": "apps/api/src/transport/places/place.service.ts",
+      "line": 85
+    },
+    "place.search": {
+      "functionName": "TransportPlaceService.search",
+      "filePath": "apps/api/src/transport/places/place.service.ts",
       "line": 57
     },
     "planning.cancel": {
@@ -731,9 +746,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/document/documents.controller.ts",
       "line": 79
     },
-    "transport.order.manage": {
-      "filePath": "apps/api/src/transport/movement/orders.controller.ts"
-    },
     "transport.order.read": {
       "filePath": "apps/api/src/transport/movement/orders.controller.ts"
     },
@@ -1055,37 +1067,37 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "dispatch.candidate_filter|*": {
       "functionName": "DispatchService.suggest",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 293
+      "line": 321
     },
     "dispatch.commit|*": {
       "functionName": "DispatchService.commit",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 413
+      "line": 441
     },
     "dispatch.commit|COMMIT_REVALIDATION_FAILED": {
       "functionName": "DispatchService.commit",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 394
+      "line": 422
     },
     "dispatch.pickup_resolution|*": {
       "functionName": "DispatchService.resolvePickup",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 471
+      "line": 500
     },
     "dispatch.route_estimate|*": {
       "functionName": "DispatchService.routeGroupToPickup",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 761
+      "line": 701
     },
     "dispatch.run_grouping|RUN_GROUPING_MULTI_ORDER_RUN": {
       "functionName": "DispatchService.requireMultiOrderRun",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 235
+      "line": 256
     },
     "dispatch.run_grouping|RUN_GROUPING_ONE_ORDER_PER_RUN": {
       "functionName": "DispatchService.requireMultiOrderRun",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 245
+      "line": 266
     },
     "driver.self_expense_scope|*": {
       "functionName": "CostingReadService.selfTripExpenseEvidence",
@@ -1737,6 +1749,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/orders/orders.service.ts",
       "line": 225
     },
+    "order.location|*": {
+      "functionName": "MovementService.requireOrderPoint",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts",
+      "line": 1052
+    },
     "outbound.authority|*": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
@@ -1810,6 +1827,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "WorkforceService.movePayslip",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 319
+    },
+    "place.lookup|*": {
+      "functionName": "TransportPlaceService.recordLookup",
+      "filePath": "apps/api/src/transport/places/place.service.ts",
+      "line": 114
     },
     "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
       "functionName": "OperationalProofService.record",

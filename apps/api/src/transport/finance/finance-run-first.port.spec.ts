@@ -29,6 +29,8 @@ const order = (id: string, over: Partial<Order> = {}): Order => ({
   customerId: 'kh-1',
   originLabel: 'Kho A',
   destinationLabel: 'Kho B',
+  originPoint: null,
+  destinationPoint: null,
   cargoDescription: null,
   freightAmount: 6_000_000,
   currencyCode: 'VND',

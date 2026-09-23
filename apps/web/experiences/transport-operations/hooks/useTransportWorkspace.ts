@@ -11,6 +11,7 @@ import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import type {
   FuelEntryInboxQuery,
+  GeoPoint,
   LegTransitionTarget,
   SettlementFlow,
   TollCandidateQuery,
@@ -86,6 +87,8 @@ export const TRANSPORT_QUERY_KEYS = {
   financeSummary: ['transport', 'finance', 'summary'],
   /** `#385` — hieu qua tung viec, cung ham gop voi `financeSummary`. */
   financeMargin: ['transport', 'finance', 'margin'],
+  /** `#379` — dia diem da biet (bai xe, nha may/kho) cho man tao don. */
+  knownPlaces: ['transport', 'places', 'known'],
 } as const;
 
 /** Nang luc + hanh dong deu phai dat truoc khi ban mot yeu cau. */
@@ -357,6 +360,49 @@ export function useTransportOrders(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.orders,
     queryFn: () => transportApi.movement.orders(),
     enabled: allowed(input, 'transport-core', 'transport.order.read'),
+  });
+}
+
+/**
+ * DIA DIEM DA BIET (`#379`) — CHI doc khi man tao don DANG MO.
+ *
+ * `isComposerOpen` nam trong `enabled`, khong phai mot lua chon trinh bay: danh sach don duoc mo
+ * hang chuc lan moi ngay de XEM, va moi lan mo ma ban them mot lan doc hang rao la mot lan goi
+ * khong ai can (bo e2e `office-leg-lifecycle` con khoa dieu nay bang `world.unhandled`).
+ *
+ * Ma quyen la `transport.order.manage` vi do dung la ma cua route — nguoi khong tao duoc don thi
+ * cung khong can danh sach cho de chon.
+ */
+export function useKnownPlaces(input: NavigationInput, isComposerOpen: boolean) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.knownPlaces,
+    queryFn: () => transportApi.places.known(),
+    enabled: isComposerOpen && allowed(input, 'transport-core', 'transport.order.manage'),
+    /* Hang rao doi theo tuan, khong theo phut: mo lai man tao don khong can doc lai ngay. */
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * TIM DIA DIEM theo chu (`#379`) — `useMutation`, cung ly do voi `useDispatchSuggestions()`.
+ *
+ * Mot `useQuery` se tu chay lai khi cua so lay lai tieu diem hay mang noi lai: moi lan la mot luot
+ * cua nha cung cap ngoai (Nominatim cam tu dong hoan thanh). Nguoi dung bam "Tìm" hoac Enter, va
+ * CHI luc do mot yeu cau duoc gui.
+ */
+export function usePlaceSearch() {
+  return useMutation({
+    mutationFn: (query: string) => transportApi.places.search(query),
+  });
+}
+
+/**
+ * TIM NGUOC mot diem vua bam tren ban do (`#379`). Nguoi goi giu MA LUOT cua tung lan bam
+ * (`workspace/order-draft.ts`) — ket qua ve muon cua lan bam cu khong duoc ghi de lan bam moi.
+ */
+export function usePlaceReverse() {
+  return useMutation({
+    mutationFn: (point: GeoPoint) => transportApi.places.reverse(point),
   });
 }
 
