@@ -1,9 +1,12 @@
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import { MANAGER_HAS_NO_TRANSPORT_SCOPE } from '../../experiences/transport-operations/transport-actions';
 import {
+  BASEMAP_UNAVAILABLE_NOTICE,
   GOOGLE_BASEMAP_UNAVAILABLE_NOTICE,
   LOCAL_BASEMAP_NOTICE,
+  OPENFREEMAP_LIBERTY_STYLE_URL,
 } from '../../experiences/transport-operations/visual/map-style';
+import { MAPLIBRE_WORKER_URL } from '../../experiences/transport-operations/visual/maplibre-worker-url';
 
 /**
  * Be mat VAN HANH VAN TAI tren mot may chu that, voi API duoc chan o tang mang.
@@ -1878,6 +1881,48 @@ test.describe('anh chup lam bang chung', () => {
 /** Moi may chu ma Maps JavaScript API goi toi (script, tile, font, anh dieu khien). */
 const GOOGLE_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(googleapis|gstatic)\.com\//;
 
+/** Instance CONG KHAI cua OpenFreeMap: style, TileJSON, o tile, sprite, phong chu — mot may chu. */
+const OPENFREEMAP_HOST = 'tiles.openfreemap.org';
+const OPENFREEMAP_URLS = /^https:\/\/tiles\.openfreemap\.org\//;
+
+/**
+ * Che do nen cua MAY CHU e2e — cung phep tinh voi `playwright.transport.config.ts`: khong dat (hay
+ * dat rong) la `local`, nen CI bat buoc khong bao gio ra Internet.
+ */
+const MAP_PROVIDER = (
+  process.env.NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER?.trim() || 'local'
+).toLowerCase();
+
+/**
+ * Ghi lai moi yeu cau http(s) RA KHOI may chu web. API da bi chan bang `page.route` tren cung
+ * origin, nen "ra ngoai" o day chi con la nen ban do — dung thu ma `#374` §9 bai 16–18 doi dem.
+ */
+function recordExternalRequests(page: Page): Array<{ url: string; referer: string | undefined }> {
+  const external: Array<{ url: string; referer: string | undefined }> = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+    if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return;
+    external.push({ url: request.url(), referer: request.headers()['referer'] });
+  });
+  return external;
+}
+
+/**
+ * Chunk JS cua nha cung cap Google tai tu chinh may chu web. `next dev` dat ten chunk theo duong
+ * dan module (`…visual_GoogleBasemap_tsx.js`, `…google-maps-loader_ts.js`), nen ten co chu `google`
+ * la dau vet cua ma Google. Khoi `@google-basemap` do chieu nguoc lai: bat Google thi PHAI thay no.
+ */
+function recordGoogleCodeChunks(page: Page): string[] {
+  const chunks: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/_next/') && /google/i.test(url.pathname))
+      chunks.push(url.pathname);
+  });
+  return chunks;
+}
+
 /**
  * DEM DIEM ANH MANG MAU TUYEN tren anh chup khung ban do (#374).
  *
@@ -1886,7 +1931,14 @@ const GOOGLE_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(googleapis|gstatic)\.com\//;
  * (co hang) va `--tx-stop` (rong) thi do duoc dieu nguoi xem thay. Trinh duyet tu giai ma PNG —
  * khong them thu vien nao vao bo e2e.
  */
-async function routePixels(page: Page, map: Locator): Promise<{ loaded: number; empty: number }> {
+interface RoutePixels {
+  readonly loaded: number;
+  readonly empty: number;
+  /** Trong tam cac diem anh tuyen (ca hai mau), tinh bang diem anh cua khung ban do. */
+  readonly centroid: { readonly x: number; readonly y: number } | null;
+}
+
+async function routePixels(page: Page, map: Locator): Promise<RoutePixels> {
   const png = await map.screenshot();
   return page.evaluate(async (base64) => {
     const image = new Image();
@@ -1896,7 +1948,7 @@ async function routePixels(page: Page, map: Locator): Promise<{ loaded: number; 
     canvas.width = image.width;
     canvas.height = image.height;
     const context = canvas.getContext('2d');
-    if (context === null) return { loaded: 0, empty: 0 };
+    if (context === null) return { loaded: 0, empty: 0, centroid: null };
     context.drawImage(image, 0, 0);
     const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
     const near = (index: number, [r, g, b]: readonly [number, number, number]): boolean =>
@@ -1906,11 +1958,21 @@ async function routePixels(page: Page, map: Locator): Promise<{ loaded: number; 
       60;
     let loaded = 0;
     let empty = 0;
+    let sumX = 0;
+    let sumY = 0;
     for (let index = 0; index < data.length; index += 4) {
-      if (near(index, [0x1c, 0x6b, 0x47])) loaded += 1;
-      else if (near(index, [0x94, 0x27, 0x1e])) empty += 1;
+      const isLoaded = near(index, [0x1c, 0x6b, 0x47]);
+      const isEmpty = !isLoaded && near(index, [0x94, 0x27, 0x1e]);
+      if (!isLoaded && !isEmpty) continue;
+      if (isLoaded) loaded += 1;
+      else empty += 1;
+      const pixel = index / 4;
+      sumX += pixel % canvas.width;
+      sumY += Math.floor(pixel / canvas.width);
     }
-    return { loaded, empty };
+    const count = loaded + empty;
+    const centroid = count === 0 ? null : { x: sumX / count, y: sumY / count };
+    return { loaded, empty, centroid };
   }, png.toString('base64'));
 }
 
@@ -1931,12 +1993,20 @@ const ROUTE_PIXELS_MIN = 200;
  *   3. ranh gioi quyen: ke toan mo dung man hinh do va KHONG thay ban do, nhung van thay bao cao.
  */
 test.describe('ban do vong chay (Lane N)', () => {
-  test('ban do nap that, va chang RONG doc ra duoc bang chu', async ({ page }) => {
-    /* `#374` §8: CI bat buoc KHONG phu thuoc mang Google — dem moi yeu cau di toi Google. */
-    const googleRequests: string[] = [];
-    page.on('request', (request) => {
-      if (GOOGLE_HOSTS.test(request.url())) googleRequests.push(request.url());
-    });
+  test('ban do nap that, va chang RONG doc ra duoc bang chu', async ({ page }, testInfo) => {
+    /*
+     * `#374` §9 bai 17/18: CI bat buoc KHONG phu thuoc Internet — dem MOI yeu cau ra khoi may chu
+     * web (OpenFreeMap, Google, bat ky ai), va moi chunk ma Google tai ve.
+     */
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const external = recordExternalRequests(page);
+    const googleChunks = recordGoogleCodeChunks(page);
+    /*
+     * Worker cua MapLibre 6 phai duoc phuc vu tu CHINH may chu web. Thieu no, nen OpenFreeMap tai
+     * style ma khong mot o tile nao hien (do 23/09/2026) — va nen cuc bo cua CI khong co tile nao
+     * de lo ra dieu do. MapLibre dung worker cho MOI style, nen bai nay bat duoc ngay trong CI.
+     */
+    const worker = page.waitForResponse((response) => response.url().endsWith(MAPLIBRE_WORKER_URL));
     await mockTransport(page, 'ADMIN');
     await page.goto('/?section=journey&selected=RUN-E2E-1');
 
@@ -1945,9 +2015,16 @@ test.describe('ban do vong chay (Lane N)', () => {
     /* Goi ban do NAP THAT: the `img` chi xuat hien sau khi component dong nap da chay. */
     const map = page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' });
     await expect(map).toBeVisible({ timeout: 30_000 });
-    /* Nen cuc bo — khong mot lan goi tile nao ra ngoai. */
+    /*
+     * Nen cuc bo DO MAY CHU e2e KHAI (`provider=local`), khong phai do thieu cau hinh: nen mac
+     * dinh cua san pham la OpenFreeMap, va CI khong duoc goi no.
+     */
     await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK');
-    await expect(map).toHaveAttribute('data-basemap-fallback', 'NOT_CONFIGURED');
+    await expect(map).toHaveAttribute('data-basemap-fallback', 'LOCAL_SELECTED');
+    await expect(map).toHaveAttribute('aria-busy', 'false');
+    const workerResponse = await worker;
+    expect(workerResponse.status()).toBe(200);
+    expect(workerResponse.headers()['content-type']).toMatch(/javascript/);
     /* `#278` N1: nen trong phai NOI RA la nen trong, khong de nguoi xem tuong mat dat trong tron. */
     await expect(page.getByTestId('tx-map-notice')).toHaveText(LOCAL_BASEMAP_NOTICE);
     /* Lop deck.gl ve tren canvas cua MapLibre — ban do da khoi tao WebGL that. */
@@ -1974,7 +2051,12 @@ test.describe('ban do vong chay (Lane N)', () => {
     /* Ke hoach vs thuc te: 100 -> 105 la lech +5 km. */
     await expect(page.getByText('+5 km')).toBeVisible();
 
-    expect(googleRequests).toEqual([]);
+    expect(external).toEqual([]);
+    expect(googleChunks).toEqual([]);
+
+    /* Bang chung #374 (D): che do CI, 1440×900, khong mot yeu cau nao ra Internet. */
+    await page.getByRole('region', { name: 'Bản đồ vòng chạy' }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('journey-map-local.png') });
   });
 
   /*
@@ -2205,11 +2287,11 @@ test.describe('ban do vong chay (Lane N)', () => {
 
 /**
  * ===========================================================================
- * #374 — NEN GOOGLE MAPS. TUY CHON: CI bat buoc khong bao gio chay khoi nay.
+ * #374 — NEN GOOGLE MAPS, nha cung cap TUY CHON. CI bat buoc khong bao gio chay khoi nay.
  *
  * `NEXT_PUBLIC_*` duoc nuong vao goi JS luc `next dev` bien dich, nen che do nen la cua MAY CHU,
- * khong phai cua tung bai. CI khong dat `NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER`, nen ca khoi bi bo qua
- * va bai Lane N o tren chung minh khong mot yeu cau nao di toi Google. Chay tay:
+ * khong phai cua tung bai. May chu e2e cua CI chay `provider=local`, nen ca khoi bi bo qua va bai
+ * Lane N o tren chung minh khong mot yeu cau nao ra Internet. Chay tay:
  *
  *   NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER=google NEXT_PUBLIC_TRANSPORT_GOOGLE_MAPS_API_KEY=<khoa> \
  *     pnpm exec playwright test --config playwright.transport.config.ts --grep @google-basemap
@@ -2218,8 +2300,7 @@ test.describe('ban do vong chay (Lane N)', () => {
  * con can `TRANSPORT_MAP_GOOGLE_LIVE=1`; `TRANSPORT_MAP_GOOGLE_EXPECT` mac dinh `GOOGLE_MAPS`, dat
  * `GOOGLE_AUTH_FAILED` khi co y chay voi mot khoa sai de do duong `gm_authFailure`.
  */
-const GOOGLE_MODE =
-  (process.env.NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER ?? '').trim().toLowerCase() === 'google';
+const GOOGLE_MODE = MAP_PROVIDER === 'google';
 const GOOGLE_KEY_SET = (process.env.NEXT_PUBLIC_TRANSPORT_GOOGLE_MAPS_API_KEY ?? '').trim() !== '';
 
 test.describe('nen Google Maps (#374) @google-basemap', () => {
@@ -2228,6 +2309,7 @@ test.describe('nen Google Maps (#374) @google-basemap', () => {
   test('dang tai thi noi dang tai; Google bi chan thi lui ve nen cuc bo, van ve tuyen', async ({
     page,
   }) => {
+    const googleChunks = recordGoogleCodeChunks(page);
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -2248,6 +2330,11 @@ test.describe('nen Google Maps (#374) @google-basemap', () => {
         page.getByRole('status').filter({ hasText: 'Đang tải nền Google Maps…' }),
       ).toBeVisible();
       await expect(map).toHaveAttribute('aria-busy', 'true');
+      /*
+       * Doi chung duong cho bai Lane N: trinh nap Google la ma tai luoi, va CHI khi bat Google thi
+       * chunk cua no moi di tren duong mang — ten chunk co chu `google` that su nhin thay duoc.
+       */
+      await expect.poll(() => googleChunks.length, { timeout: 15_000 }).toBeGreaterThan(0);
       release();
       await expect(map).toHaveAttribute('data-basemap-fallback', 'GOOGLE_SCRIPT_FAILED', {
         timeout: 30_000,
@@ -2302,6 +2389,337 @@ test.describe('nen Google Maps (#374) @google-basemap', () => {
 
     await page.getByRole('region', { name: 'Bản đồ vòng chạy' }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`journey-map-${expected}.png`) });
+  });
+});
+
+/**
+ * ===========================================================================
+ * #374 — NEN OPENFREEMAP, nen MAC DINH cua san pham. CI bat buoc khong chay khoi nay.
+ *
+ * May chu e2e cua CI chay `provider=local` (khong Internet). Chay tay:
+ *
+ *   NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER=openfreemap \
+ *     pnpm exec playwright test --config playwright.transport.config.ts --grep @openfreemap-basemap
+ *
+ * Hai bai dau KHONG can Internet: moi yeu cau toi OpenFreeMap bi giu roi chan, hoac tra bang mot
+ * style gia, ngay trong trinh duyet. Bai "song" goi instance cong khai that va con can
+ * `TRANSPORT_MAP_OPENFREEMAP_LIVE=1`; no luu anh 1440×900 cua nen that va sau khi keo/phong.
+ */
+const OPENFREEMAP_MODE = MAP_PROVIDER === 'openfreemap';
+
+/**
+ * Vong chay Ha Noi ⇄ Hai Phong HAI MAU: chang CO HANG (moc neo + vet GPS tho doc QL5) va chang
+ * RONG ve bang vet GPS tho doc cao toc Ha Noi – Hai Phong. Tren nen duong sa that, nguoi xem doi
+ * duoc vet tho voi con duong — va ca hai mau tuyen deu dem duoc.
+ */
+const JOURNEY_MAP_HN_HP_ROUND_TRIP = {
+  ...JOURNEY_MAP,
+  legs: [
+    {
+      ...JOURNEY_MAP.legs[0],
+      paths: [
+        ...(JOURNEY_MAP.legs[0]?.paths ?? []),
+        {
+          kind: 'RAW_OBSERVED',
+          points: [
+            { latitude: 21.0278, longitude: 105.8342 },
+            { latitude: 21.0405, longitude: 105.912 },
+            { latitude: 20.9845, longitude: 106.051 },
+            { latitude: 20.941, longitude: 106.33 },
+            { latitude: 20.883, longitude: 106.526 },
+            { latitude: 20.8449, longitude: 106.6881 },
+          ],
+          gap: null,
+          sampledFrom: 412,
+        },
+      ],
+    },
+    {
+      legId: 'l-2',
+      sequence: 2,
+      kind: 'EMPTY',
+      origin: {
+        point: { latitude: 20.8449, longitude: 106.6881 },
+        source: 'CHECKPOINT_OBSERVATION',
+        at: '2026-09-08T07:00:00.000Z',
+      },
+      originGap: null,
+      destination: {
+        point: { latitude: 21.0278, longitude: 105.8342 },
+        source: 'CHECKPOINT_OBSERVATION',
+        at: '2026-09-08T11:00:00.000Z',
+      },
+      destinationGap: null,
+      paths: [
+        {
+          kind: 'RAW_OBSERVED',
+          points: [
+            { latitude: 20.8449, longitude: 106.6881 },
+            { latitude: 20.87, longitude: 106.5 },
+            { latitude: 20.905, longitude: 106.28 },
+            { latitude: 20.952, longitude: 106.05 },
+            { latitude: 20.998, longitude: 105.915 },
+            { latitude: 21.0278, longitude: 105.8342 },
+          ],
+          gap: null,
+          sampledFrom: 388,
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Style GIA dung dang cua OpenFreeMap: mot nguon vector tro ve `tiles.openfreemap.org`. Tra no thay
+ * cho style that thi do duoc duong hong MUON — ban do va lop deck.gl da khoi tao xong, style da ap,
+ * roi moi biet khong mot o tile nao ve duoc.
+ */
+const OPENFREEMAP_LIKE_STYLE = {
+  version: 8,
+  sources: {
+    openmaptiles: {
+      type: 'vector',
+      tiles: [`https://${OPENFREEMAP_HOST}/planet/e2e/{z}/{x}/{y}.pbf`],
+      maxzoom: 14,
+    },
+  },
+  layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': '#f8f4f0' } },
+    {
+      id: 'road',
+      type: 'line',
+      source: 'openmaptiles',
+      'source-layer': 'transportation',
+      paint: { 'line-color': '#ffffff' },
+    },
+  ],
+};
+
+async function openRoundTrip(page: Page): Promise<Locator> {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockTransport(page, 'ADMIN');
+  /*
+   * Danh sach vong chay cua o chon: de trong, `next dev` bien dich trang 404 (~10 s) ngay giua luc
+   * ban do dang tai worker va tile — do 23/09/2026, worker 19 KB mat 6 s de ve toi trinh duyet.
+   */
+  await page.route('**/transport/runs', (route) => json(route, [{ id: 'r-1', code: 'RUN-E2E-1' }]));
+  await page.route('**/transport/journey/runs/*/map', (route) =>
+    json(route, JOURNEY_MAP_HN_HP_ROUND_TRIP),
+  );
+  await page.goto('/?section=journey&selected=RUN-E2E-1');
+  const map = page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' });
+  await expect(map).toBeVisible({ timeout: 30_000 });
+  await expect(map).toHaveAttribute('data-basemap', 'OPENFREEMAP');
+  return map;
+}
+
+/** Nen hong KHONG lam mat nghiep vu: ca hai mau tuyen, chu giai va cau vet GPS tho van con. */
+async function expectBusinessOverlayIntact(page: Page, map: Locator): Promise<void> {
+  await expect
+    .poll(async () => (await routePixels(page, map)).loaded, { timeout: 15_000 })
+    .toBeGreaterThan(ROUTE_PIXELS_MIN);
+  const pixels = await routePixels(page, map);
+  test.info().annotations.push({
+    type: 'diem-anh-tuyen',
+    description: `${(await map.getAttribute('data-basemap')) ?? '?'}: CÓ HÀNG ${pixels.loaded} / RỖNG ${pixels.empty}`,
+  });
+  expect(pixels.empty).toBeGreaterThan(ROUTE_PIXELS_MIN);
+  await expect(page.getByText('Chặng RỖNG (chạy không hàng)')).toBeVisible();
+  await expect(page.getByText(/không phải tuyến đã khớp bản đồ/)).toBeVisible();
+}
+
+/**
+ * Doi ban do VE XONG: hai anh chup cach nhau 400ms giong het tung byte. Tile tai ve con phai giai
+ * ma trong worker roi moi ve, nen "mang da yen" chua phai "man hinh da yen".
+ */
+async function waitForStillFrame(map: Locator): Promise<void> {
+  let previous = await map.screenshot();
+  await expect
+    .poll(
+      async () => {
+        const next = await map.screenshot();
+        const still = next.equals(previous);
+        previous = next;
+        return still;
+      },
+      { intervals: [400], timeout: 30_000 },
+    )
+    .toBe(true);
+}
+
+/**
+ * Keo ban do mot quang `delta` (diem anh) va tra ve do lech giua quang tuyen DA dich va `delta`.
+ *
+ * Nen va lop tuyen dung chung mot camera thi trong tam tuyen dich dung bang quang keo; lop tuyen
+ * lech khoi nen (hai canvas lech khung, viewState cu) thi con so nay lon.
+ */
+async function dragMisalignment(
+  page: Page,
+  map: Locator,
+  delta: { readonly x: number; readonly y: number },
+): Promise<number> {
+  const before = (await routePixels(page, map)).centroid;
+  const box = await map.boundingBox();
+  if (before === null || box === null) return Number.POSITIVE_INFINITY;
+  const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + delta.x, start.y + delta.y, { steps: 12 });
+  /*
+   * Giu chuot dung yen truoc khi tha: MapLibre bo mau van toc cu hon 160ms, nen khong con quan tinh
+   * — ban do dung dung cho chuot dung, va do lech do duoc la cua lop tuyen, khong cua da troi.
+   */
+  await page.waitForTimeout(300);
+  await page.mouse.up();
+  await waitForStillFrame(map);
+  const after = (await routePixels(page, map)).centroid;
+  if (after === null) return Number.POSITIVE_INFINITY;
+  return Math.hypot(after.x - before.x - delta.x, after.y - before.y - delta.y);
+}
+
+async function screenshotMapRegion(page: Page, path: string): Promise<void> {
+  await page.getByRole('region', { name: 'Bản đồ vòng chạy' }).scrollIntoViewIfNeeded();
+  /* Chi bao che do dev cua Next nam de goc trai duoi — khong phai mot phan cua san pham. */
+  await page.evaluate(() => {
+    for (const node of document.querySelectorAll('nextjs-portal')) node.remove();
+  });
+  await page.screenshot({ path });
+}
+
+test.describe('nen OpenFreeMap (#374) @openfreemap-basemap', () => {
+  test.skip(
+    !OPENFREEMAP_MODE,
+    'Can may chu dev bat voi NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER=openfreemap',
+  );
+
+  /*
+   * §9 bai 13/14 — OpenFreeMap khong tra loi. Style bi GIU trong luc ban do va lop deck.gl khoi tao
+   * tren nen OpenFreeMap, roi moi bi chan: dung duong "hong sau khi da khoi tao" da lam mat tuyen
+   * voi Google ngay 23/09/2026.
+   */
+  test('dang tai: tuyen da ve; OpenFreeMap bi chan → nen cuc bo, tuyen van con', async ({
+    page,
+  }, testInfo) => {
+    const external = recordExternalRequests(page);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(OPENFREEMAP_URLS, async (route) => {
+      await held;
+      await route.abort('blockedbyclient');
+    });
+
+    const map = await openRoundTrip(page);
+
+    /* Dang tai: khong mot cau thong bao nao, nhung may doc duoc la nen chua xong. */
+    await expect(map).toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByTestId('tx-map-notice')).toHaveCount(0);
+    /* Yeu cau DAU TIEN ra ngoai la style Liberty — khong khoa, khong tham so. */
+    await expect
+      .poll(() => external[0]?.url, { timeout: 15_000 })
+      .toBe(OPENFREEMAP_LIBERTY_STYLE_URL);
+    await expect
+      .poll(async () => (await routePixels(page, map)).loaded, { timeout: 15_000 })
+      .toBeGreaterThan(ROUTE_PIXELS_MIN);
+
+    release();
+
+    await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK', { timeout: 30_000 });
+    await expect(map).toHaveAttribute('data-basemap-fallback', 'OPENFREEMAP_STYLE_FAILED');
+    await expect(map).toHaveAttribute('aria-busy', 'false');
+    /* Noi NEN hong — khong noi toa do sai, khong goi ten ha tang. */
+    await expect(page.getByTestId('tx-map-notice')).toHaveText(BASEMAP_UNAVAILABLE_NOTICE);
+    await expectBusinessOverlayIntact(page, map);
+    expect(external.every(({ url }) => OPENFREEMAP_URLS.test(url))).toBe(true);
+
+    await screenshotMapRegion(page, testInfo.outputPath('openfreemap-bi-chan-lui-ve.png'));
+  });
+
+  test('style da ap nhung moi o tile hong → lui nen MUON, tuyen van con', async ({ page }) => {
+    await page.route(OPENFREEMAP_URLS, async (route) => {
+      if (route.request().url() === OPENFREEMAP_LIBERTY_STYLE_URL) {
+        await json(route, OPENFREEMAP_LIKE_STYLE);
+        return;
+      }
+      await route.abort('blockedbyclient');
+    });
+
+    const map = await openRoundTrip(page);
+
+    await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK', { timeout: 30_000 });
+    await expect(map).toHaveAttribute('data-basemap-fallback', 'OPENFREEMAP_TILES_FAILED');
+    await expect(page.getByTestId('tx-map-notice')).toHaveText(BASEMAP_UNAVAILABLE_NOTICE);
+    await expectBusinessOverlayIntact(page, map);
+  });
+
+  test('song: OpenFreeMap that — duong sa, ghi nguon, chi goi dung may chu nen; keo/phong van khop', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      process.env.TRANSPORT_MAP_OPENFREEMAP_LIVE !== '1',
+      'Can TRANSPORT_MAP_OPENFREEMAP_LIVE=1',
+    );
+    /* Mang that + ba lan cho man hinh ve xong (thanh cong, keo, phong): 30 s mac dinh la khong du. */
+    test.setTimeout(120_000);
+    const external = recordExternalRequests(page);
+    const googleChunks = recordGoogleCodeChunks(page);
+
+    const map = await openRoundTrip(page);
+
+    await expect(map).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
+    expect(await map.getAttribute('data-basemap-fallback')).toBeNull();
+    /* Nen thanh cong thi KHONG mot bang ron nha cung cap nao. */
+    await expect(page.getByTestId('tx-map-notice')).toHaveCount(0);
+    /* §5: ghi nguon hien du — OpenFreeMap, OpenMapTiles, OpenStreetMap. */
+    const attribution = map.locator('.maplibregl-ctrl-attrib');
+    await expect(attribution).toBeVisible();
+    await expect(attribution).toContainText('OpenFreeMap');
+    await expect(attribution).toContainText('OpenStreetMap');
+    await expectBusinessOverlayIntact(page, map);
+
+    /*
+     * §6 + §9 bai 16/18 — chi instance OpenFreeMap, khong Google; URL khong mang tham so truy van
+     * nao, va Referer chi la ORIGIN: dia chi trang (`?selected=RUN-E2E-1`) khong ra khoi trinh duyet.
+     */
+    expect(external.length).toBeGreaterThan(0);
+    expect(external[0]?.url).toBe(OPENFREEMAP_LIBERTY_STYLE_URL);
+    for (const { url, referer } of external) {
+      const parsed = new URL(url);
+      expect(parsed.host, url).toBe(OPENFREEMAP_HOST);
+      expect(parsed.search, url).toBe('');
+      if (referer !== undefined)
+        expect(new URL(referer).pathname + new URL(referer).search).toBe('/');
+    }
+    expect(googleChunks).toEqual([]);
+
+    await waitForStillFrame(map);
+    await screenshotMapRegion(page, testInfo.outputPath('openfreemap-thanh-cong.png'));
+
+    /*
+     * §10 B — keo/phong: tuyen di CUNG nen. Lui mot muc truoc de ca tuyen nam trong khung khi keo
+     * (o khung fit, tuyen cham le 48px — keo ngang se cat mat mot dau va lam lech trong tam).
+     */
+    await map.getByRole('button', { name: 'Zoom out' }).click();
+    await waitForStillFrame(map);
+    /* Keo di roi keo ve: ca hai lan tuyen phai dich DUNG bang quang keo; lan hai dua tuyen ve giua. */
+    for (const delta of [
+      { x: -140, y: 60 },
+      { x: 140, y: -60 },
+    ]) {
+      const misalignment = await dragMisalignment(page, map, delta);
+      testInfo.annotations.push({
+        type: 'do-lech-khi-keo',
+        description: `keo (${delta.x}, ${delta.y}) px → lech ${misalignment.toFixed(2)} px`,
+      });
+      expect(misalignment).toBeLessThan(8);
+    }
+
+    await map.getByRole('button', { name: 'Zoom in' }).click();
+    await map.getByRole('button', { name: 'Zoom in' }).click();
+    await waitForStillFrame(map);
+    await expectBusinessOverlayIntact(page, map);
+    await screenshotMapRegion(page, testInfo.outputPath('openfreemap-keo-phong.png'));
   });
 });
 

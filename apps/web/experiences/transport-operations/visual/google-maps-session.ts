@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GoogleFailureReason } from './map-style';
-import {
-  loadGoogleMapsLibraries,
-  onGoogleMapsAuthFailure,
-  type GoogleMapsLibraries,
-} from './google-maps-loader';
+import type { GoogleMapsLibraries } from './google-maps-loader';
 
 /**
  * VONG DOI NEN GOOGLE cua MOT ban do — ba trang thai, va hai trong so do la cuoi (#374 §6).
@@ -81,6 +77,31 @@ export function startGoogleMapsSession(
 const LOADING: GoogleMapsSessionState = { status: 'LOADING' };
 
 /**
+ * Trinh nap Google la ma TAI LUOI: trang dung OpenFreeMap mac dinh khong tai no.
+ *
+ * Dang ky nghe `gm_authFailure` vi the cung di sau mot lan `import()`. Thu tu khong quan trong:
+ * `gm_authFailure` chi co the den SAU khi script Google chay, va `onGoogleMapsAuthFailure` van bao
+ * mot nguoi nghe dang ky muon — khoa da hong thi nguoi nghe duoc goi ngay (`google-maps-loader.ts`).
+ */
+const importLoader = () => import('./google-maps-loader');
+
+function subscribeAuthFailureLazily(listener: () => void): () => void {
+  let active = true;
+  let unsubscribe: () => void = () => undefined;
+  importLoader().then(
+    (loader) => {
+      if (active) unsubscribe = loader.onGoogleMapsAuthFailure(listener);
+    },
+    /* Chunk trinh nap khong tai duoc: `load` cung hong va phien ra GOOGLE_SCRIPT_FAILED o do. */
+    () => undefined,
+  );
+  return () => {
+    active = false;
+    unsubscribe();
+  };
+}
+
+/**
  * `apiKey === null` nghia la nen nay KHONG phai Google — hook khong nap gi va tra `null`.
  *
  * Hook luon duoc goi (quy tac cua hook), nen "khong dung Google" phai la mot gia tri vao, khong
@@ -94,8 +115,8 @@ export function useGoogleMapsSession(apiKey: string | null): GoogleMapsSessionSt
     setState(LOADING);
     return startGoogleMapsSession(
       {
-        load: () => loadGoogleMapsLibraries(apiKey),
-        subscribeAuthFailure: onGoogleMapsAuthFailure,
+        load: () => importLoader().then((loader) => loader.loadGoogleMapsLibraries(apiKey)),
+        subscribeAuthFailure: subscribeAuthFailureLazily,
         timeoutMs: GOOGLE_LOAD_TIMEOUT_MS,
       },
       setState,

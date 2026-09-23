@@ -193,7 +193,9 @@ describe('Google hong → man hinh doi sang nen cuc bo (khong crash, noi ro)', (
     h.rejectLoad(new Error('blocked'));
     await flush();
     const latest = h.states.at(-1);
-    const shown = effectiveBasemap(configured, latest?.status === 'FAILED' ? latest.reason : null);
+    const shown = effectiveBasemap(configured, {
+      google: latest?.status === 'FAILED' ? latest.reason : null,
+    });
 
     expect(shown.source).toBe('LOCAL_FALLBACK');
     expect(shown.notice).toBe(GOOGLE_BASEMAP_UNAVAILABLE_NOTICE);

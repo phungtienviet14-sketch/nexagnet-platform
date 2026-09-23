@@ -8,16 +8,31 @@ import Map, {
   type MapRef,
   type ViewState,
 } from 'react-map-gl/maplibre';
-import type { StyleSpecification } from 'maplibre-gl';
+import { setWorkerUrl, type StyleSpecification } from 'maplibre-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { buildJourneyLayers } from './journey-layers';
+import { MAPLIBRE_WORKER_URL } from './maplibre-worker-url';
+import {
+  watchExternalBasemap,
+  type ExternalBasemapStatus,
+  type ExternalBasemapWatch,
+} from './maplibre-basemap-watch';
 import type { ChartPalette } from './chart-options';
 import type { MapCamera } from './map-camera';
 import type { JourneyMapModel } from '../workspace/journey';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 /**
- * NEN MAPLIBRE — style URL da khai, hoac nen CUC BO khong goi mang (#278 N1/N2/N5).
+ * NEN MAPLIBRE — OpenFreeMap (mac dinh), style URL da khai, hoac nen CUC BO khong goi mang
+ * (#278 N1/N2/N5, #374).
+ *
+ * ===========================================================================
+ * NEN NGOAI THI GHI NGUON, VA DUOC THEO DOI CHO TOI KHI HIEN RA.
+ *
+ * Style ngoai (chuoi URL) bat dieu khien ghi nguon mac dinh cua MapLibre: no doc `attribution` cua
+ * chinh style (OpenFreeMap © OpenMapTiles, du lieu © OpenStreetMap) va KHONG mot quy tac CSS nao che
+ * no. Va `onExternalStatus` nhan ket qua cua `watchExternalBasemap`: hong thi `TransportMap` dung
+ * lai mot ban do MOI tren nen cuc bo — kem lop MOI (xem ben duoi).
  *
  * ===========================================================================
  * DECK.GL DI VAO NHU MOT `control` CUA MAPLIBRE, KHONG PHAI MOT LOP CANVAS THU HAI.
@@ -36,6 +51,12 @@ import 'maplibre-gl/dist/maplibre-gl.css';
  * Lop duoc dung MOI trong effect, khong nhan tu ngoai vao: xem `GoogleBasemap` — mot lop da thuoc
  * ngu canh WebGL cua nen Google khong ve duoc tren nen nay.
  */
+
+/*
+ * Mot lan cho ca trang, TRUOC ban do dau tien — tai lieu cua MapLibre 6 doi dieu nay o moi bundler.
+ * Thieu no, nen ngoai tai style ve ma khong mot o tile nao duoc xin (xem `maplibre-worker-url.ts`).
+ */
+setWorkerUrl(MAPLIBRE_WORKER_URL);
 
 function DeckOverlay({
   model,
@@ -69,22 +90,44 @@ const initialViewStateFor = (
         fitBoundsOptions: { padding: camera.paddingPx, maxZoom: camera.maxZoom },
       };
 
+/**
+ * Watch song TRONG effect, khong trong luc ve: tao no la bat dong ho. Cac handler su kien doc watch
+ * dang song qua `ref`; `reactStrictMode` gan-go-gan thi watch thu nhat da `dispose` va im lang.
+ */
+function useExternalBasemapWatch(
+  onStatus: ((status: ExternalBasemapStatus) => void) | undefined,
+): React.RefObject<ExternalBasemapWatch | null> {
+  const watch = useRef<ExternalBasemapWatch | null>(null);
+  useEffect(() => {
+    if (onStatus === undefined) return undefined;
+    const current = watchExternalBasemap(onStatus);
+    watch.current = current;
+    return () => {
+      watch.current = null;
+      current.dispose();
+    };
+  }, [onStatus]);
+  return watch;
+}
+
 export function MapLibreBasemap({
   style,
-  showAttribution,
+  onExternalStatus,
   model,
   palette,
   camera,
 }: {
-  /** Chuoi = URL style ngoai; doi tuong = style cuc bo khong goi mang. */
+  /** Chuoi = URL style ngoai (co ghi nguon); doi tuong = style cuc bo khong goi mang. */
   readonly style: string | StyleSpecification;
-  /** Tile ngoai (OSM, MapTiler, …) BAT BUOC ghi nguon; nen cuc bo khong co gi de ghi. */
-  readonly showAttribution: boolean;
+  /** Chi cho style NGOAI: nen hien ra (`READY`) hay hong (`FAILED`). Phai la mot ham ON DINH. */
+  readonly onExternalStatus?: (status: ExternalBasemapStatus) => void;
   readonly model: JourneyMapModel;
   readonly palette: ChartPalette;
   readonly camera: MapCamera;
 }): React.ReactElement {
   const map = useRef<MapRef | null>(null);
+  const watch = useExternalBasemapWatch(onExternalStatus);
+  const isExternal = typeof style === 'string';
 
   useEffect(() => {
     const instance = map.current;
@@ -107,8 +150,21 @@ export function MapLibreBasemap({
       ref={map}
       initialViewState={initialViewStateFor(camera)}
       mapStyle={style}
-      attributionControl={showAttribution ? { compact: true } : false}
+      /*
+       * `{}` (khong `compact`) = ghi nguon TU CO GIAN cua MapLibre 6.8: day du tren khung rong hon
+       * 640px, thu gon thanh nut (i) o duoi. Khong `compact: true` — no thu gon ca tren man rong
+       * ngay khi nguoi dung keo ban do.
+       */
+      attributionControl={isExternal ? {} : false}
       style={{ width: '100%', height: '100%' }}
+      onStyleData={() => watch.current?.onStyleData()}
+      onSourceData={(event) => watch.current?.onSourceData(event)}
+      onIdle={() => watch.current?.onIdle()}
+      /*
+       * Chi thay trinh bao loi mac dinh (`console.error` moi o tile) khi CO watch: ly do da nam tren
+       * `data-basemap-fallback`. Nen cuc bo giu nguyen trinh bao mac dinh cua react-map-gl.
+       */
+      onError={onExternalStatus === undefined ? undefined : () => watch.current?.onError()}
     >
       <NavigationControl position="top-right" showCompass={false} />
       <ScaleControl position="bottom-left" unit="metric" />
