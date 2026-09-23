@@ -12,7 +12,6 @@ import {
   FUEL_ENTRY_RUN_VEHICLE,
   costExpenseOnRunFirstEntry,
   isCostExpenseNeedsTripViolation,
-  isDriverCashNeedsTripViolation,
   isFuelCostAttributionTriggerViolation,
   isLegRunViolation,
   isRunVehicleViolation,
@@ -200,10 +199,8 @@ describe('#364 — tang kho nhan ra loi CSDL bang ten, va khong nhan nham loi kh
   it.each([
     [isRunVehicleViolation, `${FUEL_ENTRY_RUN_VEHICLE}: vong chay a khong phai cua xe b`],
     [isLegRunViolation, `${FUEL_ENTRY_LEG_RUN}: chang a khong thuoc vong chay b`],
-    [
-      isDriverCashNeedsTripViolation,
-      `new row violates check constraint "${FUEL_ENTRY_DRIVER_CASH_NEEDS_TRIP}"`,
-    ],
+    // `#369` R-4 go `CHECK TransportFuelEntry_driver_cash_needs_trip` va bo nhan dien cua no — xem
+    // `transport-fuel-run-first-driver-cash-storage.spec.ts`. Ten van khoa migration GOC o tren.
     [
       isCostExpenseNeedsTripViolation,
       `new row violates check constraint "${FUEL_ENTRY_COST_EXPENSE_NEEDS_TRIP}"`,

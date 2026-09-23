@@ -5,6 +5,8 @@ import { PrismaService } from '../../config/prisma.service.js';
 import type { OrderCompletionEligibility } from '../acceptance/acceptance.types.js';
 import type { TransportCostingPolicy } from '../costing/costing-policy.js';
 import { CostingService } from '../costing/costing.service.js';
+import { MovementCostingRunContextAdapter } from '../costing/costing-run-context.port.js';
+import { RunExpenseService } from '../costing/run-expense.service.js';
 import { PrismaCostingRepository } from '../costing/prisma-costing.repository.js';
 import { TransportCoreFactsAdapter } from '../costing/transport-core-facts.port.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
@@ -87,6 +89,14 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       CORE_POLICY,
       COSTING_POLICY,
     );
+    // `#369` R-4 — chan Quy cua phieu Run-first `DRIVER_CASH` di qua day.
+    const runExpenses = new RunExpenseService(
+      new PrismaCostingRepository(prisma),
+      new TransportCoreFactsAdapter(trips, fleet),
+      new MovementCostingRunContextAdapter(new PrismaMovementRepository(prisma)),
+      audit,
+      CORE_POLICY,
+    );
     const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
     const fuelRuns = new MovementFuelRunContextAdapter(new PrismaMovementRepository(prisma));
     const fuel = new FuelService(
@@ -94,7 +104,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       new PrismaFuelStationRepository(prisma),
       fuelCore,
       fuelRuns,
-      new CostingFuelExpenseAdapter(costing),
+      new CostingFuelExpenseAdapter(costing, runExpenses),
       audit,
       CORE_POLICY,
       FUEL_POLICY,

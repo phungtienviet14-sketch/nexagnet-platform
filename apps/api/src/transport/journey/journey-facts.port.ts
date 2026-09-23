@@ -162,6 +162,17 @@ export class JourneyLocationFactsAdapter extends JourneyLocationFacts {
 
 export abstract class JourneyFuelFacts {
   abstract listEntriesByTrip(tripId: string): Promise<readonly FuelEntry[]>;
+  /**
+   * `#369` R-2 — phieu khai TREN vong chay (`runId` cua CHINH phieu).
+   *
+   * Duong doc THU HAI, va no can thiet vi duong thu nhat di qua CHUYEN v1: mot vong chay Order-first
+   * khong co chuyen nao, nen truoc `#369` moi phieu dau cua no vang mat khoi dong thoi gian — mot lan
+   * do dau CO THAT khong hien o dau tren man hinh hanh trinh.
+   *
+   * Hai duong ROI NHAU theo cau truc (`CHECK TransportFuelEntry_one_context_kind`), nen gop chung
+   * khong hien mot phieu hai lan.
+   */
+  abstract listEntriesByRun(runId: string): Promise<readonly FuelEntry[]>;
 }
 
 @Injectable()
@@ -172,5 +183,9 @@ export class JourneyFuelFactsAdapter extends JourneyFuelFacts {
 
   listEntriesByTrip(tripId: string): Promise<readonly FuelEntry[]> {
     return this.fuel.listEntriesByTrip(tripId);
+  }
+
+  listEntriesByRun(runId: string): Promise<readonly FuelEntry[]> {
+    return this.fuel.listEntriesByRun(runId);
   }
 }

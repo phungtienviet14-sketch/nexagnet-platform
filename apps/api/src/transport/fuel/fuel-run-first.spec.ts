@@ -143,11 +143,8 @@ describe('#364 §4.2 / §9 — ngu canh sai bi tu choi voi MOT ly do co ma', () 
       () => ({ tripId: LEGACY_TRIP, vehicleId: VEHICLE_A }),
       'DENIED:FUEL_ENTRY_CONTEXT_CONFLICT',
     ],
-    [
-      'tien mat lai xe ung tren phieu Run-first',
-      () => ({ paymentMethod: 'DRIVER_CASH' as const }),
-      'DENIED:FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
-    ],
+    // `#369` R-4: "tien mat lai xe ung tren phieu Run-first" KHONG con nam trong bang nay — no HOP LE,
+    // va duong Quy cua no do o `fuel-run-first-driver-cash.spec.ts`.
   ])('%s', async (_label, patch, expected) => {
     expect(
       await reasonOf(world.fuel.submitFuelEntry(runFirstCommand(world, patch()), 'lx.binh')),
@@ -164,26 +161,32 @@ describe('#364 §4.2 / §9 — ngu canh sai bi tu choi voi MOT ly do co ma', () 
     ).toBe('DENIED:FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN');
   });
 
-  it('SUA mot phieu Run-first sang `DRIVER_CASH` cung bi chan', async () => {
+  /**
+   * `#369` R-4 — DAO hop dong cua `#364`: sua mot phieu Run-first CON `DECLARED` sang `DRIVER_CASH`
+   * gio HOP LE. Va lenh sua KHONG cham Quy: chan Quy chi sinh ra luc DUYET (so tien khi do da bat bien,
+   * `GD-10`) — mot to khai con sua duoc khong duoc tru quy cua ai.
+   */
+  it('SUA mot phieu Run-first sang `DRIVER_CASH` khi con DECLARED -> duoc, CHUA cham Quy', async () => {
     const entry = await world.fuel.submitFuelEntry(runFirstCommand(world), 'lx.binh');
-    expect(
-      await reasonOf(
-        world.fuel.amendFuelEntry(
-          entry.id,
-          {
-            supplierId: world.supplierId,
-            liters: '100',
-            amount: 2_100_000,
-            odometerKm: 120_000,
-            occurredAt: '2026-09-22T11:30:00+07:00',
-            businessDate: '2026-09-22',
-            paymentMethod: 'DRIVER_CASH',
-          },
-          'ke-toan',
-        ),
-      ),
-    ).toBe('DENIED:FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP');
-    expect((await world.fuelRepo.findEntry(entry.id))?.paymentMethod).toBe('SUPPLIER_ACCOUNT');
+    const amended = await world.fuel.amendFuelEntry(
+      entry.id,
+      {
+        supplierId: world.supplierId,
+        liters: '100',
+        amount: 2_100_000,
+        odometerKm: 120_000,
+        occurredAt: '2026-09-22T11:30:00+07:00',
+        businessDate: '2026-09-22',
+        paymentMethod: 'DRIVER_CASH',
+      },
+      'ke-toan',
+    );
+    expect(amended).toMatchObject({
+      paymentMethod: 'DRIVER_CASH',
+      tripId: null,
+      driverFundEntryId: null,
+    });
+    expect(world.costing.driverCashCommands).toEqual([]);
   });
 });
 

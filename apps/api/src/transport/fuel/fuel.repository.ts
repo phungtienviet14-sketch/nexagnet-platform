@@ -10,6 +10,7 @@ import type {
   FuelVerificationStatus,
 } from './fuel-lifecycle.js';
 import type { FuelDiscrepancyKind } from './fuel-matching.js';
+import type { CashPaidMatch } from './fuel-payable.js';
 import type { FuelIngestChannel } from './fuel-station.types.js';
 import type {
   FuelDiscrepancy,
@@ -235,6 +236,21 @@ export interface FuelEntryInboxFilter {
    * doi ra id qua `FuelRunContextFacts`, tang kho chi nhan ket qua da doi.
    */
   readonly runIds: readonly string[] | null;
+  /**
+   * `#369` R-5 — CHUYEN v1 da duoc chieu sang chinh cac vong chay o `runIds`.
+   *
+   * Loc theo MA VONG CHAY phai thay CA hai loai phieu cua vong chay do: phieu Run-first (khai thang
+   * `runId`) VA phieu chuyen v1 da chieu sang mot chang cua no. Nen hai truong nay hop bang HOAC:
+   *
+   * ```text
+   * runId IN (runIds) OR tripId IN (runTripIds)
+   * ```
+   *
+   * Tang UNG DUNG doi `runCode -> runIds -> runTripIds` (`FuelRunContextFacts`); tang kho chi nhan ket
+   * qua da doi — §4.1 luat 4. `null` khi khong loc theo vong chay; `[]` khi loc ma khong chuyen nao da
+   * chieu sang vong chay do.
+   */
+  readonly runTripIds: readonly string[] | null;
   readonly driverId: string | null;
   readonly vehicleId: string | null;
   readonly supplierId: string | null;
@@ -505,11 +521,17 @@ export interface ResolvedDiscrepancy {
 }
 
 /**
- * BA ket cuc phan biet duoc — hai lan tu choi vi hai ly do khac han nhau.
+ * BON ket cuc phan biet duoc — ba lan tu choi vi ba ly do khac han nhau.
  *
  * `RECONCILIATION_REJECTED` = ky khong con nhan quyet dinh (da dong). `DISCREPANCY_RACE` = ky van
  * mo nhung chenh lech nay vua duoc nguoi khac quyet. Nguoi dung phai lam hai viec khac nhau, nen ho
  * phai nhan hai cau tra loi khac nhau.
+ *
+ * `MATCH_PAYMENT_METHOD_CONFLICT` (`#371`) = cap khop tay tro toi mot phieu KHONG ghi no, doc lai
+ * DUOI KHOA (hang doi soat, roi hang phieu `FOR UPDATE`) truoc moi lan ghi. Lan kiem o tang mien doc
+ * TRUOC giao dich, nen mot lenh sua phieu sang `DRIVER_CASH` chen vao giua van lot — lan doc nay moi
+ * la lan co hieu luc. Khong mot hang nao duoc ghi: chenh lech van `PENDING`, khong cap khop, trang
+ * thai dong/phieu y nguyen.
  */
 export type ResolveDiscrepancyOutcome =
   | {
@@ -518,7 +540,12 @@ export type ResolveDiscrepancyOutcome =
       readonly state: FuelReconciliationState;
     }
   | { readonly kind: 'RECONCILIATION_REJECTED'; readonly state: FuelReconciliationState | null }
-  | { readonly kind: 'DISCREPANCY_RACE' };
+  | { readonly kind: 'DISCREPANCY_RACE' }
+  | {
+      readonly kind: 'MATCH_PAYMENT_METHOD_CONFLICT';
+      readonly fuelEntryId: string;
+      readonly paymentMethod: FuelPaymentMethod;
+    };
 
 /**
  * DOI Y ve mot quyet dinh DA GHI — `#317` G0.
@@ -584,6 +611,7 @@ export type ReviseDecisionOutcome =
  * ```text
  * 0. khoa doc quyen hang doi soat, doc lai trang thai
  * 0bis. DEM LAI chenh lech con treo — trong giao dich nay
+ * 0ter. `#371` — cap khop toi phieu KHONG ghi no? -> tu choi, khong ghi gi (`CASH_PAID_MATCHES`)
  * 1. `RESOLVED -> CLOSED`
  * 2. moi dong/phieu trong ky chuyen `SETTLED`
  * 2bis. CONG LAI tong duoc chap nhan — trong giao dich nay
@@ -615,15 +643,21 @@ export interface ClosedReconciliation {
 }
 
 /**
- * BA ket cuc, va `PENDING_DISCREPANCIES` phai tach khoi `REJECTED`.
+ * BON ket cuc, va `PENDING_DISCREPANCIES` phai tach khoi `REJECTED`.
  *
  * "Con 3 cau hoi chua ai tra loi" la mot viec nguoi doi soat LAM DUOC. "Ky nay vua bi nguoi khac
  * doi trang thai" thi khong. Gop hai cai thanh mot ma se buoc ho doan xem minh phai lam gi.
+ *
+ * `CASH_PAID_MATCHES` (`#371`) = LUOI CUOI truoc ban giao: ky mang it nhat mot cap khop toi phieu
+ * KHONG ghi no (`cashPaidMatches`, doc DUOI KHOA). Khong mot hang nao duoc ghi — ky giu nguyen trang
+ * thai, khong `SETTLED`, khong ban giao. KHONG loc bo cap hong roi dong: do la coi mot ky hong la
+ * sach, va con so di sang T5 se khong con giai thich duoc bang chinh bo cap khop cua ky.
  */
 export type CloseReconciliationOutcome =
   | { readonly kind: 'CLOSED'; readonly closed: ClosedReconciliation }
   | { readonly kind: 'PENDING_DISCREPANCIES'; readonly pending: number }
-  | { readonly kind: 'REJECTED'; readonly state: FuelReconciliationState | null };
+  | { readonly kind: 'REJECTED'; readonly state: FuelReconciliationState | null }
+  | { readonly kind: 'CASH_PAID_MATCHES'; readonly matches: readonly CashPaidMatch[] };
 
 export interface ReopenReconciliationInput {
   readonly reconciliationId: string;
@@ -659,6 +693,14 @@ export abstract class FuelRepository {
   abstract findEntry(id: string): Promise<FuelEntry | null>;
   abstract findEntryByCorrelation(correlationKey: string): Promise<FuelEntry | null>;
   abstract listEntriesByTrip(tripId: string): Promise<FuelEntry[]>;
+  /**
+   * `#369` R-2 — phieu khai TREN mot vong chay (`runId` cua CHINH phieu), theo thu tu thoi gian.
+   *
+   * Doi xung `listEntriesByTrip`, va HAI tap ROI NHAU: `CHECK TransportFuelEntry_one_context_kind`
+   * cam mot phieu mang ca hai ngu canh. Nen mot dong thoi gian gop hai duong doc nay khong the hien
+   * mot phieu hai lan — khong can mot phep khu trung nao.
+   */
+  abstract listEntriesByRun(runId: string): Promise<FuelEntry[]>;
   abstract listEntriesByDriver(driverId: string): Promise<FuelEntry[]>;
   /**
    * Moi phieu dang mang it nhat MOT ly do can kiem tra (`INV-06`, VT-046 vuot dinh muc).
@@ -737,6 +779,16 @@ export abstract class FuelRepository {
    * giu dung dieu nay o tang CSDL.
    */
   abstract attachCostExpense(id: string, expenseId: string): Promise<FuelEntry | null>;
+  /**
+   * `#369` R-4 — gan CHAN QUY LAI XE vao phieu Run-first `DRIVER_CASH` da duyet, CHI KHI chua co.
+   *
+   * Cung khuon `attachCostExpense`, chieu nguoc lai: `null` = da co (lan phat lai vo hai). Phieu
+   * KHONG du dieu kien (gan chuyen v1, khong `DRIVER_CASH`, chua duyet) thi NEM
+   * `driverFundLegOnIneligibleEntry` va KHONG ghi gi — tra `null` o do se lam nguoi goi tin mot but
+   * toan quy mo coi la cua mot phien khac. `CHECK TransportFuelEntry_driver_fund_leg_shape` va trigger
+   * `transport_fuel_entry_driver_fund_leg` giu dung dieu nay o tang CSDL.
+   */
+  abstract attachDriverFundEntry(id: string, fundEntryId: string): Promise<FuelEntry | null>;
 
   /* --- Bang chung --- */
   /**

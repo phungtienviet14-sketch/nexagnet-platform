@@ -94,7 +94,7 @@ export class JourneyReadService {
     }));
 
     const events = this.timelineEvents(timeline);
-    const fuelEvents = await this.fuelEvents(tripByLeg, unavailableSources);
+    const fuelEvents = await this.fuelEvents(run.id, tripByLeg, unavailableSources);
 
     return {
       run: {
@@ -296,12 +296,29 @@ export class JourneyReadService {
       code: entry.type,
       at: entry.at.toISOString(),
       legId: entry.legId,
+      // Moc KHAI thang chang cua no; moc muc vong chay (`ASSIGNED`/`DEPARTED`/`COMPLETED`) khong
+      // thuoc chang nao.
+      placement: entry.legId === null ? ('RUN_LEVEL' as const) : ('DECLARED' as const),
       hasLocationProof: entry.hasLocationProof,
       subjectId: entry.checkpointId,
     }));
   }
 
+  /**
+   * PHIEU DO DAU tren dong thoi gian — HAI DUONG DOC, va moi duong noi ro no den tu dau (`#369` R-2).
+   *
+   * ```text
+   * phieu chuyen v1   -> qua `TransportTripRunLegLink` -> chang do  (`DERIVED_FROM_TRIP_LINK`)
+   * phieu Run-first   -> `runId`/`legId` CUA CHINH phieu            (`DECLARED` / `RUN_LEVEL`)
+   * ```
+   *
+   * Truoc `#369`, chi co duong thu nhat. Mot vong chay Order-first khong co chuyen v1 nao, nen moi
+   * phieu dau cua no — ke ca phieu tien mat lai xe da ung — vang mat khoi dong thoi gian. Hai duong
+   * doc hai tap phieu ROI NHAU (`CHECK TransportFuelEntry_one_context_kind`), nen khong phieu nao
+   * hien hai lan va khong can mot phep khu trung nao.
+   */
   private async fuelEvents(
+    runId: string,
     tripByLeg: ReadonlyMap<string, string>,
     unavailable: JourneySource[],
   ): Promise<readonly JourneyEvent[]> {
@@ -311,19 +328,29 @@ export class JourneyReadService {
       return [];
     }
 
+    const fuelEvent = (
+      entry: { readonly id: string; readonly occurredAt: string },
+      legId: string | null,
+      placement: JourneyEvent['placement'],
+    ): JourneyEvent => ({
+      kind: 'FUEL',
+      code: 'FUEL_ENTRY',
+      at: entry.occurredAt,
+      legId,
+      placement,
+      /* Mot phieu do dau khong mang ban dinh vi — noi that thay vi de trong. */
+      hasLocationProof: false,
+      subjectId: entry.id,
+    });
+
     const events: JourneyEvent[] = [];
     for (const [legId, tripId] of tripByLeg) {
       for (const entry of await fuel.listEntriesByTrip(tripId)) {
-        events.push({
-          kind: 'FUEL',
-          code: 'FUEL_ENTRY',
-          at: entry.occurredAt,
-          legId,
-          /* Mot phieu do dau khong mang ban dinh vi — noi that thay vi de trong. */
-          hasLocationProof: false,
-          subjectId: entry.id,
-        });
+        events.push(fuelEvent(entry, legId, 'DERIVED_FROM_TRIP_LINK'));
       }
+    }
+    for (const entry of await fuel.listEntriesByRun(runId)) {
+      events.push(fuelEvent(entry, entry.legId, entry.legId === null ? 'RUN_LEVEL' : 'DECLARED'));
     }
     return events;
   }

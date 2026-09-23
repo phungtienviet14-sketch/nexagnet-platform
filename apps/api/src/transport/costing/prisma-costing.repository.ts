@@ -5,8 +5,10 @@ import { isUniqueViolationOn } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   CORRELATION_INDEXES,
+  FUND_ACCOUNT_DRIVER,
   FUND_PERIOD_NO_OVERLAP,
   REVERSAL_ONCE_INDEXES,
+  isFundEntryLegRunViolation,
 } from './costing-storage-conflict.js';
 import {
   CostingRepository,
@@ -48,6 +50,9 @@ interface EntryRow {
   currencyCode: string;
   businessDate: string;
   tripId: string | null;
+  /** `#369` — co the vang o mot ban client sinh truoc migration R-4; doc qua `?? null`. */
+  runId?: string | null;
+  legId?: string | null;
   correlationKey: string;
   reversalOfId: string | null;
   note: string | null;
@@ -123,6 +128,8 @@ const toEntry = (row: EntryRow): DriverFundEntry => ({
   currencyCode: row.currencyCode,
   businessDate: row.businessDate,
   tripId: row.tripId,
+  runId: row.runId ?? null,
+  legId: row.legId ?? null,
   correlationKey: row.correlationKey,
   reversalOfId: row.reversalOfId,
   note: row.note,
@@ -209,13 +216,30 @@ export class PrismaCostingRepository extends CostingRepository {
    * chi vi ai do bam nhanh hon nua giay.
    */
   async ensureAccount(driverId: string, at: Date): Promise<DriverFundAccount> {
-    return toAccount(
-      await model(this.prisma, 'transportDriverFundAccount').upsert({
-        where: { driverId },
-        create: { driverId, currencyCode: TRANSPORT_CURRENCY, updatedAt: at },
-        update: {},
-      }),
-    );
+    try {
+      return toAccount(
+        await model(this.prisma, 'transportDriverFundAccount').upsert({
+          where: { driverId },
+          create: { driverId, currencyCode: TRANSPORT_CURRENCY, updatedAt: at },
+          update: {},
+        }),
+      );
+    } catch (error) {
+      /*
+       * `#369` — `upsert` voi phan `update` RONG khong phai luon la mot cau `INSERT ... ON CONFLICT`:
+       * Prisma co the chay "doc roi tao", va hai lan ghi Quy DAU TIEN cua cung mot lai xe chay song
+       * song deu thay "chua co" roi deu `INSERT`. Ben thua dam unique `driverId` — do la unique lam
+       * DUNG viec cua no, khong phai mot loi dau vao. Doc lai la du: so quy khong co gi de hoa giai,
+       * no chi la mot hang danh tinh.
+       *
+       * Do duoc o `transport-fuel-run-first-driver-cash.int.spec.ts` (D4b): hai lenh ghi Quy song song
+       * cho mot lai xe CHUA co so quy.
+       */
+      if (!isUniqueViolationOn(error, FUND_ACCOUNT_DRIVER)) throw error;
+      const existing = await this.findAccountByDriver(driverId);
+      if (existing) return existing;
+      throw error;
+    }
   }
 
   async findAccount(id: string): Promise<DriverFundAccount | null> {
@@ -262,6 +286,8 @@ export class PrismaCostingRepository extends CostingRepository {
                 currencyCode: TRANSPORT_CURRENCY,
                 businessDate: input.entry.businessDate,
                 tripId: input.entry.tripId,
+                runId: input.entry.runId ?? null,
+                legId: input.entry.legId ?? null,
                 correlationKey: input.correlationKey,
                 reversalOfId: input.entry.reversalOfId ?? null,
                 note: input.entry.note ?? null,
@@ -357,6 +383,12 @@ export class PrismaCostingRepository extends CostingRepository {
     // Ky dong bang KHONG phai mot va cham luu tru — no la mot cong nghiep vu da dong, va service
     // moi biet cong nao dang mo de dat ten cho no. Tra nguyen ven.
     if (error instanceof FundPeriodFrozenError) return error;
+    if (isFundEntryLegRunViolation(error)) {
+      return TransportDomainError.denied(
+        'RUN_EXPENSE_LEG_NOT_IN_RUN',
+        `Chang cua ${correlationKey} khong thuoc vong chay cua but toan`,
+      );
+    }
     for (const index of REVERSAL_ONCE_INDEXES) {
       if (isUniqueViolationOn(error, index)) {
         return TransportDomainError.conflict(

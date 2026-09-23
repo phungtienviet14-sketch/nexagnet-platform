@@ -43,6 +43,12 @@ export interface FundEntryIdentity {
   readonly signedAmount: number;
   readonly businessDate: BusinessDate;
   readonly tripId: string | null;
+  /**
+   * `#369` R-4 — VONG CHAY/CHANG ma khoan chi Run-first thuoc ve. Cung mot so tien, cung mot ngay,
+   * nhung cho mot vong chay KHAC la mot khoan chi KHAC — phat lai no se lam mat khoan thu hai.
+   */
+  readonly runId: string | null;
+  readonly legId: string | null;
   readonly note: string | null;
 }
 
@@ -75,10 +81,12 @@ const FUND_ENTRY_FIELDS = [
   'signedAmount',
   'businessDate',
   'tripId',
+  'runId',
+  'legId',
   'note',
 ] as const satisfies Covers<
   FundEntryIdentity,
-  ['accountId', 'kind', 'signedAmount', 'businessDate', 'tripId', 'note']
+  ['accountId', 'kind', 'signedAmount', 'businessDate', 'tripId', 'runId', 'legId', 'note']
 >;
 
 const TRIP_EXPENSE_FIELDS = [
@@ -129,6 +137,8 @@ export const fundEntryIdentity = (raw: {
   readonly signedAmount: number;
   readonly businessDate: BusinessDate;
   readonly tripId?: string | null;
+  readonly runId?: string | null;
+  readonly legId?: string | null;
   readonly note?: string | null;
 }): FundEntryIdentity => ({
   accountId: raw.accountId,
@@ -136,6 +146,8 @@ export const fundEntryIdentity = (raw: {
   signedAmount: raw.signedAmount,
   businessDate: raw.businessDate,
   tripId: raw.tripId ?? null,
+  runId: raw.runId ?? null,
+  legId: raw.legId ?? null,
   note: text(raw.note),
 });
 

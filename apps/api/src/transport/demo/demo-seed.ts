@@ -1067,6 +1067,7 @@ async function writePlan(
             amount: true,
             invoiceNo: true,
             sourceStatementId: true,
+            paymentMethod: true,
           },
         });
         const matchableEntries: MatchableFuelEntry[] = supplierEntries.map((entry) => ({
@@ -1076,6 +1077,10 @@ async function writePlan(
           amount: Number(entry.amount),
           invoiceNo: entry.invoiceNo,
           sourceStatementId: entry.sourceStatementId,
+          // `#371` — cung luat voi san pham: phieu lai xe tra tien mat khong bao gio khop bang ke
+          // cong no. Ban gieo KHONG duoc de ra mot cap khop ma `FuelReconciliationService` tu choi
+          // (trigger `TransportFuelMatch_payable_entry_only` se lam lenh gieo chet neu quen).
+          paymentMethod: entry.paymentMethod,
           reconciliationStatus: 'UNMATCHED',
         }));
 

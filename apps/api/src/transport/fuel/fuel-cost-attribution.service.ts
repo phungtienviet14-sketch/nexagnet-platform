@@ -37,8 +37,10 @@ export interface RecordFuelCostAttributionCommand {
  *
  *   1. KHONG sua su that cua phieu — khong mot lenh ghi nao vao `TransportFuelEntry`;
  *   2. KHONG cham cong no nha cung cap, bang ke, cap khop hay chenh lech — khong tiem kho cua chung;
- *   3. KHONG cham Quy lai xe — phieu Run-first khong the mang `DRIVER_CASH`, va tep nay khong tiem
- *      `CostingService`;
+ *   3. KHONG cham Quy lai xe — tep nay khong tiem `CostingService`, va no van dung sau `#369` R-4:
+ *      mot phieu Run-first `DRIVER_CASH` co chan Quy RIENG (`RUN_EXPENSE`, ghi luc DUYET), con phan
+ *      bo gia thanh la mot quyet dinh KHAC cua ke toan. Hai su that ve cung mot lan do dau — "lai xe
+ *      da bo bao nhieu" va "cong viec nao chiu bao nhieu" — khong duoc tron;
  *   4. KHONG xoa, KHONG sua mot dong — sua la mot dong DAO roi mot cap phat moi;
  *   5. KHONG tu phan bo — moi dong do MOT NGUOI quyet (`recordedBy`), khong co lan phan bo "mac dinh
  *      100% vao vong chay cua ngu canh".

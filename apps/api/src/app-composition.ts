@@ -122,6 +122,7 @@ import { FuelReconciliationController } from './transport/fuel/fuel-reconciliati
 import { FuelDocumentController } from './transport/fuel/fuel-document.controller.js';
 import { FuelStationController } from './transport/fuel/fuel-station.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
+import { TransportFuelAnalyticsBridgeModule } from './transport/fuel/fuel-analytics-bridge.module.js';
 import { TollController } from './transport/toll/toll.controller.js';
 import { TransportTollModule } from './transport/toll/transport-toll.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
@@ -322,6 +323,14 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
   // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
   owned('transport-fuel', TransportFuelModule),
+  // CAU NOI phan bo gia thanh nhien lieu -> bien truc tiep cua vong chay (`#369` R-1). `@Global()`,
+  // va CHI xuat mot cong CHI DOC.
+  //
+  // Den cung `transport-fuel` va bien mat cung no: khach tat nhien lieu thi token khong ton tai,
+  // `OperatingMetricsReadService` nhan `undefined` qua `@Optional()`, va `runMargin` cong bo
+  // `FUEL_COST_ATTRIBUTION` trong `unavailableSources` — mot nguon vang mat DOC DUOC tren bao cao,
+  // thay vi mot so 0 khong ai giai thich duoc.
+  owned('transport-fuel', TransportFuelAnalyticsBridgeModule),
   // NAP DU LIEU ETC / PHI DUONG BO (Lane J, #269). Den cung `transport-toll` va bien mat cung no:
   // mot khach chua doi soat ETC khong duoc nap mot bang nao cua `TX-08` mo rong.
   owned('transport-toll', TransportTollModule),

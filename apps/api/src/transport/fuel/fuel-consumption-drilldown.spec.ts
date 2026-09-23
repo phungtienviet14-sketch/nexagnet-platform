@@ -60,6 +60,7 @@ const entry = (input: {
     reconciliationStatus: 'UNMATCHED',
     sourceStatementId: null,
     costExpenseId: null,
+    driverFundEntryId: null,
     correlationKey: `khoa-${id}`,
     invoiceNo: null,
     note: null,

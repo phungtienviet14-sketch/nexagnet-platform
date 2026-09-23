@@ -25,7 +25,7 @@ Ba câu tóm tắt quyết định:
 | Lệnh nộp                                            | `requireTrip` → `guardTripAcceptsFuel` → `requireAssignedToTrip` (lái xe + xe) | `resolveContext`: nhánh chuyến cũ giữ nguyên mọi cổng; nhánh vòng xe có cổng riêng (§4)               |
 | Chống ghi trùng                                     | danh tính 11 trường, có `tripId`                                               | thêm `runId`/`legId` (nullable) — đổi ngữ cảnh là một phiếu **khác**                                  |
 | Giá thành                                           | `VERIFIED` → `FuelCostingPort.postFuelCost` → `TX-03` `TransportTripExpense`   | chỉ phiếu có `tripId`; phiếu Run-first dừng ở `FUEL_COST_AWAITS_ATTRIBUTION` và sang lớp phân bổ (§3) |
-| Quỹ lái xe                                          | `DRIVER_CASH` → `TX-03` → sổ quỹ (khoá theo chuyến)                            | `DRIVER_CASH` **chỉ** trên phiếu chuyến cũ — CHECK ở DB + lý do có mã                                 |
+| Quỹ lái xe                                          | `DRIVER_CASH` → `TX-03` → sổ quỹ (khoá theo chuyến)                            | `DRIVER_CASH` **chỉ** trên phiếu chuyến cũ — CHECK ở DB + lý do có mã · **#369: mở, xem §9.2**        |
 | Hộp thư kế toán                                     | lọc và hiện **mã chuyến**                                                      | giữ mã chuyến; thêm lọc **mã vòng xe**, hiện vòng xe + số chặng; phiếu không chuyến vẫn xuất hiện     |
 | Khung nhìn lái xe                                   | `DriverFuelSlipView.tripId` bắt buộc                                           | nullable; thêm `runCode`, `legSequence`, `vehiclePlate`                                               |
 | Tiêu hao                                            | chuỗi odo theo **xe** (không phụ thuộc chuyến); drill-down mang `tripId`       | `tripId` nullable + `runId` trong drill-down; thuật toán không đổi                                    |
@@ -48,7 +48,7 @@ số tiền, phương thức thanh toán, chứng từ, `correlationKey`, trạn
 | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `TransportFuelEntry_leg_needs_run`           | có chặng thì phải có vòng xe                                                               |
 | `TransportFuelEntry_one_context_kind`        | `num_nonnulls(tripId, runId) <= 1` — không bao giờ cả chuyến lẫn vòng xe                   |
-| `TransportFuelEntry_driver_cash_needs_trip`  | `DRIVER_CASH` chỉ trên phiếu chuyến cũ                                                     |
+| ~~`TransportFuelEntry_driver_cash_needs_trip`~~ | `DRIVER_CASH` chỉ trên phiếu chuyến cũ — **#369 đã gỡ**, xem §9.2                        |
 | `TransportFuelEntry_cost_expense_needs_trip` | `costExpenseId IS NULL OR tripId IS NOT NULL` — chân `TX-03` chỉ trên phiếu chuyến cũ (§3) |
 | trigger `transport_fuel_entry_run_context`   | vòng xe là của **chính xe** trên phiếu; chặng thuộc **chính vòng xe** đó                   |
 
@@ -77,6 +77,9 @@ Khoá phân vùng là `tripId`, và nó bất biến sau khi ghi, nên một phi
 | --------------------------- | ---------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `tripId ≠ NULL` (chuyến cũ) | `TransportTripExpense` (`TX-03`), trỏ bằng `costExpenseId` | `FuelService.postFuelCost` khi `VERIFIED` — **như trước** | biên chuyến, `runMargin` (qua `TransportTripRunLegLink`), Quỹ lái xe khi `DRIVER_CASH`                 |
 | `tripId = NULL` (Run-first) | `TransportFuelCostAttribution`                             | kế toán, qua lệnh phân bổ riêng                           | `GET /transport/fuel/runs/:runId/cost-attribution`, `GET /transport/fuel/entries/:id/cost-attribution` |
+
+> **Cập nhật #369 (R-1):** `runMargin` nay đọc **cả hai** sổ — xem §9.1. Quỹ lái xe là một sổ **thứ
+> ba** (tiền mặt, không phải giá thành) và không bao giờ được cộng vào giá thành: xem §9.2.
 
 Cưỡng chế ở **cả hai chiều**, mỗi chiều có lưới ở tầng DB — không chỉ quy ước:
 
@@ -147,7 +150,7 @@ kia bị từ chối có mã. Gỡ `FOR UPDATE` khỏi kho → A2 **đỏ** (đ�
 Lý do có mã mới (tiền tố theo bộ từ vựng hiện có của `fuel-decisions.ts`):
 `FUEL_ENTRY_CONTEXT_REQUIRED`, `FUEL_ENTRY_CONTEXT_CONFLICT`, `FUEL_ENTRY_RUN_NOT_FOUND` (404),
 `FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN`, `FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE`,
-`FUEL_ENTRY_LEG_NOT_IN_RUN`, `FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP`,
+`FUEL_ENTRY_LEG_NOT_IN_RUN`, ~~`FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP`~~ (#369 đã gỡ),
 `FUEL_COST_AWAITS_ATTRIBUTION`, và điểm quyết định mới `fuel.cost_attribution` với 12 lý do
 (`FUEL_COST_ATTRIBUTED`, `FUEL_COST_ATTRIBUTION_REPLAY`, `…_EXCEEDS_ENTRY`, …). Vi phạm CHECK/trigger
 đi qua đường ghi không qua tầng miền được dịch về đúng các mã đó — không có 500 chung chung.
@@ -187,12 +190,114 @@ quyết định thì không cần migration.
 
 ## 8. Tồn đọng — ngoài PR này, có chủ đích
 
-| Mã  | Tồn đọng                                                                  | Vì sao chưa làm                                                                                            |
-| --- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| R-1 | `runMargin` và báo cáo tài chính chưa cộng `TransportFuelCostAttribution` | thuộc capability analytics; hai sổ rời nhau nên cộng thêm là an toàn — việc riêng, không sửa lõi giá thành |
-| R-2 | Dòng thời gian hành trình chưa hiện phiếu Run-first                       | đang đọc theo chuyến (`listEntriesByTrip`); cần cổng đọc theo vòng xe                                      |
-| R-3 | Phiếu chỉ-xe (không vòng xe)                                              | cần quyết định chủ repo về nguồn lái xe ↔ xe có thẩm quyền (§6)                                            |
-| R-4 | `DRIVER_CASH` trên phiếu Run-first                                        | sổ Quỹ lái xe khoá theo chuyến (`TransportTripExpense.tripId` NOT NULL); cần đường ghi quỹ không chuyến    |
-| R-5 | Hộp thư chưa hiện vòng xe suy ra cho phiếu chuyến cũ                      | suy từ `TransportTripRunLegLink` là đọc, không phải ghi; để không trộn với bảng ngữ cảnh gốc               |
-| R-6 | Bảng giá thành trên web chỉ gợi ý vòng xe/chặng của ngữ cảnh              | API đã nhận mọi vòng xe/chặng cùng xe; ô chọn tự do cần một khung nhìn liệt kê vòng xe của xe              |
-| R-7 | Bằng chứng runtime/UAT §11 của #364                                       | chỉ làm được sau merge + deploy — ngoài phạm vi phiên này                                                  |
+| Mã  | Tồn đọng                                                                  | Trạng thái                                                                                                   |
+| --- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| R-1 | `runMargin` và báo cáo tài chính chưa cộng `TransportFuelCostAttribution` | **ĐÃ ĐÓNG — #369** (§9.1)                                                                                     |
+| R-2 | Dòng thời gian hành trình chưa hiện phiếu Run-first                       | **ĐÃ ĐÓNG — #369** (§9.3)                                                                                     |
+| R-3 | Phiếu chỉ-xe (không vòng xe)                                              | **CÒN MỞ, fail closed** — cần quyết định chủ repo về nguồn lái xe ↔ xe có thẩm quyền (§6)                     |
+| R-4 | `DRIVER_CASH` trên phiếu Run-first                                        | **ĐÃ ĐÓNG — #369** (§9.2)                                                                                     |
+| R-5 | Hộp thư chưa hiện vòng xe suy ra cho phiếu chuyến cũ                      | **ĐÃ ĐÓNG — #369** (§9.3)                                                                                     |
+| R-6 | Bảng giá thành trên web chỉ gợi ý vòng xe/chặng của ngữ cảnh              | **CÒN MỞ** — pha UI/UX riêng; #369 là backend-only nên web chưa mở ô `DRIVER_CASH` trên vòng xe (§9.4)        |
+| R-7 | Bằng chứng runtime/UAT §11 của #364                                       | **CÒN MỞ** — chỉ làm được sau merge + deploy                                                                  |
+
+---
+
+## 9. #369 — bốn tồn đọng đã đóng (backend)
+
+### 9.1 `runMargin` cộng **hai sổ cái rời nhau**, không đếm trùng (R-1)
+
+```text
+directCost = Σ TransportTripExpense (chuyến v1 nối chặng qua TransportTripRunLegLink)
+           + Σ TransportFuelCostAttribution (đích RUN và đích LEG của chính vòng xe)
+```
+
+Phép cộng thẳng là **đúng vì §3**: một phiếu chỉ nằm ở một sổ, và hai chiều đều có lưới ở tầng CSDL.
+`RunMargin` vì vậy mang `costSources` (tách hai nguồn), `legCosts` (chi phí từng chặng đã đếm),
+`runLevelCost` (đích `RUN` — thuộc vòng xe, **không** rơi vào biên của đơn nào, cùng lẽ với chặng
+rỗng) và `fuelCostAttributionIds` (đường đối soát ngược về từng dòng).
+
+Cổng đọc `AnalyticsFuelAttributionFacts` khai ở `analytics.ports.ts` (không một hàm ghi), adapter được
+**cắm vào** từ `TransportFuelAnalyticsBridgeModule` (`@Global()`, đến/đi cùng `transport-fuel`) — nên
+`transport-costing` **không** trở thành phụ thuộc của `transport-fuel`. Khách tắt nhiên liệu vẫn boot
+và báo cáo nói ra `FUEL_COST_ATTRIBUTION` trong `unavailableSources`, thay vì cộng ra 0.
+
+Tiền nằm trên **chặng đã huỷ** không vào `directCost` (quy ước cũ của `R8`) nhưng từ #369 được **gọi
+tên** bằng mã `COST_ON_CANCELLED_LEG` — trước đó nó bị bỏ qua trong im lặng ở cả hai nguồn.
+
+### 9.2 `DRIVER_CASH` Run-first vào Quỹ lái xe bằng `RUN_EXPENSE` (R-4)
+
+`TransportTripExpense.tripId` **giữ nguyên NOT NULL**. Thay vì một chuyến giả, Quỹ lái xe nhận một
+**loại bút toán mới** `RUN_EXPENSE` (âm) mang ngữ cảnh vòng xe/chặng — **chân tiền mặt**, không phải
+chân giá thành:
+
+| Phiếu                       | Chân giá thành                 | Chân tiền mặt (Quỹ lái xe)                        |
+| --------------------------- | ------------------------------ | ------------------------------------------------- |
+| `tripId ≠ NULL` + `DRIVER_CASH` | `TransportTripExpense` (`TX-03`) | `DriverFundEntry` `TRIP_EXPENSE` (cùng khoá, `INV-03`) |
+| `tripId = NULL` + `DRIVER_CASH` | `TransportFuelCostAttribution` (kế toán quyết sau) | `DriverFundEntry` `RUN_EXPENSE`, ghi **lúc duyệt** |
+| `tripId = NULL` + `SUPPLIER_ACCOUNT` | `TransportFuelCostAttribution` | — (không ai ứng tiền)                              |
+
+Khoá sự kiện là **một** cho cả hai đường (`fuelCostCorrelationKey` = `fuel:<id>`), nên unique
+`TransportDriverFundEntry.correlationKey` giữ *"một phiếu, tối đa một bút toán Quỹ gốc"* ngay trong sổ
+Quỹ — bất kể đường ghi nào. Phiếu trỏ ngược về chân Quỹ bằng `TransportFuelEntry.driverFundEntryId`
+(UNIQUE, đối xứng `costExpenseId`), và hai CHECK loại trừ nhau theo `tripId` nên một phiếu có **tối đa
+một** đường vào Quỹ. Trigger `transport_fuel_entry_driver_fund_leg` đòi bút toán gắn vào đúng là của
+chính phiếu đó (loại, `-amount`, lái xe, vòng xe/chặng, ngày, khoá).
+
+Sửa = **đảo**, đi đường đảo chung của `TX-03` (`POST /transport/driver-fund/entries/:id/reversal`):
+dòng đảo sao lại ngữ cảnh vòng xe, `reversalOfId` UNIQUE nên chỉ đảo được một lần, và có dấu vết kiểm
+toán. Duyệt lại sau khi đảo **không** ghi lại tiền (khoá vẫn là của bản gốc).
+
+`CHECK TransportFuelEntry_driver_cash_needs_trip` của #364 đã được **gỡ** — nó là một điều kiện đúng
+*khi chưa có đường ghi Quỹ không chuyến*, và giữ lại là giữ một chuyện giả làm điều kiện.
+
+### 9.3 Đọc theo vòng xe, và suy vòng xe cho phiếu chuyến cũ (R-2, R-5)
+
+- **Dòng thời gian** đọc thêm `listEntriesByRun`; mỗi sự kiện mang `placement` (`DECLARED` /
+  `DERIVED_FROM_TRIP_LINK` / `RUN_LEVEL`) để người đọc phân biệt được *bản ghi tự khai chặng* với
+  *chặng được suy ra*. Hai đường đọc hai tập phiếu rời nhau nên không phiếu nào hiện hai lần.
+- **Hộp thư** thêm trường **riêng** `derivedRun` cho phiếu chuyến cũ (`runId`/`legId` của phiếu **giữ
+  nguyên `null`**), và bộ lọc theo mã vòng xe trở thành phép HOẶC: phiếu khai thẳng vòng xe **hoặc**
+  phiếu của chuyến đã chiếu sang một chặng của nó.
+- Phép suy đi qua `TransportTripRunLegLink` — quan hệ 1-1, nên **không có chỗ để đoán**. Chuyến chưa
+  chiếu ⇒ `null`, không suy theo (xe, ngày). **Không** ghi ngược `runId`/`legId` vào phiếu cũ (§7 giữ
+  nguyên): làm vậy sẽ biến một phiếu chuyến cũ trông như phiếu Run-first và làm mất khoá phân vùng của
+  §3.
+
+### 9.4 Cái #369 **không** làm
+
+- **R-3** vẫn fail closed: phiếu không vòng xe, không chuyến vẫn bị từ chối
+  (`FUEL_ENTRY_CONTEXT_REQUIRED`). Không có nguồn "lái xe ↔ xe lúc T" nào được nghĩ ra.
+- **Web không đổi một dòng**: ô khai phiếu của lái xe vẫn khoá `DRIVER_CASH` trên vòng xe
+  (`fuel-declaration.ts`), nên đường này hôm nay chỉ dùng được qua API. Mở ô đó thuộc pha UI (R-6).
+- ~~Bộ so khớp bảng kê không xét `paymentMethod`~~ — **đóng bởi #371**, xem §9.5.
+
+### 9.5 Một lần đổ dầu, một lần trả: `DRIVER_CASH` không bao giờ thành công nợ cây xăng (#371)
+
+Review độc lập của #371 đo được trên `ec748fcc`: phiếu `DRIVER_CASH` đã vào Quỹ lái xe (`TX-03` hoặc
+`RUN_EXPENSE`) vẫn khớp được với bảng kê công nợ (tự động **và** tay), đóng kỳ, sinh công nợ nhà cung
+cấp — **trả hai lần** cho cùng một lần đổ. Luật: bảng kê là chứng từ **công nợ**; chỉ phiếu
+`SUPPLIER_ACCOUNT` là ứng viên của nó (`fuel-payable.ts`, kiểm **dương** — một cách trả mới về sau mặc
+định **không** là công nợ).
+
+| Đường vào                | Chặn ở đâu                                                                                                                  | Mã                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| So khớp tự động          | `fuel-matching.ts`: phiếu tiền mặt không là ứng viên (không gây nhập nhằng giả); dòng chỉ còn phiếu tiền mặt → chênh lệch riêng | `PAYMENT_METHOD_CONFLICT` / `MATCH_PAYMENT_METHOD_CONFLICT` |
+| Xác nhận khớp tay        | kiểm sớm ở dịch vụ + **đọc lại dưới khoá** ở kho (khoá hàng kỳ, rồi hàng phiếu `FOR UPDATE`) trước mọi lần ghi              | `MATCH_PAYMENT_METHOD_CONFLICT` (403)     |
+| "Chấp nhận số cây xăng"  | trên dòng `PAYMENT_METHOD_CONFLICT` — cả lần quyết lẫn lần đổi ý sau khi mở kỳ                                            | `DISCREPANCY_CASH_PAID_NOT_PAYABLE` / `DECISION_CASH_PAID_NOT_PAYABLE` |
+| Đóng kỳ (lưới cuối)      | kỳ mang cặp khớp tới phiếu không ghi nợ (dữ liệu cũ, đường ghi thô) → **không đóng, không bàn giao**, không lọc bỏ rồi coi là sạch | `RECONCILIATION_HAS_CASH_PAID_MATCH`      |
+| CSDL                     | trigger `TransportFuelMatch_payable_entry_only` + chiều ngược `TransportFuelEntry_matched_stays_payable`                    | lỗi được dịch về mã nghiệp vụ             |
+
+**Hai trigger không thay được khoá hàng phiếu.** Dưới `READ COMMITTED` mỗi trigger chỉ thấy dữ liệu
+đã commit: một cặp khớp chưa commit và một lệnh sửa cách trả đồng thời lọt qua **cả hai** (ghi-lệch).
+Bài `PMC-IT-08` dựng đúng cảnh đó trên Postgres thật làm đối chứng âm; `PMC-IT-09` ép hai thứ tự bằng
+khoá hàng phiếu và đo rằng xác nhận khớp tay với sửa phiếu sang tiền mặt **không bao giờ cùng thành
+công**.
+
+Đường ra của dữ liệu hỏng: cặp `AUTO` → chạy lại so khớp (cặp cũ bị xoá, không được đề nghị lại);
+cặp `MANUAL` → lệnh đóng tiếp tục từ chối cho tới khi dữ liệu được sửa (không có lệnh "gỡ khớp tay" —
+giới hạn có từ trước). Đếm trước khi triển khai: câu `SELECT` ở đầu migration
+`20260923120100_transport_fuel_match_payable_entry_only`.
+
+**Không đổi:** phiếu `DRIVER_CASH` không nằm trong chênh lệch nào vẫn ra `FUEL_ENTRY_ONLY` như trước
+(vắng mặt trên bảng kê công nợ là trạng thái đúng của một lần trả tiền mặt — có đưa phiếu tiền mặt ra
+khỏi phạm vi đối soát không là quyết định nghiệp vụ riêng, chưa ai quyết).

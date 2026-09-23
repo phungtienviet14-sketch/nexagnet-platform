@@ -15,6 +15,7 @@ import {
   FuelCostingPort,
   TransportFuelCoreFacts,
   type FuelCostPostingCommand,
+  type FuelDriverCashPostingCommand,
   type FuelDriverFacts,
   type FuelTripFacts,
   type FuelVehicleFacts,
@@ -95,10 +96,18 @@ export class RunFirstCoreFacts extends TransportFuelCoreFacts {
 
 export class RecordingCostingPort extends FuelCostingPort {
   readonly commands: FuelCostPostingCommand[] = [];
+  /** `#369` R-4 — moi lan goi ghi Quy lai xe Run-first, ke ca lan phat lai. */
+  readonly driverCashCommands: FuelDriverCashPostingCommand[] = [];
 
   async postFuelCost(command: FuelCostPostingCommand): Promise<string> {
     this.commands.push(command);
     return `expense-of-${command.correlationKey}`;
+  }
+
+  /** Khoa tat dinh -> CUNG mot id but toan, y het `RunExpenseService` khi gap lai mot khoa da dung. */
+  async postRunFirstDriverCash(command: FuelDriverCashPostingCommand): Promise<string> {
+    this.driverCashCommands.push(command);
+    return `fund-of-${command.correlationKey}`;
   }
 }
 
@@ -128,8 +137,14 @@ export interface RunFirstWorld {
   readonly otherLeg: RunLeg;
 }
 
-export async function buildRunFirstWorld(): Promise<RunFirstWorld> {
-  const fuelRepo = new InMemoryFuelRepository();
+/**
+ * `fuelRepo` thay duoc: `#371` can mot kho CHEN duoc mot lenh sua phieu vao giua lan kiem cua dich vu
+ * va lan ghi cua tang kho. Mac dinh la kho trong bo nho thuong.
+ */
+export async function buildRunFirstWorld(
+  options: { readonly fuelRepo?: InMemoryFuelRepository } = {},
+): Promise<RunFirstWorld> {
+  const fuelRepo = options.fuelRepo ?? new InMemoryFuelRepository();
   const movement = new InMemoryMovementRepository();
   const runs = new MovementFuelRunContextAdapter(movement);
   const core = new RunFirstCoreFacts();
