@@ -1,5 +1,11 @@
 # Bằng chứng chạy thật — nền Google Maps cho Bản đồ vòng chạy (#374)
 
+> ⚠️ **Lịch sử — không còn là hướng mặc định.** Sau `OWNER_DECISION_UPDATE_2026_09_23`, nền mặc định
+> là **OpenFreeMap + MapLibre** (không khoá, không GCP); Google chỉ còn là nhà cung cấp **tuỳ chọn**.
+> Bằng chứng hiện hành: [`transport-map-openfreemap-basemap-2026-09-23.md`](transport-map-openfreemap-basemap-2026-09-23.md).
+> Trang này giữ nguyên số đo của đường Google (vẫn đúng cho `provider=google`), trừ dòng 1: "không
+> khai gì" nay ra **OpenFreeMap**, và CI bắt buộc khai tường minh `provider=local` (`LOCAL_SELECTED`).
+>
 > Đo 23/09/2026 trên nhánh `claude/google-maps-basemap-4a5536`. Cấu hình và việc phía chủ dự án:
 > [`phat-trien/van-hanh/ban-do-nen.md`](../phat-trien/van-hanh/ban-do-nen.md).
 

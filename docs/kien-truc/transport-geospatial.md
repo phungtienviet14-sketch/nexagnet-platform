@@ -237,26 +237,30 @@ một Postgres trắng** kể cả sau khi đã bật PostGIS.
 
 ---
 
-## 7. Bản đồ — nền Google Maps có cấu hình, lớp nghiệp vụ không đổi
+## 7. Bản đồ — nền OpenFreeMap mặc định, lớp nghiệp vụ không đổi
 
-*Cập nhật 23/09/2026 (#374).* Lane N (#278) dựng bản đồ vòng chạy bằng MapLibre + deck.gl trên một
-nền cục bộ **trống** (không tile). Chủ dự án chọn **Google Maps làm nền** để người xem thấy đường sá,
-địa danh, sông hồ thật. Quyết định:
+*Cập nhật 23/09/2026 (#374, `OWNER_DECISION_UPDATE_2026_09_23`).* Lane N (#278) dựng bản đồ vòng chạy
+bằng MapLibre + deck.gl trên một nền cục bộ **trống** (không tile). #374 thêm nền thật để người xem
+thấy đường sá, địa danh, sông hồ. Kế hoạch đầu là Google Maps; chủ dự án không bật được thanh toán
+GCP nên đổi quyết định: **nền mặc định là instance công khai của OpenFreeMap (style Liberty) qua
+MapLibre sẵn có** — không khoá, không GCP, không thanh toán. Quyết định:
 
-- **Nền là cấu hình, không phải kiến trúc.** Ba nguồn: `GOOGLE_MAPS` (Maps JavaScript API +
-  `@deck.gl/google-maps`; có Map ID thì bản đồ vector và deck.gl vẽ chung ngữ cảnh WebGL của
-  Google, không có thì raster),
-  `CONFIGURED_STYLE_URL` (MapLibre + style ngoài — giữ tương thích, và là đường cho PMTiles tự dựng
-  nếu sau này có), `LOCAL_FALLBACK` (CI, offline, thiếu khoá, Google hỏng).
+- **Nền là cấu hình, không phải kiến trúc.** Bốn nguồn: `OPENFREEMAP` (mặc định), `GOOGLE_MAPS`
+  (**tuỳ chọn**, chỉ khi khai tường minh `provider=google`; Maps JavaScript API +
+  `@deck.gl/google-maps`, mã tải lười), `CONFIGURED_STYLE_URL` (MapLibre + style tự khai — đường cho
+  OpenFreeMap/PMTiles tự dựng), `LOCAL_FALLBACK` (CI, offline, cấu hình sai, nền ngoài hỏng).
+- **Instance công khai không có SLA** ⇒ nền ngoài hỏng thì dựng lại bản đồ mới trên nền cục bộ, kèm
+  lớp deck.gl mới; tuyến và mốc không bao giờ mất theo nền. Cần bảo đảm cao hơn: tự dựng hoặc chọn
+  tường minh một nhà cung cấp thương mại — quyết định của chủ dự án.
 - **Lớp nghiệp vụ chung mọi nền.** Tuyến, chặng RỖNG, mốc, vệt GPS thô là lớp deck.gl vẽ thẳng từ
-  toạ độ máy chủ. Hình học của Google **không bao giờ** là sự thật quãng đường: `distanceKm` vẫn là
-  số của nghiệp vụ, không tính lại, không ghi đè.
-- **Chỉ nền.** Không Directions, Places, Geocoding, Street View.
+  toạ độ máy chủ. Hình học của nền **không bao giờ** là sự thật quãng đường: `distanceKm` vẫn là số
+  của nghiệp vụ, không tính lại, không ghi đè, không "bám đường".
+- **Chỉ nền.** Không routing, Directions, Places, Geocoding, tối ưu tuyến.
 
 Nhận xét của R0 về PMTiles vẫn đứng nguyên: kích thước tile Việt Nam **≈ 215 MB là ước tính suy từ
 tỷ lệ của Hà Lan**, chưa dựng, chưa đo — đừng đưa con số đó vào một bảng chi phí.
 
-Biến môi trường, phán quyết dự phòng, việc phía chủ dự án (khoá, giới hạn, thanh toán, CSP):
+Biến môi trường, phán quyết dự phòng, ghi nguồn, quyền riêng tư, đường nâng cấp, Google tuỳ chọn:
 [`phat-trien/van-hanh/ban-do-nen.md`](../phat-trien/van-hanh/ban-do-nen.md).
 
 ---
