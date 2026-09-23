@@ -66,31 +66,128 @@ const PARTNER_POSITION = {
   currencyCode: 'VND',
 };
 
-const DIRECT_MARGIN = {
-  tripId: 'trip-1',
-  tripKind: 'OWN_DIRECT',
-  revenueAmount: 11_500_000,
-  directCostAmount: 6_000_000,
-  carrierPayableAmount: 0,
-  commissionAmount: 0,
-  deductionAmount: 6_000_000,
-  marginAmount: 5_500_000,
-  marginBasisPoints: 4782,
-  currencyCode: 'VND',
-  fixedCostsIncluded: false,
-  disclosure: 'Chưa gồm chi phí cố định',
-  unexpectedInternalCost: false,
-};
-
-const MARGIN_ROLLUP = {
-  revenueAmount: 23_000_000,
-  deductionAmount: 12_000_000,
-  marginAmount: 11_000_000,
-  marginBasisPoints: 4782,
+/**
+ * `#381`/`#385` — tong CA CONG TY cua may chu: 2 chuyen cu + 1 don theo vong xe, 1 don chua dieu xe
+ * (khong vao tong), 1 phieu dau chua phan bo. Moi so o day la tong con cua `basis`, man hinh khong cong.
+ */
+const MARGIN_TOTALS = {
+  revenueAmount: 29_000_000,
+  deductionAmount: 13_320_000,
+  marginAmount: 15_680_000,
+  marginBasisPoints: 5407,
   tripCount: 2,
   skippedTripCount: 0,
   fixedCostsIncluded: false,
   disclosure: 'Chưa gồm chi phí cố định',
+  basis: {
+    legacyTrips: {
+      counted: 2,
+      skipped: 0,
+      revenueAmount: 23_000_000,
+      deductionAmount: 12_000_000,
+      marginAmount: 11_000_000,
+    },
+    runFirstOrders: {
+      counted: 1,
+      excluded: { FREIGHT_MISSING: 0, NO_RUN_YET: 1, SHARED_RUN: 0, COST_SOURCE_UNAVAILABLE: 0 },
+      withoutRecordedCost: 0,
+      revenueAmount: 6_000_000,
+      deductionAmount: 1_320_000,
+      marginAmount: 4_680_000,
+    },
+    projectedOrderCount: 2,
+    pendingFuelCost: { amount: 500_000, entryCount: 1, rowCount: 1 },
+    unassignedRunFirstCost: { amount: 0, runCount: 0 },
+  },
+};
+
+const marginRow = (over: Record<string, unknown>) => ({
+  tripId: null,
+  orderId: null,
+  runIds: [],
+  runCodes: [],
+  tripKind: null,
+  orderStatus: null,
+  customerId: 'cus-1',
+  costs: { tripExpense: 0, carrierPayable: 0, commission: 0, fuelAttribution: 0 },
+  counted: true,
+  exclusion: null,
+  pendingFuelCost: { amount: 0, entryCount: 0 },
+  unexpectedInternalCost: false,
+  currencyCode: 'VND',
+  ...over,
+});
+
+const FINANCE_MARGIN = {
+  generatedFor: '2026-09-23',
+  totals: MARGIN_TOTALS,
+  rows: [
+    marginRow({
+      key: 'ORDER:ord-cho',
+      source: 'RUN_FIRST_ORDER',
+      code: 'UAT-378-0923B',
+      orderId: 'ord-cho',
+      orderStatus: 'OPEN',
+      businessDate: '2026-09-23',
+      originLabel: 'Kho C',
+      destinationLabel: 'Kho D',
+      revenueAmount: 2_000_000,
+      costs: null,
+      deductionAmount: null,
+      marginAmount: null,
+      marginBasisPoints: null,
+      counted: false,
+      exclusion: 'NO_RUN_YET',
+    }),
+    marginRow({
+      key: 'ORDER:ord-a',
+      source: 'RUN_FIRST_ORDER',
+      code: 'UAT-378-0923A',
+      orderId: 'ord-a',
+      runIds: ['run-a'],
+      runCodes: ['RUN-S260923-BE4C94F9'],
+      orderStatus: 'FULFILLED',
+      businessDate: '2026-09-23',
+      originLabel: 'Kho A',
+      destinationLabel: 'Kho B',
+      revenueAmount: 6_000_000,
+      costs: { tripExpense: 0, carrierPayable: 0, commission: 0, fuelAttribution: 1_320_000 },
+      deductionAmount: 1_320_000,
+      marginAmount: 4_680_000,
+      marginBasisPoints: 7800,
+      pendingFuelCost: { amount: 500_000, entryCount: 1 },
+    }),
+    marginRow({
+      key: 'TRIP:trip-1',
+      source: 'LEGACY_TRIP',
+      code: 'VT-2026-0913',
+      tripId: 'trip-1',
+      tripKind: 'OWN_DIRECT',
+      businessDate: '2026-09-08',
+      originLabel: 'Hà Nội',
+      destinationLabel: 'Hải Phòng',
+      revenueAmount: 11_500_000,
+      costs: { tripExpense: 6_000_000, carrierPayable: 0, commission: 0, fuelAttribution: 0 },
+      deductionAmount: 6_000_000,
+      marginAmount: 5_500_000,
+      marginBasisPoints: 4782,
+    }),
+    marginRow({
+      key: 'TRIP:trip-2',
+      source: 'LEGACY_TRIP',
+      code: 'VT-2026-0914',
+      tripId: 'trip-2',
+      tripKind: 'OWN_DIRECT',
+      businessDate: '2026-09-07',
+      originLabel: 'Hà Nội',
+      destinationLabel: 'Nam Định',
+      revenueAmount: 11_500_000,
+      costs: { tripExpense: 6_000_000, carrierPayable: 0, commission: 0, fuelAttribution: 0 },
+      deductionAmount: 6_000_000,
+      marginAmount: 5_500_000,
+      marginBasisPoints: 4782,
+    }),
+  ],
 };
 
 const MAINTENANCE_DUE = [
@@ -860,7 +957,7 @@ const FINANCE_SUMMARY = {
     driverReimbursementOutstanding: 0,
     driverSettlementRemaining: 3_000_000,
   },
-  directMargin: MARGIN_ROLLUP,
+  directMargin: MARGIN_TOTALS,
   receivable: { outstandingTotal: 11_500_000, overdueTotal: 11_500_000 },
   currency: { codes: ['VND'], isSingle: true },
   unavailableSources: [],
@@ -1011,12 +1108,6 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
   await page.route('**/transport/settlement/partners/*/position', (route) =>
     json(route, PARTNER_POSITION),
   );
-  await page.route('**/transport/settlement/direct-margin/rollup*', (route) =>
-    json(route, MARGIN_ROLLUP),
-  );
-  await page.route('**/transport/settlement/trips/*/direct-margin', (route) =>
-    json(route, DIRECT_MARGIN),
-  );
   await page.route('**/transport/customer-ar/pending**', (route) =>
     json(route, { orders: CUSTOMER_AR_PENDING }),
   );
@@ -1095,6 +1186,7 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
    */
   await page.route('**/transport/control-tower', (route) => json(route, CONTROL_TOWER));
   await page.route('**/transport/finance/summary', (route) => json(route, FINANCE_SUMMARY));
+  await page.route('**/transport/finance/margin', (route) => json(route, FINANCE_MARGIN));
 
   /*
    * `#294` — CHE DO GOM NHOM, va mac dinh o day la mac dinh CUA SAN PHAM.
@@ -3218,5 +3310,93 @@ test.describe('#341 — danh muc ke toan theo cau hoi nghiep vu', () => {
         name: 'Phải trả đối tác & cây xăng',
       }),
     ).toHaveAttribute('href', '/?section=ar-ap');
+  });
+});
+
+/**
+ * ===========================================================================
+ * #381/#385 — HAI MAN TIEN THAY DON GIAO THEO VONG XE, TREN TRINH DUYET THAT.
+ *
+ *   1. `Hiệu quả từng chuyến` doc MOT route cua may chu (`/transport/finance/margin`) — khong goi lai
+ *      duong cong don theo lo chuyen cu, tuc trinh duyet khong tu quyet tap nao duoc cong.
+ *   2. Don Run-first hien bang MA DON, ma vong xe la boi canh; bam vao ra nguon cua tung con so.
+ *   3. Don chua dieu xe hien "Chưa vào tổng", chi phi "Chưa biết" — khong bao gio 0 ₫.
+ *   4. `Tổng hợp tài chính` noi doanh thu theo NGUON va canh bao tien dau chua phan bo.
+ */
+test.describe('#381 — doanh thu/bien tinh ca don giao theo vong xe', () => {
+  test('Hieu qua: mot route cua may chu, don Run-first co dong rieng va nguon con so', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    const calls: string[] = [];
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.includes('direct-margin') || path.startsWith('/transport/finance/'))
+        calls.push(path);
+    });
+
+    await page.goto('/?section=margin');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Hiệu quả từng chuyến' }),
+    ).toBeVisible();
+
+    const totals = page.getByRole('region', { name: 'Cộng dồn biên trực tiếp' });
+    await expect(totals).toContainText('Tính trên 2 chuyến cũ và 1 đơn theo vòng xe.');
+    const bySource = totals.getByRole('table', { name: 'Doanh thu và biên theo nguồn' });
+    await expect(bySource.getByRole('row', { name: /Đơn theo vòng xe/ })).toContainText(
+      '6.000.000',
+    );
+    await expect(totals.getByRole('list', { name: 'Lưu ý về con số' })).toContainText(
+      'chưa phân bổ vào chi phí',
+    );
+
+    const table = page.getByRole('table', { name: 'Hiệu quả từng đơn và chuyến' });
+    const order = table.getByRole('rowheader', { name: /UAT-378-0923A/ });
+    await expect(order).toContainText('Vòng xe RUN-S260923-BE4C94F9');
+    const waiting = table.getByRole('row', { name: /UAT-378-0923B/ });
+    await expect(waiting).toContainText('Chưa vào tổng · Chưa điều xe');
+    // Chi phi CHUA BIET la mot o chu, khong phai mot so tien bang 0.
+    await expect(waiting.getByRole('cell', { name: 'Chưa biết', exact: true })).toHaveCount(1);
+
+    await page
+      .getByRole('group', { name: 'Lọc theo nguồn' })
+      .getByRole('button', {
+        name: 'Đơn theo vòng xe (2)',
+      })
+      .click();
+    await expect(table.getByRole('rowheader', { name: /VT-2026-0913/ })).toHaveCount(0);
+
+    await order.click();
+    const detail = page.getByRole('region', { name: 'Nguồn con số UAT-378-0923A' });
+    await expect(detail).toContainText('Giá cước của đơn UAT-378-0923A');
+    await expect(detail).toContainText('Nhiên liệu phân bổ');
+    await expect(detail).toContainText('1.320.000');
+    await expect(detail).toContainText('Chưa gồm chi phí cố định');
+
+    // Tong la cua MAY CHU: mot lan doc, khong mot lan goi cong don theo lo nao.
+    expect(calls.filter((path) => path.includes('direct-margin'))).toEqual([]);
+    expect(calls).toContain('/transport/finance/margin');
+  });
+
+  test('Tong hop tai chinh: doanh thu theo nguon, duong sang tung don va chuyen', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    await page.goto('/?section=finance');
+
+    const margin = page.getByRole('region', { name: 'Biên trực tiếp' });
+    await expect(margin).toContainText('Tính trên 2 chuyến cũ và 1 đơn theo vòng xe.');
+    await expect(
+      margin.getByRole('table', { name: 'Doanh thu và biên theo nguồn' }).getByRole('row', {
+        name: /Chuyến cũ/,
+      }),
+    ).toContainText('23.000.000');
+    await expect(margin).toContainText('2 đơn sinh từ chuyến cũ đã tính qua chuyến');
+
+    await margin.getByRole('link', { name: 'Xem từng đơn và chuyến →' }).click();
+    await expect(page).toHaveURL(/\?section=margin$/);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Hiệu quả từng chuyến' }),
+    ).toBeVisible();
   });
 });

@@ -1,6 +1,7 @@
-import { formatBasisPoints, formatBusinessDate, formatCount, formatMoney } from '../customer-view';
+import { formatBusinessDate, formatCount, formatMoney } from '../customer-view';
 import type { TransportSectionId } from '../navigation';
 import type { FinanceSource, FinanceSummaryView, SettlementFlow } from '../transport-types';
+import { toMarginTotals, type MarginNote, type MarginSourceModel } from './company-margin';
 
 /**
  * BANG TAI CHINH — tang doc cua man hinh, HAM THUAN.
@@ -64,6 +65,10 @@ export interface FinanceMarginModel {
   /** Cau cong bo cua may chu. KHONG duoc bo di, va KHONG duoc thay bang chu cua man hinh. */
   readonly disclosure: string;
   readonly coverage: string;
+  /** `#385` — doanh thu/bien theo NGUON (don theo vong xe / chuyen cu), tong CON cua may chu. */
+  readonly sources: readonly MarginSourceModel[];
+  /** `#385` — dieu phai biet truoc khi tin tong: tien dau chua phan bo, don chua vao tong... */
+  readonly notes: readonly MarginNote[];
 }
 
 export interface FinanceModel {
@@ -97,6 +102,7 @@ const FLOW_SECTION: Readonly<Record<SettlementFlow, TransportSectionId>> = {
 };
 
 export function toFinance(view: FinanceSummaryView): FinanceModel {
+  const margin = toMarginTotals(view.directMargin);
   const flowRows = FLOW_ORDER.map((flow): FinanceMoneyRow => ({
     key: flow,
     label: FLOW_LABEL[flow],
@@ -131,16 +137,14 @@ export function toFinance(view: FinanceSummaryView): FinanceModel {
     rows: [...flowRows, ...driverRows],
     receivableOverdue: formatMoney(view.receivable.overdueTotal),
     margin: {
-      revenue: formatMoney(view.directMargin.revenueAmount),
-      deduction: formatMoney(view.directMargin.deductionAmount),
-      margin: formatMoney(view.directMargin.marginAmount),
-      ratio: formatBasisPoints(view.directMargin.marginBasisPoints),
+      revenue: margin.revenueLabel,
+      deduction: margin.deductionLabel,
+      margin: margin.marginLabel,
+      ratio: margin.rateLabel,
       disclosure: view.directMargin.disclosure,
-      coverage:
-        view.directMargin.skippedTripCount === 0
-          ? `Tính trên ${formatCount(view.directMargin.tripCount)} chuyến.`
-          : `Tính trên ${formatCount(view.directMargin.tripCount)} chuyến; ` +
-            `${formatCount(view.directMargin.skippedTripCount)} chuyến chưa có giá cước nên không được tính.`,
+      coverage: margin.coverage,
+      sources: margin.sources,
+      notes: margin.notes,
     },
     currencyWarning: view.currency.isSingle
       ? null

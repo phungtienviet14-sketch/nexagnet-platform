@@ -40,14 +40,13 @@ import type {
   ControlTowerView,
   CorridorInsightView,
   DispatchSuggestionView,
+  FinanceMarginView,
   FinanceSummaryView,
   FleetInsightView,
   RunJourneyMapView,
   RunJourneyView,
   ComplianceSubjectKind,
   CorrelatedPosting,
-  DirectMargin,
-  DirectMarginRollup,
   Driver,
   DriverPayslipView,
   EffectiveVehicleState,
@@ -1468,14 +1467,6 @@ export const transportApi = {
       get(`/transport/settlement/ap?flow=${encodeURIComponent(flow)}`),
     partnerPosition: (partnerId: string): Promise<PartnerPosition> =>
       get(`/transport/settlement/partners/${encodeURIComponent(partnerId)}/position`),
-    /** 404 khi chuyen khong co du lieu bien — man hinh phai chiu duoc, khong coi la su co. */
-    tripDirectMargin: (tripId: string): Promise<DirectMargin> =>
-      get(`/transport/settlement/trips/${encodeURIComponent(tripId)}/direct-margin`),
-    /** Tran 200 chuyen/lan o may chu. Man hinh chia lo truoc khi goi. */
-    directMarginRollup: (tripIds: readonly string[]): Promise<DirectMarginRollup> =>
-      get(
-        `/transport/settlement/direct-margin/rollup?tripIds=${encodeURIComponent(tripIds.join(','))}`,
-      ),
     documentChain: (originalId: string): Promise<SettlementDocumentChain> =>
       get(`/transport/settlement/documents/${encodeURIComponent(originalId)}/chain`),
   },
@@ -1752,6 +1743,11 @@ export const transportApi = {
    */
   finance: {
     summary: (): Promise<FinanceSummaryView> => get('/transport/finance/summary'),
+    /**
+     * `#381`/`#385` — hieu qua TUNG viec (chuyen cu + don theo vong xe) kem tong CUA MAY CHU. Man
+     * hinh doc `totals`, khong goi N lan theo vong xe roi tu cong.
+     */
+    margin: (): Promise<FinanceMarginView> => get('/transport/finance/margin'),
   },
 
   /**

@@ -10,6 +10,7 @@ import {
 import { buildSectionUrl } from '../navigation';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { toFinance } from '../workspace/finance';
+import { MarginNotes, MarginSourceSplit } from './CompanyMarginParts';
 
 /**
  * TONG HOP TAI CHINH (ten cu: Bang tai chinh) — sau dong tien canh nhau, va KHONG mot o tong nao
@@ -62,7 +63,7 @@ export function FinanceView() {
 
           <section className="tx-panel" aria-label="Biên trực tiếp">
             <h2>Doanh thu và biên trực tiếp</h2>
-            <div className="tx-cards">
+            <div className="tx-cards tx-cards--lead">
               <MetricCard label="Doanh thu" value={model.margin.revenue} />
               <MetricCard label="Chi phí trực tiếp" value={model.margin.deduction} />
               <MetricCard
@@ -76,7 +77,16 @@ export function FinanceView() {
                 hint={model.margin.disclosure}
               />
             </div>
-            <p className="tx-panel__lead">{model.margin.coverage}</p>
+            <p className="tx-note">{model.margin.coverage}</p>
+            {/*
+              `#385` — nguon cua con so ngay duoi con so: bao nhieu den tu don theo vong xe, bao nhieu
+              tu chuyen cu, va dieu gi lam tong chua du. Tong con la cua MAY CHU.
+            */}
+            <MarginSourceSplit sources={model.margin.sources} />
+            <MarginNotes notes={model.margin.notes} />
+            <p className="tx-split__more">
+              <a href={buildSectionUrl('margin')}>Xem từng đơn và chuyến →</a>
+            </p>
           </section>
 
           <section className="tx-panel" aria-label="Sáu dòng tiền">

@@ -814,6 +814,14 @@ export class PrismaMovementRepository extends MovementRepository {
     return row ? toOrderLink(row) : null;
   }
 
+  async findOrderLinksByOrders(orderIds: readonly string[]): Promise<TripOrderLink[]> {
+    if (orderIds.length === 0) return [];
+    const rows = await model(this.prisma, 'transportTripOrderLink').findMany({
+      where: { orderId: { in: [...orderIds] } },
+    });
+    return rows.map(toOrderLink);
+  }
+
   async listLegsByOrders(orderIds: readonly string[]): Promise<RunLeg[]> {
     if (orderIds.length === 0) return [];
     const rows: LegRow[] = await model(this.prisma, 'transportRunLeg').findMany({

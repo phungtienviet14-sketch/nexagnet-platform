@@ -309,6 +309,12 @@ export const DRIVER_FUND_ENTRY_KINDS = [
   'REVERSAL',
   /** `TX-07b` — cong ty tra lai lai xe khoan ho da bo tui. KHONG phai luong, khong phai tam ung. */
   'REIMBURSEMENT',
+  /**
+   * `#369` R-4 — lai xe chi tien cua quy cho mot khoan gan VONG XE (Run-first), vd phieu dau
+   * `DRIVER_CASH` da duyet. AM. Chi la chan tien mat: gia thanh cua no nam o lop phan bo Run-first,
+   * nen dong nay KHONG BAO GIO la gia thanh chuyen va khong vao cong no cay xang.
+   */
+  'RUN_EXPENSE',
 ] as const;
 export type DriverFundEntryKind = (typeof DRIVER_FUND_ENTRY_KINDS)[number];
 
@@ -2690,10 +2696,102 @@ export interface FinanceReceivableSummary {
 
 export type FinanceSource = 'DRIVER_SETTLEMENT';
 
+/* ------------------------------------------------------------------ *
+ * `#381`/`#385` — BIEN CA CONG TY: chuyen cu CONG don giao theo vong xe
+ * ------------------------------------------------------------------ */
+
+/** Hai nguon cua mot dong hieu qua — `company-margin.ts` o may chu. */
+export const MARGIN_ROW_SOURCES = ['LEGACY_TRIP', 'RUN_FIRST_ORDER'] as const;
+export type MarginRowSource = (typeof MARGIN_ROW_SOURCES)[number];
+
+/** Vi sao mot dong KHONG vao tong. Chi phi chua biet KHONG BAO GIO duoc hien thanh 0. */
+export const MARGIN_EXCLUSIONS = [
+  'FREIGHT_MISSING',
+  'NO_RUN_YET',
+  'SHARED_RUN',
+  'COST_SOURCE_UNAVAILABLE',
+] as const;
+export type MarginExclusion = (typeof MARGIN_EXCLUSIONS)[number];
+
+export interface MarginCostBreakdown {
+  /** `TX-03` — chi phi truc tiep cua chuyen cu. */
+  readonly tripExpense: number;
+  readonly carrierPayable: number;
+  readonly commission: number;
+  /** `#364` — phan bo gia thanh nhien lieu theo vong xe. */
+  readonly fuelAttribution: number;
+}
+
+export interface PendingFuelCost {
+  readonly amount: number;
+  readonly entryCount: number;
+}
+
+export interface CompanyMarginRow {
+  readonly key: string;
+  readonly source: MarginRowSource;
+  /** Ma DON (luong moi) hoac ma CHUYEN (chuyen cu). */
+  readonly code: string;
+  /** Boi canh van hanh — ma vong xe. */
+  readonly runCodes: readonly string[];
+  readonly tripId: string | null;
+  readonly orderId: string | null;
+  readonly runIds: readonly string[];
+  readonly tripKind: TripKind | null;
+  readonly orderStatus: TransportOrderStatus | null;
+  readonly businessDate: BusinessDate;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly customerId: string | null;
+  readonly revenueAmount: number | null;
+  /** `null` = CHUA BIET, khong phai 0 — `exclusion` noi vi sao. */
+  readonly costs: MarginCostBreakdown | null;
+  readonly deductionAmount: number | null;
+  readonly marginAmount: number | null;
+  readonly marginBasisPoints: number | null;
+  readonly counted: boolean;
+  readonly exclusion: MarginExclusion | null;
+  readonly pendingFuelCost: PendingFuelCost;
+  readonly unexpectedInternalCost: boolean;
+  readonly currencyCode: string;
+}
+
+export interface MarginSubtotal {
+  readonly revenueAmount: number;
+  readonly deductionAmount: number;
+  readonly marginAmount: number;
+}
+
+export interface CompanyMarginBasis {
+  readonly legacyTrips: MarginSubtotal & { readonly counted: number; readonly skipped: number };
+  readonly runFirstOrders: MarginSubtotal & {
+    readonly counted: number;
+    readonly excluded: Readonly<Record<MarginExclusion, number>>;
+    /** Don DA vao tong nhung chua co mot dong chi phi nao — bien 100% cua chung chua phan anh gi. */
+    readonly withoutRecordedCost: number;
+  };
+  /** Don CHIEU tu chuyen cu — da tinh qua chuyen, khong tinh lai. */
+  readonly projectedOrderCount: number;
+  readonly pendingFuelCost: PendingFuelCost & { readonly rowCount: number };
+  readonly unassignedRunFirstCost: { readonly amount: number; readonly runCount: number };
+}
+
+/** Tong CUA MAY CHU. `tripCount`/`skippedTripCount` giu nghia CHUYEN CU. */
+export interface CompanyMarginRollup extends DirectMarginRollup {
+  readonly basis: CompanyMarginBasis;
+}
+
+export interface FinanceMarginView {
+  readonly generatedFor: BusinessDate;
+  readonly totals: CompanyMarginRollup;
+  readonly rows: readonly CompanyMarginRow[];
+}
+
 export interface FinanceSummaryView {
   readonly generatedFor: BusinessDate;
   readonly buckets: SettlementBuckets;
-  readonly directMargin: DirectMarginRollup;
+  /** `#385` — tong CA CONG TY (chuyen cu + don theo vong xe), cung ham gop voi `FinanceMarginView`. */
+  readonly directMargin: CompanyMarginRollup;
   readonly receivable: FinanceReceivableSummary;
   readonly currency: FinanceCurrencyCoverage;
   readonly unavailableSources: readonly FinanceSource[];

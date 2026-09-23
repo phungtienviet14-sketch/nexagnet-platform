@@ -489,6 +489,12 @@ export abstract class MovementRepository {
    */
   abstract findOrderLink(tripId: string): Promise<TripOrderLink | null>;
   /**
+   * `#385` — TRA CUU NGUOC theo lo: tu DON ra chuyen cu da chieu ra no. Don co mat o day la ban CHIEU
+   * cua mot chuyen cu — bang tai chinh tinh no qua chuyen, va dem no lan thu hai o nhanh don la dem
+   * trung doanh thu.
+   */
+  abstract findOrderLinksByOrders(orderIds: readonly string[]): Promise<TripOrderLink[]>;
+  /**
    * CHIEU THUONG MAI: tao don + lien ket trong MOT giao dich, TAT DINH va LAP LAI DUOC.
    *
    * Goi lai tren mot chuyen da chieu tra ve chinh ban cu (`tripId` la khoa chinh cua lien ket).
@@ -1000,6 +1006,13 @@ export class InMemoryMovementRepository extends MovementRepository {
 
   async findOrderLink(tripId: string): Promise<TripOrderLink | null> {
     return this.orderLinks.get(tripId) ?? null;
+  }
+
+  async findOrderLinksByOrders(orderIds: readonly string[]): Promise<TripOrderLink[]> {
+    const wanted = new Set(orderIds);
+    return [...this.orderLinks.values()]
+      .filter((link) => wanted.has(link.orderId))
+      .map((link) => ({ ...link }));
   }
 
   async projectTripOrder(input: ProjectTripOrderInput): Promise<TripOrderProjection> {

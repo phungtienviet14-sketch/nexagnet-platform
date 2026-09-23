@@ -85,6 +85,8 @@ export const TRANSPORT_QUERY_KEYS = {
   controlTower: ['transport', 'control-tower'],
   /** Lane G — sau con so tai chinh, cung mot lan doc. */
   financeSummary: ['transport', 'finance', 'summary'],
+  /** `#385` — hieu qua tung viec, cung ham gop voi `financeSummary`. */
+  financeMargin: ['transport', 'finance', 'margin'],
   /** `#379` — dia diem da biet (bai xe, nha may/kho) cho man tao don. */
   knownPlaces: ['transport', 'places', 'known'],
 } as const;
@@ -246,6 +248,14 @@ export function useFinanceSummary(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.financeSummary,
     queryFn: () => transportApi.finance.summary(),
+    enabled: allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
+  });
+}
+
+export function useFinanceMargin(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.financeMargin,
+    queryFn: () => transportApi.finance.margin(),
     enabled: allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
   });
 }
@@ -998,30 +1008,6 @@ export function usePartnerPosition(input: NavigationInput, partnerId: string | n
     queryFn: () => transportApi.settlement.partnerPosition(partnerId as string),
     enabled:
       partnerId !== null &&
-      allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
-  });
-}
-
-/**
- * 404 la mot cau tra loi NGHIEP VU o day (chuyen chua co du lieu bien), khong phai mot su co. Nen
- * `retry: false`: thu lai ba lan mot cau tra loi dung chi lam man hinh cham di.
- */
-export function useTripDirectMargin(input: NavigationInput, tripId: string | null) {
-  return useQuery({
-    queryKey: ['transport', 'settlement', 'direct-margin', tripId],
-    queryFn: () => transportApi.settlement.tripDirectMargin(tripId as string),
-    enabled:
-      tripId !== null && allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
-    retry: false,
-  });
-}
-
-export function useDirectMarginRollup(input: NavigationInput, tripIds: readonly string[]) {
-  return useQuery({
-    queryKey: ['transport', 'settlement', 'rollup', [...tripIds].sort().join(',')],
-    queryFn: () => transportApi.settlement.directMarginRollup(tripIds),
-    enabled:
-      tripIds.length > 0 &&
       allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
   });
 }
