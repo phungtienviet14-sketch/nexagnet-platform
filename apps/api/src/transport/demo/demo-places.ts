@@ -47,9 +47,10 @@ import { DEMO_SEED_ACTOR } from './demo-seed.js';
  * HAI LAN CHAY SONG SONG KHONG DE LAI BAN SAO.
  *
  * Moi diem tim-hoac-tao trong MOT giao dich `Serializable`. Hai lan khoi dong chong nhau thi mot ben
- * commit, ben kia nhan loi xung dot (P2034, hoac P2002 tren ma so thue) va chay lai DUNG MOT lan —
- * lan do doc thay hang rao ben kia vua ghi va bo qua. Loi con lai sau lan thu hai thi nem: nguoi goi
- * (script gieo) ghi log va de api khoi dong tiep, vi diem mau la tien ich trinh dien.
+ * commit, ben kia nhan loi xung dot (P2034, hoac P2002 tren ma so thue) va chay lai toi da
+ * `MAX_MARKER_ATTEMPTS` lan, cach nhau mot quang co do lech — lan doc sau thay hang rao ben kia vua
+ * ghi va bo qua. Loi con lai sau lan cuoi thi nem: nguoi goi (script gieo) ghi log va de api khoi dong
+ * tiep, vi diem mau la tien ich trinh dien.
  *
  * Chi Prisma, khong SQL tho — cung rang buoc #196 voi `demo-seed.ts`: moi dong di qua CHECK cua
  * bang nhu mot dong san pham tao ra.
@@ -233,15 +234,32 @@ export function counterpartyLookup(
 }
 
 /**
- * Chay mot diem trong giao dich `Serializable`, THU LAI DUNG MOT LAN khi va voi mot lan chay song
- * song. Lan thu hai doc trang thai DA COMMIT, nen thuong ket thuc bang `MARKER_ALREADY_SEEDED`.
+ * Toi da bao nhieu LAN CHAY cho mot diem khi va voi mot lan chay song song.
+ *
+ * MOT lan thu lai la KHONG DU (do 24/09 tren CI exact-main): moi giao dich doc CA bang hang rao (kiem
+ * nhan trung), nen lan thu lai cua diem 1 ben B co the va tiep voi giao dich diem 2 dang ghi cua ben
+ * A. Vai lan thu, cach nhau mot quang ngan co do lech, cho ben kia di qua; sau do lan doc thay hang rao
+ * da commit va dung lai bang `MARKER_ALREADY_SEEDED`.
+ */
+const MAX_MARKER_ATTEMPTS = 6;
+const RETRY_BACKOFF_MS = 40;
+
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Chay mot diem trong giao dich `Serializable`, THU LAI co gioi han khi va voi mot lan chay song song.
+ * Lan thu sau doc trang thai DA COMMIT, nen thuong ket thuc bang `MARKER_ALREADY_SEEDED`. Loi khong
+ * phai xung dot, hoac xung dot van con sau lan cuoi, thi nem cho script gieo ghi log.
  */
 async function seedMarkerOnce(prisma: DemoPlacesPrisma, plan: MarkerPlan): Promise<MarkerOutcome> {
-  try {
-    return await prisma.$transaction((tx) => seedMarker(tx, plan), TRANSACTION_OPTIONS);
-  } catch (error) {
-    if (!isConcurrentWriteConflict(error)) throw error;
-    return prisma.$transaction((tx) => seedMarker(tx, plan), TRANSACTION_OPTIONS);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await prisma.$transaction((tx) => seedMarker(tx, plan), TRANSACTION_OPTIONS);
+    } catch (error) {
+      if (!isConcurrentWriteConflict(error) || attempt >= MAX_MARKER_ATTEMPTS) throw error;
+      /* Do lech ngau nhien: hai ben cung lui mot quang bang nhau se lai dung nhau lan nua. */
+      await pause(RETRY_BACKOFF_MS * attempt + Math.floor(Math.random() * RETRY_BACKOFF_MS));
+    }
   }
 }
 
