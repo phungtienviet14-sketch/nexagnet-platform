@@ -90,6 +90,34 @@ describe('sau dong tien — giu rieng, khong mot tong nao', () => {
       expect(known, row.key).toContain(row.section);
     }
   });
+
+  /**
+   * #341 — hai duong dan nay TUNG BI DAO: dong khach hang mo man phai tra (khong co tuoi no phai
+   * thu nao), ba dong phai tra mo man chi giu cuoc khach hang. Bai nay khoa dung dich cua tung dong.
+   */
+  it('dong phai thu mo `Phải thu khách hàng`, ba dong phai tra mo `Phải trả đối tác & cây xăng`', () => {
+    const target = Object.fromEntries(toFinance(view()).rows.map((row) => [row.key, row.section]));
+
+    expect(target).toEqual({
+      CUSTOMER_FREIGHT: 'settlement',
+      FUEL_SUPPLIER: 'ar-ap',
+      CARRIER_SERVICE: 'ar-ap',
+      PARTNER_COMMISSION: 'ar-ap',
+      'driver-reimbursement': 'driver-fund',
+      'driver-wage-remaining': 'driver-settlement',
+    });
+  });
+
+  it('CHIEU cua dong khop voi NHOM cua muc no mo ra tren danh muc', () => {
+    for (const row of toFinance(view()).rows) {
+      const group = TRANSPORT_SECTIONS.find((section) => section.id === row.section)?.group;
+      if (row.direction === 'RECEIVABLE') {
+        expect(group, row.key).toBe('receivable');
+      } else {
+        expect(['payable', 'driver-money'], row.key).toContain(group);
+      }
+    }
+  });
 });
 
 describe('bien truc tiep — KHONG PHAI lai rong', () => {

@@ -5,7 +5,7 @@ import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import { EMPTY_VALUE } from '../customer-view';
-import { buildSectionUrl } from '../navigation';
+import { buildSectionUrl, findSection } from '../navigation';
 import {
   toSectionQuery,
   useApByFlow,
@@ -60,7 +60,7 @@ function useSettlementDirectory() {
 }
 
 /* ------------------------------------------------------------------ *
- * Cong no & quyet toan — tuoi no phai thu
+ * Phai thu khach hang — tuoi no phai thu (ten cu: Cong no & quyet toan)
  * ------------------------------------------------------------------ */
 
 /**
@@ -108,14 +108,22 @@ export function SettlementView() {
   return (
     <>
       <PageHeader
-        title="Công nợ & quyết toán"
+        /*
+         * Ten trang = nhan o danh muc (#341). Hai lien ket duoi LAY NHAN tu chinh danh muc: muc kia
+         * doi ten thi cau nay doi theo, khong con mot ban chep tay `AR/AP` nao de lech.
+         */
+        title="Phải thu khách hàng"
         summary="Tiền khách hàng nợ công ty: ai nợ, nợ bao nhiêu, quá hạn bao lâu — và việc kế toán phải làm để thu về."
         context={
           <p className="tx-note">
             Màn này giữ <strong>một dòng tiền: cước khách hàng</strong>. Ba dòng phải trả — nhà xe,
-            hoa hồng nguồn đơn, cây xăng — đọc ở <a href={buildSectionUrl('ar-ap')}>AR/AP</a>; tiền
-            đã ra với lái xe ở <a href={buildSectionUrl('driver-settlement')}>Quyết toán lái xe</a>.
-            Năm dòng không cộng chung.
+            hoa hồng nguồn đơn, cây xăng — đọc ở{' '}
+            <a href={buildSectionUrl('ar-ap')}>{findSection('ar-ap')?.label}</a>; tiền đã ra với lái
+            xe ở{' '}
+            <a href={buildSectionUrl('driver-settlement')}>
+              {findSection('driver-settlement')?.label}
+            </a>
+            . Năm dòng không cộng chung.
           </p>
         }
       />
@@ -268,7 +276,7 @@ export function SettlementView() {
 }
 
 /* ------------------------------------------------------------------ *
- * AR/AP — nam dong giu RIENG
+ * Phai tra doi tac & cay xang — ba dong phai tra giu RIENG (ten cu: AR/AP)
  * ------------------------------------------------------------------ */
 
 function ApFlowPanel({ flow }: { readonly flow: SettlementFlow }) {
@@ -380,12 +388,19 @@ export function ArApView() {
   return (
     <>
       <PageHeader
-        title="AR/AP"
-        summary="Tuổi nợ phải thu và phải trả theo từng đối tác."
+        /*
+         * KHONG con "tuoi no phai thu" o tom tat (#341): man nay khong co bang tuoi no cua khach nao.
+         * Va la BA dong phai tra chu khong phai bon — dong thu tu cua `SETTLEMENT_FLOWS` la cuoc
+         * khach hang, bi loc ra ngay ben duoi.
+         */
+        title="Phải trả đối tác & cây xăng"
+        summary="Công ty còn nợ ai — cây xăng, nhà xe, hoa hồng nguồn đơn — theo từng đối tác, cùng vị thế hai chiều của một đối tác."
         context={
           <p className="tx-note">
-            Bốn dòng tiền phải trả được giữ riêng, không cộng chung: một đối tác có thể vừa là nhà
-            xe vừa là nguồn đơn, nên khoá phân biệt là vai chứ không phải đối tác.
+            Ba dòng tiền phải trả được giữ riêng, không cộng chung: một đối tác có thể vừa là nhà xe
+            vừa là nguồn đơn, nên khoá phân biệt là vai chứ không phải đối tác. Tiền khách hàng nợ
+            công ty đọc ở{' '}
+            <a href={buildSectionUrl('settlement')}>{findSection('settlement')?.label}</a>.
           </p>
         }
       />
@@ -398,7 +413,7 @@ export function ArApView() {
 }
 
 /* ------------------------------------------------------------------ *
- * Bien truc tiep
+ * Hieu qua tung chuyen — bien truc tiep (ten cu: Bien truc tiep)
  * ------------------------------------------------------------------ */
 
 export function MarginView() {
@@ -422,8 +437,8 @@ export function MarginView() {
   return (
     <>
       <PageHeader
-        title="Biên trực tiếp"
-        summary="Doanh thu trừ chi phí trực tiếp của từng chuyến — chưa gồm chi phí cố định."
+        title="Hiệu quả từng chuyến"
+        summary="Chuyến nào làm ra tiền: biên trực tiếp của từng chuyến — doanh thu trừ chi phí trực tiếp, chưa gồm chi phí cố định."
       />
 
       {rollup.errorMessage === null ? null : (

@@ -24,7 +24,7 @@ import {
 } from '../workspace/driver-fund';
 
 /**
- * Man QUY LAI XE / CHI PHI.
+ * Man QUY LAI XE (ten cu: Quy lai xe / Chi phi — #341 bo chu `Chi phí` dung mot minh).
  *
  * KHONG dua lai xe len dia chi. Hai ly do, va ly do thu hai la quyet dinh: `Driver` khong co ma
  * nghiep vu nao (chi co `id` ky thuat va so dien thoai), va so dien thoai la DU LIEU CA NHAN —
@@ -143,7 +143,7 @@ export function DriverFundView() {
   if (!hasOperationsScope(navigation.role)) {
     return (
       <>
-        <PageHeader title="Quỹ lái xe / Chi phí" />
+        <PageHeader title="Quỹ lái xe" />
         <ErrorState message={operationsEmptyMessage(navigation.role)} />
       </>
     );
@@ -158,7 +158,7 @@ export function DriverFundView() {
   return (
     <>
       <PageHeader
-        title="Quỹ lái xe / Chi phí"
+        title="Quỹ lái xe"
         summary="Số dư quỹ từng lái xe, tạm ứng, hoàn quỹ, chi phí chuyến và kỳ quỹ."
         actions={
           <div className="tx-pagehead__btns">

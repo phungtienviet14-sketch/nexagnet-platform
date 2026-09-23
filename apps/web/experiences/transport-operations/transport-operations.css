@@ -196,11 +196,11 @@
 /*
  * DANH MUC CUON TRONG THANH BEN, va PHAI NOI RA rang no dang cuon.
  *
- * Voi vai Giam doc, 23 muc + bon nhan nhom cao hon mot khung nhin 900px, nen danh muc co vung cuon
+ * Voi vai Giam doc, 22 muc + sau nhan nhom cao hon mot khung nhin 900px, nen danh muc co vung cuon
  * cua rieng no (thanh ben `position: sticky`, khong troi theo trang nua). Nhung mot vung cuon KHONG
  * co dau hieu gi thi te hon mot trang dai: muc cuoi bi cat ngang chu trong y nhu mot loi ve, va bon
- * muc duoi cung (`Bản đồ vòng chạy`, `Biên trực tiếp`, `AR/AP`, `Xuất dữ liệu`) bien mat ma khong
- * ai biet chung con o do.
+ * muc duoi cung (`Bản đồ vòng chạy`, `Xuất dữ liệu`, `Bảo dưỡng & giấy tờ`, `Sở hữu tài sản`) bien
+ * mat ma khong ai biet chung con o do.
  *
  * Bon lop nen duoi la ky thuat `scroll shadow` cua Roman Komarov: hai lop `local` la mang giay che,
  * hai lop `scroll` la vet do. Khi cuon het co, mang che nam dung tren vet do va khong thay gi; khi
