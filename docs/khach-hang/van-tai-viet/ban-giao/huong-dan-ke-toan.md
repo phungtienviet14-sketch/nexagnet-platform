@@ -20,7 +20,7 @@ Mở ba chỗ, theo thứ tự:
 2. **Nhiên liệu**, xem nhãn **"… chờ xác thực"** ở khối "Phiếu nhiên liệu". Đây là phiếu dầu lái xe vừa khai.
 3. **Phải thu khách hàng**, xem ô **"Chờ đối soát"** và **"Trong đó quá hạn"**.
 
-**Bảng điều hành** còn một hàng việc chung cho cả công ty, như giấy tờ xe hết hạn hay bảo dưỡng quá hạn. Hàng này chủ yếu là việc của điều hành.
+**Bảng điều hành** còn một hàng việc chung cho cả công ty. Ngoài giấy tờ xe và bảo dưỡng, hàng này có cả việc của kế toán: phiếu dầu chờ xác thực, kỳ đối soát bảng kê còn mở, quỹ lái xe âm, đề nghị chi chờ duyệt.
 
 ---
 
@@ -30,7 +30,7 @@ Mở ba chỗ, theo thứ tự:
 
 1. Lọc **"Chờ kết thúc"**.
 2. Mỗi dòng là một đơn đã giao xong. Dòng cho biết:
-   - số chứng từ số đã có; "Bản giấy" nghĩa là chưa có bản số;
+   - số chứng từ đã ghi cho đơn; "Bản giấy" nghĩa là chưa có chứng từ nào được ghi;
    - vòng xe đã chạy đơn, chỉ để tham khảo.
 
 **Đơn chỉ vào hàng này khi văn phòng đã bấm "Xác nhận đã giao xong".** Không thấy một đơn thì hỏi điều hành trước.
@@ -41,11 +41,11 @@ Mở ba chỗ, theo thứ tự:
 - số lượng khớp đơn;
 - các giấy tờ công ty yêu cầu.
 
-Ảnh lái xe gửi được mở từ đơn.
+Hiện **chưa có chỗ mở ảnh** biên nhận lái xe gửi từ màn này: danh sách chứng từ nằm sau hộp xác nhận (xem hạn chế bên dưới). Cần xem ảnh thì hỏi điều hành.
 
 **Quyết định** nằm ở cột "Kết thúc", bên phải bảng; kéo ngang nếu màn hẹp. Có ba lựa chọn:
 
-- **Đã kết thúc**: đủ căn cứ. Đơn được vào đối soát với khách.
+- **Đã kết thúc**: đủ căn cứ. Đơn được vào đối soát với khách, nếu đơn đã có khách hàng và giá cước.
 - **Cần bổ sung**: thiếu giấy tờ. Đơn nằm ở lọc "Cần bổ sung"; khi đủ giấy tờ, kế toán quyết định lại.
 - **Từ chối**: không chấp nhận.
 
@@ -82,14 +82,16 @@ Màn này chỉ giữ **một dòng tiền: cước khách hàng**. Tiền phả
 2. Nhập **số tiền hai bên đã thống nhất**. Nếu khác số đề nghị, ghi lý do chênh lệch.
 3. Bấm **"Xác nhận đối soát"**.
 
-Đơn thành **phải thu chính thức, có hạn thanh toán**. Nhiều đơn của cùng một khách thì dùng **"Gom đơn theo kỳ"**: tạo một lô, rồi quyết từng dòng.
+Đơn thành **phải thu chính thức**. Hạn thanh toán được tính nếu khách đã cài điều khoản thanh toán; chưa cài thì chứng từ không có hạn.
+
+Nhiều đơn của cùng một khách thì dùng **"Gom đơn theo kỳ"**. Lô lấy **mọi** đơn đang chờ của khách đó trong cùng tiền tệ; ô ngày chỉ để ghi, không lọc. Mỗi dòng chỉ có hai lựa chọn: **"Xác nhận số đề nghị"** hoặc **"Hoãn đối soát"**. Số khác đề nghị thì hoãn dòng đó, rồi dùng "Chốt một đơn".
 
 ### 3b. Ghi nhận tiền khách trả
 
 ![Nhập tiền về](assets/ke-toan/05-nhap-tien-ve.jpg)
 
 1. Chọn **khách hàng**.
-2. Nhập **số tiền**. Điền cả thời điểm nhận và tham chiếu ngân hàng.
+2. Nhập **số tiền** và **thời điểm nhận**; cả hai bắt buộc. Tham chiếu ngân hàng không bắt buộc nhưng nên điền.
 3. Bấm **"Ghi nhận thanh toán"**.
 
 Tiền này nằm ở **"Tiền nhận trước"**. Nó **chưa trừ vào nợ nào**.
@@ -120,7 +122,7 @@ Ba dòng phải trả, **giữ riêng**:
 
 "Vị thế đối tác" đặt hai chiều cạnh nhau: họ nợ mình, và mình nợ họ. Phần này **chỉ để xem**. Hệ thống không tự bù trừ.
 
-Phí đường bộ tự động (ETC) chưa bật trong đợt này.
+Phí đường bộ tự động (ETC) nằm ngoài phạm vi đợt này, nên không có trong danh mục.
 
 ---
 
@@ -145,7 +147,7 @@ Ba việc còn lại trên một phiếu:
 
 ### 5b. Phân bổ giá thành dầu vào vòng xe
 
-Tiền dầu **không tự** vào chi phí của đơn. Trong phiếu, mở **"Giá thành nhiên liệu"**.
+Tiền dầu trên vòng xe **không tự** vào chi phí của đơn. Sau khi phiếu **đã xác thực**, trong phiếu mở **"Giá thành nhiên liệu"**. Phiếu gắn chuyến theo cách cũ thì tự vào chi phí chuyến khi xác thực, không phân bổ ở đây.
 
 ![Phân bổ giá thành dầu](assets/ke-toan/09-phan-bo-gia-thanh-dau.jpg)
 
@@ -174,10 +176,11 @@ Chưa phân bổ thì màn hiệu quả ghi **"Dầu chưa phân bổ"** (mục 
    - chỉ có phiếu nội bộ;
    - lệch quá dung sai;
    - số hoá đơn hai bên khác nhau;
-   - lái xe đã trả tiền mặt, nên không phải công nợ.
-4. **"Chạy so khớp"**: chạy lại sau khi sửa phiếu hoặc nhập thêm dòng.
+   - lái xe đã trả tiền mặt, nên không phải công nợ;
+   - phiếu sinh từ chính bảng kê.
+4. **"Chạy so khớp"**: chạy lại khi có thêm phiếu trong khoảng ngày của kỳ, ví dụ lái xe vừa khai hoặc nộp lại và kế toán vừa xác thực. Không nhập thêm bảng kê vào một kỳ đã có được, và chưa có màn nào sửa số trên phiếu.
 
-Cách xử lý một dòng: chấp nhận số của cây xăng, từ chối dòng bảng kê, xác nhận cặp khớp, bỏ qua **có lý do**, hoặc yêu cầu sửa phiếu.
+Cách xử lý một dòng: chấp nhận số của cây xăng, từ chối dòng bảng kê, xác nhận cặp khớp, bỏ qua, hoặc yêu cầu sửa phiếu. Hệ thống **không bắt** ghi lý do khi bỏ qua; kế toán nên tự ghi vào ô "Ghi chú".
 
 Khi kế toán **đóng kỳ**, khoản nợ cây xăng mới vào **Phải trả đối tác và cây xăng**. **Mở lại kỳ đã đóng chỉ giám đốc làm được.**
 
@@ -202,14 +205,14 @@ Một dòng ghi sai thì bấm **"Đảo"** trên dòng đó. Hệ thống khôn
 
 **Phân biệt với nhiên liệu cây xăng:** phiếu **ghi nợ cây xăng** không bao giờ đụng tới quỹ lái xe. Nó đi qua kỳ đối soát bảng kê (mục 5c).
 
-**Duyệt chi lái xe** là nơi duyệt các đề nghị chi của lái xe. Hiện lái xe **chưa gửi được** khoản chi dọc đường cho việc theo vòng xe từ điện thoại. Các khoản này lái xe báo trực tiếp văn phòng.
+**Duyệt chi lái xe**: hiện chưa có màn nào gửi đề nghị vào đây, nên danh sách thường trống. Khoản chi lái xe ghi trên điện thoại (chỉ cho chuyến theo cách cũ) vào **thẳng quỹ**, không qua duyệt. Khoản chi dọc đường của việc theo vòng xe **chưa có chỗ ghi** vào chi phí; lái xe báo văn phòng, và kế toán chỉ phản ánh được vào quỹ bằng "Điều chỉnh".
 
 ---
 
 ## 7. Lương và quyết toán lái xe
 
-- **Lương**: mở một kỳ lương (tên kỳ, từ ngày, đến ngày), tính và duyệt bảng lương, rồi **chốt kỳ**. Lái xe chỉ thấy phiếu lương sau khi kế toán công bố.
-- **Quyết toán lái xe**: theo từng lái xe, gồm lương đã ghi nhận, đã trả, còn lại, và khoản công ty hoàn ứng.
+- **Lương**: mở một kỳ lương (tên kỳ, từ ngày, đến ngày), bấm **"Chạy tính lương"**, **"Duyệt"** từng phiếu, **"Chi trả"** khi đã trả, rồi **"Chốt kỳ"**. Lái xe thấy phiếu ngay khi phiếu được duyệt; phiếu tạm tính thì không thấy.
+- **Quyết toán lái xe**: theo từng lái xe, gồm Đã ghi nhận, Đã chi, Còn lại, và hoàn ứng công ty còn nợ. Đây cũng là nơi **"Ghi một lần chi"** (lương tháng và/hoặc hoàn ứng, chuyển khoản hay tiền mặt) và đảo một lần chi ghi sai.
 
 > **Hạn chế hiện tại.** Phần lương **theo chuyến** và **theo km** chỉ đếm chuyến theo cách làm cũ, chưa đếm việc theo vòng xe. Nếu công ty trả lương theo chuyến hoặc km, kế toán cộng tay phần việc theo vòng xe cho tới khi hệ thống sửa.
 
@@ -228,7 +231,7 @@ Mỗi dòng tiền mở sang màn chi tiết của nó. Tổng hợp giám đố
 
 Mở **Hiệu quả từng chuyến** và lọc **"Đơn theo vòng xe"**:
 
-1. Đơn đã **phân bổ dầu** có chi phí và biên thật.
+1. Đơn đã **phân bổ dầu** có chi phí dầu và biên trực tiếp tương ứng. Con số vẫn chưa gồm cầu đường, lương và chi phí cố định.
 2. Đơn **"Chưa ghi chi phí"** hiện biên 100%. Con số đó có nghĩa **chưa ghi chi phí**, không có nghĩa không tốn chi phí.
 
 Nhãn **"Dầu chưa phân bổ …"** nghĩa là có phiếu dầu trên vòng xe mà chưa phân bổ. Biên thật có thể thấp hơn tới mức số tiền đó.
@@ -240,9 +243,9 @@ Nhãn **"Dầu chưa phân bổ …"** nghĩa là có phiếu dầu trên vòng 
 | Bạn thấy                                   | Nghĩa là                                                         | Làm gì                                      |
 | ------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------- |
 | Đơn không có trong "Kết thúc đơn"          | Văn phòng chưa xác nhận giao xong                                | Hỏi điều hành                               |
-| Đơn không có trong "Chờ đối soát"          | Chưa bấm "Đã kết thúc"                                           | Quay lại mục 2                              |
-| Bấm nút mà không có gì xảy ra              | Còn ô bắt buộc chưa điền, ví dụ "Thời điểm nhận" khi ghi tiền về | Điền đủ các ô, bấm lại                      |
-| "Cần ghi lý do trước khi xác nhận"         | Hộp xác nhận cần căn cứ                                          | Ghi rõ đã nhận gì                           |
+| Đơn không có trong "Chờ đối soát"          | Chưa bấm "Đã kết thúc", hoặc đơn chưa có khách hàng hay giá cước | Quay lại mục 2                              |
+| Bấm nút thì trình duyệt nhắc "điền ô này"  | Còn ô bắt buộc chưa điền, ví dụ "Thời điểm nhận" khi ghi tiền về | Điền đủ các ô, bấm lại                      |
+| "Cần ghi lý do trước khi xác nhận"         | Hộp xác nhận này bắt buộc ghi lý do hoặc căn cứ                  | Ghi rõ đã nhận gì                           |
 | Không đóng được kỳ đối soát                | Còn chênh lệch chưa xử lý                                        | Xử lý hết các dòng "Chờ xử lý"              |
 | Cần mở lại một kỳ đã đóng                  | Chỉ giám đốc làm được                                            | Báo giám đốc, kèm lý do                     |
 | "Chưa ghi chi phí" hoặc "Dầu chưa phân bổ" | Con số chưa đủ                                                   | Phân bổ dầu (mục 5b); đừng coi biên là thật |

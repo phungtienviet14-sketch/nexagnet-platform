@@ -28,7 +28,7 @@ Việc văn phòng đã giao thì bạn **không cần** vào "Nhận việc" đ
 
 1. **Chặng đang làm**: tuyến, trạng thái, mã đơn.
 2. **Nút bấm được lúc này**. Màn chỉ hiện những nút đúng bước.
-3. **Chặng khác**: chặng chạy rỗng.
+3. **Chặng khác**: các chặng còn lại của việc đang làm, thường là chặng chạy rỗng.
 
 **Chặng rỗng** là đoạn xe chạy **không chở hàng**, ví dụ từ bãi tới điểm lấy. Chặng này không có nút nào. Văn phòng tự cho chạy và hoàn tất. Dòng của nó có thể vẫn ghi "Chưa bắt đầu"; bạn không cần làm gì.
 
@@ -43,10 +43,10 @@ Bấm **"Đã tới điểm lấy hàng"**. Màn hiện ba nút:
 ![Tại điểm lấy hàng](assets/tai-xe/03-tai-diem-lay.jpg)
 
 1. **Đã vào cổng**: khi xe vào cổng nhà máy hoặc kho.
-2. **Đang xếp hàng**: bấm được nhiều lần nếu xếp hàng lâu.
+2. **Đang xếp hàng**: khi bắt đầu xếp hàng. Nếu xếp hàng ở điểm thứ hai, ra khỏi màn Hiện trường rồi vào lại mới bấm được lần mới; bấm liền tay chỉ gửi lại mốc cũ.
 3. **Rời điểm lấy hàng**: khi xe đã lên hàng và rời đi.
 
-Bên dưới là các nút chụp giấy vào cổng, phiếu xếp hàng, phiếu cân. Chụp được thì tốt, nhưng **không bắt buộc**.
+Nút chụp giấy hiện **sau** mốc tương ứng: giấy vào cổng sau "Đã vào cổng", phiếu xếp hàng sau "Đang xếp hàng", phiếu cân sau "Rời điểm lấy hàng". Chụp được thì tốt, nhưng **không bắt buộc**.
 
 ---
 
@@ -57,7 +57,7 @@ Bên dưới là các nút chụp giấy vào cổng, phiếu xếp hàng, phi�
 1. Trạng thái chuyển sang **"Đang trên đường"**.
 2. Tới nơi giao thì bấm **"Đã đến nơi (cần vị trí)"**.
 
-Hai nút có chữ **"(cần vị trí)"** lấy vị trí điện thoại đúng lúc bấm: "Đã đến nơi" và "Khách đã nhận hàng". Các nút khác không cần vị trí.
+Hai nút có chữ **"(cần vị trí)"** lấy vị trí điện thoại đúng lúc bấm: "Đã đến nơi" và "Khách đã nhận hàng". Các nút khác không cần vị trí. Nếu bấm lại sau lỗi, hệ thống dùng vị trí của lần bấm đầu.
 
 ---
 
@@ -80,7 +80,7 @@ Bật định vị cho trình duyệt, ra chỗ thoáng, rồi bấm lại. **M�
 
 ![Đang chờ người nhận](assets/tai-xe/07-dang-cho.jpg)
 
-1. Màn đếm **thời gian chờ**, theo giờ của hệ thống.
+1. Màn hiện **số phút đã chờ** theo giờ hệ thống, cập nhật khoảng 30 giây một lần.
 
 - "Bắt đầu chờ" chỉ có sau "Đã đến nơi", và trước khi khách nhận hàng.
 - **Không có nút dừng chờ.** Thời gian chờ tự dừng khi bạn bấm "Khách đã nhận hàng".
@@ -127,7 +127,7 @@ Vào mục **Nhiên liệu** ở thanh dưới.
 
 1. Phiếu vừa gửi hiện ở **"Phiếu đã gửi"**, trạng thái **"Mới khai"**. Bấm "Đính ảnh chứng từ" để gắn ảnh phiếu nếu chưa gắn.
 
-Kế toán sẽ **xác thực** hoặc **từ chối kèm lý do**. Phiếu bị từ chối thì nộp lại được, không phải khai từ đầu.
+Kế toán sẽ **xác thực** hoặc **từ chối kèm lý do**. Phiếu bị từ chối thì bấm **"Nộp lại phiếu"** để gửi lại đúng số đã khai, đính thêm ảnh nếu cần. Nếu bị từ chối vì sai số lít, tiền hay km thì không sửa được trên điện thoại: hỏi kế toán, có thể phải ghi phiếu mới.
 
 ---
 
@@ -157,7 +157,7 @@ Có khoản chi dọc đường thì **báo văn phòng** và giữ hoá đơn.
    - lương đã ghi nhận;
    - đã nhận;
    - còn lại;
-   - tiền công ty trả lại hoàn ứng.
+   - hoàn ứng công ty còn phải trả bạn.
 2. **Phiếu lương**. Chỉ phiếu kế toán đã công bố mới hiện ở đây.
 
 Thấy phiếu lương thiếu chuyến hay km, hãy **báo kế toán**.
@@ -167,9 +167,9 @@ Thấy phiếu lương thiếu chuyến hay km, hãy **báo kế toán**.
 ## 11. Khi mất sóng hoặc bấm không được
 
 - Hệ thống **cần mạng**. Chưa có chế độ làm việc khi mất sóng.
-- Mất sóng lúc bấm thì đợi có sóng rồi **bấm lại**. Bấm lại cùng một mốc **không** tạo mốc trùng. Riêng "Đang xếp hàng" được ghi nhiều lần.
+- Mất sóng lúc bấm thì đợi có sóng rồi **bấm lại**. Bấm lại cùng một mốc **không** tạo mốc trùng.
 - Màn Hiện trường tự làm mới. Nếu thấy dòng "Chưa làm mới được việc hiện trường", điện thoại đang yếu sóng; màn vẫn hiện lần đọc trước.
-- Nếu một mốc cần vị trí báo lỗi **"đang có một phiên mở trên việc khác"**, bạn **gọi văn phòng**. Đừng bấm lặp lại nhiều lần.
+- Nếu một mốc cần vị trí báo lỗi **"Lai xe dang co mot phien mo tren mot chu the khac…"** hoặc **"…tu mot thiet bi khac"** (chữ không dấu), bạn **gọi văn phòng**. Đừng bấm lặp lại nhiều lần.
 
 ---
 
