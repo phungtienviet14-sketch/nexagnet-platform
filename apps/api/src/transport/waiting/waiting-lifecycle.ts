@@ -59,6 +59,17 @@ export const WAITING_CLOSING_CHECKPOINT: RunCheckpointType = 'DELIVERY_ACCEPTED'
 export const legAcceptsNewWaiting = (status: RunLegStatus): boolean =>
   legAcceptsNewCheckpoints(status);
 
+/**
+ * Nguoi nhan DA nhan hang tren chang nay chua — `#363`.
+ *
+ * Mot ham cho HAI ben, cung ly le voi `legAcceptsNewWaiting`: `evaluateWaitingStart` (tu choi som,
+ * tren chuoi moc doc TRUOC khoa) va `WaitingSessionService` (tu choi DUOI khoa, tren chuoi moc doc
+ * lai qua CHINH giao dich dang giu khoa vong chay). Hai ben doc hai ban khac nhau cua cung mot su
+ * that — ban truoc khoa co the da cu — nhung phai hoi no bang CUNG mot cau.
+ */
+export const deliveryAlreadyAccepted = (types: readonly RunCheckpointType[]): boolean =>
+  types.includes(WAITING_CLOSING_CHECKPOINT);
+
 export interface WaitingStartDecision {
   readonly allowed: boolean;
   readonly reason: WaitingStartReason;
@@ -81,7 +92,10 @@ export interface WaitingStartEvaluation {
    * cho qua. Day la ban doc TRUOC khoa; cong that nam duoi khoa, tren `RunWriteScope.legs`.
    */
   readonly legStatus: RunLegStatus;
-  /** Loai moc DA GHI tren dung chang dang xet. */
+  /**
+   * Loai moc DA GHI tren dung chang dang xet. Cung nhu `legStatus`, day la ban doc TRUOC khoa; lan
+   * nhan hang duoi khoa duoc doc lai tren giao dich dang giu khoa (`#363`, `deliveryAlreadyAccepted`).
+   */
   readonly legCheckpointTypes: readonly RunCheckpointType[];
   /** Chang nay da co mot phien cho dang mo chua. */
   readonly hasOpenSession: boolean;
@@ -113,7 +127,7 @@ export function evaluateWaitingStart(input: WaitingStartEvaluation): WaitingStar
     return denyStart('WAITING_ARRIVAL_NOT_FOUND');
   }
 
-  if (input.legCheckpointTypes.includes(WAITING_CLOSING_CHECKPOINT)) {
+  if (deliveryAlreadyAccepted(input.legCheckpointTypes)) {
     return denyStart('WAITING_DELIVERY_ALREADY_ACCEPTED');
   }
 

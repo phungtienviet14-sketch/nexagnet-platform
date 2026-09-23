@@ -71,7 +71,18 @@ export abstract class CheckpointRepository {
     clientEventId: string,
   ): Promise<RunCheckpoint | null>;
   abstract listForRun(runId: string): Promise<readonly RunCheckpoint[]>;
-  abstract listForLeg(legId: string): Promise<readonly RunCheckpoint[]>;
+  /**
+   * Moc cua MOT chang — tuy chon DOC TREN giao dich dang giu khoa vong chay (`#363`).
+   *
+   * Chi DOC, khong mo mot duong ghi nao cho capability khac. `tx` co mat nghia la nguoi goi dang
+   * dung trong `RunWriteGuard.underRunLock()` va can su that MOI NHAT ve moc cua chang: moi lan ghi
+   * moc gianh CHINH khoa do, nen doc qua `tx` sau khi khoa da trong tay thay moi moc da commit truoc
+   * no — con ban doc truoc khoa thi co the da cu. Doc qua client goc trong luc giu khoa thi muon mot
+   * ket noi THU HAI (xem `RunWriteScope.tx`).
+   *
+   * `tx` vang mat la duong cu, dung cho moi lan doc khong can thu tu cua khoa.
+   */
+  abstract listForLeg(legId: string, tx?: RunWriteTransaction): Promise<readonly RunCheckpoint[]>;
   abstract listForDriver(driverId: string): Promise<readonly RunCheckpoint[]>;
 }
 
