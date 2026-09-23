@@ -237,12 +237,31 @@ một Postgres trắng** kể cả sau khi đã bật PostGIS.
 
 ---
 
-## 7. Bản đồ — chưa quyết, và chưa cần quyết
+## 7. Bản đồ — nền OpenFreeMap mặc định, lớp nghiệp vụ không đổi
 
-R0 chọn **MapLibre GL JS + PMTiles tự dựng**. Lane B **không xét lại** kết luận đó, vì chưa có một
-màn hình nào cần vẽ bản đồ: dữ liệu phải tồn tại trước. Một điều R0 nói cần được nhắc lại vì nó là
-một con số chưa đo: kích thước tile Việt Nam **≈ 215 MB là ước tính suy từ tỷ lệ của Hà Lan**, và
-chính R0 đã ghi *"hãy dựng rồi đo"*. Đừng đưa con số đó vào một bảng chi phí trước khi dựng.
+*Cập nhật 23/09/2026 (#374, `OWNER_DECISION_UPDATE_2026_09_23`).* Lane N (#278) dựng bản đồ vòng chạy
+bằng MapLibre + deck.gl trên một nền cục bộ **trống** (không tile). #374 thêm nền thật để người xem
+thấy đường sá, địa danh, sông hồ. Kế hoạch đầu là Google Maps; chủ dự án không bật được thanh toán
+GCP nên đổi quyết định: **nền mặc định là instance công khai của OpenFreeMap (style Liberty) qua
+MapLibre sẵn có** — không khoá, không GCP, không thanh toán. Quyết định:
+
+- **Nền là cấu hình, không phải kiến trúc.** Bốn nguồn: `OPENFREEMAP` (mặc định), `GOOGLE_MAPS`
+  (**tuỳ chọn**, chỉ khi khai tường minh `provider=google`; Maps JavaScript API +
+  `@deck.gl/google-maps`, mã tải lười), `CONFIGURED_STYLE_URL` (MapLibre + style tự khai — đường cho
+  OpenFreeMap/PMTiles tự dựng), `LOCAL_FALLBACK` (CI, offline, cấu hình sai, nền ngoài hỏng).
+- **Instance công khai không có SLA** ⇒ nền ngoài hỏng thì dựng lại bản đồ mới trên nền cục bộ, kèm
+  lớp deck.gl mới; tuyến và mốc không bao giờ mất theo nền. Cần bảo đảm cao hơn: tự dựng hoặc chọn
+  tường minh một nhà cung cấp thương mại — quyết định của chủ dự án.
+- **Lớp nghiệp vụ chung mọi nền.** Tuyến, chặng RỖNG, mốc, vệt GPS thô là lớp deck.gl vẽ thẳng từ
+  toạ độ máy chủ. Hình học của nền **không bao giờ** là sự thật quãng đường: `distanceKm` vẫn là số
+  của nghiệp vụ, không tính lại, không ghi đè, không "bám đường".
+- **Chỉ nền.** Không routing, Directions, Places, Geocoding, tối ưu tuyến.
+
+Nhận xét của R0 về PMTiles vẫn đứng nguyên: kích thước tile Việt Nam **≈ 215 MB là ước tính suy từ
+tỷ lệ của Hà Lan**, chưa dựng, chưa đo — đừng đưa con số đó vào một bảng chi phí.
+
+Biến môi trường, phán quyết dự phòng, ghi nguồn, quyền riêng tư, đường nâng cấp, Google tuỳ chọn:
+[`phat-trien/van-hanh/ban-do-nen.md`](../phat-trien/van-hanh/ban-do-nen.md).
 
 ---
 
