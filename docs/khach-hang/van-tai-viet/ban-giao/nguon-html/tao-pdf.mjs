@@ -18,7 +18,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BAN_GIAO = path.resolve(HERE, '..');
 const REPO = path.resolve(HERE, '../../../../..');
 const NAME = process.argv[2] ?? 'gioi-thieu-he-thong-cho-lanh-dao';
-const FOOTER_TITLE = 'Giới thiệu hệ thống vận tải cho lãnh đạo · Vận tải Việt';
+const COMPANY = 'Vận tải Việt';
 
 function loadMarkdownIt() {
   const store = path.join(REPO, 'node_modules/.pnpm');
@@ -106,6 +106,9 @@ function buildPage({ html, headings }) {
   th, td { border: 1px solid var(--line); padding: 5pt 7pt; vertical-align: top; }
   figure { margin: 10pt 0 6pt; break-inside: avoid; }
   figure img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  /* Ảnh điện thoại (dọc): giữ vừa nửa trang để chữ hướng dẫn nằm cạnh ảnh của nó. */
+  figure img[src*="/tai-xe/"] { width: auto; max-width: 100%; height: 100mm; margin: 0 auto; }
+  figure:has(img[src*="/tai-xe/"]) figcaption { text-align: center; }
   figure + ol, figure + ul { break-before: avoid; }
   figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 4pt; }
   .cover { min-height: 250mm; display: flex; flex-direction: column; break-after: page; }
@@ -131,7 +134,7 @@ ${body}
 `;
 }
 
-async function printPdf(htmlPath, pdfPath) {
+async function printPdf(htmlPath, pdfPath, title) {
   const chromium = await loadChromium();
   const browser = await chromium.launch();
   try {
@@ -147,7 +150,7 @@ async function printPdf(htmlPath, pdfPath) {
       tagged: true,
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
-      footerTemplate: `<div style="font-family:'Segoe UI',Arial;font-size:7.5pt;color:#7a8288;width:100%;padding:0 15mm;display:flex;justify-content:space-between"><span>${FOOTER_TITLE}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`,
+      footerTemplate: `<div style="font-family:'Segoe UI',Arial;font-size:7.5pt;color:#7a8288;width:100%;padding:0 15mm;display:flex;justify-content:space-between"><span>${escapeHtml(title)} · ${COMPANY}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`,
     });
   } finally {
     await browser.close();
@@ -157,6 +160,7 @@ async function printPdf(htmlPath, pdfPath) {
 const source = readFileSync(path.join(BAN_GIAO, `${NAME}.md`), 'utf8');
 const htmlPath = path.join(HERE, `${NAME}.html`);
 const pdfPath = path.join(BAN_GIAO, `${NAME}.pdf`);
-writeFileSync(htmlPath, buildPage(renderMarkdown(source)));
-await printPdf(htmlPath, pdfPath);
+const rendered = renderMarkdown(source);
+writeFileSync(htmlPath, buildPage(rendered));
+await printPdf(htmlPath, pdfPath, rendered.headings.find((h) => h.level === 1)?.text ?? NAME);
 console.log(`Đã ghi ${path.relative(REPO, htmlPath)} và ${path.relative(REPO, pdfPath)}`);

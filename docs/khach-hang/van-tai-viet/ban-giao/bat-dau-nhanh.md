@@ -1,6 +1,7 @@
 # Bắt đầu nhanh
 
 > **Tài liệu demo/legacy** — xem [“Giới thiệu hệ thống cho lãnh đạo”](gioi-thieu-he-thong-cho-lanh-dao.md) để biết luồng hiện tại.
+> Kế toán và lái xe dùng [Hướng dẫn cho kế toán](huong-dan-ke-toan.md) và [Hướng dẫn cho lái xe](huong-dan-tai-xe.md).
 >
 > Bản này viết theo cách làm dựa trên **chuyến**, trước khi có Đơn hàng → Vòng xe → Chặng. Việc
 > mới bắt đầu ở **Đơn hàng & vòng chạy** (tạo đơn, chọn điểm lấy/giao trên bản đồ); mục
