@@ -376,7 +376,7 @@ describe('diem dia diem mau (#379)', () => {
   });
 
   /**
-   * HAI LAN KHOI DONG CHONG NHAU. Mot ben commit truoc; ben kia nhan P2034, chay lai MOT lan, doc
+   * HAI LAN KHOI DONG CHONG NHAU. Mot ben commit truoc; ben kia nhan P2034, chay lai (co gioi han), doc
    * thay hang rao vua ghi va bo qua. Khong ban sao, khong loi nem ra.
    */
   it('hai lan chay song song: khong ban sao, khong loi, moi diem dung mot ben tao', async () => {
@@ -412,12 +412,23 @@ describe('diem dia diem mau (#379)', () => {
     },
   );
 
-  it('xung dot lap lai sau lan chay lai -> nem ra (chi thu lai MOT lan)', async () => {
+  it('xung dot lap lai NHIEU lan (nhu CI exact-main) -> van thu tiep va thanh cong', async () => {
+    const { prisma, tables, transactions, failures } = fakePrisma();
+    failures.push('P2034', 'P2034', 'P2034');
+
+    const result = await backfillDemoPlaceMarkers(prisma);
+
+    expect(result.created).toEqual({ counterparty: 2, counterpartySite: 2, geofence: 3 });
+    expect(transactions).toHaveLength(6);
+    expect(tables.geofences).toHaveLength(3);
+  });
+
+  it('xung dot van con sau lan thu CUOI -> nem ra (thu lai co gioi han, khong vo han)', async () => {
     const { prisma, transactions, failures } = fakePrisma();
-    failures.push('P2034', 'P2034');
+    failures.push('P2034', 'P2034', 'P2034', 'P2034', 'P2034', 'P2034');
 
     await expect(backfillDemoPlaceMarkers(prisma)).rejects.toMatchObject({ code: 'P2034' });
-    expect(transactions).toHaveLength(2);
+    expect(transactions).toHaveLength(6);
   });
 
   it('loi KHONG phai xung dot -> nem ngay, khong thu lai', async () => {

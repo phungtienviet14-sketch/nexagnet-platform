@@ -90,6 +90,7 @@
   grid-template-areas:
     'finder'
     'map'
+    'locate'
     'card'
     'legend'
     'notice';
@@ -440,17 +441,24 @@
   flex: none;
 }
 
+/*
+ * Man HEP: nut vi tri la mot HANG RIENG ngay duoi ban do, KHONG de len ban do. Duoi 640px MapLibre
+ * thu ghi nguon OpenFreeMap / OSM thanh nut (i); mo ra thi no chiem ca be ngang day ban do va xuong
+ * 2–3 dong (do 23/09: cao 44px o 360–390px). Mot nut de len goc duoi-trai luc do che chu ghi nguon —
+ * ma ghi nguon la bat buoc (#374). Man rong dat lai nut vao o `locate` TRONG ban do (ghi nguon o
+ * goc phai, khong chung cho).
+ */
 .tx-composer__locate-btn {
-  grid-area: map;
-  align-self: end;
+  grid-area: locate;
+  align-self: start;
   justify-self: start;
   position: relative;
   z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0 0 0.6rem 0.6rem;
-  box-shadow: var(--tx-lift-strong);
+  margin: 0.6rem 0 0;
+  box-shadow: var(--tx-lift);
 }
 
 /* Dang lay vi tri: nut VAN nhan tieu diem (khong `disabled`), chi trong nhu dang ban. */
@@ -737,6 +745,7 @@
   .tx-composer__locate-btn {
     grid-area: locate;
     margin: 0 0 2rem 0.75rem;
+    box-shadow: var(--tx-lift-strong);
   }
 
   /*
