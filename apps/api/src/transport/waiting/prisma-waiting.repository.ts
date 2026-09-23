@@ -95,8 +95,9 @@ export class PrismaWaitingSessionRepository extends WaitingSessionRepository {
   async findByEvent(
     legId: string,
     startClientEventId: string,
+    tx?: RunWriteTransaction,
   ): Promise<DeliveryWaitingSession | null> {
-    const row = await this.prisma.transportDeliveryWaitingSession.findFirst({
+    const row: PrismaWaitingSession | null = await sessions(tx ?? this.prisma).findFirst({
       where: { legId, startClientEventId },
     });
     return row ? toDomain(row) : null;

@@ -104,9 +104,18 @@ export abstract class WaitingSessionRepository {
   ): Promise<DeliveryWaitingSession>;
   abstract close(input: CloseWaitingSessionInput): Promise<DeliveryWaitingSession>;
   abstract find(sessionId: string): Promise<DeliveryWaitingSession | null>;
+  /**
+   * Phien da mo boi DUNG lenh nay — tuy chon DOC TREN giao dich dang giu khoa vong chay (`#363`).
+   *
+   * `tx` co mat la lan hoi GUI LAI thu hai, DUOI khoa: hai ban cua cung mot lan bam co the cung qua
+   * lan hoi truoc khoa, va ban thu hai lay khoa SAU khi ban thu nhat da mo phien — co khi sau ca lan
+   * nhan hang da dong phien do. Moi lan mo phien deu ghi duoi CHINH khoa nay, nen doc qua `tx` luc
+   * do thay chac chan ban thu nhat.
+   */
   abstract findByEvent(
     legId: string,
     startClientEventId: string,
+    tx?: RunWriteTransaction,
   ): Promise<DeliveryWaitingSession | null>;
   abstract findOpenForLeg(legId: string): Promise<DeliveryWaitingSession | null>;
   abstract listForRun(runId: string): Promise<readonly DeliveryWaitingSession[]>;

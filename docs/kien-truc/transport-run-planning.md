@@ -428,6 +428,29 @@ Mọi đường **ghi** đều bắt đầu bằng một **đơn**, không bằn
 > **Chưa quyết ở `#358`:** chứng từ trên chặng đã kết thúc vẫn được mời ở màn Hiện trường và vẫn ghi
 > được (`evaluateDocumentRecord` chỉ chặn theo vòng chạy) — chính sách đó để một issue riêng.
 
+> **Khách đã nhận hàng thì không mở phiên chờ mới — `#363` (23/09/2026).** Chặng đã có mốc
+> `DELIVERY_ACCEPTED` từ chối lệnh mở phiên chờ **mới** bằng `WAITING_DELIVERY_ALREADY_ACCEPTED` (409)
+> — kể cả khi mốc đó commit **trong khe** giữa phép kiểm sớm và lúc lệnh mở lấy khoá. Trước `#363` mã
+> này chỉ là phép kiểm trước khoá; dưới khoá lệnh mở chỉ đọc lại vòng chạy + chặng, nên một lần nhận
+> hàng commit trong khe để lại một phiên `OPEN` mở _sau_ khi khách đã nhận hàng — cầu nối
+> `closeByAcceptance` đã chạy xong và không thấy phiên nào để đóng, phiên giữ vòng chạy ở
+> `OPEN_WAITING_SESSION`. Màn Hiện trường vẫn ẩn "Bắt đầu chờ" khi đã thấy mốc nhận hàng — không đổi.
+>
+> Cùng **một** ranh giới serialize, không thêm khoá: lần ghi mốc đã giành khoá hàng vòng chạy
+> (`#293` R2). Dưới khoá, lệnh mở hỏi **gửi lại** trước (cùng `legId + clientEventId` đã thành công thì
+> trả phiên cũ, kể cả khi bản gửi lại xếp hàng sau lần nhận hàng), rồi đọc lại vòng chạy → chặng →
+> **mốc nhận hàng qua chính giao dịch đang giữ khoá** (`CheckpointRepository.listForLeg(legId, tx)`,
+> chỉ đọc). Thứ tự mã giữ như phép kiểm sớm: nhận hàng đứng trước `WAITING_ALREADY_OPEN`. Chỉ còn hai
+> thứ tự: mở trước → mốc xếp hàng sau, commit, cầu nối đóng đúng phiên đó (`RECEIVER_ACCEPTED`);
+> nhận hàng trước → lệnh mở bị từ chối, không phiên nào.
+>
+> **Giờ nhận của mốc lấy dưới khoá.** Khoá quyết định thứ tự commit, không quyết định thứ tự đóng dấu
+> giờ: trước `#363` một lần nhận hàng tới cửa khoá trước (giờ sớm) rồi xếp hàng sau một lệnh mở đã lấy
+> khoá (giờ muộn) mang `receivedAt` < `startedAt`, cầu nối từ chối đóng (`WAITING_END_BEFORE_START`)
+> và phiên ở lại `OPEN` dù thứ tự commit hợp lệ. Nay `receivedAt` — và ngày nghiệp vụ — lấy **sau**
+> khi có khoá, nên mốc của một vòng chạy mang giờ theo đúng thứ tự commit (trên cùng một đồng hồ máy
+> chủ). Bằng chứng Postgres: `waiting-delivery-accepted.int.spec.ts`.
+
 `idempotencyKey` là **bắt buộc** ở đường chốt. Không có khoá thì không có gì để nhận ra lần thứ hai
 là lần thứ hai, và #276 L9 bài 1 không thể đạt được.
 

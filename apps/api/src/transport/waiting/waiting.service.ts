@@ -20,6 +20,7 @@ import {
 } from './waiting-decisions.js';
 import {
   WAITING_ANCHOR_CHECKPOINT,
+  deliveryAlreadyAccepted,
   evaluateWaitingClose,
   evaluateWaitingStart,
   legAcceptsNewWaiting,
@@ -29,6 +30,7 @@ import {
   WAITING_OPEN_PER_LEG,
   WaitingSessionAlreadyClosedError,
   WaitingSessionRepository,
+  type CreateWaitingSessionInput,
 } from './waiting.repository.js';
 import type {
   CloseWaitingByOperatorCommand,
@@ -36,6 +38,12 @@ import type {
   StartWaitingCommand,
 } from './waiting.types.js';
 import { toWaitingSessionView, type WaitingSessionView } from './waiting.view.js';
+
+/** Ket qua cua phan DUOI khoa — `replayed` de telemetry tach mot lan gui lai khoi mot lan mo moi. */
+interface LockedWaitingStart {
+  readonly session: DeliveryWaitingSession;
+  readonly replayed: boolean;
+}
 
 /**
  * PHIEN CHO NGUOI NHAN — `#279` O5.
@@ -140,7 +148,8 @@ export class WaitingSessionService {
     const legCheckpoints = await this.checkpoints.listForLeg(leg.id);
     const decision = evaluateWaitingStart({
       runTerminal: run.status === 'COMPLETED' || run.status === 'CANCELLED',
-      // Ban doc TRUOC khoa — chi de tu choi som cho re. Cong that: `revalidateUnderLock()`.
+      // Ban doc TRUOC khoa (chang, va chuoi moc ngay duoi) — chi de tu choi som cho re. Cong that:
+      // `revalidateUnderLock()`, doc lai ca hai duoi khoa (`#358`, `#363`).
       legStatus: leg.status,
       legCheckpointTypes: legCheckpoints.map((row) => row.type),
       hasOpenSession: (await this.sessions.findOpenForLeg(leg.id)) !== null,
@@ -204,6 +213,18 @@ export class WaitingSessionService {
     anchor: RunCheckpoint,
   ): Promise<DeliveryWaitingSession> {
     const startedAt = this.now();
+    const input: CreateWaitingSessionInput = {
+      runId,
+      legId: command.legId,
+      driverId,
+      arrivalCheckpointId: anchor.id,
+      reason: command.reason,
+      startedAt,
+      startedBy: command.authUserId,
+      startClientEventId: command.clientEventId,
+      note: command.note ?? null,
+      businessDate: toBusinessDate(startedAt, this.corePolicy.timeZone),
+    };
     try {
       /*
        * MO PHIEN TREN DUONG DA KHOA — `#293` R2, doan con lai sau `#290`.
@@ -220,36 +241,27 @@ export class WaitingSessionService {
        *                         no giu lai;
        *   · lan dong ghi TRUOC -> phep kiem ngay duoi day doc thay trang thai cuoi va tu choi.
        *
-       * `#358` mo rong cung khoa do sang CHANG — xem `revalidateUnderLock()`.
+       * `#358` mo rong cung khoa do sang CHANG, `#363` sang LAN NHAN HANG — xem `openUnderLock()`.
        *
        * Lan ghi PHAI di qua `scope.tx`: ghi ra ngoai giao dich dang giu khoa thi khoa khong che
        * duoc gi — xem `RunWriteScope.tx`.
        */
-      const session = await this.runs.underRunLock(runId, async (scope) => {
-        this.revalidateUnderLock(scope, runId, command.legId);
-
-        return this.sessions.create(
-          {
-            runId,
-            legId: command.legId,
-            driverId,
-            arrivalCheckpointId: anchor.id,
-            reason: command.reason,
-            startedAt,
-            startedBy: command.authUserId,
-            startClientEventId: command.clientEventId,
-            note: command.note ?? null,
-            businessDate: toBusinessDate(startedAt, this.corePolicy.timeZone),
-          },
-          scope.tx,
-        );
-      });
+      const opened = await this.runs.underRunLock(runId, (scope) =>
+        this.openUnderLock(scope, input),
+      );
+      if (opened.replayed) {
+        this.allow('waiting.start', 'WAITING_REPLAYED', {
+          sessionId: opened.session.id,
+          revalidated: true,
+        });
+        return opened.session;
+      }
       this.allow('waiting.start', 'WAITING_STARTED', {
-        sessionId: session.id,
-        legId: session.legId,
-        reason: session.reason,
+        sessionId: opened.session.id,
+        legId: opened.session.legId,
+        reason: opened.session.reason,
       });
-      return session;
+      return opened.session;
     } catch (error) {
       // HAI YEU CAU SONG SONG cua cung mot lan bam. Phep doc o dau ham khong thay ban kia vi no
       // chua commit; unique cua kho thi thay. Doc lai va tra ve — khong bao loi cho mot viec da
@@ -275,20 +287,55 @@ export class WaitingSessionService {
   }
 
   /**
-   * CONG DUOI KHOA — vong chay (`#293` R2) roi CHANG (`#358`), doc lai tren `scope`.
+   * PHAN DUOI KHOA cua lenh mo — ba buoc, va thu tu cua chung la mot phan cua hop dong.
    *
-   * Ban doc o dau `start()` (`findRun`, `findLeg`) co the da cu: luot quet co the da dong vong chay,
-   * van phong co the da hoan tat/huy chang trong khe truoc khi lenh nay lay khoa. Moi duong ghi hai
-   * su that do — `closeRunAsSystemSerialized()`, `setLegStatus()` (`#354`) — gianh CHINH khoa nay,
-   * nen o day chi con hai thu tu: ho truoc (va lenh nay thay trang thai cuoi roi tu choi), hoac lenh
-   * nay truoc (va ho xep hang sau lan mo phien — phien do la lich su that, van hanh don duoc). Khong
-   * co thu tu thu ba, va khong them mot khoa thu hai nao.
+   *   1. GUI LAI (`#363`). Cung quy uoc "gui lai truoc moi phep kiem" cua `start()`, nhung doc lai
+   *      tren `scope.tx`. Hai ban cua CUNG mot lan bam co the cung qua lan hoi truoc khoa; ban thu
+   *      hai lay khoa SAU khi ban thu nhat da mo phien — co khi sau ca lan nhan hang da dong phien
+   *      do. No la lan gui lai cua mot lenh DA thanh cong, nen cau tra loi dung la phien cu, khong
+   *      phai `WAITING_DELIVERY_ALREADY_ACCEPTED`. Truoc `#363` unique `WAITING_CLIENT_EVENT` o
+   *      `append()` tra loi thay cho buoc nay; tu khi cong duoi khoa doc lai lan nhan hang, cong do
+   *      se chan truoc khi lan chen kip cham unique.
+   *   2. CONG — `revalidateUnderLock()`.
+   *   3. GHI — qua `scope.tx`.
+   */
+  private async openUnderLock(
+    scope: RunWriteScope,
+    input: CreateWaitingSessionInput,
+  ): Promise<LockedWaitingStart> {
+    const replayed = await this.sessions.findByEvent(
+      input.legId,
+      input.startClientEventId,
+      scope.tx,
+    );
+    if (replayed) return { session: replayed, replayed: true };
+
+    await this.revalidateUnderLock(scope, input.runId, input.legId);
+
+    return { session: await this.sessions.create(input, scope.tx), replayed: false };
+  }
+
+  /**
+   * CONG DUOI KHOA — vong chay (`#293` R2), CHANG (`#358`), roi LAN NHAN HANG (`#363`), doc lai tren
+   * `scope`.
+   *
+   * Ban doc o dau `start()` (`findRun`, `findLeg`, chuoi moc) co the da cu: luot quet co the da dong
+   * vong chay, van phong co the da hoan tat/huy chang, nguoi nhan co the da nhan hang trong khe truoc
+   * khi lenh nay lay khoa. Moi duong ghi ba su that do — `closeRunAsSystemSerialized()`,
+   * `setLegStatus()` (`#354`), `CheckpointService` — gianh CHINH khoa nay, nen o day chi con hai thu
+   * tu: ho truoc (va lenh nay thay trang thai cuoi roi tu choi), hoac lenh nay truoc (va ho xep hang
+   * sau lan mo phien — phien do la lich su that). Khong co thu tu thu ba, va khong them mot khoa thu
+   * hai nao.
    *
    * `revalidated` phan biet mot lan tu choi o cong THU HAI voi mot lan tu choi o cong thu nhat. Hai
    * cai giong het nhau khi doc ket qua, va khac han nhau khi doc nguyen nhan: cai nay nghia la vong
-   * chay/chang vua ket thuc TRONG LUC lai xe dang bam.
+   * chay/chang vua ket thuc, hay nguoi nhan vua nhan hang, TRONG LUC lai xe dang bam.
    */
-  private revalidateUnderLock(scope: RunWriteScope, runId: string, legId: string): void {
+  private async revalidateUnderLock(
+    scope: RunWriteScope,
+    runId: string,
+    legId: string,
+  ): Promise<void> {
     if (isTerminalRunStatus(scope.run.status)) {
       this.deny('waiting.start', 'WAITING_RUN_TERMINAL', {
         runId,
@@ -313,6 +360,29 @@ export class WaitingSessionService {
         revalidated: true,
       });
       throw this.startErrorFor('WAITING_LEG_TERMINAL');
+    }
+
+    /*
+     * ...VA NGUOI NHAN CHUA NHAN HANG — `#363`.
+     *
+     * Doc qua `scope.tx`, SAU khi khoa da trong tay. Giao dich chay o `ReadCommitted`, nen moi cau
+     * lenh thay moi thu da commit truoc khi no bat dau — ke ca lan nhan hang vua giu khoa nay ngay
+     * truoc lenh mo. Cau tra loi vi the theo DUNG thu tu cua khoa: moc commit truoc -> tu choi, va
+     * khong phien nao; moc xep hang sau -> phien mo, roi cau noi (`closeByAcceptance`) dong no ngay
+     * khi moc commit. Ban doc truoc khoa o `start()` chi con la lan tu choi som cho re.
+     *
+     * Dung SAU chang — cung thu tu voi `evaluateWaitingStart` — va TRUOC lan chen: phien cu con mo
+     * vi cau noi chua kip dong thi cau tra loi van la "khong con gi de cho", khong phai
+     * `WAITING_ALREADY_OPEN` tu unique cua kho.
+     */
+    const legCheckpoints = await this.checkpoints.listForLeg(legId, scope.tx);
+    if (deliveryAlreadyAccepted(legCheckpoints.map((row) => row.type))) {
+      this.deny('waiting.start', 'WAITING_DELIVERY_ALREADY_ACCEPTED', {
+        runId,
+        legId,
+        revalidated: true,
+      });
+      throw this.startErrorFor('WAITING_DELIVERY_ALREADY_ACCEPTED');
     }
   }
 
