@@ -252,6 +252,12 @@ export const FUEL_MATCH_REASONS = [
    * vien sach nao khac.
    */
   'MATCH_INVOICE_CONFLICT',
+  /**
+   * `#371` — phieu la lai xe DA TRA TIEN MAT (`DRIVER_CASH`): khong bao gio la cap khop cua bang ke
+   * cong no. Phat o CA HAI duong: may chay so khop (dong chi con ung vien tien mat) va nguoi xac nhan
+   * khop tay vao mot phieu tien mat.
+   */
+  'MATCH_PAYMENT_METHOD_CONFLICT',
 ] as const;
 export type FuelMatchReason = (typeof FUEL_MATCH_REASONS)[number];
 
@@ -272,6 +278,12 @@ export const FUEL_RECONCILIATION_TRANSITION_REASONS = [
   'RECONCILIATION_FROZEN',
   /** Hang doi soat bien mat giua luc doc va luc khoa — hiem, nhung phan biet duoc voi `FROZEN`. */
   'RECONCILIATION_NOT_FOUND',
+  /**
+   * `#371` — LUOI CUOI truoc ban giao: ky mang mot cap khop toi phieu KHONG ghi no (du lieu hong tu
+   * truoc `#371`, hoac mot duong ghi khong qua tang mien). KHONG dong, KHONG phat cong no — va khong
+   * lang le bo cap do roi coi ky la sach.
+   */
+  'RECONCILIATION_HAS_CASH_PAID_MATCH',
 ] as const;
 export type FuelReconciliationTransitionReason =
   (typeof FUEL_RECONCILIATION_TRANSITION_REASONS)[number];
@@ -285,6 +297,11 @@ export const FUEL_DISCREPANCY_RESOLVE_REASONS = [
   'DISCREPANCY_RECONCILIATION_FROZEN',
   /** `GD-09` — quyet "khop di" ma khong noi khop voi cai nao thi he thong lai phai doan. */
   'DISCREPANCY_MATCH_TARGET_REQUIRED',
+  /**
+   * `#371` — "chap nhan so cay xang" tren mot dong `PAYMENT_METHOD_CONFLICT`: dong do la lan do lai
+   * xe da tra tien mat, chap nhan no la tra lan thu hai. Xem `isCashPaidLineAcceptance`.
+   */
+  'DISCREPANCY_CASH_PAID_NOT_PAYABLE',
 ] as const;
 export type FuelDiscrepancyResolveReason = (typeof FUEL_DISCREPANCY_RESOLVE_REASONS)[number];
 
@@ -306,6 +323,8 @@ export const FUEL_DISCREPANCY_REVISE_REASONS = [
   'DECISION_NOT_CURRENT',
   'DECISION_MATCH_LOCKED',
   'DECISION_REVISION_NO_CHANGE',
+  /** `#371` — doi y SANG "chap nhan so cay xang" tren dong phieu tien mat: cung duong tra hai lan. */
+  'DECISION_CASH_PAID_NOT_PAYABLE',
 ] as const;
 export type FuelDiscrepancyReviseReason = (typeof FUEL_DISCREPANCY_REVISE_REASONS)[number];
 
@@ -601,6 +620,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     MATCH_SELF_SOURCED_BLOCKED: 'Ứng viên là phiếu đẻ ra từ chính bảng kê này (INV-26)',
     MATCH_INVOICE_CONFLICT:
       'Ứng viên đúng xe, ngày, tiền nhưng số hoá đơn hai bên khác nhau — không tự khớp',
+    MATCH_PAYMENT_METHOD_CONFLICT:
+      'Phiếu do lái xe đã trả tiền mặt — không khớp với bảng kê công nợ (tránh trả hai lần)',
 
     RECONCILIATION_OPENED: 'Đã mở kỳ đối soát cho bảng kê',
     RECONCILIATION_MATCHING_RUN: 'Đã chạy so khớp tất định',
@@ -612,11 +633,15 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     RECONCILIATION_ALREADY_IN_STATE: 'Kỳ đối soát đã ở đúng trạng thái đó rồi',
     RECONCILIATION_FROZEN: 'Kỳ đối soát đã đóng — không nhận thay đổi',
     RECONCILIATION_NOT_FOUND: 'Không tìm thấy kỳ đối soát',
+    RECONCILIATION_HAS_CASH_PAID_MATCH:
+      'Kỳ có cặp khớp tới phiếu lái xe đã trả tiền mặt — không đóng, không phát công nợ',
 
     DISCREPANCY_RESOLVED: 'Đã ghi quyết định cho chênh lệch',
     DISCREPANCY_ALREADY_RESOLVED: 'Chênh lệch này đã có người quyết trước đó',
     DISCREPANCY_RECONCILIATION_FROZEN: 'Kỳ đối soát đã đóng nên không nhận quyết định mới',
     DISCREPANCY_MATCH_TARGET_REQUIRED: 'Xác nhận khớp phải chỉ rõ cặp nào',
+    DISCREPANCY_CASH_PAID_NOT_PAYABLE:
+      'Dòng này là lần đổ lái xe đã trả tiền mặt — chấp nhận số cây xăng là trả hai lần',
 
     DECISION_REVISED:
       'Đã ghi quyết định thay thế — quyết định cũ vẫn nằm trong lịch sử, tổng đổi ở lần đóng kỳ sau',
@@ -629,6 +654,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     DECISION_MATCH_LOCKED:
       'Quyết định xác nhận khớp đã ghi một cặp khớp tay — mở lại kỳ và chạy lại so khớp',
     DECISION_REVISION_NO_CHANGE: 'Quyết định mới trùng quyết định đang có — không ghi bản rỗng',
+    DECISION_CASH_PAID_NOT_PAYABLE:
+      'Không đổi ý sang chấp nhận số cây xăng cho lần đổ lái xe đã trả tiền mặt',
 
     HANDOFF_EMITTED: 'Đã phát bàn giao công nợ nhà cung cấp cho T5',
     HANDOFF_REVISION_EMITTED: 'Kết quả kinh tế đã đổi — phát một bản sửa đổi mới của bàn giao',

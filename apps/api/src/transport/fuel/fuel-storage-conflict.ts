@@ -217,6 +217,33 @@ export const FUEL_MATCH_NO_SELF_SOURCE = 'TransportFuelMatch_no_self_source';
 export const isSelfSourcedMatchViolation = (error: unknown): boolean =>
   error instanceof Error && error.message.includes(FUEL_MATCH_NO_SELF_SOURCE);
 
+/* ------------------------------------------------------------------ *
+ * `#371` — cong no cay xang chi den tu phieu GHI NO
+ * (`20260923120000_transport_fuel_match_payable_entry_only`)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ten TRIGGER (va tien to thong diep) chan mot cap khop toi phieu KHONG ghi no.
+ *
+ * Tang mien chan truoc — `fuel-matching.ts` khong de nghi, `resolveDiscrepancy` doc lai duoi khoa.
+ * Trigger chi con la luoi cuoi cho moi duong ghi KHONG di qua tang do, cung vai voi `INV-26`.
+ */
+export const FUEL_MATCH_PAYABLE_ENTRY_ONLY = 'TransportFuelMatch_payable_entry_only';
+
+export const isCashPaidMatchViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUEL_MATCH_PAYABLE_ENTRY_ONLY);
+
+/**
+ * Chieu NGUOC cua cung bat bien: phieu DANG co cap khop khong roi khoi `SUPPLIER_ACCOUNT` duoc.
+ *
+ * Thieu no, trigger tren thi chi chan luc GHI CAP KHOP, con mot `UPDATE` cach tra SAU do van tao lai
+ * dung hinh dang tra hai lan ma khong cham bang cap khop nao.
+ */
+export const FUEL_ENTRY_MATCHED_STAYS_PAYABLE = 'TransportFuelEntry_matched_stays_payable';
+
+export const isMatchedEntryPaymentChangeViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUEL_ENTRY_MATCHED_STAYS_PAYABLE);
+
 export const FUEL_UNIQUE_INDEXES: readonly UniqueIndexRef[] = [
   FUEL_ENTRY_CORRELATION,
   FUEL_ENTRY_COST_ONCE,

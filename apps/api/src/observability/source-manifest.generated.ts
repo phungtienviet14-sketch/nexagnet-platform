@@ -1443,30 +1443,40 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "FuelReconciliationService.runMatching",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts"
     },
+    "fuel.match|MATCH_PAYMENT_METHOD_CONFLICT": {
+      "functionName": "FuelReconciliationService.denyCashPaidMatch",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 740
+    },
     "fuel.match|MATCH_SELF_SOURCED_BLOCKED": {
       "functionName": "FuelReconciliationService.buildConfirmedMatch",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 766
+      "line": 853
     },
     "fuel.settlement_handoff|*": {
       "functionName": "FuelReconciliationService.closeReconciliation",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 536
+      "line": 595
     },
     "fuel_discrepancy.resolve|DISCREPANCY_ALREADY_RESOLVED": {
       "functionName": "FuelReconciliationService.resolveDiscrepancy",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 312
+      "line": 318
+    },
+    "fuel_discrepancy.resolve|DISCREPANCY_CASH_PAID_NOT_PAYABLE": {
+      "functionName": "FuelReconciliationService.resolveDiscrepancy",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 339
     },
     "fuel_discrepancy.resolve|DISCREPANCY_MATCH_TARGET_REQUIRED": {
       "functionName": "FuelReconciliationService.buildConfirmedMatch",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 725
+      "line": 812
     },
     "fuel_discrepancy.resolve|DISCREPANCY_RESOLVED": {
       "functionName": "FuelReconciliationService.resolveDiscrepancy",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 358
+      "line": 399
     },
     "fuel_discrepancy.revise|*": {
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts"
@@ -1560,32 +1570,37 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fuel_reconciliation.transition|*": {
       "functionName": "FuelReconciliationService.denyFrozen",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 615
+      "line": 674
     },
     "fuel_reconciliation.transition|RECONCILIATION_CLOSED": {
       "functionName": "FuelReconciliationService.closeReconciliation",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 529
+      "line": 588
     },
     "fuel_reconciliation.transition|RECONCILIATION_FROZEN": {
       "functionName": "FuelReconciliationService.requireOpen",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 696
+      "line": 783
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_HAS_CASH_PAID_MATCH": {
+      "functionName": "FuelReconciliationService.closeReconciliation",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 553
     },
     "fuel_reconciliation.transition|RECONCILIATION_HAS_PENDING_DISCREPANCY": {
       "functionName": "FuelReconciliationService.closeReconciliation",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 499
+      "line": 540
     },
     "fuel_reconciliation.transition|RECONCILIATION_MATCHING_RUN": {
       "functionName": "FuelReconciliationService.runMatching",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 255
+      "line": 261
     },
     "fuel_reconciliation.transition|RECONCILIATION_REOPENED": {
       "functionName": "FuelReconciliationService.reopenReconciliation",
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
-      "line": 577
+      "line": 636
     },
     "fuel_reconciliation.transition|RECONCILIATION_RESOLVED": {
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts"

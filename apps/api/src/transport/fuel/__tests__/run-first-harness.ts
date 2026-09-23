@@ -137,8 +137,14 @@ export interface RunFirstWorld {
   readonly otherLeg: RunLeg;
 }
 
-export async function buildRunFirstWorld(): Promise<RunFirstWorld> {
-  const fuelRepo = new InMemoryFuelRepository();
+/**
+ * `fuelRepo` thay duoc: `#371` can mot kho CHEN duoc mot lenh sua phieu vao giua lan kiem cua dich vu
+ * va lan ghi cua tang kho. Mac dinh la kho trong bo nho thuong.
+ */
+export async function buildRunFirstWorld(
+  options: { readonly fuelRepo?: InMemoryFuelRepository } = {},
+): Promise<RunFirstWorld> {
+  const fuelRepo = options.fuelRepo ?? new InMemoryFuelRepository();
   const movement = new InMemoryMovementRepository();
   const runs = new MovementFuelRunContextAdapter(movement);
   const core = new RunFirstCoreFacts();

@@ -480,6 +480,11 @@ export const FUEL_DISCREPANCY_KINDS = [
   'SELF_SOURCED_BLOCKED',
   /** `#317` G4 — ung vien dung xe/ngay/tien nhung so hoa don hai ben khac nhau; may khong tu khop. */
   'INVOICE_CONFLICT',
+  /**
+   * `#371` — dong chi con ung vien la phieu lai xe DA TRA TIEN MAT. May chu chan ca khop tay lan
+   * "chap nhan so cay xang" tren dong nay (tra hai lan).
+   */
+  'PAYMENT_METHOD_CONFLICT',
 ] as const;
 export type FuelDiscrepancyKind = (typeof FUEL_DISCREPANCY_KINDS)[number];
 

@@ -269,8 +269,35 @@ toán. Duyệt lại sau khi đảo **không** ghi lại tiền (khoá vẫn là
   (`FUEL_ENTRY_CONTEXT_REQUIRED`). Không có nguồn "lái xe ↔ xe lúc T" nào được nghĩ ra.
 - **Web không đổi một dòng**: ô khai phiếu của lái xe vẫn khoá `DRIVER_CASH` trên vòng xe
   (`fuel-declaration.ts`), nên đường này hôm nay chỉ dùng được qua API. Mở ô đó thuộc pha UI (R-6).
-- **Bộ so khớp bảng kê vẫn không xét `paymentMethod`** (hành vi có từ trước #369, đúng với cả phiếu
-  chuyến cũ): một phiếu `DRIVER_CASH` vẫn có thể khớp với một dòng bảng kê của cây xăng nếu cây xăng
-  ghi nó vào sao kê công nợ. Quỹ lái xe và công nợ nhà cung cấp là hai sổ **tách biệt về cấu trúc**,
-  nhưng "cây xăng xuất hoá đơn công nợ cho một lần khách trả tiền mặt" là một **bất thường nghiệp vụ**
-  chưa có cổng nào chặn. Cần chủ repo quyết: có tách nó thành một chênh lệch riêng không.
+- ~~Bộ so khớp bảng kê không xét `paymentMethod`~~ — **đóng bởi #371**, xem §9.5.
+
+### 9.5 Một lần đổ dầu, một lần trả: `DRIVER_CASH` không bao giờ thành công nợ cây xăng (#371)
+
+Review độc lập của #371 đo được trên `ec748fcc`: phiếu `DRIVER_CASH` đã vào Quỹ lái xe (`TX-03` hoặc
+`RUN_EXPENSE`) vẫn khớp được với bảng kê công nợ (tự động **và** tay), đóng kỳ, sinh công nợ nhà cung
+cấp — **trả hai lần** cho cùng một lần đổ. Luật: bảng kê là chứng từ **công nợ**; chỉ phiếu
+`SUPPLIER_ACCOUNT` là ứng viên của nó (`fuel-payable.ts`, kiểm **dương** — một cách trả mới về sau mặc
+định **không** là công nợ).
+
+| Đường vào                | Chặn ở đâu                                                                                                                  | Mã                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| So khớp tự động          | `fuel-matching.ts`: phiếu tiền mặt không là ứng viên (không gây nhập nhằng giả); dòng chỉ còn phiếu tiền mặt → chênh lệch riêng | `PAYMENT_METHOD_CONFLICT` / `MATCH_PAYMENT_METHOD_CONFLICT` |
+| Xác nhận khớp tay        | kiểm sớm ở dịch vụ + **đọc lại dưới khoá** ở kho (khoá hàng kỳ, rồi hàng phiếu `FOR UPDATE`) trước mọi lần ghi              | `MATCH_PAYMENT_METHOD_CONFLICT` (403)     |
+| "Chấp nhận số cây xăng"  | trên dòng `PAYMENT_METHOD_CONFLICT` — cả lần quyết lẫn lần đổi ý sau khi mở kỳ                                            | `DISCREPANCY_CASH_PAID_NOT_PAYABLE` / `DECISION_CASH_PAID_NOT_PAYABLE` |
+| Đóng kỳ (lưới cuối)      | kỳ mang cặp khớp tới phiếu không ghi nợ (dữ liệu cũ, đường ghi thô) → **không đóng, không bàn giao**, không lọc bỏ rồi coi là sạch | `RECONCILIATION_HAS_CASH_PAID_MATCH`      |
+| CSDL                     | trigger `TransportFuelMatch_payable_entry_only` + chiều ngược `TransportFuelEntry_matched_stays_payable`                    | lỗi được dịch về mã nghiệp vụ             |
+
+**Hai trigger không thay được khoá hàng phiếu.** Dưới `READ COMMITTED` mỗi trigger chỉ thấy dữ liệu
+đã commit: một cặp khớp chưa commit và một lệnh sửa cách trả đồng thời lọt qua **cả hai** (ghi-lệch).
+Bài `PMC-IT-08` dựng đúng cảnh đó trên Postgres thật làm đối chứng âm; `PMC-IT-09` ép hai thứ tự bằng
+khoá hàng phiếu và đo rằng xác nhận khớp tay với sửa phiếu sang tiền mặt **không bao giờ cùng thành
+công**.
+
+Đường ra của dữ liệu hỏng: cặp `AUTO` → chạy lại so khớp (cặp cũ bị xoá, không được đề nghị lại);
+cặp `MANUAL` → lệnh đóng tiếp tục từ chối cho tới khi dữ liệu được sửa (không có lệnh "gỡ khớp tay" —
+giới hạn có từ trước). Đếm trước khi triển khai: câu `SELECT` ở đầu migration
+`20260923120100_transport_fuel_match_payable_entry_only`.
+
+**Không đổi:** phiếu `DRIVER_CASH` không nằm trong chênh lệch nào vẫn ra `FUEL_ENTRY_ONLY` như trước
+(vắng mặt trên bảng kê công nợ là trạng thái đúng của một lần trả tiền mặt — có đưa phiếu tiền mặt ra
+khỏi phạm vi đối soát không là quyết định nghiệp vụ riêng, chưa ai quyết).

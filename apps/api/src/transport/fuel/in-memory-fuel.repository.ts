@@ -17,6 +17,7 @@ import {
   evaluateDecisionRevision,
   lineStatusAfterRevision,
 } from './fuel-decision-revision.js';
+import { cashPaidMatches, isSupplierPayable } from './fuel-payable.js';
 import { settlementResultFingerprint, sumAcceptedSettlement } from './fuel-settlement.js';
 import {
   costExpenseOnRunFirstEntry,
@@ -693,6 +694,18 @@ export class InMemoryFuelRepository extends FuelRepository {
       return { kind: 'RECONCILIATION_REJECTED', state: locked.state };
     }
 
+    // `#371` — doi tuong doi cua lan doc cach tra DUOI KHOA o ban Prisma: kiem TRUOC moi lan ghi.
+    if (input.confirmedMatch) {
+      const target = this.entries.get(input.confirmedMatch.fuelEntryId);
+      if (target && !isSupplierPayable(target.paymentMethod)) {
+        return {
+          kind: 'MATCH_PAYMENT_METHOD_CONFLICT',
+          fuelEntryId: target.id,
+          paymentMethod: target.paymentMethod,
+        };
+      }
+    }
+
     const current = this.discrepancies.get(input.discrepancyId);
     if (!current || current.reconciliationId !== input.reconciliationId) {
       return { kind: 'DISCREPANCY_RACE' };
@@ -843,6 +856,13 @@ export class InMemoryFuelRepository extends FuelRepository {
 
     const path = planFuelReconciliationPath(current.state, 'CLOSED');
     if (path === null || path.length === 0) return { kind: 'REJECTED', state: current.state };
+
+    // `#371` — LUOI CUOI TRUOC BAN GIAO: cung phep kiem, cung cho, voi ban Prisma.
+    const cashPaid = cashPaidMatches(
+      [...this.matches.values()].filter((match) => match.reconciliationId === current.id),
+      new Map([...this.entries.values()].map((entry) => [entry.id, entry.paymentMethod])),
+    );
+    if (cashPaid.length > 0) return { kind: 'CASH_PAID_MATCHES', matches: cashPaid };
 
     const closed: FuelReconciliation = {
       ...current,

@@ -1787,6 +1787,9 @@ enum TransportFuelDiscrepancyKind {
   SELF_SOURCED_BLOCKED
   /// `#317` G4 — ung vien dung xe/ngay/tien nhung so hoa don hai ben TRAI nguoc. Khong tu khop.
   INVOICE_CONFLICT
+  /// `#371` — dong CHI con ung vien la phieu lai xe DA TRA TIEN MAT (`DRIVER_CASH`). Khong tu khop,
+  /// va khong "chap nhan so cay xang" duoc: do la tra cung mot lan do dau hai lan.
+  PAYMENT_METHOD_CONFLICT
 }
 
 enum TransportFuelDiscrepancyStatus {
@@ -2502,6 +2505,11 @@ model TransportFuelReconciliation {
 /// UNIQUE o CA HAI VE: mot dong khong khop duoc voi hai phieu, va mot phieu khong khop duoc voi
 /// hai dong. Do la quan he 1-1 ma `GD-09` gia dinh, va no phai duoc DB giu — kiem o tang mien chi
 /// dung khi co MOT nguoi ghi.
+///
+/// `#371` — CHI phieu `SUPPLIER_ACCOUNT` (ghi no) moi la mot cap khop. Hai trigger viet tay (khong
+/// bieu dien duoc o day) giu dieu do o CSDL: `TransportFuelMatch_payable_entry_only` va, chieu nguoc,
+/// `TransportFuelEntry_matched_stays_payable` — xem migration
+/// `20260923120000_transport_fuel_match_payable_entry_only`.
 model TransportFuelMatch {
   id                    String                      @id @default(cuid())
   reconciliationId      String

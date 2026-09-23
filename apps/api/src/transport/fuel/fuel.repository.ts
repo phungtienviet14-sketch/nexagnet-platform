@@ -10,6 +10,7 @@ import type {
   FuelVerificationStatus,
 } from './fuel-lifecycle.js';
 import type { FuelDiscrepancyKind } from './fuel-matching.js';
+import type { CashPaidMatch } from './fuel-payable.js';
 import type { FuelIngestChannel } from './fuel-station.types.js';
 import type {
   FuelDiscrepancy,
@@ -520,11 +521,17 @@ export interface ResolvedDiscrepancy {
 }
 
 /**
- * BA ket cuc phan biet duoc — hai lan tu choi vi hai ly do khac han nhau.
+ * BON ket cuc phan biet duoc — ba lan tu choi vi ba ly do khac han nhau.
  *
  * `RECONCILIATION_REJECTED` = ky khong con nhan quyet dinh (da dong). `DISCREPANCY_RACE` = ky van
  * mo nhung chenh lech nay vua duoc nguoi khac quyet. Nguoi dung phai lam hai viec khac nhau, nen ho
  * phai nhan hai cau tra loi khac nhau.
+ *
+ * `MATCH_PAYMENT_METHOD_CONFLICT` (`#371`) = cap khop tay tro toi mot phieu KHONG ghi no, doc lai
+ * DUOI KHOA (hang doi soat, roi hang phieu `FOR UPDATE`) truoc moi lan ghi. Lan kiem o tang mien doc
+ * TRUOC giao dich, nen mot lenh sua phieu sang `DRIVER_CASH` chen vao giua van lot — lan doc nay moi
+ * la lan co hieu luc. Khong mot hang nao duoc ghi: chenh lech van `PENDING`, khong cap khop, trang
+ * thai dong/phieu y nguyen.
  */
 export type ResolveDiscrepancyOutcome =
   | {
@@ -533,7 +540,12 @@ export type ResolveDiscrepancyOutcome =
       readonly state: FuelReconciliationState;
     }
   | { readonly kind: 'RECONCILIATION_REJECTED'; readonly state: FuelReconciliationState | null }
-  | { readonly kind: 'DISCREPANCY_RACE' };
+  | { readonly kind: 'DISCREPANCY_RACE' }
+  | {
+      readonly kind: 'MATCH_PAYMENT_METHOD_CONFLICT';
+      readonly fuelEntryId: string;
+      readonly paymentMethod: FuelPaymentMethod;
+    };
 
 /**
  * DOI Y ve mot quyet dinh DA GHI — `#317` G0.
@@ -599,6 +611,7 @@ export type ReviseDecisionOutcome =
  * ```text
  * 0. khoa doc quyen hang doi soat, doc lai trang thai
  * 0bis. DEM LAI chenh lech con treo — trong giao dich nay
+ * 0ter. `#371` — cap khop toi phieu KHONG ghi no? -> tu choi, khong ghi gi (`CASH_PAID_MATCHES`)
  * 1. `RESOLVED -> CLOSED`
  * 2. moi dong/phieu trong ky chuyen `SETTLED`
  * 2bis. CONG LAI tong duoc chap nhan — trong giao dich nay
@@ -630,15 +643,21 @@ export interface ClosedReconciliation {
 }
 
 /**
- * BA ket cuc, va `PENDING_DISCREPANCIES` phai tach khoi `REJECTED`.
+ * BON ket cuc, va `PENDING_DISCREPANCIES` phai tach khoi `REJECTED`.
  *
  * "Con 3 cau hoi chua ai tra loi" la mot viec nguoi doi soat LAM DUOC. "Ky nay vua bi nguoi khac
  * doi trang thai" thi khong. Gop hai cai thanh mot ma se buoc ho doan xem minh phai lam gi.
+ *
+ * `CASH_PAID_MATCHES` (`#371`) = LUOI CUOI truoc ban giao: ky mang it nhat mot cap khop toi phieu
+ * KHONG ghi no (`cashPaidMatches`, doc DUOI KHOA). Khong mot hang nao duoc ghi — ky giu nguyen trang
+ * thai, khong `SETTLED`, khong ban giao. KHONG loc bo cap hong roi dong: do la coi mot ky hong la
+ * sach, va con so di sang T5 se khong con giai thich duoc bang chinh bo cap khop cua ky.
  */
 export type CloseReconciliationOutcome =
   | { readonly kind: 'CLOSED'; readonly closed: ClosedReconciliation }
   | { readonly kind: 'PENDING_DISCREPANCIES'; readonly pending: number }
-  | { readonly kind: 'REJECTED'; readonly state: FuelReconciliationState | null };
+  | { readonly kind: 'REJECTED'; readonly state: FuelReconciliationState | null }
+  | { readonly kind: 'CASH_PAID_MATCHES'; readonly matches: readonly CashPaidMatch[] };
 
 export interface ReopenReconciliationInput {
   readonly reconciliationId: string;

@@ -271,6 +271,7 @@ export const FUEL_DISCREPANCY_KIND_LABEL = {
   OUT_OF_TOLERANCE: 'Lệch quá dung sai',
   SELF_SOURCED_BLOCKED: 'Phiếu sinh từ chính bảng kê',
   INVOICE_CONFLICT: 'Số hoá đơn hai bên khác nhau',
+  PAYMENT_METHOD_CONFLICT: 'Lái xe đã trả tiền mặt — không phải công nợ',
 } as const satisfies Record<FuelDiscrepancyKind, string>;
 
 export const FUEL_DISCREPANCY_RESOLUTION_LABEL = {
