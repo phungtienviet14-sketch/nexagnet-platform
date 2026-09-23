@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
-import type { StatusTone } from '../customer-view';
 import {
   toSectionQuery,
   useCustomers,
@@ -17,15 +16,18 @@ import {
   useVehicleRuns,
   useVehicles,
 } from '../hooks/useTransportWorkspace';
-import type {
-  RunPlanProposal,
-  RunLeg,
-  TransportOrder,
-  TransportOrderStatus,
-  VehicleRun,
-  VehicleRunStatus,
-} from '../transport-types';
+import type { RunPlanProposal, RunLeg, TransportOrder, VehicleRun } from '../transport-types';
 import { newCorrelationKey, transportApi } from '../transport-api';
+import {
+  LEG_STATUS_LABEL,
+  legStatusTone,
+  ORDER_STATUS_LABEL,
+  orderStatusTone,
+  RUN_STATUS_LABEL,
+  runStatusTone,
+} from '../workspace/office-lifecycle';
+import { OrderFulfilmentPanel } from './OrderFulfilmentPanel';
+import { RunLegWorkflow } from './RunLegWorkflow';
 
 /**
  * DON HANG & VONG CHAY — man hinh LAY DON LAM TRUNG TAM (#274 / #276 L8).
@@ -50,6 +52,10 @@ import { newCorrelationKey, transportApi } from '../transport-api';
  * chay" xuat hien o day thi hoac phan xu tu dong da hong, hoac ai do vua dua mot thao tac quan ly
  * vong chay tro lai quy trinh binh thuong — ca hai deu la hoi quy cua Lane L.
  *
+ * Nut CO o day tu `#376` la nut cua CHANG va cua DON — xem `RunLegWorkflow` va
+ * `OrderFulfilmentPanel`: van phong tien chang `PLANNED -> IN_TRANSIT -> COMPLETED` va xac nhan don
+ * `OPEN -> FULFILLED`. Moc lai xe la bang chung, khong tu doi mot trang thai nao trong hai truc do.
+ *
  * ============================================================================================
  * MOT CAM TUYET DOI: MAN HINH KHONG TU CONG KM
  * ============================================================================================
@@ -58,57 +64,6 @@ import { newCorrelationKey, transportApi } from '../transport-api';
  * DINH — ma man hinh KHONG duoc gop lai: mot chang chua chay xong la mot ke hoach, khong phai mot
  * quang duong da di.
  */
-
-const LEG_KIND_LABEL: Readonly<Record<RunLeg['kind'], string>> = {
-  LOADED: 'Có hàng',
-  EMPTY: 'Chạy rỗng',
-};
-
-const LEG_STATUS_LABEL: Readonly<Record<RunLeg['status'], string>> = {
-  PLANNED: 'Dự kiến',
-  IN_TRANSIT: 'Đang chạy',
-  COMPLETED: 'Đã xong',
-  CANCELLED: 'Đã huỷ',
-};
-
-const legKindTone = (kind: RunLeg['kind']): StatusTone => (kind === 'LOADED' ? 'go' : 'stop');
-
-const legStatusTone = (status: RunLeg['status']): StatusTone => {
-  switch (status) {
-    case 'PLANNED':
-      return 'wait';
-    case 'IN_TRANSIT':
-      return 'go';
-    case 'COMPLETED':
-      return 'done';
-    case 'CANCELLED':
-      return 'stop';
-  }
-};
-
-const runStatusTone = (status: VehicleRunStatus): StatusTone => {
-  switch (status) {
-    case 'PLANNED':
-      return 'wait';
-    case 'ACTIVE':
-      return 'go';
-    case 'COMPLETED':
-      return 'done';
-    case 'CANCELLED':
-      return 'stop';
-  }
-};
-
-const orderStatusTone = (status: TransportOrderStatus): StatusTone => {
-  switch (status) {
-    case 'OPEN':
-      return 'go';
-    case 'FULFILLED':
-      return 'done';
-    case 'CANCELLED':
-      return 'stop';
-  }
-};
 
 /** `null` la CHUA BIET, khong phai 0 — va man hinh phai noi dung the. */
 const km = (value: number | null): string =>
@@ -211,6 +166,8 @@ export function MovementView() {
       : (orders.data?.find((order) => order.id === orderId)?.code ?? 'đơn đã gỡ');
 
   const activePlan = orderPlans.data?.find((plan) => plan.cancelledAt === null) ?? null;
+  const selectedOrder =
+    openOrderId === null ? null : (orders.data.find((order) => order.id === openOrderId) ?? null);
 
   /** Chi khach DANG HOAT DONG moi la mot lua chon hop le cho mot don moi. */
   const activeCustomers = (customers.data ?? []).filter(
@@ -335,7 +292,10 @@ export function MovementView() {
             key: 'status',
             header: 'Trạng thái',
             render: (order) => (
-              <StatusBadge label={order.status} tone={orderStatusTone(order.status)} />
+              <StatusBadge
+                label={ORDER_STATUS_LABEL[order.status]}
+                tone={orderStatusTone(order.status)}
+              />
             ),
           },
         ]}
@@ -436,6 +396,24 @@ export function MovementView() {
               }`}
             />
           )}
+          {/*
+            `#376` — TIEN DO VONG CHAY dung ngay trong don: ca chang RONG (khong mang don nao) cung
+            nam o day, vi vong chay chi dong khi MOI chang da xong, va nguoi lam viec voi DON khong
+            phai di tim vong chay o bang nang cao ben duoi.
+          */}
+          {activePlan !== null && (
+            <RunLegWorkflow
+              runId={activePlan.runId}
+              captionFor={(runCode) =>
+                `Chặng của vòng chạy ${runCode} phục vụ đơn ${orderCodeOf(openOrderId)}`
+              }
+              orderCodeOf={orderCodeOf}
+              asPanel
+            />
+          )}
+          {selectedOrder === null ? null : (
+            <OrderFulfilmentPanel order={selectedOrder} legs={orderLegs.data} />
+          )}
           <DataTable<RunLeg>
             caption={`Chặng của đơn ${orderCodeOf(openOrderId)}`}
             rows={orderLegs.data}
@@ -495,7 +473,12 @@ export function MovementView() {
             {
               key: 'status',
               header: 'Trạng thái',
-              render: (run) => <StatusBadge label={run.status} tone={runStatusTone(run.status)} />,
+              render: (run) => (
+                <StatusBadge
+                  label={RUN_STATUS_LABEL[run.status]}
+                  tone={runStatusTone(run.status)}
+                />
+              ),
             },
           ]}
         />
@@ -508,54 +491,13 @@ export function MovementView() {
 
       {runDetail.data != null && (
         <>
-          <DataTable<RunLeg>
-            caption={`Chặng của vòng chạy ${runDetail.data.run.code}`}
-            rows={runDetail.data.legs}
-            rowKey={(leg) => leg.id}
-            columns={[
-              {
-                key: 'sequence',
-                header: '#',
-                render: (leg) => String(leg.sequence),
-                isRowHeader: true,
-                isNumeric: true,
-              },
-              {
-                key: 'route',
-                header: 'Chặng',
-                render: (leg) => `${leg.originLabel} → ${leg.destinationLabel}`,
-              },
-              {
-                key: 'kind',
-                header: 'Loại',
-                render: (leg) => (
-                  <StatusBadge label={LEG_KIND_LABEL[leg.kind]} tone={legKindTone(leg.kind)} />
-                ),
-              },
-              { key: 'order', header: 'Đơn', render: (leg) => orderCodeOf(leg.orderId) },
-              {
-                key: 'status',
-                header: 'Tiến độ',
-                render: (leg) => (
-                  <StatusBadge
-                    label={LEG_STATUS_LABEL[leg.status]}
-                    tone={legStatusTone(leg.status)}
-                  />
-                ),
-              },
-              {
-                key: 'distance',
-                header: 'Đã đi',
-                render: (leg) => km(leg.distanceKm),
-                isNumeric: true,
-              },
-              {
-                key: 'plannedDistance',
-                header: 'Dự kiến',
-                render: (leg) => km(leg.plannedDistanceKm),
-                isNumeric: true,
-              },
-            ]}
+          {/* Cung bang + cung nut voi khoi tien do cua don (`#376`) — mot vong chay khong gan don nao
+              (nhan viec tai dia diem, chieu chuyen cu) van tien chang duoc o day. */}
+          <RunLegWorkflow
+            runId={runDetail.data.run.id}
+            captionFor={(runCode) => `Chặng của vòng chạy ${runCode}`}
+            orderCodeOf={orderCodeOf}
+            showDistance
           />
 
           {movement.data !== undefined && (
