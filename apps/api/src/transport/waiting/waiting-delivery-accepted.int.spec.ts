@@ -106,6 +106,12 @@ const LOCK_QUEUE_TIMEOUT_MS = 15_000;
 const CLOCK_GAP_MS = 25;
 const TEST_TIMEOUT_MS = 60_000;
 const STRESS_TIMEOUT_MS = 240_000;
+/**
+ * Giao dich don dep: cho lay mot ket noi, roi cho khoa tu van cua tep khac (ke ca mot khoa bi ro,
+ * xem `cleanup()`). Cong lai van duoi tran 60 s cua hook.
+ */
+const CLEANUP_CONNECTION_WAIT_MS = 10_000;
+const CLEANUP_TX_TIMEOUT_MS = 45_000;
 
 const POLICY: TransportPlanningPolicy = {
   grouping: 'ONE_ORDER_PER_RUN',
@@ -245,21 +251,36 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         })
       ).map((run) => run.id);
 
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${WAITING_TRIGGER_LOCK})`);
-      for (const [table, trigger] of PROTECTED_TABLES) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-      }
-      try {
-        await prisma.transportDeliveryWaitingSession.deleteMany({
-          where: { runId: { in: runIds } },
-        });
-        await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
-      } finally {
-        for (const [table, trigger] of PROTECTED_TABLES) {
-          await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-        }
-        await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${WAITING_TRIGGER_LOCK})`);
-      }
+      /*
+       * TAT TRIGGER TRONG MOT GIAO DICH, voi khoa tu van MUC GIAO DICH.
+       *
+       * Cac tep anh em lay `pg_advisory_lock` MUC PHIEN qua client Prisma CO POOL, roi nha bang
+       * `pg_advisory_unlock` o mot lenh KHAC. Hai lenh do co the roi vao hai ket noi khac nhau: lan
+       * nha tra `false` (log Postgres: *"you don't own a lock of type ExclusiveLock"*) va khoa o lai
+       * tren ket noi kia toi luc `$disconnect()`, chan buoc don cua moi tep khac — ke ca buoc don sau
+       * cua chinh tep do. Do tren CI run 35811743513: bon lan trong mot job, mot lan lam `afterAll`
+       * cua `run-closure-concurrency.int.spec.ts` qua 10 s.
+       *
+       * O day moi lenh di qua CUNG mot giao dich: khoa nha luc commit/rollback, khong con cho nao ro.
+       * Van loai tru duoc nhau voi cac tep kia (cung con so, cung khong gian khoa tu van), va tep
+       * khac khong bao gio thay trigger dang tat — lan tat va lan bat commit cung nhau.
+       */
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${WAITING_TRIGGER_LOCK})`);
+          for (const [table, trigger] of PROTECTED_TABLES) {
+            await tx.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
+          }
+          await tx.transportDeliveryWaitingSession.deleteMany({
+            where: { runId: { in: runIds } },
+          });
+          await tx.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+          for (const [table, trigger] of PROTECTED_TABLES) {
+            await tx.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
+          }
+        },
+        { maxWait: CLEANUP_CONNECTION_WAIT_MS, timeout: CLEANUP_TX_TIMEOUT_MS },
+      );
 
       await prisma.transportOrderRunPlan.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
