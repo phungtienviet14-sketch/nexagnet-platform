@@ -27,6 +27,9 @@
   th, td { border: 1px solid var(--line); padding: 5pt 7pt; vertical-align: top; }
   figure { margin: 10pt 0 6pt; break-inside: avoid; }
   figure img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  /* Ảnh điện thoại (dọc): giữ vừa nửa trang để chữ hướng dẫn nằm cạnh ảnh của nó. */
+  figure img[src*="/tai-xe/"] { width: auto; max-width: 100%; height: 100mm; margin: 0 auto; }
+  figure:has(img[src*="/tai-xe/"]) figcaption { text-align: center; }
   figure + ol, figure + ul { break-before: avoid; }
   figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 4pt; }
   .cover { min-height: 250mm; display: flex; flex-direction: column; break-after: page; }
@@ -589,6 +592,7 @@
 <li><strong>Danh sách bãi xe, nhà máy, kho của khách cần nhập sẵn</strong>, vì tìm địa điểm theo tên sẽ tắt khi chạy dữ liệu thật. Hiện danh sách này do đội triển khai nhập, chưa có màn hình.</li>
 <li><strong>Ai được tạo đơn và điều xe.</strong> Hiện kế toán cũng làm được.</li>
 </ol>
+<p>Hướng dẫn thao tác từng bước: <a href="huong-dan-ke-toan.md">cho kế toán</a> · <a href="huong-dan-tai-xe.md">cho lái xe</a>.</p>
 <p><em>Tài liệu cũ trong thư mục này (“Bắt đầu nhanh”, “Kịch bản demo”, “Vận hành bản demo”) viết theo cách làm dựa trên chuyến. Khi nội dung khác nhau, tài liệu này là bản đúng.</em></p>
 
 </main>

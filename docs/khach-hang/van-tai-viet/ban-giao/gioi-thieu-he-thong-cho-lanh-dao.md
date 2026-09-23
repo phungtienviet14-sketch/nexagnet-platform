@@ -388,4 +388,6 @@ Chỉ ghi những điều có ảnh hưởng tới quyết định.
 
 ---
 
+Hướng dẫn thao tác từng bước: [cho kế toán](huong-dan-ke-toan.md) · [cho lái xe](huong-dan-tai-xe.md).
+
 _Tài liệu cũ trong thư mục này (“Bắt đầu nhanh”, “Kịch bản demo”, “Vận hành bản demo”) viết theo cách làm dựa trên chuyến. Khi nội dung khác nhau, tài liệu này là bản đúng._
