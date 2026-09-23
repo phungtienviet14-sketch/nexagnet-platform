@@ -80,6 +80,15 @@ describe('so quy — sua lich su chi bang but toan dao', () => {
     expect(rows[0]!.isCredit).toBe(false);
     expect(rows[0]!.kindLabel).toBe('Chi phí chuyến');
   });
+
+  it('#380 — but toan Run-first `RUN_EXPENSE` co nhan tieng Viet, khong phai loai rong', () => {
+    const rows = toFundLedgerRows(
+      [fundEntry({ signedAmount: -1_320_000, kind: 'RUN_EXPENSE', tripId: null })],
+      'ACCOUNTING',
+    );
+    expect(rows[0]!.kindLabel).toBe('Chi phí vòng xe');
+    expect(rows[0]!.isCredit).toBe(false);
+  });
 });
 
 describe('ky quy', () => {

@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { TRANSPORT_SECTIONS } from '../../navigation';
-import type { FinanceSummaryView } from '../../transport-types';
+import type { CompanyMarginBasis, FinanceSummaryView } from '../../transport-types';
 import { toFinance } from '../finance';
+
+const BASIS: CompanyMarginBasis = {
+  legacyTrips: {
+    counted: 42,
+    skipped: 0,
+    revenueAmount: 494_000_000,
+    deductionAmount: 378_680_000,
+    marginAmount: 115_320_000,
+  },
+  runFirstOrders: {
+    counted: 1,
+    excluded: { FREIGHT_MISSING: 0, NO_RUN_YET: 0, SHARED_RUN: 0, COST_SOURCE_UNAVAILABLE: 0 },
+    revenueAmount: 6_000_000,
+    deductionAmount: 1_320_000,
+    marginAmount: 4_680_000,
+  },
+  projectedOrderCount: 40,
+  pendingFuelCost: { amount: 0, entryCount: 0, rowCount: 0 },
+  unassignedRunFirstCost: { amount: 0, runCount: 0 },
+};
 
 const view = (over: Partial<FinanceSummaryView> = {}): FinanceSummaryView => ({
   generatedFor: '2026-09-08',
@@ -24,6 +44,7 @@ const view = (over: Partial<FinanceSummaryView> = {}): FinanceSummaryView => ({
     skippedTripCount: 0,
     fixedCostsIncluded: false,
     disclosure: 'Chưa gồm chi phí cố định',
+    basis: BASIS,
   },
   receivable: { outstandingTotal: 120_000_000, overdueTotal: 15_000_000 },
   currency: { codes: ['VND'], isSingle: true },
@@ -147,12 +168,36 @@ describe('bien truc tiep — KHONG PHAI lai rong', () => {
   it('chuyen chua co gia cuoc duoc noi ra, khong bi coi la 0', () => {
     const model = toFinance(
       view({
-        directMargin: { ...view().directMargin, tripCount: 40, skippedTripCount: 2 },
+        directMargin: {
+          ...view().directMargin,
+          tripCount: 40,
+          skippedTripCount: 2,
+          basis: { ...BASIS, legacyTrips: { ...BASIS.legacyTrips, counted: 40, skipped: 2 } },
+        },
       }),
     );
 
     expect(model.margin.coverage).toContain('2');
     expect(model.margin.coverage).toContain('chưa có giá cước');
+  });
+
+  /**
+   * `#381` — cau co so cu "Tính trên 44 chuyến" noi mot nua. Gio no noi DUNG don vi cua ca hai nguon,
+   * va hai nguon co mat voi tong con CUA MAY CHU (khong cong o man hinh).
+   */
+  it('#381 — cau co so noi ca chuyen cu lan don theo vong xe; nguon mang tong con cua may chu', () => {
+    const model = toFinance(view());
+
+    expect(model.margin.coverage).toBe('Tính trên 42 chuyến cũ và 1 đơn theo vòng xe.');
+    expect(model.margin.sources.map((source) => [source.label, source.countLabel])).toEqual([
+      ['Đơn theo vòng xe', '1 đơn'],
+      ['Chuyến cũ', '42 chuyến'],
+    ]);
+    expect(model.margin.sources[0]!.revenueLabel.replace(/\D/g, '')).toBe('6000000');
+    // Don chieu tu chuyen cu: noi ra la da tinh qua chuyen, khong phai bi quen.
+    expect(model.margin.notes.map((note) => note.text).join(' ')).toContain(
+      '40 đơn sinh từ chuyến cũ',
+    );
   });
 });
 
