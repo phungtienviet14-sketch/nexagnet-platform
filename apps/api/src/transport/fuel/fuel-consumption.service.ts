@@ -158,6 +158,8 @@ export class FuelConsumptionReadService {
       verification: null,
       reconciliation: null,
       tripIds: null,
+      // `#364` — tieu hao la su that cua XE: khong loc theo chuyen, khong loc theo vong chay.
+      runIds: null,
       driverId: null,
       supplierId: null,
       from: null,

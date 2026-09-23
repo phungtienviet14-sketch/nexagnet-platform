@@ -66,7 +66,13 @@ export interface FuelConsumptionAnchor {
 /** Mot phieu trong chuoi. Don vi giong `fuel.types.ts`: mililit, mili-L/100km, km nguyen. */
 export interface FuelConsumptionLink {
   readonly entryId: string;
-  readonly tripId: string;
+  /**
+   * CHI HIEN THI. Chuoi km di theo XE va thoi gian, khong theo chuyen: `null` o phieu Run-first
+   * (`#364`) va chuoi van noi tiep qua no nhu moi phieu khac.
+   */
+  readonly tripId: string | null;
+  /** `#364` — vong chay lam ngu canh, chi hien thi. */
+  readonly runId: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: string;
   readonly verificationStatus: FuelVerificationStatus;
@@ -210,6 +216,7 @@ function linkOf(
   return {
     entryId: entry.id,
     tripId: entry.tripId,
+    runId: entry.runId,
     businessDate: entry.businessDate,
     occurredAt: entry.occurredAt,
     verificationStatus: entry.verificationStatus,

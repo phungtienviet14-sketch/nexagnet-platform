@@ -98,6 +98,14 @@ export const TRANSPORT_ACTIONS = [
   'transport.fuel.entry.submit_for_driver',
   'transport.fuel.entry.verify',
   /**
+   * `#364` — PHAN BO GIA THANH mot phieu Run-first vao vong chay/chang, va DAO mot phan bo.
+   *
+   * Tach khoi `.entry.verify`: duyet la "chung tu nay dung", phan bo la "tien nay thuoc cong viec
+   * nao" — hai quyet dinh, hai thoi diem, co the hai nguoi. Doc phan bo thi dung `.entry.read`
+   * (cung du lieu phieu, chi khac cach hoi). Lai xe KHONG co ma nay.
+   */
+  'transport.fuel.cost_attribution.record',
+  /**
    * DANH MUC CAY XANG (Lane C / C1) — doc va quan ly tram, bi danh, sieu du lieu hop dong.
    *
    * Hai ma, va chung KHONG gop vao `transport.fuel.entry.*`: phieu do dau la CHUNG TU (sinh moi

@@ -66,10 +66,21 @@ export interface FuelSupplier extends FuelSupplierContract {
   readonly updatedAt: string;
 }
 
-/** PHIEU DO DAU — aggregate root cua `TX-04`, hai truc trang thai doc lap (T1 §7.4). */
+/**
+ * PHIEU DO DAU — aggregate root cua `TX-04`, hai truc trang thai doc lap (T1 §7.4).
+ *
+ * `#364`: SU KIEN CUA XE. `vehicleId` + `occurredAt` la goc; ba truong ngu canh deu tuy chon va
+ * NHIEU NHAT MOT loai co mat — `tripId` (chuyen v1, tuong thich) HOAC `runId` (+ `legId` tuy chon).
+ * Ngu canh KHONG phai phan bo gia thanh: xem `FuelCostAttribution`.
+ */
 export interface FuelEntry {
   readonly id: string;
-  readonly tripId: string;
+  /** Chuyen v1 — chi de TUONG THICH. `null` o moi phieu Run-first. */
+  readonly tripId: string | null;
+  /** `#364` — vong chay v2 lam ngu canh van hanh. Cua CHINH `vehicleId` (tang mien + trigger). */
+  readonly runId: string | null;
+  /** `#364` — chang cua CHINH `runId`. `null` = ngu canh o muc vong chay. */
+  readonly legId: string | null;
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
@@ -381,9 +392,16 @@ export interface FuelEntryDetail {
  */
 export interface FuelEntryInboxRow {
   readonly id: string;
-  readonly tripId: string;
-  /** MA CHUYEN — dinh danh NGHIEP VU doc duoc, khong phai `tripId`. */
-  readonly tripCode: string;
+  /** Chuyen v1 — `null` o phieu Run-first (`#364`). */
+  readonly tripId: string | null;
+  /** MA CHUYEN — dinh danh NGHIEP VU doc duoc, khong phai `tripId`. `null` khi khong co chuyen. */
+  readonly tripCode: string | null;
+  /** `#364` — vong chay lam ngu canh, va MA doc duoc cua no. */
+  readonly runId: string | null;
+  readonly runCode: string | null;
+  /** `#364` — chang lam ngu canh, va SO THU TU cua no trong vong chay ("Chang 2"). */
+  readonly legId: string | null;
+  readonly legSequence: number | null;
   readonly driverId: string;
   readonly driverName: string | null;
   readonly vehicleId: string;

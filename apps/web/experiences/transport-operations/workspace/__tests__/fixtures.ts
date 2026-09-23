@@ -192,6 +192,8 @@ export const tripExpense = (over: Partial<TripExpense> = {}): TripExpense => ({
 export const fuelEntry = (over: Partial<FuelEntry> = {}): FuelEntry => ({
   id: 'fu-1',
   tripId: '11111111-1111-4111-8111-111111111111',
+  runId: null,
+  legId: null,
   vehicleId: 'veh-1',
   driverId: 'drv-1',
   supplierId: 'sup-1',
@@ -329,7 +331,13 @@ export const driverTrip = (over: Partial<DriverTripView> = {}): DriverTripView =
 export const driverFuelSlip = (over: Partial<DriverFuelSlipView> = {}): DriverFuelSlipView => ({
   id: 'fu-1',
   tripId: '11111111-1111-4111-8111-111111111111',
+  tripCode: 'VT-001',
+  runId: null,
+  runCode: null,
+  legId: null,
+  legSequence: null,
   vehicleId: 'veh-1',
+  vehiclePlate: '29C-123.45',
   supplierId: 'sup-1',
   stationId: null,
   stationName: null,

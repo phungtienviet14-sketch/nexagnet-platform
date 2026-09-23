@@ -1,5 +1,5 @@
 import type { DriverFuelSubmitInput } from '../transport-api';
-import type { BusinessDate, FuelPaymentMethod } from '../transport-types';
+import type { BusinessDate, DriverFuelRunView, FuelPaymentMethod } from '../transport-types';
 
 /**
  * TO KHAI NHIEN LIEU cua lai xe — phan THUAN cua bieu mau (`#313`).
@@ -101,19 +101,118 @@ export const occurredAtProblem = (value: string, now: Date): string | null => {
   return null;
 };
 
+/**
+ * NGU CANH cua phieu lai xe dang khai — `#364`.
+ *
+ * `RUN`: viec duoc dieu (vong xe, chang tuy chon) — KHONG gui `vehicleId`: xe LA xe cua vong xe, may
+ * chu tu lay. `LEGACY_TRIP`: chuyen v1 cua cach lam cu — gui ca `vehicleId` nhu truoc.
+ */
+export type DriverFuelContext =
+  | { readonly kind: 'RUN'; readonly runId: string; readonly legId: string | null }
+  | { readonly kind: 'LEGACY_TRIP'; readonly tripId: string; readonly vehicleId: string };
+
+/** Mot lua chon ngu canh tren o khai phieu. */
+export interface DriverFuelContextOption {
+  readonly key: string;
+  readonly label: string;
+  readonly vehicleLabel: string;
+  readonly kind: DriverFuelContext['kind'];
+  /** Chang CHON DUOC (khong gom chang da huy) — rong voi chuyen v1. */
+  readonly legs: readonly { readonly legId: string; readonly label: string }[];
+  readonly runId: string | null;
+  readonly tripId: string | null;
+  readonly vehicleId: string | null;
+}
+
+/**
+ * CAC NGU CANH khai duoc, theo thu tu uu tien — `#364`.
+ *
+ * Viec DUOC DIEU (vong xe) di truoc: vong xe DANG CHAY truoc vong xe moi len ke hoach, roi theo ma.
+ * Chuyen v1 dang mo chi la LOI PHU cho cach lam cu, xep cuoi. Khong co gi thi danh sach RONG — va man
+ * hinh phai noi "chua khai duoc" chu khong bia mot ngu canh (may chu cung se tu choi).
+ */
+export const driverFuelContextOptions = (input: {
+  readonly runs: readonly DriverFuelRunView[];
+  readonly legacyTrip: {
+    readonly id: string;
+    readonly code: string;
+    readonly vehicleId: string | null;
+    readonly vehiclePlate: string | null;
+  } | null;
+}): DriverFuelContextOption[] => {
+  const rank = (status: string): number => (status === 'ACTIVE' ? 0 : 1);
+  const runs = [...input.runs].sort(
+    (left, right) =>
+      rank(left.runStatus) - rank(right.runStatus) || left.runCode.localeCompare(right.runCode),
+  );
+  const options: DriverFuelContextOption[] = runs.map((run) => ({
+    key: `run:${run.runId}`,
+    label: `Vòng xe ${run.runCode}`,
+    vehicleLabel: run.vehiclePlate ?? 'Xe của vòng xe',
+    kind: 'RUN',
+    legs: run.legs
+      .filter((leg) => leg.status !== 'CANCELLED')
+      .map((leg) => ({
+        legId: leg.legId,
+        label: `Chặng ${leg.sequence}: ${leg.originLabel} → ${leg.destinationLabel}`,
+      })),
+    runId: run.runId,
+    tripId: null,
+    vehicleId: run.vehicleId,
+  }));
+  const trip = input.legacyTrip;
+  if (trip !== null && trip.vehicleId !== null) {
+    options.push({
+      key: `trip:${trip.id}`,
+      label: `Chuyến cũ ${trip.code}`,
+      vehicleLabel: trip.vehiclePlate ?? 'Xe của chuyến',
+      kind: 'LEGACY_TRIP',
+      legs: [],
+      runId: null,
+      tripId: trip.id,
+      vehicleId: trip.vehicleId,
+    });
+  }
+  return options;
+};
+
+/** Lua chon + chang dang chon -> ngu canh gui len may chu. */
+export const toDriverFuelContext = (
+  option: DriverFuelContextOption,
+  legId: string | null,
+): DriverFuelContext =>
+  option.kind === 'RUN'
+    ? { kind: 'RUN', runId: option.runId as string, legId }
+    : {
+        kind: 'LEGACY_TRIP',
+        tripId: option.tripId as string,
+        vehicleId: option.vehicleId as string,
+      };
+
+/**
+ * `DRIVER_CASH` chi ghi duoc tren chuyen v1 (so quy di theo chuyen) — may chu tu choi phieu theo
+ * vong xe mang tien mat ung (`FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP`), nen o chon an no di.
+ */
+export const allowsDriverCash = (context: DriverFuelContext | null): boolean =>
+  context?.kind === 'LEGACY_TRIP';
+
 /** Than `POST /transport/me/fuel/slips`. Ham THUAN: cung dau vao, cung than — dieu kien de gui lai. */
 export const toDriverFuelSubmission = (input: {
   readonly form: DriverFuelForm;
-  readonly trip: { readonly id: string; readonly vehicleId: string };
+  readonly context: DriverFuelContext;
   readonly correlationKey: string;
   readonly timeZone: string | undefined;
 }): DriverFuelSubmitInput => {
   const occurredAt = fromDateTimeLocalValue(input.form.occurredAtLocal);
   if (occurredAt === null) throw new Error('Chọn thời điểm đổ.');
   const invoiceNo = input.form.invoiceNo.trim();
+  const context =
+    input.context.kind === 'RUN'
+      ? // Khong `vehicleId`, khong `tripId`, khong `driverId`: xe LA xe cua vong xe, lai xe tu phien.
+        { runId: input.context.runId, legId: input.context.legId }
+      : { tripId: input.context.tripId, vehicleId: input.context.vehicleId };
   return {
-    tripId: input.trip.id,
-    vehicleId: input.trip.vehicleId,
+    ...context,
     supplierId: input.form.supplierId,
     // `null` tuong minh chu khong bo truong: than yeu cau la ham thuan cua form, gui lai phai giong het.
     stationId: input.form.stationId === '' ? null : input.form.stationId,

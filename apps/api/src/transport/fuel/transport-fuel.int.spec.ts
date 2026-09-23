@@ -18,7 +18,9 @@ import { FuelStatementService } from './fuel-statement.service.js';
 import { CostingFuelExpenseAdapter, TransportFuelCoreFactsAdapter } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
 import { deleteFuelDiscrepanciesForTest } from './fuel-test-cleanup.js';
+import { MovementFuelRunContextAdapter } from './fuel-run-context.port.js';
 import { PrismaFuelRepository } from './prisma-fuel.repository.js';
+import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
 
 /**
@@ -74,10 +76,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     );
 
     const fuelCore = new TransportFuelCoreFactsAdapter(trips, fleet);
+    const fuelRuns = new MovementFuelRunContextAdapter(new PrismaMovementRepository(prisma));
     const fuel = new FuelService(
       fuelRepo,
       new PrismaFuelStationRepository(prisma),
       fuelCore,
+      fuelRuns,
       new CostingFuelExpenseAdapter(costing),
       audit,
       CORE_POLICY,
@@ -91,7 +95,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       FUEL_POLICY,
     );
     const reconciliation = new FuelReconciliationService(fuelRepo, audit, FUEL_POLICY);
-    const read = new FuelReadService(fuelRepo, fuelCore, new PrismaFuelStationRepository(prisma));
+    const read = new FuelReadService(
+      fuelRepo,
+      fuelCore,
+      new PrismaFuelStationRepository(prisma),
+      fuelRuns,
+    );
 
     const CODE_PREFIX = 'IT-T4-CH';
     const PHONE_PREFIX = '0933T4';
@@ -765,6 +774,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
             new PrismaFleetRepository(freshPrisma),
           ),
           new PrismaFuelStationRepository(freshPrisma),
+          new MovementFuelRunContextAdapter(new PrismaMovementRepository(freshPrisma)),
         );
 
         try {

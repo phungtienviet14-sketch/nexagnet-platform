@@ -26,6 +26,11 @@ const FUEL_ARTEFACTS = [
    * kieu ro ri capability ma bon bai duoi chan — nen no nam trong CHINH danh sach nay.
    */
   'FuelConsumptionController',
+  /**
+   * PHAN BO GIA THANH phieu Run-first (`#364`). Mot bang phan bo nhien lieu tren stack cua mot khach
+   * khong bat `transport-fuel` la dung kieu ro ri capability ma bon bai duoi chan.
+   */
+  'FuelCostAttributionController',
   'TransportFuelModule',
 ];
 

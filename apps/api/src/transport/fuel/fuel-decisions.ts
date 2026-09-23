@@ -54,6 +54,39 @@ export const FUEL_ENTRY_SUBMIT_REASONS = [
   'FUEL_ENTRY_STATION_SUPPLIER_MISMATCH',
   /** `#317` G1 — tram da ngung hop tac (`INACTIVE`); to khai MOI khong duoc tro toi no. */
   'FUEL_ENTRY_STATION_INACTIVE',
+
+  /* --- `#364` Fuel Event Run-first --- */
+  /**
+   * Khong co chuyen v1 lan vong chay — FAIL CLOSED.
+   *
+   * Mot su kien CHI co xe + thoi diem la hop le o tang du lieu, nhung de mot lai xe khai no thi may
+   * chu phai CHUNG MINH lai xe duoc phep khai cho xe do. Ngoai phan cong vong chay / chuyen v1, code
+   * hien tai chua co nguon co tham quyen nao cho dieu do — va `#364` cam tu nghi ra "xe mac dinh cua
+   * lai xe". Residual ghi o PR.
+   */
+  'FUEL_ENTRY_CONTEXT_REQUIRED',
+  /** Ca chuyen v1 LAN vong chay tren mot phieu — hai ngu canh co the mau thuan. */
+  'FUEL_ENTRY_CONTEXT_CONFLICT',
+  'FUEL_ENTRY_RUN_NOT_FOUND',
+  /**
+   * Lai xe CHUA TUNG duoc phan cong vao vong chay do — "tung", khong phai "dang", cung ly le voi
+   * `FUEL_ENTRY_DRIVER_NOT_ASSIGNED` (`GD-06`): nguoi bi thay ca van khai duoc lan do dau cua phan
+   * duong ho da chay.
+   */
+  'FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN',
+  /** Xe tren lenh khac xe cua vong chay — vong chay LA vong chay cua mot chiec xe. */
+  'FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE',
+  /** Chang khong ton tai, hoac thuoc mot vong chay KHAC — mot ma cho ca hai, khong lo su ton tai. */
+  'FUEL_ENTRY_LEG_NOT_IN_RUN',
+  /**
+   * `DRIVER_CASH` tren phieu KHONG gan chuyen v1.
+   *
+   * Tien mat lai xe ung phai vao Quy lai xe, va duong ghi duy nhat vao quy la `TX-03`
+   * (`TransportTripExpense.tripId` NOT NULL). Nhan phieu nay se de lai mot khoan lai xe da bo tui ma
+   * so quy khong bao gio thay — va lai xe bi doi tra lai tien da tieu. Chan o day, co `CHECK`
+   * `TransportFuelEntry_driver_cash_needs_trip` lam luoi cuoi.
+   */
+  'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
 ] as const;
 export type FuelEntrySubmitReason = (typeof FUEL_ENTRY_SUBMIT_REASONS)[number];
 
@@ -84,6 +117,8 @@ export const FUEL_ENTRY_AMEND_REASONS = [
    * khong phai di dao mot phieu.
    */
   'FUEL_ENTRY_AMEND_STATE_RACE',
+  /** `#364` — sua mot phieu Run-first sang `DRIVER_CASH`. Cung cong voi luc nop. */
+  'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
 ] as const;
 export type FuelEntryAmendReason = (typeof FUEL_ENTRY_AMEND_REASONS)[number];
 
@@ -114,8 +149,46 @@ export const FUEL_COST_POSTING_REASONS = [
    * thu hai ma so khoan chi van la mot, thi cong idempotent dang lam dung viec cua no.
    */
   'FUEL_COST_ALREADY_POSTED',
+  /**
+   * `#364` — phieu Run-first (khong chuyen v1) da duyet: KHONG ghi `TX-03`, gia thanh CHO mot quyet
+   * dinh phan bo rieng (`fuel.cost_attribution`).
+   *
+   * Khong phai tu choi: lan duyet van thanh cong. Va KHONG tu phan bo 100% vao vong chay chi vi
+   * phieu co ngu canh vong chay — ngu canh khong phai phan bo (`OWNER_DECISIONS_2026_09_22`).
+   */
+  'FUEL_COST_AWAITS_ATTRIBUTION',
 ] as const;
 export type FuelCostPostingReason = (typeof FUEL_COST_POSTING_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel.cost_attribution — phan bo gia thanh phieu Run-first (`#364`)
+ * ------------------------------------------------------------------ */
+export const FUEL_COST_ATTRIBUTION_REASONS = [
+  'FUEL_COST_ATTRIBUTED',
+  /** Gui lai CUNG khoa, CUNG noi dung — tra lai dong da ghi, KHONG ghi them. */
+  'FUEL_COST_ATTRIBUTION_REPLAY',
+  /** Cung khoa, KHAC noi dung — client dung lai khoa cho mot quyet dinh khac. */
+  'FUEL_COST_ATTRIBUTION_KEY_REUSED',
+  /** Tong phan bo sau lan ghi nay se vuot so tien phieu — hoac mot lan ghi khac vua ve dich truoc. */
+  'FUEL_COST_ATTRIBUTION_EXCEEDS_ENTRY',
+  /** Chi phieu da duyet moi phan bo duoc: so tien cua no khi do moi bat bien (`GD-10`). */
+  'FUEL_COST_ATTRIBUTION_ENTRY_NOT_VERIFIED',
+  /**
+   * Phieu gan chuyen v1: gia thanh cua no DA CO so cai — `TransportTripExpense` (`TX-03`). Phan bo
+   * them o day la dem hai lan.
+   */
+  'FUEL_COST_ATTRIBUTION_LEGACY_TRIP_PROJECTED',
+  'FUEL_COST_ATTRIBUTION_TARGET_NOT_FOUND',
+  /** Vong chay dich khong phai cua xe tren phieu — dau cua xe A khong the la gia thanh cua xe B. */
+  'FUEL_COST_ATTRIBUTION_TARGET_VEHICLE_MISMATCH',
+  'FUEL_COST_ATTRIBUTION_NOT_FOUND',
+  /** Dong can dao la mot dong DAO — dao cua dao khong ton tai, cap phat lai moi la duong dung. */
+  'FUEL_COST_ATTRIBUTION_NOT_REVERSIBLE',
+  'FUEL_COST_ATTRIBUTION_REVERSED',
+  /** Cap phat nay DA duoc dao — tra lai dong dao da co, khong ghi them. */
+  'FUEL_COST_ATTRIBUTION_ALREADY_REVERSED',
+] as const;
+export type FuelCostAttributionReason = (typeof FUEL_COST_ATTRIBUTION_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
  * fuel_statement.import — nhap ca file
@@ -394,6 +467,7 @@ export type TransportFuelDecisionReason =
   | FuelEntryAmendReason
   | FuelEvidenceWithdrawReason
   | FuelCostPostingReason
+  | FuelCostAttributionReason
   | FuelStatementImportReason
   | FuelStatementRowReason
   | FuelMatchReason
@@ -415,6 +489,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel_entry.amend',
     'fuel_entry.evidence_withdraw',
     'fuel.cost_posting',
+    'fuel.cost_attribution',
     'fuel_statement.import',
     'fuel_statement.import_row',
     'fuel.match',
@@ -443,6 +518,15 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_STATION_SUPPLIER_MISMATCH:
       'Cây xăng khai trên phiếu không thuộc nhà cung cấp của phiếu',
     FUEL_ENTRY_STATION_INACTIVE: 'Cây xăng đã ngừng hợp tác — tờ khai mới không chọn được',
+    FUEL_ENTRY_CONTEXT_REQUIRED:
+      'Chưa có chuyến hay vòng xe để chứng minh lái xe được khai phiếu cho xe này',
+    FUEL_ENTRY_CONTEXT_CONFLICT: 'Phiếu mang cả chuyến cũ lẫn vòng xe — chỉ được một loại',
+    FUEL_ENTRY_RUN_NOT_FOUND: 'Không tìm thấy vòng xe trên phiếu',
+    FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN: 'Lái xe chưa từng được phân công vào vòng xe này',
+    FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE: 'Xe trên phiếu không phải xe của vòng xe',
+    FUEL_ENTRY_LEG_NOT_IN_RUN: 'Chặng trên phiếu không thuộc vòng xe của phiếu',
+    FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP:
+      'Tiền mặt lái xe ứng chỉ ghi được trên chuyến cũ — sổ quỹ đi theo chuyến',
 
     FUEL_ENTRY_VERIFIED: 'Kế toán đã duyệt phiếu',
     FUEL_ENTRY_REJECTED: 'Kế toán trả lại phiếu kèm lý do',
@@ -465,6 +549,22 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
 
     FUEL_COST_POSTED: 'Chi phí dầu đã vào giá thành chuyến',
     FUEL_COST_ALREADY_POSTED: 'Phiếu này đã có chân giá thành — không ghi thêm lần hai',
+    FUEL_COST_AWAITS_ATTRIBUTION:
+      'Phiếu theo vòng xe đã duyệt — giá thành chờ kế toán phân bổ, không tự vào chuyến',
+
+    FUEL_COST_ATTRIBUTED: 'Đã phân bổ giá thành nhiên liệu vào công việc',
+    FUEL_COST_ATTRIBUTION_REPLAY: 'Gửi lại cùng khoá — trả lại dòng phân bổ đã ghi',
+    FUEL_COST_ATTRIBUTION_KEY_REUSED: 'Khoá chống trùng đã dùng cho một phân bổ có nội dung khác',
+    FUEL_COST_ATTRIBUTION_EXCEEDS_ENTRY: 'Tổng phân bổ sẽ vượt số tiền của phiếu',
+    FUEL_COST_ATTRIBUTION_ENTRY_NOT_VERIFIED: 'Phiếu chưa được duyệt nên chưa phân bổ được',
+    FUEL_COST_ATTRIBUTION_LEGACY_TRIP_PROJECTED:
+      'Phiếu gắn chuyến cũ — giá thành đã vào chuyến, không phân bổ lần hai',
+    FUEL_COST_ATTRIBUTION_TARGET_NOT_FOUND: 'Không tìm thấy vòng xe hay chặng được chọn',
+    FUEL_COST_ATTRIBUTION_TARGET_VEHICLE_MISMATCH: 'Vòng xe được chọn không phải của xe trên phiếu',
+    FUEL_COST_ATTRIBUTION_NOT_FOUND: 'Không tìm thấy dòng phân bổ',
+    FUEL_COST_ATTRIBUTION_NOT_REVERSIBLE: 'Dòng này là một dòng đảo — không đảo lại được',
+    FUEL_COST_ATTRIBUTION_REVERSED: 'Đã đảo một dòng phân bổ, lịch sử vẫn giữ nguyên',
+    FUEL_COST_ATTRIBUTION_ALREADY_REVERSED: 'Dòng phân bổ này đã được đảo trước đó',
 
     STATEMENT_IMPORTED: 'Đã nhập bảng kê cây xăng',
     STATEMENT_PERIOD_TAKEN: 'Đã có bảng kê cho đúng cây xăng và kỳ này',

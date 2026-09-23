@@ -22,7 +22,9 @@ import {
   submitFuelEntrySchema,
 } from './fuel.schemas.js';
 import { DEFAULT_FUEL_PAYMENT_METHOD } from './fuel.types.js';
+import { MovementFuelRunContextAdapter } from './fuel-run-context.port.js';
 import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
+import { InMemoryMovementRepository } from '../movement/movement.repository.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
 
 /**
@@ -125,8 +127,18 @@ beforeEach(async () => {
   costing = new RecordingCostingPort();
   const audit = new AuditLogService(new InMemoryAuditLogRepository());
   stations = new InMemoryFuelStationRepository();
-  service = new FuelService(repository, stations, core, costing, audit, CORE_POLICY, FUEL_POLICY);
-  read = new FuelReadService(repository, core, stations);
+  const runs = new MovementFuelRunContextAdapter(new InMemoryMovementRepository());
+  service = new FuelService(
+    repository,
+    stations,
+    core,
+    runs,
+    costing,
+    audit,
+    CORE_POLICY,
+    FUEL_POLICY,
+  );
+  read = new FuelReadService(repository, core, stations, runs);
 
   supplierId = (
     await repository.createSupplier({
@@ -407,7 +419,13 @@ describe('GD-10 — sua duoc khi con DECLARED, sau do chi dao', () => {
 describe('Be mat lai xe — INV-09 va pham vi cua chinh minh', () => {
   it('khung nhin lai xe KHONG mang mot truong so sach nao', async () => {
     const entry = await submit();
-    const view = toDriverFuelSlipView(entry, [], null);
+    const view = toDriverFuelSlipView(entry, [], {
+      stationName: null,
+      vehiclePlate: null,
+      tripCode: null,
+      runCode: null,
+      legSequence: null,
+    });
 
     for (const forbidden of ['costExpenseId', 'sourceStatementId', 'declaredBy', 'freightAmount']) {
       expect(Object.keys(view)).not.toContain(forbidden);
@@ -525,6 +543,7 @@ describe('#317 G1 — tram tren to khai co bien nha cung cap', () => {
       verification: null,
       reconciliation: null,
       tripCode: null,
+      runCode: null,
       driverId: null,
       vehicleId: null,
       supplierId: null,

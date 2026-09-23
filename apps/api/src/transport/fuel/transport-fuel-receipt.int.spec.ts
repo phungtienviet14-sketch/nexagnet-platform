@@ -178,18 +178,27 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
      * cung cap khong di qua tui lai xe, nen khong mot buoc dong tien nao cua quy tai xe duoc sinh
      * ra. Bai nay dem TRUOC va SAU chu khong khang dinh mot con so tuyet doi: bang nay dung chung
      * voi moi bai khac trong thu muc, va mot khang dinh `= 0` se do vi ly do khong lien quan.
+     *
+     * Va dem theo NGUOI GHI cua chinh bai nay (`ACTOR`, duy nhat trong ca bo IT), khong dem TOAN
+     * BANG: job `integration` chay moi tep SONG SONG tren mot Postgres, nen mot tep ben canh ghi
+     * phieu dau / buoc quy giua hai lan dem la du lam bai nay do — do that tren may dev o `#364`
+     * (797/798, chay rieng thi 6/6 xanh). Lenh nhap anh chi co MOT danh tinh de ghi — `actor` duoc
+     * truyen xuong moi lan ghi cua `fuel-document.service.ts` — nen mot phieu hay mot buoc quy do NO
+     * sinh ra se mang ten `ACTOR` va van bi bat.
      */
     it('C3-INT-06 — nhap bon buc anh KHONG sinh mot buoc dong tien nao cua quy tai xe', async () => {
-      const beforeFund = await prisma.transportDriverFundEntry.count();
-      const beforeEntries = await prisma.transportFuelEntry.count();
+      const fundByActor = { where: { recordedBy: ACTOR } };
+      const entriesByActor = { where: { declaredBy: ACTOR } };
+      const beforeFund = await prisma.transportDriverFundEntry.count(fundByActor);
+      const beforeEntries = await prisma.transportFuelEntry.count(entriesByActor);
 
       for (const salt of ['d', 'e', 'f', 'g']) {
         await service.ingestReceiptImage(photo(salt), ACTOR);
       }
 
-      expect(await prisma.transportDriverFundEntry.count()).toBe(beforeFund);
+      expect(await prisma.transportDriverFundEntry.count(fundByActor)).toBe(beforeFund);
       // Va cung khong mot PHIEU DO DAU nao: mot ung vien khong tu tro thanh phieu duoc.
-      expect(await prisma.transportFuelEntry.count()).toBe(beforeEntries);
+      expect(await prisma.transportFuelEntry.count(entriesByActor)).toBe(beforeEntries);
     });
   },
 );

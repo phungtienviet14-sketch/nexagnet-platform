@@ -121,7 +121,14 @@ export interface UpdateFuelSupplierProfileInput {
  * ------------------------------------------------------------------ */
 
 export interface CreateFuelEntryInput {
-  readonly tripId: string;
+  /**
+   * `#364` — NGU CANH, nhieu nhat mot loai: chuyen v1 HOAC vong chay (+ chang). Tang mien DA KIEM
+   * vong chay la cua `vehicleId` va chang thuoc vong chay; `CHECK`/trigger cua migration
+   * `20260922100000_transport_fuel_run_first` la luoi cuoi.
+   */
+  readonly tripId: string | null;
+  readonly runId: string | null;
+  readonly legId: string | null;
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
@@ -223,6 +230,11 @@ export interface FuelEntryInboxFilter {
   readonly verification: FuelVerificationStatus | null;
   readonly reconciliation: FuelReconciliationStatus | null;
   readonly tripIds: readonly string[] | null;
+  /**
+   * `#364` — cung quy uoc `null` / `[]` voi `tripIds`: nguoi dung go MA VONG CHAY, tang ung dung
+   * doi ra id qua `FuelRunContextFacts`, tang kho chi nhan ket qua da doi.
+   */
+  readonly runIds: readonly string[] | null;
   readonly driverId: string | null;
   readonly vehicleId: string | null;
   readonly supplierId: string | null;
@@ -717,6 +729,12 @@ export abstract class FuelRepository {
    *
    * Tra `null` khi da co — mot lan phat lai vo hai, khong phai mot loi. Cung voi unique tren cot
    * do, day la nua thu hai cua "chi phi dau vao gia thanh chuyen dung mot lan".
+   *
+   * `#364` — CHI phieu gan chuyen v1. Phieu Run-first (`tripId` NULL) thi NEM
+   * `costExpenseOnRunFirstEntry` va KHONG ghi gi: so cai cua no la `TransportFuelCostAttribution`
+   * (mot phieu, mot so cai). Nem chu khong tra `null` — `null` la "da co", va nguoi goi se tin mot
+   * khoan `TX-03` mo coi la cua mot phien khac. `CHECK TransportFuelEntry_cost_expense_needs_trip`
+   * giu dung dieu nay o tang CSDL.
    */
   abstract attachCostExpense(id: string, expenseId: string): Promise<FuelEntry | null>;
 
