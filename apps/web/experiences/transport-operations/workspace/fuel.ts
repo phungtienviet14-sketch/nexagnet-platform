@@ -412,6 +412,15 @@ const RESOLUTIONS_BY_KIND: Readonly<
     'ENTRY_CORRECTION_REQUIRED',
     'IGNORE_WITH_REASON',
   ],
+  /**
+   * `#371` — ung vien la phieu lai xe DA TRA TIEN MAT. Khong `MATCH_CONFIRMED`, khong
+   * `ACCEPT_SUPPLIER_AMOUNT`: ca hai la tra cung mot lan do hai lan, va may chu tu choi ca hai (403).
+   */
+  PAYMENT_METHOD_CONFLICT: [
+    'REJECT_SUPPLIER_LINE',
+    'ENTRY_CORRECTION_REQUIRED',
+    'IGNORE_WITH_REASON',
+  ],
 };
 
 /** Hai loai chenh lech co danh sach UNG VIEN de nguoi chon cap khi xac nhan khop. */

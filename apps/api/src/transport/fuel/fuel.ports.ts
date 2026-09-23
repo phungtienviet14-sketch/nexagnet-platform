@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { BusinessDate } from '../business-date.js';
 import { CostingService } from '../costing/costing.service.js';
 import type { ExpenseFundingSource } from '../costing/driver-fund-ledger.js';
+import { RunExpenseService } from '../costing/run-expense.service.js';
 import { FleetRepository } from '../fleet/fleet.repository.js';
 import type { TripKind, TripStatus } from '../trips/trip-lifecycle.js';
 import { TripRepository } from '../trips/trip.repository.js';
@@ -216,9 +217,35 @@ export interface FuelCostPostingCommand {
   readonly correlationKey: string;
 }
 
+/**
+ * `#369` R-4 — CHAN TIEN MAT cua mot phieu Run-first `DRIVER_CASH`: lai xe da bo tien cua quy ra do
+ * dau cho xe cua vong chay. KHONG co `tripId`, KHONG co danh muc chi phi: day khong phai mot dong gia
+ * thanh — gia thanh cua phieu van cho ke toan phan bo o `TransportFuelCostAttribution`.
+ */
+export interface FuelDriverCashPostingCommand {
+  /** Lai xe KHAI phieu — nguoi da bo tien mat, va la chu so quy bi tru. */
+  readonly driverId: string;
+  /** Ngu canh cua CHINH phieu — khong doi chieu lai o day, `RunExpenseService` kiem lai. */
+  readonly runId: string;
+  readonly legId: string | null;
+  readonly amount: number;
+  readonly businessDate: BusinessDate;
+  readonly note: string | null;
+  /** CUNG khoa voi duong `TX-03` cu — `fuelCostCorrelationKey()`. Xem chu thich cua ham do. */
+  readonly correlationKey: string;
+}
+
 export abstract class FuelCostingPort {
   /** Tra ve id cua dong gia thanh o `TX-03`. Goi lai cung khoa KHONG sinh dong thu hai. */
   abstract postFuelCost(command: FuelCostPostingCommand, actor: string): Promise<string>;
+  /**
+   * `#369` R-4 — tra ve id but toan `RUN_EXPENSE` o Quy lai xe. Goi lai cung khoa (tuan tu HOAC song
+   * song) KHONG sinh but toan thu hai.
+   */
+  abstract postRunFirstDriverCash(
+    command: FuelDriverCashPostingCommand,
+    actor: string,
+  ): Promise<string>;
 }
 
 /**
@@ -232,6 +259,12 @@ export abstract class FuelCostingPort {
  * Hai lop nghe thua, nhung chung chan hai kieu hong khac nhau: khoa nay chan mot lan GOI LAP, con
  * unique kia chan mot lan GAN SAI. Bo lop nao cung de lai mot duong dem hai lan tien dau — khoan
  * chiem 35-45% gia thanh chuyen theo nguon khach.
+ *
+ * `#369` R-4 — CUNG MOT khoa cho chan tien mat cua phieu Run-first (`postRunFirstDriverCash`), va do
+ * la co y: khoa nay la danh tinh cua SU KIEN "phieu X vao `TX-03`", bat ke duong nao. Nho vay unique
+ * `TransportDriverFundEntry.correlationKey` giu "mot phieu, toi da MOT but toan Quy goc" ngay trong
+ * so Quy — va trigger `transport_fuel_entry_driver_fund_leg` doi chan Quy gan vao phieu mang DUNG khoa
+ * nay. Doi dinh dang khoa la doi ca trigger do.
  */
 export const fuelCostCorrelationKey = (fuelEntryId: string): string => `fuel:${fuelEntryId}`;
 
@@ -244,8 +277,31 @@ export const fuelCostCorrelationKey = (fuelEntryId: string): string => `fuel:${f
  */
 @Injectable()
 export class CostingFuelExpenseAdapter extends FuelCostingPort {
-  constructor(private readonly costing: CostingService) {
+  constructor(
+    private readonly costing: CostingService,
+    /** `#369` R-4 — duong ghi Quy cho khoan chi Run-first, cung tang UNG DUNG cua `TX-03`. */
+    private readonly runExpenses: RunExpenseService,
+  ) {
     super();
+  }
+
+  async postRunFirstDriverCash(
+    command: FuelDriverCashPostingCommand,
+    actor: string,
+  ): Promise<string> {
+    const posted = await this.runExpenses.recordRunExpense(
+      {
+        driverId: command.driverId,
+        runId: command.runId,
+        legId: command.legId,
+        amount: command.amount,
+        businessDate: command.businessDate,
+        note: command.note,
+        correlationKey: command.correlationKey,
+      },
+      actor,
+    );
+    return posted.entry.id;
   }
 
   async postFuelCost(command: FuelCostPostingCommand, actor: string): Promise<string> {

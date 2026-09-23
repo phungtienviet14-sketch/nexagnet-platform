@@ -14,6 +14,7 @@ import {
   FuelCostingPort,
   TransportFuelCoreFacts,
   type FuelCostPostingCommand,
+  type FuelDriverCashPostingCommand,
   type FuelDriverFacts,
   type FuelTripFacts,
   type FuelVehicleFacts,
@@ -93,6 +94,10 @@ class StubCoreFacts extends TransportFuelCoreFacts {
 class SilentCostingPort extends FuelCostingPort {
   async postFuelCost(command: FuelCostPostingCommand): Promise<string> {
     return `expense-of-${command.correlationKey}`;
+  }
+
+  async postRunFirstDriverCash(command: FuelDriverCashPostingCommand): Promise<string> {
+    return `fund-of-${command.correlationKey}`;
   }
 }
 

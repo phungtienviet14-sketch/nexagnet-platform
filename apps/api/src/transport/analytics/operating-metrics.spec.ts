@@ -5,6 +5,7 @@ import {
   distanceProvenance,
   foldOrderMargins,
   foldRunMargin,
+  type AttributedCostFact,
   type LegCostFact,
   type SettlementBuckets,
 } from './operating-metrics.js';
@@ -71,6 +72,19 @@ const ORDER_C = order({ id: 'ord-C', freightAmount: 4_000_000 });
 const cost = (legId: string, signedAmount: number, tripId = `trip-${legId}`): LegCostFact => ({
   legId,
   tripId,
+  signedAmount,
+});
+
+/** `#369` R-1 — mot dong phan bo gia thanh Run-first. `legId` `null` = dich `RUN`. */
+let attributionSeed = 0;
+const attributed = (
+  legId: string | null,
+  signedAmount: number,
+  runId = 'run-1',
+): AttributedCostFact => ({
+  attributionId: `pb-${(attributionSeed += 1)}`,
+  runId,
+  legId,
   signedAmount,
 });
 
@@ -254,6 +268,137 @@ describe('foldRunMargin', () => {
     const costs = [cost('leg-1', 2_000_000), cost('leg-1', 300_000), cost('leg-2', 1_500_000)];
     const run = foldRunMargin('run-1', CYCLE, [ORDER_A], costs);
     expect(run.directCost).toBe(costs.reduce((sum, row) => sum + row.signedAmount, 0));
+  });
+});
+
+/**
+ * ===========================================================================
+ * `#369` R-1 — HAI SO CAI GIA THANH, MOT CON SO, KHONG DEM TRUNG.
+ *
+ * `#364` §3 dat luat: mot phieu dau gan chuyen v1 chi co chan `TX-03`, mot phieu Run-first chi co
+ * dong phan bo. Hai tap phieu ROI NHAU theo cau truc, nen bien vong chay cong thang ca hai. Cac bai
+ * duoi day khoa dung dieu do — ke ca cho de sai nhat: mot phieu bi dem o ca hai duong.
+ */
+describe('foldRunMargin + phan bo gia thanh Run-first (`#369` R-1)', () => {
+  it('phan bo dich `RUN` vao bien vong chay DUNG MOT LAN, tach nguon doc duoc', () => {
+    const run = foldRunMargin('run-1', CYCLE, [ORDER_A], [], {
+      attributions: [attributed(null, 1_200_000)],
+    });
+
+    expect(run.directCost).toBe(1_200_000);
+    expect(run.costSources).toEqual({ legacyTripExpense: 0, fuelCostAttribution: 1_200_000 });
+    expect(run.runLevelCost).toBe(1_200_000);
+    expect(run.fuelCostAttributionIds).toHaveLength(1);
+    // Dich `RUN` khong thuoc chang nao — nen no KHONG roi vao bien cua don nao.
+    expect(run.legCosts.every((leg) => leg.fuelCostAttribution === 0)).toBe(true);
+    expect(
+      foldOrderMargins([ORDER_A], CYCLE, [], [attributed(null, 1_200_000)])[0]?.directCost,
+    ).toBe(0);
+  });
+
+  it('phan bo dich `LEG` roi vao CHANG do, va vao bien cua don ma chang do chay', () => {
+    const attributions = [attributed('leg-1', 800_000), attributed('leg-2', 300_000)];
+    const run = foldRunMargin('run-1', CYCLE, [ORDER_A], [], { attributions });
+
+    expect(run.legCosts).toEqual([
+      { legId: 'leg-1', legacyTripExpense: 0, fuelCostAttribution: 800_000, directCost: 800_000 },
+      { legId: 'leg-2', legacyTripExpense: 0, fuelCostAttribution: 300_000, directCost: 300_000 },
+    ]);
+    expect(run.directCost).toBe(1_100_000);
+
+    const [order] = foldOrderMargins([ORDER_A], CYCLE, [], attributions);
+    // `leg-2` la chang RONG — chi phi cua no khong thuoc don nao, y het chi phi `TX-03` cua chang rong.
+    expect(order?.directCost).toBe(800_000);
+    expect(order?.fuelCostAttributionIds).toHaveLength(1);
+  });
+
+  /**
+   * MOT PHIEU KHONG BAO GIO NAM O CA HAI SO CAI (`#364` §3), nen phep cong o day khong tru gi. Bai
+   * nay do dung con so ma nguoi doi soat cong tay: tong hai bang nguon.
+   */
+  it('lan lon chuyen cu va Run-first: cong ca hai, moi dong dung mot lan', () => {
+    const costs = [cost('leg-1', 2_000_000), cost('leg-2', 1_500_000)];
+    const attributions = [attributed(null, 400_000), attributed('leg-1', 600_000)];
+    const run = foldRunMargin('run-1', CYCLE, [ORDER_A], costs, { attributions });
+
+    expect(run.costSources).toEqual({
+      legacyTripExpense: 3_500_000,
+      fuelCostAttribution: 1_000_000,
+    });
+    expect(run.directCost).toBe(4_500_000);
+    expect(run.directCost).toBe(
+      [...costs, ...attributions].reduce((sum, row) => sum + row.signedAmount, 0),
+    );
+    expect(run.tripIds).toEqual(['trip-leg-1', 'trip-leg-2']);
+    expect(run.fuelCostAttributionIds).toHaveLength(2);
+  });
+
+  it('dong DAO mang so am nen mot cap phat da dao net ve 0', () => {
+    const allocation = attributed('leg-1', 900_000);
+    const run = foldRunMargin('run-1', CYCLE, [ORDER_A], [], {
+      attributions: [allocation, attributed('leg-1', -900_000)],
+    });
+    expect(run.directCost).toBe(0);
+    expect(run.costSources.fuelCostAttribution).toBe(0);
+    // Ca hai dong deu duoc ke ten: bao cao noi duoc no da cong nhung dong nao.
+    expect(run.fuelCostAttributionIds).toHaveLength(2);
+  });
+
+  it('dong cua vong chay KHAC khong lot vao bao cao nay', () => {
+    const run = foldRunMargin('run-1', CYCLE, [ORDER_A], [], {
+      attributions: [attributed('leg-9', 5_000_000, 'run-2'), attributed(null, 100_000)],
+    });
+    expect(run.directCost).toBe(100_000);
+    expect(run.fuelCostAttributionIds).toHaveLength(1);
+  });
+
+  /**
+   * CHANG DA HUY khong duoc dem — quy uoc cua ca tep, ap cho CA HAI nguon. Nhung so tien do khong
+   * duoc BIEN MAT trong im lang: bao cao phat mot ma de nguoi doc di tim.
+   */
+  it('tien nam tren chang DA HUY: khong cong vao, va duoc GOI TEN', () => {
+    const legs = [
+      CYCLE[0]!,
+      leg({ id: 'leg-huy', sequence: 3, status: 'CANCELLED', distanceKm: 50 }),
+    ];
+    const run = foldRunMargin('run-1', legs, [ORDER_A], [cost('leg-huy', 700_000)], {
+      attributions: [attributed('leg-huy', 300_000)],
+    });
+
+    expect(run.directCost).toBe(0);
+    expect(run.gaps).toContain('COST_ON_CANCELLED_LEG');
+    expect(run.legCosts.map((item) => item.legId)).toEqual(['leg-1']);
+  });
+
+  it('cap phat da dao TREN chang huy thi khong phat ma — khong con dong tien nao bi bo', () => {
+    const legs = [
+      CYCLE[0]!,
+      leg({ id: 'leg-huy', sequence: 3, status: 'CANCELLED', distanceKm: 50 }),
+    ];
+    const run = foldRunMargin('run-1', legs, [ORDER_A], [], {
+      attributions: [attributed('leg-huy', 300_000), attributed('leg-huy', -300_000)],
+    });
+    expect(run.gaps).not.toContain('COST_ON_CANCELLED_LEG');
+  });
+
+  /**
+   * NGUON VANG MAT PHAI DOC DUOC. Khach tat `transport-fuel` thi bao cao van dua ra tong THAT cua
+   * phan `TX-03`, kem mot ma noi rang no chua doc lop phan bo — khong phai mot so 0 im lang.
+   */
+  it('thieu nguon phan bo -> `unavailableSources` noi ra, con so con lai van dung', () => {
+    const run = foldRunMargin('run-1', CYCLE, [ORDER_A], [cost('leg-1', 2_000_000)], {
+      unavailableSources: ['FUEL_COST_ATTRIBUTION'],
+    });
+    expect(run.unavailableSources).toEqual(['FUEL_COST_ATTRIBUTION']);
+    expect(run.directCost).toBe(2_000_000);
+    expect(run.costSources.fuelCostAttribution).toBe(0);
+  });
+
+  it('khong truyen gi -> hinh dang cu giu nguyen, khong nguon nao bi bao thieu', () => {
+    const run = foldRunMargin('run-1', CYCLE, [ORDER_A], [cost('leg-1', 2_000_000)]);
+    expect(run.unavailableSources).toEqual([]);
+    expect(run.directCost).toBe(2_000_000);
+    expect(run.runLevelCost).toBe(0);
   });
 });
 

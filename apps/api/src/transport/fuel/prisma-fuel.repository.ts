@@ -15,6 +15,7 @@ import {
   evaluateDecisionRevision,
   lineStatusAfterRevision,
 } from './fuel-decision-revision.js';
+import { cashPaidMatches, isSupplierPayable } from './fuel-payable.js';
 import { settlementResultFingerprint, sumAcceptedSettlement } from './fuel-settlement.js';
 import {
   consumptionFromStored,
@@ -29,8 +30,10 @@ import {
   FUEL_MATCH_LINE_ONCE,
   FUEL_STATEMENT_PERIOD,
   costExpenseOnRunFirstEntry,
-  isDriverCashNeedsTripViolation,
+  driverFundLegOnIneligibleEntry,
+  isCashPaidMatchViolation,
   isLegRunViolation,
+  isMatchedEntryPaymentChangeViolation,
   isRunVehicleViolation,
   isSelfSourcedMatchViolation,
   isStationSupplierViolation,
@@ -65,6 +68,7 @@ import type {
   FuelEntry,
   FuelHandoffKeyset,
   FuelMatch,
+  FuelPaymentMethod,
   FuelReceiptEvidence,
   FuelReconciliation,
   FuelSettlementHandoff,
@@ -137,6 +141,8 @@ const toEntry = (row: any): FuelEntry => ({
   reconciliationStatus: row.reconciliationStatus,
   sourceStatementId: row.sourceStatementId,
   costExpenseId: row.costExpenseId,
+  // `?? null` — cung ly le voi `runId`/`legId`: client sinh truoc migration `#369` R-4 khong co khoa nay.
+  driverFundEntryId: row.driverFundEntryId ?? null,
   correlationKey: row.correlationKey,
   invoiceNo: row.invoiceNo,
   note: row.note,
@@ -174,7 +180,18 @@ const inboxScopeWhere = (filter: FuelEntryInboxFilter): Record<string, any> => {
   const where: Record<string, any> = {};
   // `null` = khong loc; `[]` = co loc va khong chuyen nao khop. Xem `FuelEntryInboxFilter`.
   if (filter.tripIds !== null) where.tripId = { in: [...filter.tripIds] };
-  if (filter.runIds !== null) where.runId = { in: [...filter.runIds] };
+  /*
+   * `#369` R-5 — loc theo VONG CHAY la mot phep HOAC: phieu khai thang vong chay do, HOAC phieu
+   * chuyen v1 da duoc chieu sang mot chang cua no. Mot `AND` o day se lam bo loc luon rong (mot phieu
+   * khong bao gio mang ca hai ngu canh — `CHECK TransportFuelEntry_one_context_kind`).
+   */
+  if (filter.runIds !== null) {
+    const runTripIds = filter.runTripIds ?? [];
+    where.OR = [
+      { runId: { in: [...filter.runIds] } },
+      ...(runTripIds.length > 0 ? [{ tripId: { in: [...runTripIds] } }] : []),
+    ];
+  }
   if (filter.driverId !== null) where.driverId = filter.driverId;
   if (filter.vehicleId !== null) where.vehicleId = filter.vehicleId;
   if (filter.supplierId !== null) where.supplierId = filter.supplierId;
@@ -324,10 +341,12 @@ const translateEntryWriteError = (error: unknown): unknown => {
       'Chang tren phieu khong thuoc vong chay cua phieu',
     );
   }
-  if (isDriverCashNeedsTripViolation(error)) {
+  // `#371` — luoi cuoi: lenh sua phieu da loai phieu dang khop (`lockedReconciliation`), nen toi duoc
+  // day nghia la trang thai doi soat cua phieu da lech khoi bang cap khop.
+  if (isMatchedEntryPaymentChangeViolation(error)) {
     return TransportDomainError.denied(
-      'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
-      'Tien mat lai xe ung chi ghi duoc tren chuyen cu',
+      'MATCH_PAYMENT_METHOD_CONFLICT',
+      'Phieu dang co cap khop bang ke cong no — khong doi cach tra sang lai xe tra tien mat',
     );
   }
   return translateStationSupplierError(error);
@@ -471,6 +490,14 @@ export class PrismaFuelRepository extends FuelRepository {
   async listEntriesByTrip(tripId: string): Promise<FuelEntry[]> {
     const rows = await model(this.prisma, 'transportFuelEntry').findMany({
       where: { tripId },
+      orderBy: [{ businessDate: 'asc' }, { occurredAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(toEntry);
+  }
+
+  async listEntriesByRun(runId: string): Promise<FuelEntry[]> {
+    const rows = await model(this.prisma, 'transportFuelEntry').findMany({
+      where: { runId },
       orderBy: [{ businessDate: 'asc' }, { occurredAt: 'asc' }, { id: 'asc' }],
     });
     return rows.map(toEntry);
@@ -661,6 +688,29 @@ export class PrismaFuelRepository extends FuelRepository {
     const current = await this.findEntry(id);
     if (current?.tripId === null) throw costExpenseOnRunFirstEntry(id);
     return null;
+  }
+
+  async attachDriverFundEntry(id: string, fundEntryId: string): Promise<FuelEntry | null> {
+    const updated = await model(this.prisma, 'transportFuelEntry').updateMany({
+      // MOT lenh `UPDATE` co dieu kien (CAS): du dieu kien cua `CHECK` NAM TRONG lenh ghi, va
+      // `driverFundEntryId: null` chan lan gan thu hai. Hai lan duyet song song gan CUNG mot but toan
+      // (khoa su kien tat dinh) — ben sau thay 0 hang va doc lai.
+      where: {
+        id,
+        driverFundEntryId: null,
+        tripId: null,
+        paymentMethod: 'DRIVER_CASH',
+        verificationStatus: 'VERIFIED',
+      },
+      data: { driverFundEntryId: fundEntryId },
+    });
+    if (updated.count > 0) return this.findEntry(id);
+
+    // Khong ghi duoc: phan loai de `null` chi con MOT nghia ("da co"). Ba dieu kien con lai deu bat
+    // bien voi mot phieu da duyet, nen phep doc nay khong dua voi ai.
+    const current = await this.findEntry(id);
+    if (current && current.driverFundEntryId !== null) return null;
+    throw driverFundLegOnIneligibleEntry(id);
   }
 
   /* -------------------------- Bang chung -------------------------- */
@@ -1041,6 +1091,30 @@ export class PrismaFuelRepository extends FuelRepository {
         }
 
         /*
+         * `#371` — CACH TRA CUA PHIEU, DOC LAI DUOI KHOA, TRUOC MOI LAN GHI.
+         *
+         * Tang mien da kiem mot lan, nhung TRUOC giao dich — va mot lenh sua phieu sang
+         * `DRIVER_CASH` co the chen vao giua. Khoa hang PHIEU (`FOR UPDATE`) roi moi doc: lenh sua dang
+         * cho khoa se chay SAU khi cap khop da ghi va phieu da `MATCHED`, nen dieu kien cua no
+         * (`reconciliationStatus NOT IN MATCHED/SETTLED`) tu choi; lenh sua da ghi TRUOC thi lan doc nay
+         * thay `DRIVER_CASH` va tu choi o day.
+         *
+         * Hai trigger cua `#371` KHONG thay duoc buoc nay: duoi `READ COMMITTED` moi trigger chi thay
+         * du lieu da commit, nen cap khop moi ghi va lenh sua cach tra dang do dang lot qua CA HAI
+         * trigger (ghi-lech, `write skew`). Chinh hang khoa nay xep hai lenh thanh mot hang doi.
+         *
+         * Khoa hang doi soat TRUOC, hang phieu SAU — cung thu tu voi lenh dong ky, nen khong mo them
+         * mot duong khoa cheo nao.
+         */
+        if (input.confirmedMatch) {
+          const fuelEntryId = input.confirmedMatch.fuelEntryId;
+          const paymentMethod = await this.lockEntryPaymentMethod(scoped, fuelEntryId);
+          if (paymentMethod !== null && !isSupplierPayable(paymentMethod)) {
+            return { kind: 'MATCH_PAYMENT_METHOD_CONFLICT', fuelEntryId, paymentMethod };
+          }
+        }
+
+        /*
          * `#317` G0 — NOI CHUOI, DUOI KHOA. Mot chenh lech moi cua mot dong DA co quyet dinh (vd lan
          * chay lai so khop sau khi mo ky) thay the quyet dinh dang hieu luc cua dong do, chu khong
          * dung CANH no. Doc chuoi o day, sau `lockReconciliation`, nen khong lan quyet nao chen vao
@@ -1258,6 +1332,24 @@ export class PrismaFuelRepository extends FuelRepository {
       const path = planFuelReconciliationPath(locked.state, 'CLOSED');
       if (path === null || path.length === 0) return { kind: 'REJECTED', state: locked.state };
 
+      /*
+       * `#371` — LUOI CUOI TRUOC BAN GIAO, duoi khoa, TRUOC moi lan ghi cua lenh dong.
+       *
+       * Mot cap khop toi phieu KHONG ghi no chi ton tai khi du lieu da hong: ghi truoc `#371` (bo so
+       * khop cu khong biet cach tra), hoac mot duong ghi khong qua tang mien. Dong ky tren no la phat
+       * cong no cho mot lan do lai xe DA tra — nen tu choi, KHONG ghi gi, va KHONG loc bo cap do roi
+       * coi ky la sach. Cap `AUTO` hong thi chay lai so khop la sach; cap `MANUAL` thi nguoi phai sua.
+       */
+      const matches = await this.readMatches(scoped, input.reconciliationId);
+      const cashPaid = cashPaidMatches(
+        matches,
+        await this.readPaymentMethods(
+          scoped,
+          matches.map((match) => match.fuelEntryId),
+        ),
+      );
+      if (cashPaid.length > 0) return { kind: 'CASH_PAID_MATCHES', matches: cashPaid };
+
       const reconciliation = toReconciliation(
         await model(scoped, 'transportFuelReconciliation').update({
           where: { id: input.reconciliationId },
@@ -1269,8 +1361,6 @@ export class PrismaFuelRepository extends FuelRepository {
           },
         }),
       );
-
-      const matches = await this.readMatches(scoped, reconciliation.id);
 
       // `GD-11` — moi chung tu trong ky chuyen `SETTLED` va khoa lai.
       await model(scoped, 'transportFuelStatementLine').updateMany({
@@ -1508,6 +1598,44 @@ export class PrismaFuelRepository extends FuelRepository {
     return row ? toReconciliation(row) : null;
   }
 
+  /**
+   * `#371` — KHOA hang phieu roi doc CACH TRA cua no, trong giao dich cua nguoi goi.
+   *
+   * Hai cau lenh chu khong mot `SELECT ... FOR UPDATE` tra ve cot: cung khuon `lockReconciliation`, va
+   * duoi `READ COMMITTED` cau doc SAU khi lay khoa thay ban da commit MOI NHAT — dung ban ma lenh sua
+   * vua ghi truoc khi nha khoa. `null` = khong co phieu (khoa ngoai cua cap khop se tu choi sau do).
+   */
+  private async lockEntryPaymentMethod(
+    scoped: PrismaService,
+    fuelEntryId: string,
+  ): Promise<FuelPaymentMethod | null> {
+    const locked =
+      await scoped.$executeRaw`SELECT "id" FROM "TransportFuelEntry" WHERE "id" = ${fuelEntryId} FOR UPDATE`;
+    if (locked === 0) return null;
+
+    const row = await model(scoped, 'transportFuelEntry').findUnique({
+      where: { id: fuelEntryId },
+      select: { paymentMethod: true },
+    });
+    return row ? (row.paymentMethod as FuelPaymentMethod) : null;
+  }
+
+  /** `#371` — cach tra cua nhieu phieu, MOT lan doc. Phieu vang mat thi vang mat khoi map (dong chat). */
+  private async readPaymentMethods(
+    scoped: PrismaService,
+    fuelEntryIds: readonly string[],
+  ): Promise<ReadonlyMap<string, FuelPaymentMethod>> {
+    if (fuelEntryIds.length === 0) return new Map();
+    const rows: { id: string; paymentMethod: FuelPaymentMethod }[] = await model(
+      scoped,
+      'transportFuelEntry',
+    ).findMany({
+      where: { id: { in: [...fuelEntryIds] } },
+      select: { id: true, paymentMethod: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.paymentMethod]));
+  }
+
   private async countPending(scoped: PrismaService, reconciliationId: string): Promise<number> {
     return model(scoped, 'transportFuelDiscrepancy').count({
       where: { reconciliationId, status: 'PENDING' },
@@ -1592,6 +1720,14 @@ export class PrismaFuelRepository extends FuelRepository {
       return TransportDomainError.conflict(
         'FUEL_MATCH_SELF_SOURCED',
         'Phieu nay duoc de ra tu chinh bang ke dang doi soat — khong khop voi chinh no (INV-26)',
+      );
+    }
+    // `#371` — luoi cuoi o CSDL. Tang mien chan truoc ca hai duong; toi duoc day nghia la co mot
+    // duong ghi cap khop khong qua `fuel-matching.ts` lan `resolveDiscrepancy`.
+    if (isCashPaidMatchViolation(error)) {
+      return TransportDomainError.denied(
+        'MATCH_PAYMENT_METHOD_CONFLICT',
+        'Phieu nay do lai xe da tra tien mat — khong khop voi bang ke cong no cay xang',
       );
     }
     if (isUniqueViolationOn(error, FUEL_MATCH_LINE_ONCE)) {
