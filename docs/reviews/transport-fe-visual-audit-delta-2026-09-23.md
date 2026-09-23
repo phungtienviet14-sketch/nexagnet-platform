@@ -35,7 +35,7 @@ ngay từ bước lập kế hoạch, khi đơn còn chưa có xe.
 | Mới `NEW_REGRESSION` (do #356/#357/#375/#377)           | 1      |
 | Mới — web chưa theo hợp đồng BE vừa đổi (#371)          | 1      |
 | Mới — có từ trước, bản nền không đo tới                 | 3      |
-| **Issue đã mở** (chỉ P0/P1 chặn nghiệp vụ)              | **4**  |
+| **Issue mới mở** (chỉ P0/P1 chặn nghiệp vụ)            | **3** (#381 · #382 · #383) + dùng #380 đã có |
 
 ---
 
@@ -66,7 +66,7 @@ chuỗi UAT.
 | 1   | Tạo đơn (ADMIN)                               | ✅ — form không xoá, không thông báo (F-13.1)                                                                        |
 | 2   | Lập kế hoạch + giao xe                        | ✅ — không nói gán ai (P0-4)                                                                                         |
 | 3   | Trang chủ lái xe                              | ✅ **Run-first** (#356)                                                                                              |
-| 4   | Mốc Hiện trường (12 lần bấm, 3 chứng từ ảnh)  | ✅ — sau "Khách đã nhận hàng" không còn "Bắt đầu chờ" (#363)                                                         |
+| 4   | Mốc Hiện trường (11 việc, 4 chứng từ ảnh)     | ✅ — sau "Khách đã nhận hàng" không còn "Bắt đầu chờ" (#363). Harness bấm lặp "Đang xếp hàng" 7 lần (lỗi vòng lặp của harness, không phải của màn) |
 | 5   | Văn phòng tiến chặng ×4                       | ✅ (#377) — hệ thống giữ vòng chạy "Đang giữ: hết việc nhưng xe chưa về bãi"                                          |
 | 6   | Giao xong đơn                                 | ✅ (#377) — nhưng xem N1                                                                                             |
 | 7   | Kết thúc đơn (ACCOUNTING)                     | ⚠️ làm được sau khi **cuộn ngang** và **gõ tay căn cứ** — không chọn được chứng từ (N2)                              |
@@ -97,8 +97,8 @@ Cột **Bằng chứng**: `Dxx` = ảnh có khoanh vùng ở §6; `đo` = số �
 | ID   | Nội dung                                             | Nhãn          | Bằng chứng / số đo                                                                                                                              | Issue          |
 | ---- | ---------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
 | P0-1 | Hàng việc không chủ thể/mức độ/hạn (F-01, D-02)      | `STILL_VALID` | D08 — 54 việc, mỗi dòng chỉ còn nhãn loại                                                                                                        | không mở (§5)  |
-| P0-2 | Nút "Kết thúc" ngoài khung, 125 nút không thứ bậc (F-03) | `STILL_VALID` | D03 — nay **128 nút**, 0 nhấn mạnh, 42 "Từ chối"; bảng 1554px/1145px (1440) · 1554px/988px (1280); kể cả lọc "Chờ kết thúc" (1 dòng) vẫn 1427px/1145px | **#TBD-C**     |
-| P0-3 | Lái xe không ghi chi phí khi việc là vòng chạy (D-01) | `STILL_VALID` | D02 — "Bạn chưa có chuyến nào đang mở…" trong khi Trang chủ "Chuyến đang mở 1"; `/me/expenses` → `recordSelfTripExpense` vẫn cần `tripId`        | **#TBD-D**     |
+| P0-2 | Nút "Kết thúc" ngoài khung, 125 nút không thứ bậc (F-03) | `STILL_VALID` | D03 — nay **128 nút**, 0 nhấn mạnh, 42 "Từ chối"; bảng 1554px/1145px (1440) · 1554px/988px (1280); kể cả lọc "Chờ kết thúc" (1 dòng) vẫn 1427px/1145px | **#382**     |
+| P0-3 | Lái xe không ghi chi phí khi việc là vòng chạy (D-01) | `STILL_VALID` | D02 — "Bạn chưa có chuyến nào đang mở…" trong khi Trang chủ "Chuyến đang mở 1"; `/me/expenses` → `recordSelfTripExpense` vẫn cần `tripId`        | **#383**     |
 | P0-4 | Chốt kế hoạch không nói gán ai (F-13.3, C-10)        | `STILL_VALID` | D05 — "Đã giao đơn … cho xe 29H-152.44"; nút chốt vẫn bấm được sau khi chốt                                                                      | không mở (§5)  |
 | P0-5 | Đơn hàng & vòng chạy không tìm/lọc (F-14)            | `STILL_VALID` | D05 — 41 đơn, không ô tìm/lọc; ngày ISO                                                                                                          | không mở (§5)  |
 
@@ -118,7 +118,7 @@ Cột **Bằng chứng**: `Dxx` = ảnh có khoanh vùng ở §6; `đo` = số �
 | P1-10 | Dòng tổng cho bảng nhiên liệu (F-12, C-15)          | `STILL_VALID` | đo: 37 dòng, không `<tfoot>`, bảng 1365px trong khung 1145px                                                                                                  |
 | P1-11 | Lựa chọn dòng vào URL (F-13.4)                     | `STILL_VALID` | đo: chọn đơn, URL vẫn `/?section=movement`                                                                                                                   |
 | P1-12 | Đường vào chuỗi chứng từ (D-05)                    | `STILL_VALID` | mã: `useDocumentChain` có nhưng không màn nào gọi                                                                                                             |
-| P1-13 | Nhiên liệu lái xe: nút khoá không nói lý do (F-09) | `STILL_VALID` | D02 — "Gửi phiếu" khoá, không `title`/`aria-describedby`. Gộp vào **#TBD-A** vì cùng form                                                                          |
+| P1-13 | Nhiên liệu lái xe: nút khoá không nói lý do (F-09) | `STILL_VALID` | D02 — "Gửi phiếu" khoá, không `title`/`aria-describedby`. Cùng form với #380 — không mở riêng                                                                   |
 | P1-14 | Tách bề mặt ADMIN ≠ ACCOUNTING (C-20)              | `STILL_VALID` | đo: 23 mục = 23 mục, không khác một mục nào                                                                                                                   |
 | P1-15 | Hành động công nợ bám dòng (C-14)                  | `STILL_VALID` | đo: khối việc ở y=2079 trên trang 2523px, 25 ô, chỉ ô mặc định (tiền tệ/ngày) điền sẵn, 3 nút nhấn mạnh. Chuỗi vẫn đi được                                        |
 
@@ -145,9 +145,9 @@ Cột **Bằng chứng**: `Dxx` = ảnh có khoanh vùng ở §6; `đo` = số �
 | ID  | Nhãn                                  | Nguồn gốc                                           | Mức    | Nội dung                                                                                                                                                                                                                                                                                                                          | Issue         |
 | --- | ------------------------------------- | --------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
 | N1  | `NEW_REGRESSION`                      | **#377**                                            | P1     | D04 — "Xác nhận đã giao xong" là nút nhấn mạnh **duy nhất** của chi tiết đơn từ lúc chọn đơn, kể cả khi đơn **chưa có xe**; hộp xác nhận ghi "Không hoàn tác được". Harness đã bấm đúng nút đó khi hai chặng còn "Dự kiến" → đơn thành "Đã giao xong" và vào "Kết thúc đơn". Cho phép là cố ý (đơn thuê xe ngoài); **thứ bậc** mới là hồi quy | không mở (§5) |
-| N2  | Mới — có từ trước, bản nền không đo tới | `OrderCompletionView` + `ConfirmAction` (không đổi từ `e816fe82`) | **P0** | D03 — khối "Chứng từ số của đơn" chỉ render khi hộp thoại mở, nhưng render **ngoài** hộp thoại: `.tx-confirm` phủ toàn màn (`position:fixed; inset:0; z-index:50`), `elementFromPoint` tại ô chọn = `DIV.tx-confirm`. Kế toán không chọn được, không mở được tệp chứng từ; căn cứ luôn là `EXTERNAL_PHYSICAL_CONFIRMATION` + gõ tay | **#TBD-C**    |
-| N3  | Mới — web chậm hợp đồng BE mới        | #369 R-4 (commit `609236f4`, merge qua #371)         | **P0** | D02 — option "Lái xe trả tiền mặt **(chỉ chuyến cũ)**" `disabled` khi việc là vòng chạy (`workspace/fuel-declaration.ts:196` `allowsDriverCash = kind === 'LEGACY_TRIP'`). Cùng phiên lái xe, `POST /transport/me/fuel/slips {runId, legId, paymentMethod: DRIVER_CASH}` → **201**. Bước "Fuel DRIVER_CASH" của chuỗi UAT không làm được bằng UI | **#TBD-A**    |
-| N4  | Mới — có từ trước, bản nền không đo tới | `finance-facts.port.ts` `directMargin()` = rollup theo `trips.list()`; `MarginView` chọn theo chuyến | **P0** | D06 — sau khi `UAT370-915482` đã Giao xong → Đã kết thúc → chốt đối soát → thu tiền → phân bổ, **Tổng hợp tài chính** và **Hiệu quả từng chuyến** vẫn "Tính trên 44 chuyến", biên 219.386.201 đ (78,55%) trùng từng đồng với bản nền. `GET /transport/analytics/runs/:runId/margin` có sẵn nhưng không màn nào gọi | **#TBD-B**    |
+| N2  | Mới — có từ trước, bản nền không đo tới | `OrderCompletionView` + `ConfirmAction` (không đổi từ `e816fe82`) | **P0** | D03 — khối "Chứng từ số của đơn" chỉ render khi hộp thoại mở, nhưng render **ngoài** hộp thoại: `.tx-confirm` phủ toàn màn (`position:fixed; inset:0; z-index:50`), `elementFromPoint` tại ô chọn = `DIV.tx-confirm`. Kế toán không chọn được, không mở được tệp chứng từ; căn cứ luôn là `EXTERNAL_PHYSICAL_CONFIRMATION` + gõ tay | **#382**    |
+| N3  | Mới — web chậm hợp đồng BE mới        | #369 R-4 (commit `609236f4`, merge qua #371)         | **P0** | D02 — option "Lái xe trả tiền mặt **(chỉ chuyến cũ)**" `disabled` khi việc là vòng chạy (`workspace/fuel-declaration.ts:196` `allowsDriverCash = kind === 'LEGACY_TRIP'`). Cùng phiên lái xe, `POST /transport/me/fuel/slips {runId, legId, paymentMethod: DRIVER_CASH}` → **201**. Bước "Fuel DRIVER_CASH" của chuỗi UAT không làm được bằng UI | **#380**    |
+| N4  | Mới — có từ trước, bản nền không đo tới | `finance-facts.port.ts` `directMargin()` = rollup theo `trips.list()`; `MarginView` chọn theo chuyến | **P0** | D06 — sau khi `UAT370-915482` đã Giao xong → Đã kết thúc → chốt đối soát → thu tiền → phân bổ, **Tổng hợp tài chính** và **Hiệu quả từng chuyến** vẫn "Tính trên 44 chuyến", biên 219.386.201 đ (78,55%) trùng từng đồng với bản nền. `GET /transport/analytics/runs/:runId/margin` có sẵn nhưng không màn nào gọi | **#381**    |
 | N5  | Mới — có từ trước, bản nền không đo tới | `journey-read.service.ts` đọc GPS thô qua `TransportTripRunLegLink`; đơn chỉ có chữ | P1     | D07 — vòng chạy Run-first đã xong 2/2 chặng chỉ vẽ **một điểm**; vệt GPS "Chặng không nối với chuyến nào…"; km "—". Phần điểm lấy/giao thuộc **#379**                                                                                                                                                                                      | không mở (§5) |
 
 ---
@@ -158,10 +158,10 @@ Chỉ mở cho P0/P1 **thực sự chặn nghiệp vụ** còn tồn tại:
 
 | Issue      | Mục                | Vì sao chặn nghiệp vụ                                                                                                                  |
 | ---------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **#TBD-A** | N3 (+P1-13)        | Lái xe trả tiền mặt đổ dầu trên việc được điều không ghi được — tiền rời sổ quỹ; bước DRIVER_CASH của chuỗi UAT không làm được bằng UI      |
-| **#TBD-B** | N4                 | Doanh thu/biên của MỌI đơn tạo theo đường chính thức không vào báo cáo — màn hình nói sai sự thật về tiền                                    |
-| **#TBD-C** | P0-2 + N2          | Bước kiểm soát thương mại (kết thúc đơn theo chứng từ) không dùng được chứng từ; hành động chính không thấy                                    |
-| **#TBD-D** | P0-3 / D-01        | Lái xe không ghi được phí cầu đường/bốc xếp/bến bãi của việc được điều; #369 đã đóng phạm vi backend mà không mang đường này                    |
+| **#380** (UAT #378 đã mở — **không mở trùng**) | N3 | Lái xe trả tiền mặt đổ dầu trên việc được điều không ghi được — tiền rời sổ quỹ; bước DRIVER_CASH của chuỗi UAT không làm được bằng UI. P1-13 (nút khoá không nói lý do) ở cùng form |
+| **#381** | N4                 | Doanh thu/biên của MỌI đơn tạo theo đường chính thức không vào báo cáo — màn hình nói sai sự thật về tiền                                    |
+| **#382** | P0-2 + N2          | Bước kiểm soát thương mại (kết thúc đơn theo chứng từ) không dùng được chứng từ; hành động chính không thấy                                    |
+| **#383** | P0-3 / D-01        | Lái xe không ghi được phí cầu đường/bốc xếp/bến bãi của việc được điều; #369 đã đóng phạm vi backend mà không mang đường này                    |
 
 **Không mở** (vẫn `STILL_VALID`, giữ trong backlog #372, không chặn một bước nghiệp vụ nào — chuỗi UAT vẫn đi qua):
 
