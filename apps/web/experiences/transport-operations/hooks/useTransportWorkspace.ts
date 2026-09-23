@@ -11,6 +11,7 @@ import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import type {
   FuelEntryInboxQuery,
+  LegTransitionTarget,
   SettlementFlow,
   TollCandidateQuery,
   TollProvider,
@@ -57,6 +58,12 @@ export const TRANSPORT_QUERY_KEYS = {
   tollProviders: ['transport', 'toll', 'providers'],
   tollAccounts: ['transport', 'toll', 'accounts'],
   driverTrips: ['transport', 'me', 'trips'],
+  /**
+   * `#340` — viec hien truong (vong chay) cua CHINH lai xe. PHAI trung khoa ma man Hien truong
+   * (`driver/FieldScreen.tsx`) dung: trang chu va man do la MOT lan doc, mot o nho — khong phai hai
+   * anh chup lech nhau cua cung mot cau hoi "toi co viec gi".
+   */
+  driverFieldWork: ['transport', 'me', 'field-work'],
   driverFund: ['transport', 'me', 'fund'],
   driverFuel: ['transport', 'me', 'fuel'],
   driverPayslips: ['transport', 'me', 'payslips'],
@@ -71,6 +78,8 @@ export const TRANSPORT_QUERY_KEYS = {
   planningPolicy: ['transport', 'planning', 'policy'],
   expenseClaims: ['transport', 'expense-claims'],
   orderCompletion: ['transport', 'order-completion'],
+  /** Lane N — bao cao mot vong chay; `#376` doc giai doan hien truong tung chang tu day. */
+  journey: ['transport', 'journey'],
   /** Lane G — MOT khoa cho CA bang: mot lan goi, mot khung nhin. */
   controlTower: ['transport', 'control-tower'],
   /** Lane G — sau con so tai chinh, cung mot lan doc. */
@@ -410,6 +419,74 @@ export function useOrderRunPlans(input: NavigationInput, orderId: string | null)
   });
 }
 
+/**
+ * VONG CHAY DONG DUOC CHUA — be mat CHAN DOAN chi doc (`#293` R1), cung bang chan voi duong he thong
+ * dung de dong. Khoa nam DUOI `['transport','runs', runId]` nen moi lan lam tuoi vong chay lam tuoi
+ * luon cau tra loi nay.
+ */
+export function useRunClosure(input: NavigationInput, runId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'runs', runId ?? 'none', 'closure'],
+    queryFn: () => transportApi.planning.closure(runId as string),
+    enabled: runId !== null && allowed(input, 'transport-core', 'transport.run.read'),
+  });
+}
+
+/**
+ * NHUNG NGUON MOT LAN GHI VONG DOI DON/CHANG LAM CU — `#376`.
+ *
+ * Tien mot chang doi: chang cua don va cua vong chay, trang thai vong chay (`PLANNED -> ACTIVE`,
+ * lan dong cua he thong), cot tren Bang dieu hanh, dong thoi gian cua bao cao vong chay. Xac nhan
+ * don da giao xong doi: danh sach don (the "Don dang mo" cua Tong quan) va hang cho "Ket thuc don".
+ * Mot danh sach cho CA HAI lenh — lam tuoi thua mot nguon re hon han mot man hinh noi sai.
+ */
+const LIFECYCLE_AFFECTED_KEYS = [
+  TRANSPORT_QUERY_KEYS.orders,
+  TRANSPORT_QUERY_KEYS.runs,
+  TRANSPORT_QUERY_KEYS.journey,
+  TRANSPORT_QUERY_KEYS.controlTower,
+  TRANSPORT_QUERY_KEYS.orderCompletion,
+] as const;
+
+/**
+ * Lam tuoi o `onSettled`, KHONG chi `onSuccess`: mot lan bi tu choi la MAY CHU dang noi mo hinh tren
+ * man hinh da cu (nguoi khac vua tien chang, he thong vua dong vong chay) — cung ly le `#333` cua
+ * man Hien truong. Doc lai khong dung vao ket qua cua lan ghi.
+ */
+function useLifecycleRefresh(): () => void {
+  const client = useQueryClient();
+  return () => {
+    for (const queryKey of LIFECYCLE_AFFECTED_KEYS) void client.invalidateQueries({ queryKey });
+  };
+}
+
+/** Van phong tien mot chang (`#376`). Cong that — quyen, hien truong, ghi de — nam o may chu. */
+export function useLegTransition() {
+  const refresh = useLifecycleRefresh();
+  return useMutation({
+    mutationFn: (input: {
+      readonly runId: string;
+      readonly legId: string;
+      readonly to: LegTransitionTarget;
+      readonly overrideReason?: string;
+    }) =>
+      transportApi.movement.transitionLeg(input.runId, input.legId, {
+        to: input.to,
+        ...(input.overrideReason === undefined ? {} : { overrideReason: input.overrideReason }),
+      }),
+    onSettled: refresh,
+  });
+}
+
+/** Van phong xac nhan don da giao xong: `OPEN -> FULFILLED` (`#376`). Khong tu suy tu moc. */
+export function useOrderFulfilment() {
+  const refresh = useLifecycleRefresh();
+  return useMutation({
+    mutationFn: (orderId: string) => transportApi.movement.fulfilOrder(orderId),
+    onSettled: refresh,
+  });
+}
+
 /** DE NGHI CHI cho ke toan duyet (`D-06`). */
 export function useExpenseClaims(input: NavigationInput) {
   return useQuery({
@@ -598,6 +675,25 @@ export function useDriverTrips(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.driverTrips,
     queryFn: () => transportApi.me.trips(),
     enabled: allowed(input, 'transport-core', 'transport.driver.self.trip.read'),
+  });
+}
+
+/**
+ * VIEC DUOC DIEU cua chinh lai xe — `#340`: trang chu doc CUNG nguon voi man Hien truong.
+ *
+ * Gac bang DUNG cap (nang luc, hanh dong) cua muc `field` trong `DRIVER_SCREENS` va cua
+ * `DriverFieldController`: khach khong bat `transport-checkpoint` thi tuyen khong duoc gan, va mot
+ * yeu cau o day chi nhan ve trang 404 cua Next.js.
+ *
+ * `refetchOnWindowFocus` bat rieng o day (ung dung tat no o cap goc, `app/providers.tsx`): lai xe
+ * mo lai app sau khi van phong vua dieu viec phai thay viec do, khong phai mot trang chu cu.
+ */
+export function useDriverFieldWork(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.driverFieldWork,
+    queryFn: () => transportApi.me.fieldWork(),
+    enabled: allowed(input, 'transport-checkpoint', 'transport.driver.self.checkpoint.record'),
+    refetchOnWindowFocus: true,
   });
 }
 

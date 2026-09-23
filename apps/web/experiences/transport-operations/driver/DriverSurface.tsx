@@ -41,26 +41,34 @@ import {
   driverTripActions,
   EVIDENCE_UPLOAD_HINT,
   toDriverFuelSlipRows,
-  toDriverHome,
   toDriverTripCard,
 } from '../workspace/driver';
 import { toDriverPayslipRows } from '../workspace/payroll';
 import { DriverFieldWork } from './FieldScreen';
+import { DriverHome } from './HomeScreen';
 import { DriverSiteIntake } from './SiteIntakeScreen';
 
 /**
  * BE MAT LAI XE — `GD-23`, va moi payload di qua kieu khung nhin rieng khong co doanh thu (`INV-09`).
  *
- * Uu tien la 1–2 cham cho viec thuong lam (#161 §3): trang chu tra ve DUNG MOT chuyen dang lam kem
- * thao tac cua chinh no, chu khong tra ve mot danh sach de nguoi ta tu tim.
+ * Uu tien la 1–2 cham cho viec thuong lam (#161 §3): trang chu tra ve DUNG MOT viec dang lam, chu
+ * khong tra ve mot danh sach de nguoi ta tu tim — va tu `#340` viec do doc tu VONG CHAY da duoc
+ * dieu (`HomeScreen.tsx`), kem mot cham vao man Hien truong de lam no.
  *
  * MOI man hinh o day deu goi duoc mot duong that. Truoc T7D co HAI man chi doc duoc — nop phieu
  * dau (thieu `vehicleId`) va phieu luong (chua co route) — va ca hai da duoc #168 mo.
  */
-export function DriverSurface({ screen }: { readonly screen: DriverScreenId }) {
+export function DriverSurface({
+  screen,
+  onNavigate,
+}: {
+  readonly screen: DriverScreenId;
+  /** Dieu huong TRONG ung dung — cung duong voi thanh tab duoi, de Back van la "ra khoi man nay". */
+  readonly onNavigate: (screen: DriverScreenId) => void;
+}) {
   switch (screen) {
     case 'home':
-      return <DriverHome />;
+      return <DriverHome onNavigate={onNavigate} />;
     case 'site-intake':
       return <DriverSiteIntake />;
     case 'field':
@@ -78,88 +86,6 @@ export function DriverSurface({ screen }: { readonly screen: DriverScreenId }) {
     case 'payslip':
       return <DriverPayslip />;
   }
-}
-
-function DriverHome() {
-  const navigation = useNavigationInput();
-  const trips = toSectionQuery(useDriverTrips(navigation));
-  const fund = toSectionQuery(useDriverFund(navigation));
-  const queryClient = useQueryClient();
-  const [failure, setFailure] = useState<string | null>(null);
-
-  const setStatus = useMutation({
-    mutationFn: (input: { readonly id: string; readonly to: 'IN_TRANSIT' | 'DELIVERED' }) =>
-      transportApi.me.setTripStatus(input.id, input.to),
-    onSuccess: () => {
-      setFailure(null);
-      void queryClient.invalidateQueries({ queryKey: ['transport', 'me'] });
-    },
-    onError: (error: Error) => setFailure(error.message),
-  });
-
-  if (trips.errorMessage !== null) {
-    return <ErrorState message={trips.errorMessage} onRetry={trips.refetch} />;
-  }
-  if (trips.isLoading) return <LoadingState label="Đang đọc chuyến của bạn…" />;
-
-  const model = toDriverHome({ trips: trips.data ?? [], fund: fund.data ?? null });
-
-  return (
-    <>
-      <h1 className="tx-driver__title">Trang chủ</h1>
-      {failure === null ? null : <ErrorState message={failure} />}
-
-      <section className="tx-driver__card" aria-label="Chuyến hiện tại">
-        <h2>Chuyến hiện tại</h2>
-        <p className="tx-driver__lead">{model.headline}</p>
-        {model.currentTrip === null ? (
-          <EmptyState title="Chưa có chuyến nào được phân công cho bạn." />
-        ) : (
-          <>
-            <dl className="tx-driver__facts">
-              <dt>Mã chuyến</dt>
-              <dd>{model.currentTrip.code}</dd>
-              <dt>Tuyến</dt>
-              <dd>{model.currentTrip.route}</dd>
-              <dt>Khách hàng</dt>
-              <dd>{model.currentTrip.customerLabel}</dd>
-              <dt>Xe</dt>
-              <dd>{model.currentTrip.vehicleLabel}</dd>
-              <dt>Hàng</dt>
-              <dd>{model.currentTrip.cargoDescription ?? '—'}</dd>
-            </dl>
-            <div className="tx-driver__actions">
-              {model.actions.map((action) => (
-                <button
-                  key={action.to}
-                  type="button"
-                  className="tx-btn tx-btn--go tx-btn--wide"
-                  disabled={setStatus.isPending}
-                  onClick={() => {
-                    const id = model.currentTrip?.id;
-                    if (id !== undefined) setStatus.mutate({ id, to: action.to });
-                  }}
-                >
-                  {setStatus.isPending ? 'Đang gửi…' : action.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
-
-      {model.fund === null ? null : (
-        <section className="tx-cards" aria-label="Số dư quỹ">
-          <MetricCard
-            label="Số dư quỹ"
-            value={model.fund.balanceLabel}
-            hint={model.fund.stanceLabel}
-          />
-          <MetricCard label="Chuyến đang mở" value={String(model.openTripCount)} />
-        </section>
-      )}
-    </>
-  );
 }
 
 function DriverTrip() {

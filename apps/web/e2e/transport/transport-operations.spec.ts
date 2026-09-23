@@ -1199,7 +1199,9 @@ test.describe('vo va kien truc thong tin', () => {
     // thi an) duoc khoa o `__tests__/navigation.spec.ts`, cho ca hai chieu.
     await expect(nav.getByRole('link', { name: /Bảo dưỡng/ })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Lương' })).toBeVisible();
-    await expect(page.getByText('TÀI SẢN & NHÂN SỰ')).toBeVisible();
+    // #341 — `Bảo dưỡng` o nhom TÀI SẢN, `Lương` sang nhom tien cua lai xe.
+    await expect(nav.getByText('TÀI SẢN', { exact: true })).toBeVisible();
+    await expect(nav.getByText('QUỸ & LƯƠNG LÁI XE', { exact: true })).toBeVisible();
   });
 
   /**
@@ -3103,5 +3105,117 @@ test.describe('#351 — ba the doi xe cua Tong quan la so cua Bang dieu hanh', (
     await expect(stats.getByRole('link', { name: /^Xe đang rỗi\s*0$/ })).toBeVisible();
     await expect(stats.getByRole('link', { name: /^Lái xe đang làm\s*1$/ })).toBeVisible();
     await expect(page.getByText('Đang đọc số liệu vận hành…')).toHaveCount(0);
+  });
+});
+
+/**
+ * ===========================================================================
+ * #341 — DANH MUC KE TOAN THEO CAU HOI NGHIEP VU, TREN TRINH DUYET THAT.
+ *
+ * Luat thuan (nhom, nhan, cong quyen, dia chi cu, ten cu trong o loc) khoa o
+ * `__tests__/navigation.spec.ts`. Ba dieu duoi day chi trinh duyet do duoc:
+ *
+ *   1. ke toan nhin thanh ben MOT luot: bon nhom tien dung thu tu, ten phan he cu bien mat;
+ *   2. dia chi cu va bam tren danh muc deu ra `<h1>` noi DUNG chu cua danh muc;
+ *   3. `Tổng hợp tài chính` dan tung dong tien sang DUNG man — truoc #341 hai duong dan nay bi dao.
+ */
+test.describe('#341 — danh muc ke toan theo cau hoi nghiep vu', () => {
+  const MONEY_ENTRIES = [
+    ['Phải thu khách hàng', 'settlement'],
+    ['Phải trả đối tác & cây xăng', 'ar-ap'],
+    ['Quỹ lái xe', 'driver-fund'],
+    ['Tổng hợp tài chính', 'finance'],
+    ['Hiệu quả từng chuyến', 'margin'],
+  ] as const;
+
+  test('ke toan nhin mot luot: bon nhom tien dung thu tu, khong con ten phan he', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    // Cung be rong/cao voi bo anh bang chung ben tren — danh muc cuon trong thanh ben o day.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
+
+    const nav = page.getByRole('navigation', { name: 'Điều hướng vận hành vận tải' });
+    await expect(nav.locator('.tx-nav__grouplabel')).toHaveText([
+      'ĐIỀU HÀNH',
+      'PHẢI THU',
+      'PHẢI TRẢ',
+      'QUỸ & LƯƠNG LÁI XE',
+      'TỔNG HỢP & HIỆU QUẢ',
+      'TÀI SẢN',
+    ]);
+    for (const old of ['Công nợ & quyết toán', 'AR/AP', 'Bảng tài chính', 'Biên trực tiếp']) {
+      await expect(nav.getByRole('link', { name: old })).toHaveCount(0);
+    }
+
+    /*
+     * "Nhin MOT luot" nghia la KHONG phai cuon: bon cau tra loi nam trong khung cua danh muc ngay
+     * khi mo trang. Khi nhom TAI SAN con chen giua, hai muc tong hop roi xuong duoi mep cuon — bai
+     * nay do chinh dieu do. Do thi sua THU TU danh muc, dung xoa khang dinh.
+     */
+    for (const label of [
+      'Phải thu khách hàng',
+      'Phải trả đối tác & cây xăng',
+      'Tổng hợp tài chính',
+      'Hiệu quả từng chuyến',
+    ]) {
+      await expect(nav.getByRole('link', { name: label, exact: true })).toBeInViewport();
+    }
+  });
+
+  test('dia chi cu va bam tren danh muc deu ra dung man, dung ten', async ({ page }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    const nav = page.getByRole('navigation', { name: 'Điều hướng vận hành vận tải' });
+
+    // Dia chi cu — `id` khong doi, nen dau trang da luu mo dung man duoi ten moi.
+    for (const [label, section] of MONEY_ENTRIES) {
+      await page.goto(`/?section=${section}`);
+      await expect(page.getByRole('heading', { level: 1, name: label })).toBeVisible();
+      await expect(nav.getByRole('link', { name: label, exact: true })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    }
+
+    // Bam tren danh muc — cung mot dia chi, cung mot `<h1>`.
+    await page.goto('/');
+    for (const [label, section] of MONEY_ENTRIES) {
+      await nav.getByRole('link', { name: label, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`\\?section=${section}$`));
+      await expect(page.getByRole('heading', { level: 1, name: label })).toBeVisible();
+    }
+  });
+
+  test('Tong hop tai chinh dan dong phai thu sang Phai thu, dong phai tra sang Phai tra', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    await page.goto('/?section=finance');
+    await expect(page.getByRole('heading', { level: 1, name: 'Tổng hợp tài chính' })).toBeVisible();
+
+    const flows = page.getByRole('region', { name: 'Sáu dòng tiền' });
+    for (const payable of [/Còn nợ cây xăng/, /Còn nợ nhà xe/, /Hoa hồng phải trả đối tác/]) {
+      await expect(flows.getByRole('link', { name: payable })).toHaveAttribute(
+        'href',
+        '/?section=ar-ap',
+      );
+    }
+    await expect(page.getByRole('link', { name: /Khách hàng nợ quá hạn/ })).toHaveAttribute(
+      'href',
+      '/?section=settlement',
+    );
+
+    await flows.getByRole('link', { name: /Khách hàng còn nợ/ }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Phải thu khách hàng' }),
+    ).toBeVisible();
+    // Cau chi duong tren man phai thu doc NHAN tu danh muc, khong con chu `AR/AP` chep tay.
+    await expect(
+      page.locator('.tx-pagehead__context').getByRole('link', {
+        name: 'Phải trả đối tác & cây xăng',
+      }),
+    ).toHaveAttribute('href', '/?section=ar-ap');
   });
 });

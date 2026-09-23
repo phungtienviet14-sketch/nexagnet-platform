@@ -193,18 +193,20 @@ export function TransportOperations() {
   const driverScreens = visibleDriverScreens(navigation);
 
   if (state.surface === 'driver') {
+    // MOT duong cho thanh tab duoi VA loi vao tu trong man (`#340`: trang chu -> Hien truong).
+    const openDriverScreen = (screen: DriverScreenId) => goTo({ surface: 'driver', screen });
     return (
       <DriverShell
         screens={driverScreens}
         activeScreen={state.screen}
-        onNavigate={(screen) => goTo({ surface: 'driver', screen })}
+        onNavigate={openDriverScreen}
         onLeave={
           hasOperationsScope(navigation.role)
             ? () => goTo({ surface: 'operations', section: 'overview' })
             : null
         }
       >
-        <DriverSurface screen={state.screen} />
+        <DriverSurface screen={state.screen} onNavigate={openDriverScreen} />
       </DriverShell>
     );
   }
