@@ -2050,6 +2050,34 @@ export interface RunClosureVerdict {
   readonly holding: boolean;
 }
 
+/**
+ * Ban guong cua `RunClosureOutcome` (`apps/api/src/transport/planning/planning.service.ts`).
+ *
+ * `closed` chi `true` khi CHINH lan goi nay dong vong chay. Man hinh doc no de noi "he thong vua
+ * dong vong chay" — khong phai de tu dong vong chay: khong mot duong ghi nao cua web nhan `closed`.
+ */
+export interface RunClosureOutcome {
+  readonly runId: string;
+  readonly verdict: RunClosureVerdict;
+  readonly closed: boolean;
+  readonly run: VehicleRun;
+}
+
+/**
+ * Hai buoc van phong duoc phep ghi tren mot chang — `#376`.
+ *
+ * KHONG co `CANCELLED` (duong huy rieng, doi ly do) va KHONG co buoc nao cua VONG CHAY: dong vong
+ * chay la viec cua he thong (`#293`), nen kieu nay khong the chua mot lenh dong.
+ */
+export type LegTransitionTarget = 'IN_TRANSIT' | 'COMPLETED';
+
+/** Than tra ve cua `POST /transport/runs/:runId/legs/:legId/transition`. */
+export interface LegTransitionResult {
+  readonly leg: RunLeg;
+  /** Phan xu dong CHAY SAU lan ghi chang — `holding`/`blockers` la ket qua binh thuong, khong loi. */
+  readonly closure: RunClosureOutcome;
+}
+
 /* ------------------------------------------------------------------ *
  * DE NGHI CHI + CONG DUYET (#232 `D-06`, #234 A2)
  * ------------------------------------------------------------------ */

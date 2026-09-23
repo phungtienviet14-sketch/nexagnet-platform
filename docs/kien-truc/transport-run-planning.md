@@ -451,6 +451,33 @@ Mọi đường **ghi** đều bắt đầu bằng một **đơn**, không bằn
 > khi có khoá, nên mốc của một vòng chạy mang giờ theo đúng thứ tự commit (trên cùng một đồng hồ máy
 > chủ). Bằng chứng Postgres: `waiting-delivery-accepted.int.spec.ts`.
 
+> **Văn phòng tiến chặng và xác nhận đơn trên web — `#376` (23/09/2026).** Hai đường ghi ở trên
+> (`…/legs/:legId/transition`, `POST /transport/orders/:id/transition`) đã có từ `#276`/`#332`, nhưng
+> web chưa có thao tác nào gọi chúng: lái xe bấm "Khách đã nhận hàng" xong thì chặng vẫn `PLANNED`,
+> Bảng điều hành vẫn "Đã lên kế hoạch", và đơn không bao giờ vào "Kết thúc đơn". Nay màn **Đơn hàng
+> & vòng chạy** có:
+>
+> - khối **Tiến độ vòng chạy** trong chi tiết đơn (cả chặng RỖNG — vòng chạy chỉ đóng khi mọi chặng
+>   xong), và cùng bảng đó ở phần "Vòng chạy của xe": cột **Hiện trường** đọc giai đoạn từ báo cáo
+>   vòng chạy, cột **Việc văn phòng** có `Bắt đầu chạy` (`PLANNED → IN_TRANSIT`) và `Hoàn tất chặng`
+>   (`IN_TRANSIT → COMPLETED`), mỗi lần đều qua hộp xác nhận;
+> - chặng `LOADED` mà hiện trường chưa `DELIVERED` chỉ còn `Hoàn tất có ghi đè…` — hộp thoại **bắt
+>   buộc** lý do (`overrideReason`). Máy chủ vẫn là cổng thật: một lần từ chối
+>   `LEG_FIELD_DELIVERY_NOT_RECORDED` (đọc từ `reason` có kiểu của `#168 B7`) chuyển nút sang ghi đè;
+> - dòng **Đóng vòng chạy (hệ thống tự quyết)** chỉ **đọc** `GET …/closure` và `closure` mà chính lần
+>   tiến chặng trả về (chưa chạy / chưa đóng + lý do / đang giữ / đã đóng). Không có nút đóng vòng
+>   chạy, và web không có đường nào gọi `POST /transport/runs/:id/transition` ngoài `ACTIVE`;
+> - khối **Giao xong đơn**: `Xác nhận đã giao xong` (`OPEN → FULFILLED`), có người bấm, không tự suy
+>   từ mốc hay từ lần đóng vòng chạy; cảnh báo (không chặn) khi chặng có hàng của đơn chưa xong.
+>
+> Mỗi lần ghi — thành công **hoặc** bị từ chối — làm tươi đơn, vòng chạy, báo cáo vòng chạy, Bảng điều
+> hành và hàng chờ "Kết thúc đơn" (`useLegTransition`/`useOrderFulfilment`).
+>
+> **Còn lại, KHÔNG sửa ở `#376`:** ghi đè khi hiện trường còn ghi hàng trên xe (`LOADING`,
+> `IN_TRANSIT`, `ARRIVED`) để lại `CARGO_STILL_CARRIED` mãi — chặng đã hoàn tất không nhận mốc mới
+> (`#354`), nên không mốc nào gỡ được nó và lượt quét cũng không đóng. Hộp thoại ghi đè nói trước điều
+> đó; đường thường (lái xe bấm "Khách đã nhận hàng" trước khi văn phòng hoàn tất) không mắc phải.
+
 `idempotencyKey` là **bắt buộc** ở đường chốt. Không có khoá thì không có gì để nhận ra lần thứ hai
 là lần thứ hai, và #276 L9 bài 1 không thể đạt được.
 
