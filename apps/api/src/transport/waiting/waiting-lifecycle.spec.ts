@@ -3,6 +3,7 @@ import { legAcceptsNewCheckpoints } from '../checkpoint/checkpoint-lifecycle.js'
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
 import type { RunLegStatus } from '../movement/movement.types.js';
 import {
+  deliveryAlreadyAccepted,
   evaluateWaitingClose,
   evaluateWaitingStart,
   legAcceptsNewWaiting,
@@ -154,6 +155,36 @@ describe('Chang da ket thuc khong mo phien cho moi — #358', () => {
     }
     expect(legAcceptsNewWaiting('COMPLETED')).toBe(false);
     expect(legAcceptsNewWaiting('CANCELLED')).toBe(false);
+  });
+});
+
+/**
+ * KHACH DA NHAN HANG — `#363`.
+ *
+ * `deliveryAlreadyAccepted` la cau hoi CHUNG cua phep kiem som (`evaluateWaitingStart`) va cong duoi
+ * khoa (`WaitingSessionService`). Hai ben lech nhau o mot chuoi moc nao do la mot lenh mo bi chan
+ * som nhung lot qua duoi khoa — dung cai cua so `#363` dong lai — hoac nguoc lai.
+ */
+describe('Khach da nhan hang thi khong mo phien cho moi — #363', () => {
+  it('co khi va chi khi chuoi moc cua chang co DELIVERY_ACCEPTED', () => {
+    expect(deliveryAlreadyAccepted([])).toBe(false);
+    expect(deliveryAlreadyAccepted(ARRIVED)).toBe(false);
+    expect(deliveryAlreadyAccepted([...ARRIVED, 'DELIVERY_ACCEPTED'])).toBe(true);
+    // Mot tap su that, khong phai mot chuoi co thu tu.
+    expect(deliveryAlreadyAccepted(['DELIVERY_ACCEPTED', ...ARRIVED])).toBe(true);
+  });
+
+  it('phep kiem som hoi DUNG cau do: cung chuoi moc, cung ket luan', () => {
+    for (const legCheckpointTypes of [ARRIVED, [...ARRIVED, 'DELIVERY_ACCEPTED'] as const]) {
+      const decision = evaluateWaitingStart(startInput({ legCheckpointTypes }));
+      expect({
+        types: legCheckpointTypes,
+        refused: decision.reason === 'WAITING_DELIVERY_ALREADY_ACCEPTED',
+      }).toEqual({
+        types: legCheckpointTypes,
+        refused: deliveryAlreadyAccepted(legCheckpointTypes),
+      });
+    }
   });
 });
 

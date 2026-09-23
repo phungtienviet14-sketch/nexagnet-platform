@@ -479,6 +479,49 @@ describe('CheckpointService', () => {
       expect(checkpoint.capturedAt?.toISOString()).toBe('2026-09-06T23:00:00.000Z');
       expect(checkpoint.businessDate).toBe('2026-09-07');
     });
+
+    /**
+     * `#363` — gio ghi nhan la gio LUC CO KHOA, khong phai luc lenh toi cua khoa.
+     *
+     * Moi lan ghi tren mot vong chay commit theo thu tu cua khoa, va gio cua chung phai theo DUNG thu
+     * tu do: mot phien cho mo (va dong dau gio) trong luc lan ghi nay con xep hang se commit TRUOC no,
+     * nen gio cua moc nay khong duoc nam truoc gio cua phien do. Guard gia lap lan xep hang bang cach
+     * cho dong ho troi qua truoc khi dua ra anh chup duoi khoa — qua nua dem, de ngay nghiep vu cung
+     * phai di theo gio do.
+     */
+    it('gio ghi nhan lay DUOI khoa: lan ghi xep hang qua nua dem mang gio va ngay luc co khoa (#363)', async () => {
+      now = new Date('2026-09-07T16:59:50Z'); // 23:59:50 gio Viet Nam
+      class QueuedAtTheLock extends FakeRunWriteGuard {
+        override async underRunLock<T>(
+          runId: string,
+          write: (scope: RunWriteScope) => Promise<T>,
+        ): Promise<T> {
+          // Mot nguoi ghi khac giu khoa 20 giay; lan ghi nay doi o cua.
+          now = new Date('2026-09-07T17:00:10Z'); // 00:00:10 ngay 08/09 gio Viet Nam
+          return super.underRunLock(runId, write);
+        }
+      }
+      const queued = new CheckpointService(
+        repository,
+        core,
+        location,
+        new QueuedAtTheLock(core),
+        { timeZone: TZ },
+        DEFAULT_CHECKPOINT_POLICY,
+        undefined,
+        () => now,
+      );
+
+      const checkpoint = await queued.recordAsDriver({
+        type: 'PICKUP_ARRIVAL',
+        runId: 'run_1',
+        legId: 'leg_1',
+        authUserId: 'u.binh',
+        clientEventId: 'evt_q',
+      });
+      expect(checkpoint.receivedAt.toISOString()).toBe('2026-09-07T17:00:10.000Z');
+      expect(checkpoint.businessDate).toBe('2026-09-08');
+    });
   });
 
   describe('duong dieu hanh', () => {
