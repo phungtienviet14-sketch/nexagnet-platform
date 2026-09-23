@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CostingRepository } from '../costing/costing.repository.js';
+import { FuelCostAttributionRepository } from '../fuel/fuel-cost-attribution.repository.js';
 import { MovementRepository } from '../movement/movement.repository.js';
 import type { Order, RunLeg, TripRunLegLink, VehicleRun } from '../movement/movement.types.js';
 
@@ -15,17 +16,22 @@ import type { Order, RunLeg, TripRunLegLink, VehicleRun } from '../movement/move
  * dich, khong phai mot cau trong tai lieu. Cung khuon `settlement.ports.ts` da dat cho `TX-05`.
  *
  * ===========================================================================
- * VI SAO KHONG CO CONG THU BA (`transport-settlement`, `transport-fuel`, `transport-workforce`).
+ * CONG THU BA LA TUY CHON, VA DO LA CA DIEM CUA NO (`#369` R-1).
  *
  * `SettlementBuckets` doi so lieu tu ca bon capability. Nhung `transport-costing` — chu so huu cua
- * `R8` — chi phu thuoc `transport-core` (`tenant.schema.ts`). Mo mot cong sang settlement/fuel o
- * day se bien mot phu thuoc HOP DONG thanh phu thuoc THAT, va mot khach bat `transport-costing` ma
- * tat `transport-settlement` se khong boot duoc nua.
+ * `R8` — chi phu thuoc `transport-core` (`tenant.schema.ts`). Mot cong BAT BUOC sang settlement/fuel
+ * se bien mot phu thuoc HOP DONG thanh phu thuoc THAT, va mot khach bat `transport-costing` ma tat
+ * `transport-settlement` se khong boot duoc nua.
  *
- * Nen `R8` ban nay phoi dung phan doc duoc trong pham vi cua chinh no: chi so van hanh cua mot vong
- * chay. `SettlementBuckets` o `operating-metrics.ts` la HOP DONG cho be mat tong hop do, va viec
- * buoc no vao bon nguon la mot buoc CONG THEM co y thuc — kem mot quyet dinh ve capability nao so
- * huu no.
+ * `AnalyticsFuelAttributionFacts` ben duoi vi vay la cong TUY CHON, theo dung khuon
+ * `WorkforceWaitingAllowanceFacts` (`#279` O6): `R8` KHAI cong va adapter, capability so huu du lieu
+ * CAM adapter vao qua mot module `@Global()` chi xuat dung token do
+ * (`TransportFuelAnalyticsBridgeModule`), va khi vang mat thi `@Optional()` nhan `undefined` — bao
+ * cao noi ra trong `unavailableSources`. Khach bat `transport-costing` ma tat `transport-fuel` VAN
+ * boot, va van co bien truc tiep cua phan `TX-03`.
+ *
+ * `SettlementBuckets` o `operating-metrics.ts` van la HOP DONG chua ai noi vao: buoc no vao bon
+ * nguon la mot buoc CONG THEM co y thuc, kem mot quyet dinh ve capability nao so huu no.
  */
 
 /** CUA SO sang `transport-core`: don, vong chay, chang, va cau noi chang -> chuyen. */
@@ -79,6 +85,78 @@ export interface AnalyticsExpenseFact {
 /** CUA SO sang `transport-costing`: chi phi truc tiep cua mot chuyen. */
 export abstract class AnalyticsCostFacts {
   abstract listExpenses(tripId: string): Promise<AnalyticsExpenseFact[]>;
+}
+
+/**
+ * MOT DONG PHAN BO GIA THANH NHIEN LIEU Run-first (`TransportFuelCostAttribution`, `#364`) — thu gon
+ * con dung phan `R8` can. `#369` R-1.
+ *
+ * `signedAmount` CO DAU: cap phat duong, dong dao am — cong thang la ra phan dang hieu luc, khong loc
+ * gi. `legId` `null` = dich `RUN` (chi phi o muc vong chay, khong thuoc chang nao).
+ *
+ * CO Y bo `recordedBy`, `note`, `correlationKey`: bao cao bien truc tiep hoi "bao nhieu va vao dau",
+ * khong hoi "ai quyet" — cau do co be mat rieng (`GET /transport/fuel/entries/:id/cost-attribution`).
+ */
+export interface AnalyticsAttributedCostFact {
+  /** Dong phan bo — DUONG DOI SOAT nguoc ve `TransportFuelCostAttribution`. */
+  readonly id: string;
+  readonly fuelEntryId: string;
+  readonly runId: string;
+  readonly legId: string | null;
+  readonly signedAmount: number;
+  readonly currencyCode: string;
+}
+
+/**
+ * CUA SO THU BA — sang lop phan bo gia thanh cua `transport-fuel`. `#369` R-1. CHI DOC.
+ *
+ * ===========================================================================
+ * VI SAO CONG NAY KHAI O DAY ma adapter song o `transport-fuel`
+ *
+ * `transport-costing` (chu cua `R8`) KHONG phu thuoc `transport-fuel` — chieu nguoc lai moi dung
+ * (`tenant.schema.ts`). Nen `R8` khai DIEU NO CAN (cong nay, khong mot ham ghi nao), va capability
+ * so huu du lieu cam adapter vao qua mot module `@Global()` chi xuat DUNG cong nay
+ * (`TransportFuelAnalyticsBridgeModule`). Khach tat `transport-fuel` thi token vang mat,
+ * `OperatingMetricsReadService` nhan `undefined` qua `@Optional()` va bao cao noi thang
+ * `FUEL_COST_ATTRIBUTION` trong `unavailableSources` — khong mot so 0 gia.
+ *
+ * ===========================================================================
+ * VI SAO CONG CHU KHONG DOC THANG PRISMA
+ *
+ * Bat bien "mot phieu, mot so cai" (`#364` §3) song o lop phan bo (trigger + CHECK). Bao cao doc qua
+ * kho cua chinh lop do thi moi hien thuc — Prisma lan trong bo nho — cho cung mot tap dong; doc thang
+ * bang se tao mot ban sao thu hai cua phep loc "dong nao thuoc vong chay nay".
+ */
+export abstract class AnalyticsFuelAttributionFacts {
+  /** Moi dong (cap phat LAN dao) co dich nam trong vong chay nay — dich `RUN` va dich `LEG`. */
+  abstract listForRun(runId: string): Promise<AnalyticsAttributedCostFact[]>;
+}
+
+/**
+ * Hien thuc DUY NHAT — qua kho cua lop phan bo (`transport-fuel`). Duoc CAM VAO boi
+ * `TransportFuelAnalyticsBridgeModule`, module den/di cung `transport-fuel`.
+ *
+ * Dat o day chu khong trong thu muc fuel, cung khuon `WorkforceWaitingAllowanceFactsAdapter` va
+ * `JourneyFuelFactsAdapter`: hinh dang du lieu ma bao cao can la nhu cau CUA BAO CAO, va no phai
+ * doi cung mot cho voi cong ngay tren.
+ */
+@Injectable()
+export class AnalyticsFuelAttributionFactsAdapter extends AnalyticsFuelAttributionFacts {
+  constructor(private readonly attributions: FuelCostAttributionRepository) {
+    super();
+  }
+
+  async listForRun(runId: string): Promise<AnalyticsAttributedCostFact[]> {
+    const rows = await this.attributions.listForRun(runId);
+    return rows.map((row) => ({
+      id: row.id,
+      fuelEntryId: row.fuelEntryId,
+      runId: row.runId,
+      legId: row.legId,
+      signedAmount: row.signedAmount,
+      currencyCode: row.currencyCode,
+    }));
+  }
 }
 
 @Injectable()

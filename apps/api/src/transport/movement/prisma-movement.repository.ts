@@ -850,6 +850,14 @@ export class PrismaMovementRepository extends MovementRepository {
     return rows.map(toLink);
   }
 
+  async findTripLinksByTrips(tripIds: readonly string[]): Promise<TripRunLegLink[]> {
+    if (tripIds.length === 0) return [];
+    const rows = await model(this.prisma, 'transportTripRunLegLink').findMany({
+      where: { tripId: { in: [...tripIds] } },
+    });
+    return rows.map(toLink);
+  }
+
   async findProjection(tripId: string): Promise<TripProjection | null> {
     const row = await model(this.prisma, 'transportTripRunLegLink').findUnique({
       where: { tripId },

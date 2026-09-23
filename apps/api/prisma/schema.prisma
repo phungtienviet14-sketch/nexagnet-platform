@@ -1456,6 +1456,14 @@ enum TransportDriverFundEntryKind {
   REVERSAL
   /// `TX-07b` — cong ty tra lai lai xe khoan ho da bo tui. Dua so du AM ve gan 0 (`DA-T3-01`).
   REIMBURSEMENT
+  /// `#369` R-4 — lai xe chi tien cua quy cho mot khoan chi van hanh gan VONG CHAY (Run-first), AM.
+  ///
+  /// KHONG PHAI `TRIP_EXPENSE`: loai do LUON di kem MOT `TransportTripExpense` (`INV-03`), va
+  /// `TransportTripExpense.tripId` BAT BUOC. Chan GIA THANH cua mot khoan Run-first nam o so cai
+  /// Run-first CUA NGUON (voi nhien lieu: `TransportFuelCostAttribution`), khong o `TX-03` — nen
+  /// but toan nay chi la CHAN TIEN MAT: no doi so du quy, khong bao gio vao gia thanh nao.
+  /// `runId` bat buoc, `tripId` cam — `CHECK "TransportDriverFundEntry_run_expense_shape"`.
+  RUN_EXPENSE
 }
 
 enum TransportTripExpenseKind {
@@ -1517,6 +1525,14 @@ model TransportDriverFundEntry {
   businessDate   String                       @db.VarChar(10)
   tripId         String?
   trip           TransportTrip?               @relation(fields: [tripId], references: [id])
+  /// `#369` R-4 — NGU CANH VONG CHAY cua but toan (bat buoc voi `RUN_EXPENSE`, sao lai tren dong dao
+  /// cua no). Chuyen v1 HOAC vong chay, khong ca hai — cung luat voi `TransportFuelEntry`.
+  /// `onDelete: Restrict` tuong minh: xoa mot vong chay khong duoc lang le cat but toan khoi ngu canh.
+  runId          String?
+  run            TransportVehicleRun?         @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// `#369` R-4 — chang cua CHINH `runId` (trigger `transport_driver_fund_entry_run_context`).
+  legId          String?
+  leg            TransportRunLeg?             @relation(fields: [legId], references: [id], onDelete: Restrict)
   correlationKey String                       @unique
   reversalOfId   String?                      @unique
   reversalOf     TransportDriverFundEntry?    @relation("FundEntryReversal", fields: [reversalOfId], references: [id])
@@ -1531,6 +1547,8 @@ model TransportDriverFundEntry {
 
   @@index([accountId, businessDate])
   @@index([tripId])
+  @@index([runId])
+  @@index([legId])
   @@index([kind])
 }
 
@@ -1769,6 +1787,9 @@ enum TransportFuelDiscrepancyKind {
   SELF_SOURCED_BLOCKED
   /// `#317` G4 — ung vien dung xe/ngay/tien nhung so hoa don hai ben TRAI nguoc. Khong tu khop.
   INVOICE_CONFLICT
+  /// `#371` — dong CHI con ung vien la phieu lai xe DA TRA TIEN MAT (`DRIVER_CASH`). Khong tu khop,
+  /// va khong "chap nhan so cay xang" duoc: do la tra cung mot lan do dau hai lan.
+  PAYMENT_METHOD_CONFLICT
 }
 
 enum TransportFuelDiscrepancyStatus {
@@ -2174,10 +2195,14 @@ model TransportFuelCandidate {
 /// Rang buoc Prisma khong khai duoc (song trong SQL tho cua `20260922100000_transport_fuel_run_first`):
 ///   · `TransportFuelEntry_leg_needs_run`         — co chang thi phai co vong chay;
 ///   · `TransportFuelEntry_one_context_kind`      — chuyen cu HOAC vong chay, khong ca hai;
-///   · `TransportFuelEntry_driver_cash_needs_trip` — tien mat lai xe ung CHI tren chuyen cu (so quy
-///     theo chuyen); phieu Run-first khong bao gio cham Quy lai xe;
 ///   · `TransportFuelEntry_cost_expense_needs_trip` — chan gia thanh `TX-03` (`costExpenseId`) CHI
 ///     tren chuyen cu; phieu Run-first chi co so cai `TransportFuelCostAttribution`;
+///   · `TransportFuelEntry_driver_fund_leg_shape` (`#369` R-4) — chan Quy lai xe rieng
+///     (`driverFundEntryId`) CHI tren phieu Run-first `DRIVER_CASH` da duyet. Thay cho
+///     `TransportFuelEntry_driver_cash_needs_trip` cua `#364` (da go): tien mat lai xe ung tren vong
+///     chay nay vao Quy bang but toan `RUN_EXPENSE`, khong can chuyen gia;
+///   · trigger `transport_fuel_entry_driver_fund_leg` — but toan gan vao phai la `RUN_EXPENSE` cua
+///     CHINH lai xe, CHINH vong chay/chang, dung `-amount`, dung ngay, dung khoa `fuel:<id>`;
 ///   · trigger `transport_fuel_entry_run_context` — vong chay phai la cua CHINH xe tren phieu, chang
 ///     phai thuoc CHINH vong chay do.
 ///
@@ -2239,6 +2264,12 @@ model TransportFuelEntry {
   /// Chan gia thanh o `TX-03`. UNIQUE: mot khoan chi khong the thuoc hai phieu dau. `#364`: NULL
   /// khi `tripId` NULL (`CHECK TransportFuelEntry_cost_expense_needs_trip`).
   costExpenseId        String?                           @unique
+  /// `#369` R-4 — CHAN QUY LAI XE cua phieu Run-first `DRIVER_CASH`: but toan `RUN_EXPENSE` ma lan
+  /// duyet phieu da ghi. DOI XUNG voi `costExpenseId` cua phieu chuyen v1 (cung khuon: cot tran,
+  /// UNIQUE, khong khoa ngoai sang bang cua `TX-03`). Chi co tren phieu `tripId` NULL + `DRIVER_CASH`
+  /// + `VERIFIED` (`CHECK TransportFuelEntry_driver_fund_leg_shape`); but toan phai DUNG hinh dang
+  /// cua chinh phieu (trigger `transport_fuel_entry_driver_fund_leg`).
+  driverFundEntryId    String?                           @unique
   /// Khoa chong ghi trung cua duong nop phieu.
   correlationKey       String                            @unique
   invoiceNo            String?
@@ -2474,6 +2505,11 @@ model TransportFuelReconciliation {
 /// UNIQUE o CA HAI VE: mot dong khong khop duoc voi hai phieu, va mot phieu khong khop duoc voi
 /// hai dong. Do la quan he 1-1 ma `GD-09` gia dinh, va no phai duoc DB giu — kiem o tang mien chi
 /// dung khi co MOT nguoi ghi.
+///
+/// `#371` — CHI phieu `SUPPLIER_ACCOUNT` (ghi no) moi la mot cap khop. Hai trigger viet tay (khong
+/// bieu dien duoc o day) giu dieu do o CSDL: `TransportFuelMatch_payable_entry_only` va, chieu nguoc,
+/// `TransportFuelEntry_matched_stays_payable` — xem migration
+/// `20260923120000_transport_fuel_match_payable_entry_only`.
 model TransportFuelMatch {
   id                    String                      @id @default(cuid())
   reconciliationId      String
@@ -4353,6 +4389,8 @@ model TransportVehicleRun {
   fuelEntries          TransportFuelEntry[]
   /// `#364`: phan bo gia thanh nhien lieu vao vong chay nay (ke ca qua chang cua no).
   fuelCostAttributions TransportFuelCostAttribution[]
+  /// `#369` R-4: but toan Quy lai xe `RUN_EXPENSE` (va dong dao cua no) chi tren vong chay nay.
+  driverFundEntries    TransportDriverFundEntry[]
 
   @@index([status])
   @@index([businessDate])
@@ -4446,6 +4484,8 @@ model TransportRunLeg {
   fuelEntries          TransportFuelEntry[]
   /// `#364`: phan bo gia thanh nhien lieu vao chang nay.
   fuelCostAttributions TransportFuelCostAttribution[]
+  /// `#369` R-4: but toan Quy lai xe `RUN_EXPENSE` (va dong dao cua no) chi tren chang nay.
+  driverFundEntries    TransportDriverFundEntry[]
 
   @@unique([runId, sequence])
   @@index([orderId])

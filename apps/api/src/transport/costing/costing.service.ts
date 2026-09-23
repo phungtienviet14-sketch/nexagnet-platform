@@ -556,6 +556,10 @@ export class CostingService {
               signedAmount: assertLedgerSign('REVERSAL', -entry.signedAmount).amount,
               businessDate: entry.businessDate,
               tripId: entry.tripId,
+              // `#369` R-4 — dong dao mang CUNG ngu canh vong chay voi ban goc: so Quy loc theo vong
+              // chay phai thay ca cap, neu khong mot khoan chi Run-first da dao se trong nhu con hieu luc.
+              runId: entry.runId,
+              legId: entry.legId,
               reversalOfId: entry.id,
               note: reason,
               recordedBy: actor,

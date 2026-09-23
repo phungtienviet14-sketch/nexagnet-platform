@@ -37,6 +37,7 @@ const line = (
   ...overrides,
 });
 
+/** Mac dinh GHI NO (`SUPPLIER_ACCOUNT`) — luong chuan cua cay xang hop dong. `#371` doi tuong minh. */
 const entry = (id: string, overrides: Partial<MatchableFuelEntry> = {}): MatchableFuelEntry => ({
   id,
   vehicleId: VEHICLE,
@@ -44,6 +45,7 @@ const entry = (id: string, overrides: Partial<MatchableFuelEntry> = {}): Matchab
   amount: 4_200_000,
   invoiceNo: null,
   sourceStatementId: null,
+  paymentMethod: 'SUPPLIER_ACCOUNT',
   reconciliationStatus: 'UNMATCHED',
   ...overrides,
 });
@@ -630,6 +632,209 @@ describe('#317 G4 — so hoa don la bo phan biet tuy chon', () => {
     expect(forward.discrepancies).toEqual([
       expect.objectContaining({ kind: 'INVOICE_CONFLICT', statementLineId: 'l3' }),
     ]);
+  });
+});
+
+/**
+ * `#371` — BANG KE LA CHUNG TU CONG NO: chi phieu GHI NO la ung vien.
+ *
+ * Phieu `DRIVER_CASH` da vao Quy lai xe (`TX-03` hoac `RUN_EXPENSE`). Mot cap khop voi no la tra cung
+ * mot lan do dau HAI lan — lan cho lai xe, lan cho cay xang. Ham thuan khong biet phieu Run-first hay
+ * chuyen v1 (ca hai deu mang `paymentMethod`); hai duong do duoc do o tang service va tren Postgres.
+ */
+describe('#371 — cach tra: phieu lai xe da tra tien mat khong bao gio la cap khop', () => {
+  const cash = (id: string, overrides: Partial<MatchableFuelEntry> = {}) =>
+    entry(id, { paymentMethod: 'DRIVER_CASH', ...overrides });
+
+  it('dong CHI con phieu tien mat -> KHONG khop, PAYMENT_METHOD_CONFLICT co ten phieu do', () => {
+    const result = run([line('l1')], [cash('e-tien-mat')]);
+
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies).toEqual([
+      {
+        kind: 'PAYMENT_METHOD_CONFLICT',
+        statementLineId: 'l1',
+        fuelEntryId: null,
+        candidateEntryIds: ['e-tien-mat'],
+        candidateLineIds: [],
+        reason: 'MATCH_PAYMENT_METHOD_CONFLICT',
+      },
+    ]);
+  });
+
+  /**
+   * KHONG phai `STATEMENT_LINE_ONLY`: o do nguoi soat duoc phep "chap nhan so cay xang", tuc dung duong
+   * tra hai lan. Va phieu tien mat nam trong chenh lech nen KHONG bi bao them lan nua la "khong thay".
+   */
+  it('dong tien mat khong bi goi la STATEMENT_LINE_ONLY, phieu khong bi dem hai lan', () => {
+    const kinds = run([line('l1')], [cash('e-tien-mat')]).discrepancies.map((item) => item.kind);
+    expect(kinds).toEqual(['PAYMENT_METHOD_CONFLICT']);
+  });
+
+  it('phieu GHI NO dung ve moi mat van khop tuyet doi nhu truoc', () => {
+    const result = run([line('l1')], [entry('e-ghi-no')]);
+    expect(result.discrepancies).toEqual([]);
+    expect(result.matches).toEqual([
+      expect.objectContaining({
+        statementLineId: 'l1',
+        fuelEntryId: 'e-ghi-no',
+        reason: 'MATCH_EXACT',
+      }),
+    ]);
+  });
+
+  /**
+   * UNG VIEN TRON: mot phieu tien mat va mot phieu ghi no giong het nhau ve xe/ngay/tien. Truoc `#371`
+   * day la `AMBIGUOUS_CANDIDATES`. Phieu tien mat KHONG la ung vien, nen khong duoc lam phieu ghi no
+   * hop le thanh nhap nhang — va cap khop khong ghi la "quyet bang so hoa don".
+   */
+  it('ung vien tron: chi phieu ghi no tham gia, khong nhap nhang gia', () => {
+    const result = run([line('l1')], [cash('e-tien-mat'), entry('e-ghi-no')]);
+
+    expect(result.matches).toEqual([
+      {
+        statementLineId: 'l1',
+        fuelEntryId: 'e-ghi-no',
+        amountDeltaVnd: 0,
+        businessDateDeltaDays: 0,
+        reason: 'MATCH_EXACT',
+        invoiceRelation: 'ABSENT',
+        decidedByInvoice: false,
+      },
+    ]);
+    expect(result.discrepancies.map((item) => item.kind)).not.toContain('AMBIGUOUS_CANDIDATES');
+    // Phieu tien mat khong len bang ke cong no — nhanh "phieu khong thay" giu nguyen nhu truoc #371.
+    expect(result.discrepancies).toEqual([
+      expect.objectContaining({ kind: 'FUEL_ENTRY_ONLY', fuelEntryId: 'e-tien-mat' }),
+    ]);
+  });
+
+  it('chieu nguoc: HAI dong, mot phieu ghi no + mot phieu tien mat -> dong ghi no khop, dong kia ve soat', () => {
+    const result = run(
+      [line('l-ghi-no', { invoiceNo: 'HD-1' }), line('l-tien-mat', { invoiceNo: 'HD-2' })],
+      [entry('e-ghi-no', { invoiceNo: 'HD-1' }), cash('e-tien-mat', { invoiceNo: 'HD-2' })],
+    );
+
+    expect(result.matches.map((match) => [match.statementLineId, match.fuelEntryId])).toEqual([
+      ['l-ghi-no', 'e-ghi-no'],
+    ]);
+    expect(result.discrepancies).toEqual([
+      expect.objectContaining({
+        kind: 'PAYMENT_METHOD_CONFLICT',
+        statementLineId: 'l-tien-mat',
+        candidateEntryIds: ['e-tien-mat'],
+      }),
+    ]);
+  });
+
+  it('HAI phieu tien mat cung dung ve moi mat -> MOT chenh lech liet ke ca hai', () => {
+    const result = run([line('l1')], [cash('e-b'), cash('e-a')]);
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies).toEqual([
+      expect.objectContaining({
+        kind: 'PAYMENT_METHOD_CONFLICT',
+        candidateEntryIds: ['e-a', 'e-b'],
+      }),
+    ]);
+  });
+
+  /** Trung so hoa don KHONG cuu duoc mot phieu tien mat: so hoa don la bo phan biet, khong phai cong. */
+  it('trung CA so hoa don van khong khop — cach tra la cong, khong phai bo phan biet', () => {
+    const result = run([line('l1', { invoiceNo: 'HD-9' })], [cash('e1', { invoiceNo: 'HD-9' })]);
+    expect(result.matches).toEqual([]);
+    expect(result.discrepancies[0]?.kind).toBe('PAYMENT_METHOD_CONFLICT');
+  });
+
+  /**
+   * THU TU LY DO: `INV-26` van dung truoc; tien mat dung TRUOC xung dot so hoa don va lech dung sai.
+   * Tien mat truoc xung dot vi `INVOICE_CONFLICT` cho nguoi soat "chap nhan so cay xang" — mot dong co
+   * ca hai ly do co the chinh la lan do tien mat.
+   */
+  it('INV-26 van duoc hoi truoc cach tra', () => {
+    const result = run(
+      [line('l1')],
+      [cash('e-tu-nguon', { sourceStatementId: STATEMENT }), cash('e-tien-mat')],
+    );
+    expect(result.discrepancies[0]).toMatchObject({
+      kind: 'SELF_SOURCED_BLOCKED',
+      candidateEntryIds: ['e-tu-nguon'],
+    });
+  });
+
+  it('tien mat uu tien hon xung dot so hoa don va lech dung sai', () => {
+    const result = run(
+      [line('l1', { invoiceNo: 'HD-1' })],
+      [
+        cash('e-tien-mat', { invoiceNo: 'HD-1' }),
+        entry('e-xung-dot', { invoiceNo: 'HD-2' }),
+        entry('e-lech', { amount: 3_000_000 }),
+      ],
+    );
+    expect(result.matches).toEqual([]);
+    const lineDiscrepancy = result.discrepancies.find((item) => item.statementLineId === 'l1');
+    expect(lineDiscrepancy).toMatchObject({
+      kind: 'PAYMENT_METHOD_CONFLICT',
+      candidateEntryIds: ['e-tien-mat'],
+    });
+  });
+
+  /** Phieu tien mat LECH TIEN qua dung sai la mot `OUT_OF_TOLERANCE` binh thuong — dung sai hoi truoc. */
+  it('phieu tien mat lech tien vuot dung sai -> OUT_OF_TOLERANCE, khong phai cach tra', () => {
+    const result = run([line('l1')], [cash('e1', { amount: 4_300_000 })]);
+    expect(result.discrepancies[0]?.kind).toBe('OUT_OF_TOLERANCE');
+    expect(result.matches).toEqual([]);
+  });
+
+  /**
+   * Phieu tien mat khong duoc dem vao phep "so hoa don co la thu tach ung vien": no khong bao gio
+   * thanh cap khop, du so hoa don trung hay trai.
+   */
+  it('phieu tien mat XUNG DOT so hoa don khong lam cap ghi no thanh "quyet bang so hoa don"', () => {
+    const result = run(
+      [line('l1', { invoiceNo: 'HD-1' })],
+      [entry('e-ghi-no'), cash('e-tien-mat', { invoiceNo: 'HD-7' })],
+    );
+    expect(result.matches).toEqual([
+      expect.objectContaining({ fuelEntryId: 'e-ghi-no', decidedByInvoice: false }),
+    ]);
+  });
+
+  it('TAT DINH voi cach tra — dao thu tu dau vao cho ra ket qua giong het', () => {
+    const lines = [
+      line('l1'),
+      line('l2', { businessDate: '2026-08-09' }),
+      line('l3', { amount: 900_000 }),
+    ];
+    const entries = [
+      cash('e1'),
+      entry('e2'),
+      cash('e3', { businessDate: '2026-08-09' }),
+      cash('e4', { amount: 900_000 }),
+      entry('e5', { amount: 900_000 }),
+    ];
+    const forward = runFuelMatching({
+      statementId: STATEMENT,
+      lines,
+      entries,
+      tolerance: TOLERANCE,
+    });
+    const reversed = runFuelMatching({
+      statementId: STATEMENT,
+      lines: [...lines].reverse(),
+      entries: [...entries].reverse(),
+      tolerance: TOLERANCE,
+    });
+
+    expect(reversed).toEqual(forward);
+    expect(forward.matches.map((match) => [match.statementLineId, match.fuelEntryId])).toEqual([
+      ['l1', 'e2'],
+      ['l3', 'e5'],
+    ]);
+    expect(
+      forward.discrepancies
+        .filter((item) => item.kind === 'PAYMENT_METHOD_CONFLICT')
+        .map((item) => [item.statementLineId, item.candidateEntryIds]),
+    ).toEqual([['l2', ['e3']]]);
   });
 });
 

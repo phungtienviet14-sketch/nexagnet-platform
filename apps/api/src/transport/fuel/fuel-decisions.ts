@@ -78,15 +78,9 @@ export const FUEL_ENTRY_SUBMIT_REASONS = [
   'FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE',
   /** Chang khong ton tai, hoac thuoc mot vong chay KHAC — mot ma cho ca hai, khong lo su ton tai. */
   'FUEL_ENTRY_LEG_NOT_IN_RUN',
-  /**
-   * `DRIVER_CASH` tren phieu KHONG gan chuyen v1.
-   *
-   * Tien mat lai xe ung phai vao Quy lai xe, va duong ghi duy nhat vao quy la `TX-03`
-   * (`TransportTripExpense.tripId` NOT NULL). Nhan phieu nay se de lai mot khoan lai xe da bo tui ma
-   * so quy khong bao gio thay — va lai xe bi doi tra lai tien da tieu. Chan o day, co `CHECK`
-   * `TransportFuelEntry_driver_cash_needs_trip` lam luoi cuoi.
-   */
-  'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
+  // `#369` R-4 — `FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP` da GO: tien mat lai xe ung tren vong
+  // chay vao Quy bang but toan `RUN_EXPENSE` (`fuel.driver_cash_posting`), khong can chuyen v1.
+  // Mot ma khong con cong nao phat la mot ma noi doi tren bang loc trace.
 ] as const;
 export type FuelEntrySubmitReason = (typeof FUEL_ENTRY_SUBMIT_REASONS)[number];
 
@@ -117,8 +111,6 @@ export const FUEL_ENTRY_AMEND_REASONS = [
    * khong phai di dao mot phieu.
    */
   'FUEL_ENTRY_AMEND_STATE_RACE',
-  /** `#364` — sua mot phieu Run-first sang `DRIVER_CASH`. Cung cong voi luc nop. */
-  'FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP',
 ] as const;
 export type FuelEntryAmendReason = (typeof FUEL_ENTRY_AMEND_REASONS)[number];
 
@@ -159,6 +151,24 @@ export const FUEL_COST_POSTING_REASONS = [
   'FUEL_COST_AWAITS_ATTRIBUTION',
 ] as const;
 export type FuelCostPostingReason = (typeof FUEL_COST_POSTING_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel.driver_cash_posting — chan Quy lai xe cua phieu Run-first `DRIVER_CASH` (`#369` R-4)
+ *
+ * DIEM RIENG chu khong dung lai `fuel.cost_posting`: phieu Run-first `DRIVER_CASH` da duyet phat CA
+ * HAI — `FUEL_COST_AWAITS_ATTRIBUTION` (gia thanh cho ke toan phan bo) VA ma o day (tien mat da vao
+ * Quy). Hai su that, hai so cai; gop mot diem se lam trace noi mot phieu "vua cho vua da ghi".
+ * ------------------------------------------------------------------ */
+export const FUEL_DRIVER_CASH_POSTING_REASONS = [
+  /** Lan duyet vua ghi but toan `RUN_EXPENSE` va gan no vao phieu. */
+  'FUEL_DRIVER_CASH_POSTED',
+  /**
+   * Phieu DA co chan Quy — lan duyet lai / lan duyet song song. Khong mot dong tien thu hai nao.
+   * Chinh ma nay chung minh "mot su kien, mot anh huong Quy": so lan phat no, so but toan van la mot.
+   */
+  'FUEL_DRIVER_CASH_ALREADY_POSTED',
+] as const;
+export type FuelDriverCashPostingReason = (typeof FUEL_DRIVER_CASH_POSTING_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
  * fuel.cost_attribution — phan bo gia thanh phieu Run-first (`#364`)
@@ -242,6 +252,12 @@ export const FUEL_MATCH_REASONS = [
    * vien sach nao khac.
    */
   'MATCH_INVOICE_CONFLICT',
+  /**
+   * `#371` — phieu la lai xe DA TRA TIEN MAT (`DRIVER_CASH`): khong bao gio la cap khop cua bang ke
+   * cong no. Phat o CA HAI duong: may chay so khop (dong chi con ung vien tien mat) va nguoi xac nhan
+   * khop tay vao mot phieu tien mat.
+   */
+  'MATCH_PAYMENT_METHOD_CONFLICT',
 ] as const;
 export type FuelMatchReason = (typeof FUEL_MATCH_REASONS)[number];
 
@@ -262,6 +278,12 @@ export const FUEL_RECONCILIATION_TRANSITION_REASONS = [
   'RECONCILIATION_FROZEN',
   /** Hang doi soat bien mat giua luc doc va luc khoa — hiem, nhung phan biet duoc voi `FROZEN`. */
   'RECONCILIATION_NOT_FOUND',
+  /**
+   * `#371` — LUOI CUOI truoc ban giao: ky mang mot cap khop toi phieu KHONG ghi no (du lieu hong tu
+   * truoc `#371`, hoac mot duong ghi khong qua tang mien). KHONG dong, KHONG phat cong no — va khong
+   * lang le bo cap do roi coi ky la sach.
+   */
+  'RECONCILIATION_HAS_CASH_PAID_MATCH',
 ] as const;
 export type FuelReconciliationTransitionReason =
   (typeof FUEL_RECONCILIATION_TRANSITION_REASONS)[number];
@@ -275,6 +297,11 @@ export const FUEL_DISCREPANCY_RESOLVE_REASONS = [
   'DISCREPANCY_RECONCILIATION_FROZEN',
   /** `GD-09` — quyet "khop di" ma khong noi khop voi cai nao thi he thong lai phai doan. */
   'DISCREPANCY_MATCH_TARGET_REQUIRED',
+  /**
+   * `#371` — "chap nhan so cay xang" tren mot dong `PAYMENT_METHOD_CONFLICT`: dong do la lan do lai
+   * xe da tra tien mat, chap nhan no la tra lan thu hai. Xem `isCashPaidLineAcceptance`.
+   */
+  'DISCREPANCY_CASH_PAID_NOT_PAYABLE',
 ] as const;
 export type FuelDiscrepancyResolveReason = (typeof FUEL_DISCREPANCY_RESOLVE_REASONS)[number];
 
@@ -296,6 +323,8 @@ export const FUEL_DISCREPANCY_REVISE_REASONS = [
   'DECISION_NOT_CURRENT',
   'DECISION_MATCH_LOCKED',
   'DECISION_REVISION_NO_CHANGE',
+  /** `#371` — doi y SANG "chap nhan so cay xang" tren dong phieu tien mat: cung duong tra hai lan. */
+  'DECISION_CASH_PAID_NOT_PAYABLE',
 ] as const;
 export type FuelDiscrepancyReviseReason = (typeof FUEL_DISCREPANCY_REVISE_REASONS)[number];
 
@@ -467,6 +496,7 @@ export type TransportFuelDecisionReason =
   | FuelEntryAmendReason
   | FuelEvidenceWithdrawReason
   | FuelCostPostingReason
+  | FuelDriverCashPostingReason
   | FuelCostAttributionReason
   | FuelStatementImportReason
   | FuelStatementRowReason
@@ -489,6 +519,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel_entry.amend',
     'fuel_entry.evidence_withdraw',
     'fuel.cost_posting',
+    'fuel.driver_cash_posting',
     'fuel.cost_attribution',
     'fuel_statement.import',
     'fuel_statement.import_row',
@@ -525,8 +556,6 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_DRIVER_NOT_ASSIGNED_TO_RUN: 'Lái xe chưa từng được phân công vào vòng xe này',
     FUEL_ENTRY_VEHICLE_NOT_RUN_VEHICLE: 'Xe trên phiếu không phải xe của vòng xe',
     FUEL_ENTRY_LEG_NOT_IN_RUN: 'Chặng trên phiếu không thuộc vòng xe của phiếu',
-    FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP:
-      'Tiền mặt lái xe ứng chỉ ghi được trên chuyến cũ — sổ quỹ đi theo chuyến',
 
     FUEL_ENTRY_VERIFIED: 'Kế toán đã duyệt phiếu',
     FUEL_ENTRY_REJECTED: 'Kế toán trả lại phiếu kèm lý do',
@@ -551,6 +580,9 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_COST_ALREADY_POSTED: 'Phiếu này đã có chân giá thành — không ghi thêm lần hai',
     FUEL_COST_AWAITS_ATTRIBUTION:
       'Phiếu theo vòng xe đã duyệt — giá thành chờ kế toán phân bổ, không tự vào chuyến',
+
+    FUEL_DRIVER_CASH_POSTED: 'Tiền mặt lái xe ứng cho phiếu theo vòng xe đã vào sổ quỹ lái xe',
+    FUEL_DRIVER_CASH_ALREADY_POSTED: 'Phiếu này đã có chân quỹ lái xe — không trừ quỹ lần hai',
 
     FUEL_COST_ATTRIBUTED: 'Đã phân bổ giá thành nhiên liệu vào công việc',
     FUEL_COST_ATTRIBUTION_REPLAY: 'Gửi lại cùng khoá — trả lại dòng phân bổ đã ghi',
@@ -588,6 +620,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     MATCH_SELF_SOURCED_BLOCKED: 'Ứng viên là phiếu đẻ ra từ chính bảng kê này (INV-26)',
     MATCH_INVOICE_CONFLICT:
       'Ứng viên đúng xe, ngày, tiền nhưng số hoá đơn hai bên khác nhau — không tự khớp',
+    MATCH_PAYMENT_METHOD_CONFLICT:
+      'Phiếu do lái xe đã trả tiền mặt — không khớp với bảng kê công nợ (tránh trả hai lần)',
 
     RECONCILIATION_OPENED: 'Đã mở kỳ đối soát cho bảng kê',
     RECONCILIATION_MATCHING_RUN: 'Đã chạy so khớp tất định',
@@ -599,11 +633,15 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     RECONCILIATION_ALREADY_IN_STATE: 'Kỳ đối soát đã ở đúng trạng thái đó rồi',
     RECONCILIATION_FROZEN: 'Kỳ đối soát đã đóng — không nhận thay đổi',
     RECONCILIATION_NOT_FOUND: 'Không tìm thấy kỳ đối soát',
+    RECONCILIATION_HAS_CASH_PAID_MATCH:
+      'Kỳ có cặp khớp tới phiếu lái xe đã trả tiền mặt — không đóng, không phát công nợ',
 
     DISCREPANCY_RESOLVED: 'Đã ghi quyết định cho chênh lệch',
     DISCREPANCY_ALREADY_RESOLVED: 'Chênh lệch này đã có người quyết trước đó',
     DISCREPANCY_RECONCILIATION_FROZEN: 'Kỳ đối soát đã đóng nên không nhận quyết định mới',
     DISCREPANCY_MATCH_TARGET_REQUIRED: 'Xác nhận khớp phải chỉ rõ cặp nào',
+    DISCREPANCY_CASH_PAID_NOT_PAYABLE:
+      'Dòng này là lần đổ lái xe đã trả tiền mặt — chấp nhận số cây xăng là trả hai lần',
 
     DECISION_REVISED:
       'Đã ghi quyết định thay thế — quyết định cũ vẫn nằm trong lịch sử, tổng đổi ở lần đóng kỳ sau',
@@ -616,6 +654,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     DECISION_MATCH_LOCKED:
       'Quyết định xác nhận khớp đã ghi một cặp khớp tay — mở lại kỳ và chạy lại so khớp',
     DECISION_REVISION_NO_CHANGE: 'Quyết định mới trùng quyết định đang có — không ghi bản rỗng',
+    DECISION_CASH_PAID_NOT_PAYABLE:
+      'Không đổi ý sang chấp nhận số cây xăng cho lần đổ lái xe đã trả tiền mặt',
 
     HANDOFF_EMITTED: 'Đã phát bàn giao công nợ nhà cung cấp cho T5',
     HANDOFF_REVISION_EMITTED: 'Kết quả kinh tế đã đổi — phát một bản sửa đổi mới của bàn giao',

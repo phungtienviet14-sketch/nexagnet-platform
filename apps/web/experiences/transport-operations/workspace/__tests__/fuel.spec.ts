@@ -309,6 +309,48 @@ describe('#317 G4 — chenh lech xung dot so hoa don', () => {
   });
 });
 
+/**
+ * `#371` — ban sao cua luat may chu, KHONG phai ranh gioi: may chu tu choi ca khop tay vao phieu tien
+ * mat lan "chap nhan so cay xang" tren dong nay (403). Man hinh chi khong mo nut cho mot lenh chac
+ * chan bi tu choi.
+ */
+describe('#371 — dong ung voi phieu lai xe da tra tien mat', () => {
+  it('khong mo xac nhan khop, khong mo chap nhan so cay xang', () => {
+    const resolutions = discrepancyResolutionOptions('PAYMENT_METHOD_CONFLICT').map(
+      (option) => option.resolution,
+    );
+    expect(resolutions).toEqual([
+      'REJECT_SUPPLIER_LINE',
+      'ENTRY_CORRECTION_REQUIRED',
+      'IGNORE_WITH_REASON',
+    ]);
+  });
+
+  it('doi y sau khi mo lai ky cung khong mo duong chap nhan so cay xang', () => {
+    const [row] = toReconciliationWorkspace(
+      workspace({
+        reconciliation: reconciliation({ state: 'REOPENED' }),
+        discrepancies: [
+          discrepancy({
+            kind: 'PAYMENT_METHOD_CONFLICT',
+            fuelEntryId: null,
+            candidateEntryIds: ['fu-tien-mat'],
+            status: 'RESOLVED',
+            resolution: 'IGNORE_WITH_REASON',
+          }),
+        ],
+        pendingDiscrepancyCount: 0,
+      }),
+      'ADMIN',
+    ).discrepancyRows;
+    expect(row?.kindLabel).toBe('Lái xe đã trả tiền mặt — không phải công nợ');
+    expect(row?.reviseOptions.map((option) => option.resolution)).toEqual([
+      'REJECT_SUPPLIER_LINE',
+      'ENTRY_CORRECTION_REQUIRED',
+    ]);
+  });
+});
+
 /* ================================================================== *
  * HOP THU PHIEU NHIEN LIEU — #222 P1-B
  * ================================================================== */

@@ -180,6 +180,9 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
     FuelRepository,
     FuelStationRepository,
     FuelDocumentRepository,
+    // `#369` R-1 — EXPORT cho `TransportFuelAnalyticsBridgeModule`: bien truc tiep cua vong chay doc
+    // lop phan bo qua mot cong CHI DOC, khong doc thang bang.
+    FuelCostAttributionRepository,
   ],
 })
 export class TransportFuelModule {}

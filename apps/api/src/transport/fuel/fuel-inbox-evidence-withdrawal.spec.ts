@@ -22,6 +22,7 @@ import {
   FuelCostingPort,
   TransportFuelCoreFacts,
   type FuelCostPostingCommand,
+  type FuelDriverCashPostingCommand,
   type FuelDriverFacts,
   type FuelTripFacts,
   type FuelVehicleFacts,
@@ -121,6 +122,10 @@ class StubCoreFacts extends TransportFuelCoreFacts {
 class SilentCostingPort extends FuelCostingPort {
   async postFuelCost(command: FuelCostPostingCommand): Promise<string> {
     return `chi-phi-${command.tripId}`;
+  }
+
+  async postRunFirstDriverCash(command: FuelDriverCashPostingCommand): Promise<string> {
+    return `quy-${command.correlationKey}`;
   }
 }
 

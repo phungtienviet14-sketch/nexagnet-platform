@@ -37,8 +37,9 @@ import type { FuelVerificationStatus } from './fuel-lifecycle.js';
  *     mot ben. Mot bao cao tuong lai muon gop (vd bien loi nhuan vong chay) cong duoc hai ben ma
  *     khong dem trung, chinh vi hai tap phieu roi nhau.
  *   · Cong no nha cung cap (`FUEL_SUPPLIER`) di tu doi soat bang ke — khong doc bang nao o tren.
- *   · Quy lai xe chi nhan chan tien mat cua phieu chuyen v1 (`DRIVER_CASH`); phieu Run-first khong
- *     the mang `DRIVER_CASH` (`CHECK TransportFuelEntry_driver_cash_needs_trip`).
+ *   · Quy lai xe la mot so cai THU BA, khong phai gia thanh: phieu chuyen v1 `DRIVER_CASH` co chan
+ *     quy qua `TX-03`, phieu Run-first `DRIVER_CASH` co but toan `RUN_EXPENSE` rieng (`#369` R-4).
+ *     Ca hai deu KHONG vao bang nay, va bang nay khong tru quy cua ai.
  *
  * LEGACY_TRIP vi vay la mot kieu dich CO THAT trong khung nhin (`FuelCostLedger`), nhung KHONG phai
  * mot gia tri cua bang phan bo: chep no vao day se sinh mot nguon su that thu hai, va nguon do lech

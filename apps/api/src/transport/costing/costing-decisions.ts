@@ -55,6 +55,35 @@ export const DRIVER_FUND_POST_REASONS = [
 export type DriverFundPostReason = (typeof DRIVER_FUND_POST_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
+ * driver_fund.run_expense — RunExpenseService.recordRunExpense() (`#369` R-4)
+ *
+ * DIEM RIENG chu khong dung lai `driver_fund.post_entry`: cong nay co BON duong tu choi ma tam ung /
+ * hoan tra / dieu chinh khong co (vong chay, chang, phan cong, khoa da thuoc mot su kien khac). Gop
+ * lai thi bang loc trace khong con tach duoc "khoan chi Run-first bi chan" khoi "tam ung bi chan".
+ * ------------------------------------------------------------------ */
+export const DRIVER_FUND_RUN_EXPENSE_REASONS = [
+  'RUN_EXPENSE_RECORDED',
+  /** Cung khoa, cung noi dung — lan gui lai (tuan tu HOAC song song) cua CHINH su kien da ghi. */
+  'RUN_EXPENSE_IDEMPOTENT_REPLAY',
+  /**
+   * Khoa da thuoc mot su kien KHAC — trong so Quy HOAC trong gia thanh chuyen `TX-03`. Mot khoa su
+   * kien chi co MOT duong vao so cai: tra lai ban cu se lam mat mot khoan, ghi them se tru quy hai lan.
+   */
+  'RUN_EXPENSE_KEY_REUSED',
+  'RUN_EXPENSE_RUN_NOT_FOUND',
+  /** Chang khong ton tai, hoac thuoc mot vong chay KHAC — mot ma, khong lo su ton tai. */
+  'RUN_EXPENSE_LEG_NOT_IN_RUN',
+  /**
+   * `DA-T3-04` cho vong chay — lai xe CHUA TUNG duoc phan cong vao vong chay do. Thieu cong nay thi
+   * mot lan go nham `driverId` tru tien quy cua mot nguoi khong lien quan, va chi sua duoc bang dao.
+   */
+  'RUN_EXPENSE_DRIVER_NOT_ASSIGNED',
+  /** `INV-22` — ngay nghiep vu roi vao mot ky quy da dong hoac dang chot. */
+  'RUN_EXPENSE_PERIOD_FROZEN',
+] as const;
+export type DriverFundRunExpenseReason = (typeof DRIVER_FUND_RUN_EXPENSE_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
  * costing.reversal — `INV-20`: sua = dao + ghi moi, khong bao gio UPDATE/DELETE
  * ------------------------------------------------------------------ */
 export const COSTING_REVERSAL_REASONS = [
@@ -121,6 +150,7 @@ export type DriverSelfExpenseScopeReason = (typeof DRIVER_SELF_EXPENSE_SCOPE_REA
 export type TransportCostingDecisionReason =
   | TripExpenseRecordReason
   | DriverFundPostReason
+  | DriverFundRunExpenseReason
   | CostingReversalReason
   | FundPeriodTransitionReason
   | DriverSelfFundScopeReason
@@ -131,6 +161,7 @@ export const TRANSPORT_COSTING_DECISIONS = defineDecisionVocabulary({
   points: [
     'trip_expense.record',
     'driver_fund.post_entry',
+    'driver_fund.run_expense',
     'costing.reversal',
     'fund_period.transition',
     'driver.self_fund_scope',
@@ -148,6 +179,15 @@ export const TRANSPORT_COSTING_DECISIONS = defineDecisionVocabulary({
     FUND_ENTRY_POSTED: 'Đã ghi bút toán sổ quỹ lái xe',
     FUND_ENTRY_IDEMPOTENT_REPLAY: 'Ghi lặp cùng khoá chống trùng — trả lại bút toán đã ghi',
     FUND_ENTRY_PERIOD_FROZEN: 'Ngày nghiệp vụ rơi vào kỳ quỹ đã đóng hoặc đang chốt',
+
+    RUN_EXPENSE_RECORDED: 'Đã ghi khoản chi Run-first vào sổ quỹ lái xe',
+    RUN_EXPENSE_IDEMPOTENT_REPLAY: 'Ghi lặp cùng khoá sự kiện — trả lại bút toán đã ghi',
+    RUN_EXPENSE_KEY_REUSED:
+      'Khoá sự kiện đã thuộc một khoản khác trong sổ quỹ hoặc giá thành chuyến',
+    RUN_EXPENSE_RUN_NOT_FOUND: 'Không tìm thấy vòng xe của khoản chi',
+    RUN_EXPENSE_LEG_NOT_IN_RUN: 'Chặng không thuộc vòng xe của khoản chi',
+    RUN_EXPENSE_DRIVER_NOT_ASSIGNED: 'Lái xe chưa từng được phân công vào vòng xe này',
+    RUN_EXPENSE_PERIOD_FROZEN: 'Ngày nghiệp vụ rơi vào kỳ quỹ đã đóng hoặc đang chốt',
 
     REVERSAL_POSTED: 'Đã ghi bút toán đảo, bản gốc giữ nguyên',
     REVERSAL_ALREADY_REVERSED: 'Bản ghi này đã được đảo trước đó',
