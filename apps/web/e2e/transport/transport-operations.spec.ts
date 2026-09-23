@@ -1,5 +1,9 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import { MANAGER_HAS_NO_TRANSPORT_SCOPE } from '../../experiences/transport-operations/transport-actions';
+import {
+  GOOGLE_BASEMAP_UNAVAILABLE_NOTICE,
+  LOCAL_BASEMAP_NOTICE,
+} from '../../experiences/transport-operations/visual/map-style';
 
 /**
  * Be mat VAN HANH VAN TAI tren mot may chu that, voi API duoc chan o tang mang.
@@ -692,6 +696,43 @@ const JOURNEY_MAP = {
           points: [
             { latitude: 21.0278, longitude: 105.8342 },
             { latitude: 20.8449, longitude: 106.6881 },
+          ],
+          gap: null,
+          sampledFrom: 2,
+        },
+      ],
+    },
+  ],
+  unavailableSources: [],
+};
+
+/** Vong chay THU HAI, o mot noi khac han (Da Nang → Hue), de doi vong chay la doi khung nhin. */
+const JOURNEY_MAP_DA_NANG_HUE = {
+  runId: 'r-2',
+  runCode: 'RUN-E2E-2',
+  legs: [
+    {
+      legId: 'l-2',
+      sequence: 1,
+      kind: 'EMPTY',
+      origin: {
+        point: { latitude: 16.0544, longitude: 108.2022 },
+        source: 'CHECKPOINT_OBSERVATION',
+        at: '2026-09-09T02:00:00.000Z',
+      },
+      originGap: null,
+      destination: {
+        point: { latitude: 16.4637, longitude: 107.5909 },
+        source: 'CHECKPOINT_OBSERVATION',
+        at: '2026-09-09T05:00:00.000Z',
+      },
+      destinationGap: null,
+      paths: [
+        {
+          kind: 'CHECKPOINT_ANCHORED',
+          points: [
+            { latitude: 16.0544, longitude: 108.2022 },
+            { latitude: 16.4637, longitude: 107.5909 },
           ],
           gap: null,
           sampledFrom: 2,
@@ -1834,6 +1875,48 @@ test.describe('anh chup lam bang chung', () => {
   });
 });
 
+/** Moi may chu ma Maps JavaScript API goi toi (script, tile, font, anh dieu khien). */
+const GOOGLE_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(googleapis|gstatic)\.com\//;
+
+/**
+ * DEM DIEM ANH MANG MAU TUYEN tren anh chup khung ban do (#374).
+ *
+ * "Co mot canvas" khong chung minh tuyen da duoc ve: ngay 23/09/2026, khi Google tu choi khoa SAU
+ * khi da ve, nen cuc bo hien ra day du canvas ma KHONG co tuyen nao. Dem diem anh gan `--tx-go`
+ * (co hang) va `--tx-stop` (rong) thi do duoc dieu nguoi xem thay. Trinh duyet tu giai ma PNG —
+ * khong them thu vien nao vao bo e2e.
+ */
+async function routePixels(page: Page, map: Locator): Promise<{ loaded: number; empty: number }> {
+  const png = await map.screenshot();
+  return page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    if (context === null) return { loaded: 0, empty: 0 };
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    const near = (index: number, [r, g, b]: readonly [number, number, number]): boolean =>
+      Math.abs((data[index] ?? 0) - r) +
+        Math.abs((data[index + 1] ?? 0) - g) +
+        Math.abs((data[index + 2] ?? 0) - b) <
+      60;
+    let loaded = 0;
+    let empty = 0;
+    for (let index = 0; index < data.length; index += 4) {
+      if (near(index, [0x1c, 0x6b, 0x47])) loaded += 1;
+      else if (near(index, [0x94, 0x27, 0x1e])) empty += 1;
+    }
+    return { loaded, empty };
+  }, png.toString('base64'));
+}
+
+/** Mot doan tuyen day 5px dai hang tram diem anh — 200 la san an toan, khong phai mot con so do. */
+const ROUTE_PIXELS_MIN = 200;
+
 /**
  * ===========================================================================
  * LANE N (#278 N5/N12) — BAN DO VONG CHAY TREN TRINH DUYET THAT.
@@ -1849,6 +1932,11 @@ test.describe('anh chup lam bang chung', () => {
  */
 test.describe('ban do vong chay (Lane N)', () => {
   test('ban do nap that, va chang RONG doc ra duoc bang chu', async ({ page }) => {
+    /* `#374` §8: CI bat buoc KHONG phu thuoc mang Google — dem moi yeu cau di toi Google. */
+    const googleRequests: string[] = [];
+    page.on('request', (request) => {
+      if (GOOGLE_HOSTS.test(request.url())) googleRequests.push(request.url());
+    });
     await mockTransport(page, 'ADMIN');
     await page.goto('/?section=journey&selected=RUN-E2E-1');
 
@@ -1859,6 +1947,19 @@ test.describe('ban do vong chay (Lane N)', () => {
     await expect(map).toBeVisible({ timeout: 30_000 });
     /* Nen cuc bo — khong mot lan goi tile nao ra ngoai. */
     await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK');
+    await expect(map).toHaveAttribute('data-basemap-fallback', 'NOT_CONFIGURED');
+    /* `#278` N1: nen trong phai NOI RA la nen trong, khong de nguoi xem tuong mat dat trong tron. */
+    await expect(page.getByTestId('tx-map-notice')).toHaveText(LOCAL_BASEMAP_NOTICE);
+    /* Lop deck.gl ve tren canvas cua MapLibre — ban do da khoi tao WebGL that. */
+    await expect(map.locator('canvas').first()).toBeVisible();
+    /*
+     * Va lop do THAT SU ve: vong nay chi co chang CO HANG, nen phai co diem anh mau co hang va
+     * KHONG mot diem mau chang rong nao — mau den tu `role` cua du lieu, khong tu nen.
+     */
+    await expect
+      .poll(async () => (await routePixels(page, map)).loaded, { timeout: 15_000 })
+      .toBeGreaterThan(ROUTE_PIXELS_MIN);
+    expect((await routePixels(page, map)).empty).toBe(0);
 
     /*
      * `#278` N13 bai 4 — chang RONG phai phan biet duoc ma KHONG can den mau. Neu mot ngay co
@@ -1872,6 +1973,90 @@ test.describe('ban do vong chay (Lane N)', () => {
 
     /* Ke hoach vs thuc te: 100 -> 105 la lech +5 km. */
     await expect(page.getByText('+5 km')).toBeVisible();
+
+    expect(googleRequests).toEqual([]);
+  });
+
+  /*
+   * `#374` §8 bai 10 — doi vong chay thi ban do ve theo khung cua VONG MOI. `data-bounds` la khung
+   * du lieu ma camera dang fit (`boundsKey`), nen bai nay do duoc ca duong model → camera tren trinh
+   * duyet that ma khong phai doc pixel.
+   */
+  test('doi vong chay → ban do ve lai dung khung cua vong moi', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.route('**/transport/runs', (route) =>
+      json(route, [
+        { id: 'r-1', code: 'RUN-E2E-1' },
+        { id: 'r-2', code: 'RUN-E2E-2' },
+      ]),
+    );
+    await page.route('**/transport/journey/runs/RUN-E2E-2/map', (route) =>
+      json(route, JOURNEY_MAP_DA_NANG_HUE),
+    );
+    await page.route('**/transport/journey/runs/RUN-E2E-2', (route) =>
+      json(route, { ...JOURNEY, run: { ...JOURNEY.run, runId: 'r-2', runCode: 'RUN-E2E-2' } }),
+    );
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    await expect(page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' })).toHaveAttribute(
+      'data-bounds',
+      '105.8342,20.8449,106.6881,21.0278',
+      { timeout: 30_000 },
+    );
+
+    await page.getByRole('combobox', { name: 'Vòng chạy', exact: true }).selectOption('RUN-E2E-2');
+
+    const second = page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-2' });
+    await expect(second).toHaveAttribute('data-bounds', '107.5909,16.0544,108.2022,16.4637', {
+      timeout: 30_000,
+    });
+    await expect(page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' })).toHaveCount(0);
+    /* Vong moi chi co chang RONG: tuyen do hien ra trong khung moi, khong con vet xanh cua vong cu. */
+    await expect
+      .poll(async () => (await routePixels(page, second)).empty, { timeout: 15_000 })
+      .toBeGreaterThan(ROUTE_PIXELS_MIN);
+    expect((await routePixels(page, second)).loaded).toBe(0);
+  });
+
+  /*
+   * `#374` §8 bai 15 — co nen duong sa that thi cang de doc nham vet GPS tho thanh "tuyen xe da
+   * chay tren duong". Cau noi ro day la toa do THO, chua khop ban do, phai con nguyen.
+   */
+  test('vet GPS tho van noi ro la toa do tho, khong phai tuyen da khop ban do', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    const [leg] = JOURNEY_MAP.legs;
+    await page.route('**/transport/journey/runs/*/map', (route) =>
+      json(route, {
+        ...JOURNEY_MAP,
+        legs: [
+          {
+            ...leg,
+            paths: [
+              ...(leg?.paths ?? []),
+              {
+                kind: 'RAW_OBSERVED',
+                points: [
+                  { latitude: 21.0278, longitude: 105.8342 },
+                  { latitude: 20.94, longitude: 106.33 },
+                  { latitude: 20.8449, longitude: 106.6881 },
+                ],
+                gap: null,
+                sampledFrom: 412,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    await expect(page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText(/Vệt GPS thô: 412 bản định vị/)).toBeVisible();
+    await expect(page.getByText(/không phải tuyến đã khớp bản đồ/)).toBeVisible();
   });
 
   test('bieu do km co hang vs km rong nap that', async ({ page }) => {
@@ -2015,6 +2200,108 @@ test.describe('ban do vong chay (Lane N)', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * ===========================================================================
+ * #374 — NEN GOOGLE MAPS. TUY CHON: CI bat buoc khong bao gio chay khoi nay.
+ *
+ * `NEXT_PUBLIC_*` duoc nuong vao goi JS luc `next dev` bien dich, nen che do nen la cua MAY CHU,
+ * khong phai cua tung bai. CI khong dat `NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER`, nen ca khoi bi bo qua
+ * va bai Lane N o tren chung minh khong mot yeu cau nao di toi Google. Chay tay:
+ *
+ *   NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER=google NEXT_PUBLIC_TRANSPORT_GOOGLE_MAPS_API_KEY=<khoa> \
+ *     pnpm exec playwright test --config playwright.transport.config.ts --grep @google-basemap
+ *
+ * Bai dau KHONG can mang (Google bi chan ngay trong trinh duyet). Bai "song" goi Google that va
+ * con can `TRANSPORT_MAP_GOOGLE_LIVE=1`; `TRANSPORT_MAP_GOOGLE_EXPECT` mac dinh `GOOGLE_MAPS`, dat
+ * `GOOGLE_AUTH_FAILED` khi co y chay voi mot khoa sai de do duong `gm_authFailure`.
+ */
+const GOOGLE_MODE =
+  (process.env.NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER ?? '').trim().toLowerCase() === 'google';
+const GOOGLE_KEY_SET = (process.env.NEXT_PUBLIC_TRANSPORT_GOOGLE_MAPS_API_KEY ?? '').trim() !== '';
+
+test.describe('nen Google Maps (#374) @google-basemap', () => {
+  test.skip(!GOOGLE_MODE, 'Can may chu dev bat voi NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER=google');
+
+  test('dang tai thi noi dang tai; Google bi chan thi lui ve nen cuc bo, van ve tuyen', async ({
+    page,
+  }) => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(GOOGLE_HOSTS, async (route) => {
+      await held;
+      await route.abort('blockedbyclient');
+    });
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    const map = page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' });
+    await expect(map).toBeVisible({ timeout: 30_000 });
+
+    if (GOOGLE_KEY_SET) {
+      /* `#374` §6: trong luc Google tai, man hinh NOI dang tai — khong mot khung xam cam lang. */
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Đang tải nền Google Maps…' }),
+      ).toBeVisible();
+      await expect(map).toHaveAttribute('aria-busy', 'true');
+      release();
+      await expect(map).toHaveAttribute('data-basemap-fallback', 'GOOGLE_SCRIPT_FAILED', {
+        timeout: 30_000,
+      });
+    } else {
+      /* Thieu khoa thi khong bao gio nap Google — lui ve ngay, khong cho. */
+      await expect(map).toHaveAttribute('data-basemap-fallback', 'GOOGLE_KEY_MISSING');
+    }
+    release();
+
+    await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK');
+    await expect(map).toHaveAttribute('aria-busy', 'false');
+    await expect(page.getByTestId('tx-map-notice')).toHaveText(GOOGLE_BASEMAP_UNAVAILABLE_NOTICE);
+    /* Nen hong KHONG lam mat nghiep vu: tuyen van ve, chu giai va chang RONG van con. */
+    await expect(map.locator('canvas').first()).toBeVisible();
+    await expect
+      .poll(async () => (await routePixels(page, map)).loaded, { timeout: 15_000 })
+      .toBeGreaterThan(ROUTE_PIXELS_MIN);
+    await expect(page.getByText('Chặng RỖNG (chạy không hàng)')).toBeVisible();
+    await expect(page.getByText('RỖNG', { exact: true }).first()).toBeVisible();
+  });
+
+  test('song: Google tra loi that — ROADMAP, hoac lui ve dung ly do', async ({
+    page,
+  }, testInfo) => {
+    test.skip(process.env.TRANSPORT_MAP_GOOGLE_LIVE !== '1', 'Can TRANSPORT_MAP_GOOGLE_LIVE=1');
+    const expected = process.env.TRANSPORT_MAP_GOOGLE_EXPECT ?? 'GOOGLE_MAPS';
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    const map = page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' });
+    await expect(map).toBeVisible({ timeout: 30_000 });
+
+    if (expected === 'GOOGLE_MAPS') {
+      await expect(map).toHaveAttribute('data-basemap', 'GOOGLE_MAPS');
+      await expect(map).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
+      await expect(map.locator('.gm-style')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('tx-map-notice')).toHaveCount(0);
+    } else {
+      await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK', { timeout: 30_000 });
+      await expect(map).toHaveAttribute('data-basemap-fallback', expected);
+      await expect(page.getByTestId('tx-map-notice')).toHaveText(GOOGLE_BASEMAP_UNAVAILABLE_NOTICE);
+    }
+    /*
+     * Ca hai nhanh: tuyen PHAI hien ra. Nhanh lui ve sau `gm_authFailure` la noi tung ve ra mot nen
+     * trong khong co tuyen, du cau thong bao noi "tuyến và mốc vẫn đang được hiển thị đúng".
+     */
+    await expect
+      .poll(async () => (await routePixels(page, map)).loaded, { timeout: 30_000 })
+      .toBeGreaterThan(ROUTE_PIXELS_MIN);
+
+    await page.getByRole('region', { name: 'Bản đồ vòng chạy' }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`journey-map-${expected}.png`) });
   });
 });
 

@@ -237,12 +237,27 @@ một Postgres trắng** kể cả sau khi đã bật PostGIS.
 
 ---
 
-## 7. Bản đồ — chưa quyết, và chưa cần quyết
+## 7. Bản đồ — nền Google Maps có cấu hình, lớp nghiệp vụ không đổi
 
-R0 chọn **MapLibre GL JS + PMTiles tự dựng**. Lane B **không xét lại** kết luận đó, vì chưa có một
-màn hình nào cần vẽ bản đồ: dữ liệu phải tồn tại trước. Một điều R0 nói cần được nhắc lại vì nó là
-một con số chưa đo: kích thước tile Việt Nam **≈ 215 MB là ước tính suy từ tỷ lệ của Hà Lan**, và
-chính R0 đã ghi *"hãy dựng rồi đo"*. Đừng đưa con số đó vào một bảng chi phí trước khi dựng.
+*Cập nhật 23/09/2026 (#374).* Lane N (#278) dựng bản đồ vòng chạy bằng MapLibre + deck.gl trên một
+nền cục bộ **trống** (không tile). Chủ dự án chọn **Google Maps làm nền** để người xem thấy đường sá,
+địa danh, sông hồ thật. Quyết định:
+
+- **Nền là cấu hình, không phải kiến trúc.** Ba nguồn: `GOOGLE_MAPS` (Maps JavaScript API +
+  `@deck.gl/google-maps`; có Map ID thì bản đồ vector và deck.gl vẽ chung ngữ cảnh WebGL của
+  Google, không có thì raster),
+  `CONFIGURED_STYLE_URL` (MapLibre + style ngoài — giữ tương thích, và là đường cho PMTiles tự dựng
+  nếu sau này có), `LOCAL_FALLBACK` (CI, offline, thiếu khoá, Google hỏng).
+- **Lớp nghiệp vụ chung mọi nền.** Tuyến, chặng RỖNG, mốc, vệt GPS thô là lớp deck.gl vẽ thẳng từ
+  toạ độ máy chủ. Hình học của Google **không bao giờ** là sự thật quãng đường: `distanceKm` vẫn là
+  số của nghiệp vụ, không tính lại, không ghi đè.
+- **Chỉ nền.** Không Directions, Places, Geocoding, Street View.
+
+Nhận xét của R0 về PMTiles vẫn đứng nguyên: kích thước tile Việt Nam **≈ 215 MB là ước tính suy từ
+tỷ lệ của Hà Lan**, chưa dựng, chưa đo — đừng đưa con số đó vào một bảng chi phí.
+
+Biến môi trường, phán quyết dự phòng, việc phía chủ dự án (khoá, giới hạn, thanh toán, CSP):
+[`phat-trien/van-hanh/ban-do-nen.md`](../phat-trien/van-hanh/ban-do-nen.md).
 
 ---
 
