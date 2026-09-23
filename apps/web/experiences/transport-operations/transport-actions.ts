@@ -52,6 +52,8 @@ export const TRANSPORT_ACTIONS = [
   'transport.fuel.entry.read',
   'transport.fuel.entry.submit_for_driver',
   'transport.fuel.entry.verify',
+  /** `#364` — phan bo gia thanh phieu Run-first vao vong chay/chang. */
+  'transport.fuel.cost_attribution.record',
   'transport.fuel.station.read',
   'transport.fuel.station.manage',
   'transport.fuel.document.read',

@@ -167,7 +167,11 @@ export interface FuelInboxRowModel {
    * `odometerKm` o day la `null`; khoi chi tiet bo sung tu `GET entries/:id` khi da doc xong.
    */
   readonly declared: DeclaredFuelFacts;
-  readonly tripCode: string;
+  /**
+   * `#364` — NGU CANH doc duoc: ma chuyen v1 (phieu cu, giu NGUYEN chu de tim nguoc ve chuyen), hoac
+   * ma vong xe (+ chang) cua phieu Run-first. Xem `fuelContextLabel`.
+   */
+  readonly contextLabel: string;
   readonly driverLabel: string;
   readonly vehicleLabel: string;
   readonly supplierLabel: string;
@@ -191,6 +195,27 @@ export interface FuelInboxRowModel {
   readonly canReject: boolean;
   readonly canResubmit: boolean;
 }
+
+/**
+ * NGU CANH CUA MOT PHIEU o dang chu — `#364`. Mot ham cho hop thu ke toan VA danh sach phieu lai xe.
+ *
+ * Phieu chuyen v1 hien DUNG ma chuyen, khong tien to: day la dinh danh ke toan dung de tim nguoc ve
+ * chuyen tu truoc `#364`, va doi no se lam lac moi thoi quen (va moi lien ket) dang co. Phieu Run-first
+ * hien ma vong xe, kem so chang khi co. Phieu khong gan viec nao noi dung nhu vay — khong bia ma.
+ */
+export const fuelContextLabel = (context: {
+  readonly tripCode: string | null;
+  readonly runCode: string | null;
+  readonly legSequence: number | null;
+}): string => {
+  if (context.tripCode !== null) return context.tripCode;
+  if (context.runCode !== null) {
+    return context.legSequence === null
+      ? `Vòng xe ${context.runCode}`
+      : `Vòng xe ${context.runCode} · Chặng ${context.legSequence}`;
+  }
+  return 'Không gắn việc';
+};
 
 /**
  * MOT DONG HOP THU o dang man hinh doc duoc.
@@ -220,7 +245,7 @@ export const toFuelInboxRow = (
       odometerKm: null,
       vehiclePlate: row.vehiclePlate,
     },
-    tripCode: row.tripCode,
+    contextLabel: fuelContextLabel(row),
     // May chu tra `null` khi ho so da bi xoa/doi ten. Noi that thay vi de mot o trong.
     driverLabel: row.driverName ?? 'Lái xe chưa đọc được tên',
     vehicleLabel: row.vehiclePlate ?? 'Xe chưa đọc được biển',
@@ -384,6 +409,15 @@ const RESOLUTIONS_BY_KIND: Readonly<
   INVOICE_CONFLICT: [
     'MATCH_CONFIRMED',
     'ACCEPT_SUPPLIER_AMOUNT',
+    'ENTRY_CORRECTION_REQUIRED',
+    'IGNORE_WITH_REASON',
+  ],
+  /**
+   * `#371` — ung vien la phieu lai xe DA TRA TIEN MAT. Khong `MATCH_CONFIRMED`, khong
+   * `ACCEPT_SUPPLIER_AMOUNT`: ca hai la tra cung mot lan do hai lan, va may chu tu choi ca hai (403).
+   */
+  PAYMENT_METHOD_CONFLICT: [
+    'REJECT_SUPPLIER_LINE',
     'ENTRY_CORRECTION_REQUIRED',
     'IGNORE_WITH_REASON',
   ],

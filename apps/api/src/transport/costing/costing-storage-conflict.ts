@@ -13,6 +13,17 @@ import type { UniqueIndexRef } from '../storage-conflict.js';
  * khai CA `indexName` LAN cap `(model, column)`, va `isUniqueViolationOn` doi chieu ca hai duong.
  */
 
+/**
+ * MOT LAI XE, MOT SO QUY. `#369` — ten nay can den o `ensureAccount`: hai lan ghi Quy DAU TIEN cua
+ * cung mot lai xe chay song song deu thay "chua co" roi deu `INSERT`, va ben thua phai DOC LAI so quy
+ * vua ra doi thay vi nem mot loi Prisma tho ra tan HTTP.
+ */
+export const FUND_ACCOUNT_DRIVER: UniqueIndexRef = {
+  indexName: 'TransportDriverFundAccount_driverId_key',
+  model: 'TransportDriverFundAccount',
+  column: 'driverId',
+};
+
 export const FUND_ENTRY_CORRELATION: UniqueIndexRef = {
   indexName: 'TransportDriverFundEntry_correlationKey_key',
   model: 'TransportDriverFundEntry',
@@ -47,6 +58,19 @@ export const REVERSAL_ONCE_INDEXES: readonly UniqueIndexRef[] = [
   FUND_ENTRY_REVERSAL_ONCE,
   TRIP_EXPENSE_REVERSAL_ONCE,
 ];
+
+/**
+ * `#369` R-4 — tien to thong diep cua trigger `transport_driver_fund_entry_run_context`: chang cua
+ * but toan phai thuoc CHINH vong chay cua no.
+ *
+ * Tang mien (`RunExpenseService`) kiem truoc voi ma `RUN_EXPENSE_LEG_NOT_IN_RUN`, va `runId` cua chang
+ * khong doi sau khi tao — nen o duong ghi that trigger khong no. No con do cho moi lan ghi khong di
+ * qua tang mien; khi do nguoi goi van nhan DUNG ma, khong phai mot `500`.
+ */
+export const FUND_ENTRY_LEG_RUN = 'transport_driver_fund_entry_leg_run';
+
+export const isFundEntryLegRunViolation = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(FUND_ENTRY_LEG_RUN);
 
 /**
  * EXCLUDE constraint chan hai ky quy chong lap cho cung mot so quy.

@@ -90,6 +90,8 @@ const seed = async (input: {
   seeded += 1;
   const entry = await repository.createEntry({
     tripId: 'chuyen-1',
+    runId: null,
+    legId: null,
     vehicleId: input.vehicleId ?? VEHICLE,
     driverId: 'lai-xe-1',
     supplierId: 'cay-xang-1',

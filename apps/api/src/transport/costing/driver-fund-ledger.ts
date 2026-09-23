@@ -61,6 +61,18 @@ export const DRIVER_FUND_ENTRY_KINDS = [
    * no truc tiep se cho ra mot khoan tien da tra khong co chung tu chi nao doi ung.
    */
   'REIMBURSEMENT',
+  /**
+   * `#369` R-4 — lai xe chi tien cua quy cho mot khoan chi van hanh gan VONG CHAY (Run-first). AM.
+   *
+   * KHONG PHAI `TRIP_EXPENSE`: loai do LUON di kem mot `TripExpense` (`INV-03`), va dong gia thanh
+   * chuyen BAT BUOC co `tripId`. Mot khoan Run-first co gia thanh o so cai Run-first CUA NGUON (voi
+   * nhien lieu: `TransportFuelCostAttribution`, ke toan quyet sau) — nen but toan nay CHI la chan tien
+   * mat: doi so du quy, khong bao gio vao gia thanh nao. Dem no vao `runMargin` la dem hai lan.
+   *
+   * KHONG nam trong `POSTABLE_FUND_ENTRY_KINDS`: chi sinh ra tu `RunExpenseService`, kem MOT ngu canh
+   * vong chay da kiem (lai xe tung duoc phan cong) va MOT khoa tat dinh cua su kien nguon.
+   */
+  'RUN_EXPENSE',
 ] as const;
 export type DriverFundEntryKind = (typeof DRIVER_FUND_ENTRY_KINDS)[number];
 
@@ -82,6 +94,7 @@ const REQUIRED_SIGN: Readonly<Record<DriverFundEntryKind, 1 | -1 | null>> = {
   ADJUSTMENT: null,
   REVERSAL: null,
   REIMBURSEMENT: 1,
+  RUN_EXPENSE: -1,
 };
 
 export const TRIP_EXPENSE_KINDS = [

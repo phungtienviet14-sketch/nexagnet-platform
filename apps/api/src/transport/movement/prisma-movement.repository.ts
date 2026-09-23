@@ -13,6 +13,8 @@ import {
   type CreateLegInput,
   type CreateOrderInput,
   type CreateRunInput,
+  type LegStatusWrite,
+  type LegStatusWriteResult,
   type ProjectTripInput,
   type ProjectTripOrderInput,
   type RunAssignmentChange,
@@ -514,8 +516,13 @@ export class PrismaMovementRepository extends MovementRepository {
           where: { id: runId },
         });
         if (!row) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+        // Chang doc SAU khoa (`#354`): moi lan doi trang thai chang gianh chinh khoa nay.
+        const legRows: LegRow[] = await model(tx as TxClient, 'transportRunLeg').findMany({
+          where: { runId },
+          orderBy: [{ sequence: 'asc' }],
+        });
 
-        return write({ run: toRun(row), tx });
+        return write({ run: toRun(row), legs: legRows.map(toLeg), tx });
       },
       { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
     );
@@ -659,17 +666,50 @@ export class PrismaMovementRepository extends MovementRepository {
     return rows.map(toLeg);
   }
 
-  async setLegStatus(id: string, status: RunLegStatus, at: Date): Promise<RunLeg | null> {
-    const row = await model(this.prisma, 'transportRunLeg').update({
-      where: { id },
-      data: {
-        status,
-        updatedAt: at,
-        ...(status === 'IN_TRANSIT' ? { startedAt: at } : {}),
-        ...(status === 'COMPLETED' ? { completedAt: at } : {}),
+  /**
+   * CUNG cau khoa voi `underRunLock()`/`closeRunAsSystemSerialized()`/`createLeg()` — `#354`.
+   *
+   * Thu tu khoa van la MOT: hang vong chay truoc, hang chang sau (qua chinh cau `UPDATE`). Lan ghi
+   * moc cung khoa hang vong chay TRUOC khi cham chang (khoa ngoai `legId` chi lay `KEY SHARE`, khong
+   * dung do `NO KEY UPDATE` cua cau `UPDATE` o day) — nen khong co vong doi nao giua hai duong.
+   *
+   * `runId` doc TRUOC khoa la an toan: khong duong ghi nao doi chang sang vong chay khac, va trigger
+   * `transport_run_leg_completed_is_immutable` khoa cot do sau khi chang xong. No chi de biet phai
+   * khoa HANG nao; moi su that duoc phan xu lai deu doc SAU khoa.
+   *
+   * `ReadCommitted` la du vi cung ly do da ghi o `underRunLock()`: cau `UPDATE ... WHERE status =
+   * from` chay sau khi khoa da trong tay, nen no danh gia tren ban commit moi nhat.
+   */
+  async setLegStatus(input: LegStatusWrite): Promise<LegStatusWriteResult | null> {
+    return this.prisma.$transaction(
+      async (tx: unknown) => {
+        const owner: { runId: string } | null = await model(
+          tx as TxClient,
+          'transportRunLeg',
+        ).findUnique({ where: { id: input.legId }, select: { runId: true } });
+        if (!owner) return null;
+        await (tx as TxClient).$queryRaw`
+          SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${owner.runId} FOR UPDATE`;
+
+        const updated: { count: number } = await model(
+          tx as TxClient,
+          'transportRunLeg',
+        ).updateMany({
+          where: { id: input.legId, status: input.from },
+          data: {
+            status: input.to,
+            updatedAt: input.at,
+            ...(input.to === 'IN_TRANSIT' ? { startedAt: input.at } : {}),
+            ...(input.to === 'COMPLETED' ? { completedAt: input.at } : {}),
+          },
+        });
+        const row: LegRow | null = await model(tx as TxClient, 'transportRunLeg').findUnique({
+          where: { id: input.legId },
+        });
+        return row ? { leg: toLeg(row), applied: updated.count === 1 } : null;
       },
-    });
-    return row ? toLeg(row) : null;
+      { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
+    );
   }
 
   /**
@@ -806,6 +846,14 @@ export class PrismaMovementRepository extends MovementRepository {
     if (legIds.length === 0) return [];
     const rows = await model(this.prisma, 'transportTripRunLegLink').findMany({
       where: { legId: { in: [...legIds] } },
+    });
+    return rows.map(toLink);
+  }
+
+  async findTripLinksByTrips(tripIds: readonly string[]): Promise<TripRunLegLink[]> {
+    if (tripIds.length === 0) return [];
+    const rows = await model(this.prisma, 'transportTripRunLegLink').findMany({
+      where: { tripId: { in: [...tripIds] } },
     });
     return rows.map(toLink);
   }

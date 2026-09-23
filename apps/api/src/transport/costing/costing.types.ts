@@ -46,6 +46,13 @@ export interface DriverFundEntry {
   /** `INV-02` — NULLABLE. Mot lan tam ung khong gan chuyen nao la chuyen binh thuong. */
   readonly tripId: string | null;
   /**
+   * `#369` R-4 — NGU CANH VONG CHAY. Bat buoc voi `RUN_EXPENSE` (va dong dao cua no sao lai); `null`
+   * o moi loai khac. Chuyen v1 HOAC vong chay, khong ca hai (`CHECK` o CSDL).
+   */
+  readonly runId: string | null;
+  /** `#369` R-4 — chang cua CHINH `runId`. `null` = khoan chi o muc vong chay. */
+  readonly legId: string | null;
+  /**
    * KHOA CHONG GHI TRUNG, va cung la soi day noi hai lop cua MOT su kien kinh te (`INV-03`).
    *
    * Mot khoan chi tu quy sinh but toan nay VA mot `TripExpense`; ca hai mang cung mot gia tri.

@@ -67,6 +67,8 @@ import type {
   OrderCompletionOutcome,
   OrderCompletionRow,
   OrderRunPlan,
+  LegTransitionResult,
+  LegTransitionTarget,
   RunClosureVerdict,
   RunDistanceSummary,
   RunMovementSummary,
@@ -88,7 +90,9 @@ import type {
   SiteIntakeResult,
   SettlementDocumentChain,
   SettlementFlow,
+  DriverFuelRunView,
   DriverFuelSlipView,
+  FuelEntryCostAttributionView,
   DriverFuelStation,
   DriverFuelSupplier,
   DriverFundEntry,
@@ -174,20 +178,29 @@ import type {
  *      Caddy duong khong khop se roi ve Next.js tra ve mot trang HTML 404. `JSON.parse` mot trang
  *      HTML se nem `SyntaxError` chang noi len dieu gi; xem `readBody`.
  *
- * KHONG co ma loi may doc duoc tren duong truyen: `transportErrorToHttp` chi chuyen `error.message`
- * vao ngoai le cua Nest va bo `reason` co kieu lai o server. Nen man hinh phai HIEN NGUYEN VAN cau
- * cua may chu, khong duoc doan y roi viet lai loi thanh cau cua minh.
+ * MA LOI MAY DOC DUOC: tu `#168 B7` than loi cua mien mang them `reason` CO KIEU (xem
+ * `transportErrorBody` phia API). `TransportApiError.reason` giu no lai — va CHI de man hinh chon
+ * CACH XU LY (vd `#376`: `LEG_FIELD_DELIVERY_NOT_RECORDED` mo duong ghi de co ly do). Loi khong
+ * mang `reason` (zod, guard quyen, ha tang) thi man hinh van HIEN NGUYEN VAN cau cua may chu.
  */
 export class TransportApiError extends Error {
   readonly status: number;
   /** `true` khi than loi khong phai JSON — thuong la nghiep vu chua duoc bat cho khach nay. */
   readonly isTransportRouteMissing: boolean;
+  /** Ly do CO KIEU cua mien (`#168 B7`) — `null` khi than loi khong mang. */
+  readonly reason: string | null;
 
-  constructor(message: string, status: number, isTransportRouteMissing = false) {
+  constructor(
+    message: string,
+    status: number,
+    isTransportRouteMissing = false,
+    reason: string | null = null,
+  ) {
     super(message);
     this.name = 'TransportApiError';
     this.status = status;
     this.isTransportRouteMissing = isTransportRouteMissing;
+    this.reason = reason;
   }
 }
 
@@ -217,13 +230,15 @@ const readBody = async <T>(response: Response): Promise<T> => {
   }
 
   if (!response.ok) {
-    const body = parsed as { message?: string | readonly string[] } | null;
+    const body = parsed as { message?: string | readonly string[]; reason?: unknown } | null;
     const raw = body?.message;
     // Nest tra `message` la chuoi, hoac MOT MANG chuoi khi zod bat nhieu loi cung luc.
     const message = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join(', ') : '';
     throw new TransportApiError(
       message.length > 0 ? message : 'Không thực hiện được yêu cầu. Hãy thử lại.',
       response.status,
+      false,
+      typeof body?.reason === 'string' && body.reason.length > 0 ? body.reason : null,
     );
   }
 
@@ -554,18 +569,36 @@ export interface FuelEntryFields {
   readonly note?: string | null;
 }
 
-export interface SubmitFuelEntryInput extends FuelEntryFields {
-  readonly tripId: string;
-  readonly vehicleId: string;
+/**
+ * `#364` — NGU CANH cua lenh nop: chuyen v1 (tuong thich) HOAC vong xe (+ chang). May chu kiem lai
+ * tat ca; phieu theo vong xe khong can `vehicleId` (xe LA xe cua vong xe).
+ */
+export interface FuelEntryContextFields {
+  readonly tripId?: string | null;
+  readonly runId?: string | null;
+  readonly legId?: string | null;
+  readonly vehicleId?: string | null;
+}
+
+export interface SubmitFuelEntryInput extends FuelEntryFields, FuelEntryContextFields {
   readonly driverId: string;
   readonly correlationKey?: string;
 }
 
 /** Duong cua LAI XE: khong co `driverId` — danh tinh den tu phien dang nhap. */
-export interface DriverFuelSubmitInput extends FuelEntryFields {
-  readonly tripId: string;
-  readonly vehicleId: string;
+export interface DriverFuelSubmitInput extends FuelEntryFields, FuelEntryContextFields {
   readonly correlationKey?: string;
+}
+
+/** `#364` — CAP PHAT gia thanh mot phieu Run-first vao MOT vong xe hoac MOT chang. */
+export interface RecordFuelCostAttributionInput {
+  readonly target:
+    | { readonly kind: 'RUN'; readonly runId: string }
+    | { readonly kind: 'LEG'; readonly legId: string };
+  readonly amount: number;
+  readonly note?: string | null;
+  /** BAT BUOC — mot lan bam lai khong duoc thanh mot dong phan bo thu hai. */
+  readonly correlationKey: string;
 }
 
 /**
@@ -983,6 +1016,7 @@ export const transportApi = {
           verification: query.verification,
           reconciliation: query.reconciliation,
           tripCode: query.tripCode,
+          runCode: query.runCode,
           driverId: query.driverId,
           vehicleId: query.vehicleId,
           supplierId: query.supplierId,
@@ -1009,6 +1043,24 @@ export const transportApi = {
     /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`), be mat VAN HANH. */
     resubmitEntry: (id: string): Promise<FuelEntry> =>
       send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/resubmit`),
+    /** `#364` — tien cua MOT phieu dang nam o dau (so cai chuyen v1, hoac cac dong phan bo). */
+    costAttribution: (id: string): Promise<FuelEntryCostAttributionView> =>
+      get(`/transport/fuel/entries/${encodeURIComponent(id)}/cost-attribution`),
+    attributeCost: (
+      id: string,
+      input: RecordFuelCostAttributionInput,
+    ): Promise<FuelEntryCostAttributionView> =>
+      send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/cost-attributions`, input),
+    /** DAO mot dong phan bo — them dong am, lich su giu nguyen. */
+    reverseCostAttribution: (
+      attributionId: string,
+      reason: string,
+    ): Promise<FuelEntryCostAttributionView> =>
+      send(
+        'POST',
+        `/transport/fuel/cost-attributions/${encodeURIComponent(attributionId)}/reverse`,
+        { reason },
+      ),
 
     /*
      * CHUNG TU MAY DOC + UNG VIEN (`#313`). Moi duong duoi day da co tren may chu tu Lane C;
@@ -1293,6 +1345,11 @@ export const transportApi = {
      */
     fuelStations: (supplierId: string): Promise<readonly DriverFuelStation[]> =>
       get(`/transport/me/fuel/stations${toQuery({ supplierId })}`),
+    /**
+     * `#364` — VIEC DUOC DIEU lai xe khai phieu dau duoc (vong xe dang mo + bien so + chang).
+     * Chi de DE XUAT tren o khai phieu; lenh nop van bi may chu kiem lai.
+     */
+    fuelRuns: (): Promise<readonly DriverFuelRunView[]> => get('/transport/me/fuel/runs'),
     fuelSlips: (): Promise<readonly DriverFuelSlipView[]> => get('/transport/me/fuel/slips'),
     fuelSlip: (id: string): Promise<DriverFuelSlipView> =>
       get(`/transport/me/fuel/slips/${encodeURIComponent(id)}`),
@@ -1562,6 +1619,26 @@ export const transportApi = {
       send('POST', `/transport/runs/${encodeURIComponent(id)}/transition`, { to: 'ACTIVE' }),
     assignRun: (id: string, driverId: string): Promise<unknown> =>
       send('POST', `/transport/runs/${encodeURIComponent(id)}/assignment`, { driverId }),
+    /**
+     * VAN PHONG TIEN MOT CHANG — `#376`: `PLANNED -> IN_TRANSIT -> COMPLETED`.
+     *
+     * `overrideReason` chi di kem khi nguoi dung GHI DE TUONG MINH trai hien truong (`#332`) — mot
+     * truong vang mat thi `JSON.stringify` bo han, dung hop dong `.strict()` cua may chu. Phan xu
+     * dong vong chay chay SAU lan ghi va tra ve trong `closure`: web khong co duong nao dong vong
+     * chay (`#293`).
+     */
+    transitionLeg: (
+      runId: string,
+      legId: string,
+      input: { readonly to: LegTransitionTarget; readonly overrideReason?: string },
+    ): Promise<LegTransitionResult> =>
+      send(
+        'POST',
+        `/transport/runs/${encodeURIComponent(runId)}/legs/${encodeURIComponent(legId)}/transition`,
+        input.overrideReason === undefined
+          ? { to: input.to }
+          : { to: input.to, overrideReason: input.overrideReason },
+      ),
   },
 
   /**

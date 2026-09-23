@@ -50,6 +50,35 @@ export interface LegCostFact {
   readonly signedAmount: number;
 }
 
+/**
+ * `#369` R-1 — MOT DONG PHAN BO GIA THANH Run-first (`TransportFuelCostAttribution`, `#364`).
+ *
+ * NGUON THU HAI cua chi phi truc tiep, va no ROI `LegCostFact` theo CAU TRUC: mot phieu dau gan
+ * chuyen v1 chi co chan `TX-03` (trigger phan bo tu choi no), mot phieu Run-first chi co dong phan bo
+ * (`CHECK TransportFuelEntry_cost_expense_needs_trip`). Nen cong hai nguon KHONG dem trung — va do la
+ * luat ma `docs/kien-truc/transport-fuel-run-first.md` §3 ghi cho nguoi doc sau.
+ *
+ * `legId` `null` = dich `RUN`: chi phi cua CA vong chay, khong thuoc chang nao — nen no vao bien vong
+ * chay nhung KHONG vao bien cua don nao (cung ly le voi chang rong). `signedAmount` CO DAU: dong dao am.
+ */
+export interface AttributedCostFact {
+  /** Dong phan bo — duong doi soat nguoc ve `TransportFuelCostAttribution`. */
+  readonly attributionId: string;
+  readonly runId: string;
+  readonly legId: string | null;
+  readonly signedAmount: number;
+}
+
+/**
+ * NGUON nam NGOAI `transport-costing` ma bien truc tiep doc them — cung luat cong bo voi
+ * `JOURNEY_SOURCES`/`CONTROL_TOWER_SOURCES`: vang mat thi NOI RA, khong cong 0 roi im lang.
+ */
+export const RUN_MARGIN_SOURCES = [
+  /** Lop phan bo gia thanh nhien lieu cua `transport-fuel` (`#364`). */
+  'FUEL_COST_ATTRIBUTION',
+] as const;
+export type RunMarginSource = (typeof RUN_MARGIN_SOURCES)[number];
+
 const add = (left: number, right: number): number => {
   try {
     return money(money(left).amount + money(right).amount).amount;
@@ -92,6 +121,12 @@ export const METRIC_GAPS = [
    * mau thuan, va de nguoi doc xu ly.
    */
   'ORDER_CANCELLED_WITH_ACTIVE_LEG',
+  /**
+   * `#369` R-1 — CO TIEN tren mot chang DA HUY (khoan chi `TX-03` qua lien ket, hoac dong phan bo
+   * dich `LEG`). Theo quy uoc cua ca tep, chang huy khong duoc dem — nen so tien do KHONG vao
+   * `directCost`. Bao ra thay vi nuot: bo han hay giu lai la mot quyet dinh nghiep vu chua ai ra.
+   */
+  'COST_ON_CANCELLED_LEG',
 ] as const;
 export type MetricGap = (typeof METRIC_GAPS)[number];
 
@@ -140,9 +175,60 @@ export interface OrderMargin {
   readonly legIds: readonly string[];
   /** Chuyen `TX-03` da gop chi phi vao day — duong doi soat ve `TransportTripExpense`. */
   readonly tripIds: readonly string[];
+  /** `#369` R-1 — dong phan bo dich `LEG` da gop vao day (cap phat LAN dao). */
+  readonly fuelCostAttributionIds: readonly string[];
   readonly currencyCode: string;
   readonly gaps: readonly MetricGap[];
 }
+
+/**
+ * CHI PHI THEO CHANG tu HAI nguon, danh chi muc MOT lan cho ca hai phep gop.
+ *
+ * `foldOrderMargins` va `foldRunMargin` phai doc CUNG mot phep chia chi phi theo chang: hai ban cua
+ * phep chia do se troi, va luc do tong bien cac don khong con doi chieu duoc voi bien vong chay.
+ */
+interface LegCostIndex {
+  readonly legacyByLeg: ReadonlyMap<string, number>;
+  readonly tripsByLeg: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly attributedByLeg: ReadonlyMap<string, number>;
+  readonly attributionIdsByLeg: ReadonlyMap<string, readonly string[]>;
+}
+
+function indexLegCosts(
+  costs: readonly LegCostFact[],
+  attributions: readonly AttributedCostFact[],
+): LegCostIndex {
+  const legacyByLeg = new Map<string, number>();
+  const tripsByLeg = new Map<string, Set<string>>();
+  for (const cost of costs) {
+    legacyByLeg.set(cost.legId, add(legacyByLeg.get(cost.legId) ?? 0, cost.signedAmount));
+    const trips = tripsByLeg.get(cost.legId) ?? new Set<string>();
+    trips.add(cost.tripId);
+    tripsByLeg.set(cost.legId, trips);
+  }
+
+  const attributedByLeg = new Map<string, number>();
+  const attributionIdsByLeg = new Map<string, string[]>();
+  for (const row of attributions) {
+    if (row.legId === null) continue;
+    attributedByLeg.set(row.legId, add(attributedByLeg.get(row.legId) ?? 0, row.signedAmount));
+    attributionIdsByLeg.set(row.legId, [
+      ...(attributionIdsByLeg.get(row.legId) ?? []),
+      row.attributionId,
+    ]);
+  }
+  return { legacyByLeg, tripsByLeg, attributedByLeg, attributionIdsByLeg };
+}
+
+/**
+ * CO TIEN nam tren mot chang KHONG duoc dem (da huy) hay khong — o CA HAI nguon.
+ *
+ * "Tien", khong phai "dong": mot cap phat da bi dao tren chang huy net ve 0 va khong bi bo mat gi.
+ */
+const hasCostOutside = (index: LegCostIndex, counted: ReadonlySet<string>): boolean =>
+  [...index.legacyByLeg, ...index.attributedByLeg].some(
+    ([legId, amount]) => !counted.has(legId) && amount !== 0,
+  );
 
 /**
  * BIEN THEO DON HANG.
@@ -152,20 +238,17 @@ export interface OrderMargin {
  * bien cua bat ky don nao — no chi xuat hien o bien cua ca VONG CHAY. Do chinh la ly do hai phep do
  * nay ton tai rieng: mot don hang co the co lai trong khi ca vong chay lo, va gop chung se giau mat
  * dieu do.
+ *
+ * `#369` R-1 — dong phan bo dich `LEG` cua mot chang chay don cong vao bien cua DON DO; dong dich
+ * `RUN` thi khong (no khong thuoc chang nao, cung ly le voi chang rong).
  */
 export function foldOrderMargins(
   orders: readonly Order[],
   legs: readonly RunLeg[],
   costs: readonly LegCostFact[],
+  attributions: readonly AttributedCostFact[] = [],
 ): readonly OrderMargin[] {
-  const costByLeg = new Map<string, number>();
-  const tripsByLeg = new Map<string, Set<string>>();
-  for (const cost of costs) {
-    costByLeg.set(cost.legId, add(costByLeg.get(cost.legId) ?? 0, cost.signedAmount));
-    const trips = tripsByLeg.get(cost.legId) ?? new Set<string>();
-    trips.add(cost.tripId);
-    tripsByLeg.set(cost.legId, trips);
-  }
+  const index = indexLegCosts(costs, attributions);
 
   return orders.map((order) => {
     const own = legs.filter((leg) => leg.orderId === order.id && counts(leg));
@@ -178,9 +261,12 @@ export function foldOrderMargins(
     let directCost = 0;
     let loadedKm = 0;
     const tripIds = new Set<string>();
+    const attributionIds: string[] = [];
     for (const leg of own) {
-      directCost = add(directCost, costByLeg.get(leg.id) ?? 0);
-      for (const tripId of tripsByLeg.get(leg.id) ?? []) tripIds.add(tripId);
+      directCost = add(directCost, index.legacyByLeg.get(leg.id) ?? 0);
+      directCost = add(directCost, index.attributedByLeg.get(leg.id) ?? 0);
+      for (const tripId of index.tripsByLeg.get(leg.id) ?? []) tripIds.add(tripId);
+      attributionIds.push(...(index.attributionIdsByLeg.get(leg.id) ?? []));
       if (leg.kind === 'LOADED' && leg.distanceKm !== null)
         loadedKm = add(loadedKm, leg.distanceKm);
     }
@@ -193,10 +279,35 @@ export function foldOrderMargins(
       loadedKm,
       legIds: own.map((leg) => leg.id),
       tripIds: [...tripIds],
+      fuelCostAttributionIds: attributionIds,
       currencyCode: order.currencyCode,
       gaps,
     };
   });
+}
+
+/**
+ * HAI SO CAI GIA THANH cua mot vong chay, TACH RIENG — `#369` R-1.
+ *
+ * Chung ROI NHAU theo cau truc (`#364` §3: mot phieu, mot so cai), nen `directCost` cong thang ca hai
+ * ma khong dem trung. Tach ra de doi soat duoc: mot nguoi mo `TransportTripExpense` cua cac chuyen
+ * noi voi chang se ra dung `legacyTripExpense`, mo `TransportFuelCostAttribution` cua vong chay se ra
+ * dung `fuelCostAttribution`. Mot con so gop khong noi duoc no den tu bang nao.
+ */
+export interface RunCostSources {
+  /** `TX-03` — khoan chi cua chuyen v1 noi voi chang qua `TransportTripRunLegLink`. */
+  readonly legacyTripExpense: number;
+  /** `#364` — dong phan bo Run-first co dich trong vong chay nay (cap phat LAN dao). */
+  readonly fuelCostAttribution: number;
+}
+
+/** CHI PHI CUA MOT CHANG da dem, tach theo hai nguon — `#369` R-1. */
+export interface LegCost {
+  readonly legId: string;
+  readonly legacyTripExpense: number;
+  readonly fuelCostAttribution: number;
+  /** Tong hai nguon — chinh la phan chang nay dong gop vao `RunMargin.directCost`. */
+  readonly directCost: number;
 }
 
 /** BIEN cua MOT VONG CHAY — ca chu ky, ke ca chang rong. */
@@ -205,6 +316,15 @@ export interface RunMargin {
   readonly revenue: number;
   readonly directCost: number;
   readonly directMargin: number;
+  /** `#369` R-1 — `directCost` den tu dau. Tong hai truong = `directCost`. */
+  readonly costSources: RunCostSources;
+  /** `#369` R-1 — chi phi tung chang DA DEM, theo thu tu chang. Khung nhin Run/Leg. */
+  readonly legCosts: readonly LegCost[];
+  /**
+   * `#369` R-1 — phan bo dich `RUN`: thuoc CA vong chay, khong thuoc chang nao (vd mot lan do dau
+   * chay cho ca chu ky). Da nam trong `directCost`, va CO Y khong roi vao bien cua don nao.
+   */
+  readonly runLevelCost: number;
   /** Phep gop km cua Lane A, nguyen ven — khong tinh lai o day. */
   readonly distance: RunDistanceSummary;
   readonly provenance: DistanceProvenance;
@@ -214,6 +334,13 @@ export interface RunMargin {
   /** Don da duoc cong cuoc — DEM MOT LAN moi don. */
   readonly orderIds: readonly string[];
   readonly tripIds: readonly string[];
+  /** `#369` R-1 — dong phan bo da cong (cap phat LAN dao), duong doi soat cua nguon thu hai. */
+  readonly fuelCostAttributionIds: readonly string[];
+  /**
+   * `#369` R-1 — NGUON VANG MAT. Khach tat `transport-fuel` thi bao cao van dung voi nhung gi no
+   * doc duoc, va NOI RA phan no khong doc duoc — thay vi cong 0 roi doc len nhu da du.
+   */
+  readonly unavailableSources: readonly RunMarginSource[];
   readonly gaps: readonly MetricGap[];
 }
 
@@ -226,37 +353,57 @@ export interface RunMargin {
  *
  * Chi phi la tong MOI chang cua vong chay — KE CA chang rong. Chieu ve rong ton tien dau, tien
  * duong va tien luong y het chieu di; bo no ra khoi bien la lam moi vong chay trong dep hon thuc te.
+ *
+ * `#369` R-1 — chi phi doc tu HAI so cai ROI NHAU: `TX-03` qua lien ket chuyen v1 (`costs`) va lop
+ * phan bo Run-first (`extra.attributions`). Dong dich `LEG` vao chang cua no; dong dich `RUN` vao
+ * `runLevelCost`. Dong dao mang so am nen phep cong khong loc gi — mot cap phat da dao net ve 0.
  */
 export function foldRunMargin(
   runId: string,
   legs: readonly RunLeg[],
   orders: readonly Order[],
   costs: readonly LegCostFact[],
+  extra: {
+    readonly attributions?: readonly AttributedCostFact[];
+    readonly unavailableSources?: readonly RunMarginSource[];
+  } = {},
 ): RunMargin {
   const own = legs.filter((leg) => leg.runId === runId);
   const counted = own.filter(counts);
   const distance = summariseRunDistance(own);
   const provenance = distanceProvenance(own);
 
-  const costByLeg = new Map<string, number>();
-  const tripsByLeg = new Map<string, Set<string>>();
-  for (const cost of costs) {
-    costByLeg.set(cost.legId, add(costByLeg.get(cost.legId) ?? 0, cost.signedAmount));
-    const trips = tripsByLeg.get(cost.legId) ?? new Set<string>();
-    trips.add(cost.tripId);
-    tripsByLeg.set(cost.legId, trips);
-  }
+  const attributions = (extra.attributions ?? []).filter((row) => row.runId === runId);
+  const index = indexLegCosts(costs, attributions);
+  const runLevel = attributions.filter((row) => row.legId === null);
+  const runLevelCost = runLevel.reduce((total, row) => add(total, row.signedAmount), 0);
 
   const orderById = new Map(orders.map((order) => [order.id, order]));
   const seenOrders = new Set<string>();
   const tripIds = new Set<string>();
+  const attributionIds = runLevel.map((row) => row.attributionId);
   const gaps: MetricGap[] = [];
+  if (hasCostOutside(index, new Set(counted.map((leg) => leg.id)))) {
+    gaps.push('COST_ON_CANCELLED_LEG');
+  }
 
   let revenue = 0;
-  let directCost = 0;
+  let legacyTripExpense = 0;
+  let fuelCostAttribution = runLevelCost;
+  const legCosts: LegCost[] = [];
   for (const leg of counted) {
-    directCost = add(directCost, costByLeg.get(leg.id) ?? 0);
-    for (const tripId of tripsByLeg.get(leg.id) ?? []) tripIds.add(tripId);
+    const legacy = index.legacyByLeg.get(leg.id) ?? 0;
+    const attributed = index.attributedByLeg.get(leg.id) ?? 0;
+    legacyTripExpense = add(legacyTripExpense, legacy);
+    fuelCostAttribution = add(fuelCostAttribution, attributed);
+    legCosts.push({
+      legId: leg.id,
+      legacyTripExpense: legacy,
+      fuelCostAttribution: attributed,
+      directCost: add(legacy, attributed),
+    });
+    for (const tripId of index.tripsByLeg.get(leg.id) ?? []) tripIds.add(tripId);
+    attributionIds.push(...(index.attributionIdsByLeg.get(leg.id) ?? []));
 
     if (leg.orderId === null || seenOrders.has(leg.orderId)) continue;
     seenOrders.add(leg.orderId);
@@ -273,6 +420,7 @@ export function foldRunMargin(
   if (provenance.legIdsMissingDistance.length > 0) gaps.push('LEG_DISTANCE_MISSING');
   if (distance.totalKm === 0) gaps.push('NO_DISTANCE_RECORDED');
 
+  const directCost = add(legacyTripExpense, fuelCostAttribution);
   const perKm = (value: number): number | null =>
     distance.totalKm === 0 ? null : Math.round(value / distance.totalKm);
 
@@ -281,12 +429,17 @@ export function foldRunMargin(
     revenue,
     directCost,
     directMargin: add(revenue, -directCost),
+    costSources: { legacyTripExpense, fuelCostAttribution },
+    legCosts,
+    runLevelCost,
     distance,
     provenance,
     revenuePerKm: perKm(revenue),
     costPerKm: perKm(directCost),
     orderIds: [...seenOrders],
     tripIds: [...tripIds],
+    fuelCostAttributionIds: attributionIds,
+    unavailableSources: extra.unavailableSources ?? [],
     gaps: [...new Set(gaps)],
   };
 }

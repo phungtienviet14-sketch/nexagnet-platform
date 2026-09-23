@@ -19,11 +19,13 @@ import {
   type MatchableFuelEntry,
   type MatchableStatementLine,
 } from './fuel-matching.js';
+import { isCashPaidLineAcceptance, isSupplierPayable } from './fuel-payable.js';
 import { TRANSPORT_FUEL_POLICY, type TransportFuelPolicy } from './fuel-policy.js';
 import { FuelRepository, type MatchToApply, type MatchingRunResult } from './fuel.repository.js';
 import type {
   FuelDiscrepancy,
   FuelDiscrepancyResolution,
+  FuelPaymentMethod,
   FuelReconciliation,
   FuelSettlementHandoff,
   FuelStatementLine,
@@ -157,6 +159,10 @@ export class FuelReconciliationService {
         amount: entry.amount,
         invoiceNo: entry.invoiceNo,
         sourceStatementId: entry.sourceStatementId,
+        // `#371` — phieu tien mat VAN vao vong so khop: khong de thanh ung vien, ma de mot dong bang
+        // ke tro toi no duoc goi dung ten (`PAYMENT_METHOD_CONFLICT`). Loc no o day se bien dong do
+        // thanh `STATEMENT_LINE_ONLY` — noi nguoi soat duoc phep "chap nhan so cay xang".
+        paymentMethod: entry.paymentMethod,
         reconciliationStatus: entry.reconciliationStatus,
       }));
 
@@ -322,6 +328,31 @@ export class FuelReconciliationService {
       );
     }
 
+    /*
+     * `#371` — DONG PHIEU TIEN MAT khong thanh cong no bang duong "chap nhan so cay xang".
+     *
+     * Kiem o day la du, khong can doc lai duoi khoa: `kind` cua mot hang chenh lech khong bao gio doi,
+     * va lenh ghi o tang kho doi CHINH hang nay con `PENDING` (`updateMany ... WHERE status`) — hang bi
+     * lan chay lai so khop xoa thi lenh ghi tra `DISCREPANCY_RACE`.
+     */
+    if (isCashPaidLineAcceptance(discrepancy.kind, command.resolution)) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel_discrepancy.resolve',
+        outcome: 'denied',
+        reason: 'DISCREPANCY_CASH_PAID_NOT_PAYABLE',
+        detail: {
+          discrepancyId,
+          statementLineId: discrepancy.statementLineId,
+          candidateEntryIds: [...discrepancy.candidateEntryIds],
+        },
+      });
+      throw TransportDomainError.denied(
+        'DISCREPANCY_CASH_PAID_NOT_PAYABLE',
+        `Dong bang ke cua chenh lech ${discrepancyId} ung voi lan do lai xe da tra tien mat — chap nhan so cay xang la tra hai lan. Tu choi dong, bo qua co ly do, hoac yeu cau sua phieu neu lai xe khai sai cach tra`,
+      );
+    }
+
     const confirmed = await this.buildConfirmedMatch(discrepancy, command);
 
     const outcome = await this.repository.resolveDiscrepancy({
@@ -347,6 +378,16 @@ export class FuelReconciliationService {
     });
     if (outcome.kind === 'RECONCILIATION_REJECTED') {
       this.denyFrozen(discrepancy.reconciliationId, outcome.state);
+    }
+    if (outcome.kind === 'MATCH_PAYMENT_METHOD_CONFLICT') {
+      // Lan doc DUOI KHOA thay dieu lan kiem truoc giao dich khong thay: phieu vua bi sua sang tien
+      // mat. Khong hang nao da duoc ghi.
+      this.denyCashPaidMatch({
+        statementLineId: confirmed?.statementLineId ?? null,
+        fuelEntryId: outcome.fuelEntryId,
+        paymentMethod: outcome.paymentMethod,
+        checkedUnderLock: true,
+      });
     }
     if (outcome.kind === 'DISCREPANCY_RACE') {
       throw TransportDomainError.conflict(
@@ -508,6 +549,24 @@ export class FuelReconciliationService {
         `Con ${outcome.pending} chenh lech chua ai quyet — chua dong duoc ky doi soat`,
       );
     }
+    if (outcome.kind === 'CASH_PAID_MATCHES') {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel_reconciliation.transition',
+        outcome: 'denied',
+        reason: 'RECONCILIATION_HAS_CASH_PAID_MATCH',
+        detail: {
+          reconciliationId,
+          matchIds: outcome.matches.map((match) => match.matchId),
+          fuelEntryIds: outcome.matches.map((match) => match.fuelEntryId),
+          statementLineIds: outcome.matches.map((match) => match.statementLineId),
+        },
+      });
+      throw TransportDomainError.denied(
+        'RECONCILIATION_HAS_CASH_PAID_MATCH',
+        `Ky doi soat ${reconciliationId} co ${outcome.matches.length} cap khop toi phieu lai xe da tra tien mat — khong dong, khong phat cong no. Chay lai so khop (cap tu dong se duoc lam sach) hoac sua du lieu cap khop tay truoc khi dong`,
+      );
+    }
     if (outcome.kind === 'REJECTED') {
       if (outcome.state !== null && isFrozenFuelReconciliation(outcome.state)) {
         this.denyFrozen(reconciliationId, outcome.state);
@@ -632,10 +691,10 @@ export class FuelReconciliationService {
   }
 
   /**
-   * NAM duong tu choi mot lan doi y — moi duong mot ma, va hai nhom HTTP khac nhau.
+   * SAU duong tu choi mot lan doi y — moi duong mot ma, va hai nhom HTTP khac nhau.
    *
    * `DECISION_NOT_CURRENT`/`DECISION_NOT_RESOLVED` la VA CHAM (409): du lieu da doi hoac chua toi
-   * cho, nguoi dung tai lai roi lam tiep. Ba ma con lai la LUAT (403): lam lai bao nhieu lan cung
+   * cho, nguoi dung tai lai roi lam tiep. Bon ma con lai la LUAT (403): lam lai bao nhieu lan cung
    * khong qua, phai di mot duong khac.
    */
   private denyRevision(
@@ -656,11 +715,39 @@ export class FuelReconciliationService {
       DECISION_NOT_CURRENT: `Dong nay da co quyet dinh moi hon (${currentId ?? 'khong ro'}) — tai lai roi sua ban moi nhat`,
       DECISION_MATCH_LOCKED: `Quyet dinh ${discrepancyId} da ghi mot cap khop tay — mo lai ky va chay lai so khop thay vi sua`,
       DECISION_REVISION_NO_CHANGE: `Quyet dinh moi trung quyet dinh dang co cua ${discrepancyId} — khong ghi ban sua rong`,
+      DECISION_CASH_PAID_NOT_PAYABLE: `Dong cua quyet dinh ${discrepancyId} ung voi lan do lai xe da tra tien mat — khong doi y sang chap nhan so cay xang (se tra hai lan)`,
     };
     if (reason === 'DECISION_NOT_CURRENT' || reason === 'DECISION_NOT_RESOLVED') {
       throw TransportDomainError.conflict(reason, messages[reason]);
     }
     throw TransportDomainError.denied(reason, messages[reason]);
+  }
+
+  /**
+   * `#371` — cap khop tay tro toi mot phieu KHONG ghi no. MOT ma cho ca hai lan kiem (som, va duoi
+   * khoa); `checkedUnderLock` trong trace noi lan nao da chan — de biet mot lenh sua phieu co that su
+   * chen vao giua hay khong.
+   *
+   * 403 chu khong 409: tai lai roi bam lai cung KHONG qua. Duong dung la sua phieu (neu lai xe khai sai
+   * cach tra) hoac quyet dong do bang mot duong khong tra tien.
+   */
+  private denyCashPaidMatch(detail: {
+    readonly statementLineId: string | null;
+    readonly fuelEntryId: string;
+    readonly paymentMethod: FuelPaymentMethod;
+    readonly checkedUnderLock: boolean;
+  }): never {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel.match',
+      outcome: 'denied',
+      reason: 'MATCH_PAYMENT_METHOD_CONFLICT',
+      detail: { ...detail },
+    });
+    throw TransportDomainError.denied(
+      'MATCH_PAYMENT_METHOD_CONFLICT',
+      `Phieu ${detail.fuelEntryId} do lai xe da tra tien mat (${detail.paymentMethod}) — khong khop voi bang ke cong no cay xang`,
+    );
   }
 
   private denyTransition(reconciliation: FuelReconciliation, to: FuelReconciliationState): never {
@@ -774,6 +861,22 @@ export class FuelReconciliationService {
         'FUEL_MATCH_SELF_SOURCED',
         `Phieu ${fuelEntryId} duoc de ra tu chinh bang ke nay — khong khop voi chinh no (INV-26)`,
       );
+    }
+
+    /*
+     * `#371` — CACH TRA, lan kiem SOM: tra ve ly do co ten truoc khi mo giao dich.
+     *
+     * KHONG phai lan kiem co hieu luc. Lan doc nay nam NGOAI giao dich, nen mot lenh sua phieu sang
+     * `DRIVER_CASH` chen vao sau no van lot; `resolveDiscrepancy` o tang kho doc lai DUOI KHOA roi moi
+     * ghi. Giao dien cang khong phai ranh gioi — may chu quyet.
+     */
+    if (!isSupplierPayable(entry.paymentMethod)) {
+      this.denyCashPaidMatch({
+        statementLineId,
+        fuelEntryId,
+        paymentMethod: entry.paymentMethod,
+        checkedUnderLock: false,
+      });
     }
 
     return {

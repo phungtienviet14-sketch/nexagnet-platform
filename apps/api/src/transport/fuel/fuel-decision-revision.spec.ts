@@ -5,7 +5,9 @@ import {
   lineStatusAfterRevision,
   supersededDecisionIds,
   type DecisionRecord,
+  type RevisionTarget,
 } from './fuel-decision-revision.js';
+import type { FuelDiscrepancyKind } from './fuel-matching.js';
 import { sumAcceptedSettlement } from './fuel-settlement.js';
 
 /**
@@ -193,7 +195,11 @@ describe('evaluateDecisionRevision — ai sua duoc, sua thanh gi', () => {
     decision('e4', { statementLineId: null, resolution: 'IGNORE_WITH_REASON' }),
     decision('m5', { statementLineId: 'dong-3', resolution: 'MATCH_CONFIRMED' }),
   ];
-  const find = (id: string) => records.find((record) => record.id === id) as DecisionRecord;
+  /** Loai chenh lech chi doi luat `#371`; moi bai cu dung mot loai trung tinh. */
+  const find = (id: string, kind: FuelDiscrepancyKind = 'STATEMENT_LINE_ONLY'): RevisionTarget => ({
+    ...(records.find((record) => record.id === id) as DecisionRecord),
+    kind,
+  });
 
   it('quyet dinh HIEU LUC sang mot quyet dinh khac -> cho phep', () => {
     expect(
@@ -241,6 +247,43 @@ describe('evaluateDecisionRevision — ai sua duoc, sua thanh gi', () => {
     expect(
       evaluateDecisionRevision({ target: find('d2'), records, resolution: 'IGNORE_WITH_REASON' }),
     ).toEqual({ allowed: false, reason: 'DECISION_REVISION_NO_CHANGE' });
+  });
+
+  /**
+   * `#371` — dong `PAYMENT_METHOD_CONFLICT` la lan do lai xe DA TRA TIEN MAT. Doi y sang "chap nhan so
+   * cay xang" sau khi mo ky la duong vong ra dung khoan tra hai lan ma lan QUYET dau tien da chan.
+   */
+  it('#371 — dong phieu tien mat: doi y sang ACCEPT -> DECISION_CASH_PAID_NOT_PAYABLE', () => {
+    expect(
+      evaluateDecisionRevision({
+        target: find('d2', 'PAYMENT_METHOD_CONFLICT'),
+        records,
+        resolution: 'ACCEPT_SUPPLIER_AMOUNT',
+      }),
+    ).toEqual({ allowed: false, reason: 'DECISION_CASH_PAID_NOT_PAYABLE' });
+  });
+
+  it('#371 — dong phieu tien mat: doi y giua cac duong KHONG tra tien van duoc', () => {
+    for (const resolution of ['REJECT_SUPPLIER_LINE', 'ENTRY_CORRECTION_REQUIRED'] as const) {
+      expect(
+        evaluateDecisionRevision({
+          target: find('d2', 'PAYMENT_METHOD_CONFLICT'),
+          records,
+          resolution,
+        }),
+      ).toEqual({ allowed: true });
+    }
+  });
+
+  /** Luat `#371` gan voi LOAI chenh lech, khong gan voi quyet dinh — loai khac van doi y nhu cu. */
+  it('#371 — loai chenh lech KHAC van doi y sang ACCEPT duoc nhu truoc', () => {
+    expect(
+      evaluateDecisionRevision({
+        target: find('d2', 'OUT_OF_TOLERANCE'),
+        records,
+        resolution: 'ACCEPT_SUPPLIER_AMOUNT',
+      }),
+    ).toEqual({ allowed: true });
   });
 });
 

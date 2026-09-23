@@ -1,4 +1,6 @@
 import type { FuelReconciliationStatus } from './fuel-lifecycle.js';
+import type { FuelDiscrepancyKind } from './fuel-matching.js';
+import { isCashPaidLineAcceptance } from './fuel-payable.js';
 import type { FuelDiscrepancyResolution, FuelDiscrepancyStatus } from './fuel.types.js';
 
 /**
@@ -66,9 +68,21 @@ export const FUEL_DECISION_REVISION_DENIED_REASONS = [
   'DECISION_MATCH_LOCKED',
   /** Sua thanh CHINH quyet dinh dang co — khong ghi mot ban sua doi rong. */
   'DECISION_REVISION_NO_CHANGE',
+  /**
+   * `#371` — doi y SANG `ACCEPT_SUPPLIER_AMOUNT` tren dong `PAYMENT_METHOD_CONFLICT`: dong do la lan
+   * do lai xe da tra tien mat. Cung luat voi lan QUYET dau tien (`isCashPaidLineAcceptance`) — neu
+   * chi chan o lan quyet, mo lai ky roi doi y la mot duong vong ra dung khoan tra hai lan do.
+   */
+  'DECISION_CASH_PAID_NOT_PAYABLE',
 ] as const;
 export type FuelDecisionRevisionDeniedReason =
   (typeof FUEL_DECISION_REVISION_DENIED_REASONS)[number];
+
+/**
+ * Quyet dinh BI SUA — them `kind` so voi `DecisionRecord`: luat `#371` phu thuoc LOAI chenh lech, con
+ * phep chieu "cai nao hieu luc" thi khong, nen `DecisionRecord` van ngheo nhu cu.
+ */
+export type RevisionTarget = DecisionRecord & { readonly kind: FuelDiscrepancyKind };
 
 export type FuelDecisionRevisionDecision =
   | { readonly allowed: true }
@@ -126,13 +140,13 @@ export function supersededDecisionIds(records: readonly DecisionRecord[]): Reado
 }
 
 /**
- * SUA MOT QUYET DINH DUOC KHONG — NAM duong tu choi, moi duong mot ma.
+ * SUA MOT QUYET DINH DUOC KHONG — SAU duong tu choi, moi duong mot ma.
  *
  * Tang kho goi lai CHINH ham nay tren du lieu doc DUOI KHOA hang doi soat; lan goi o tang mien chi
  * de tra ve ly do som. Hai lan goi, mot luat.
  */
 export function evaluateDecisionRevision(input: {
-  readonly target: DecisionRecord;
+  readonly target: RevisionTarget;
   readonly records: readonly DecisionRecord[];
   readonly resolution: RevisableFuelResolution;
 }): FuelDecisionRevisionDecision {
@@ -146,6 +160,9 @@ export function evaluateDecisionRevision(input: {
   }
   if (target.resolution === 'MATCH_CONFIRMED') {
     return { allowed: false, reason: 'DECISION_MATCH_LOCKED' };
+  }
+  if (isCashPaidLineAcceptance(target.kind, input.resolution)) {
+    return { allowed: false, reason: 'DECISION_CASH_PAID_NOT_PAYABLE' };
   }
   if (target.resolution === input.resolution) {
     return { allowed: false, reason: 'DECISION_REVISION_NO_CHANGE' };

@@ -71,8 +71,8 @@ export class PrismaCheckpointRepository extends CheckpointRepository {
     return rows.map(toDomain);
   }
 
-  async listForLeg(legId: string): Promise<readonly RunCheckpoint[]> {
-    const rows = await this.prisma.transportRunCheckpoint.findMany({
+  async listForLeg(legId: string, tx?: RunWriteTransaction): Promise<readonly RunCheckpoint[]> {
+    const rows: PrismaCheckpoint[] = await checkpoints(tx ?? this.prisma).findMany({
       where: { legId },
       orderBy: { receivedAt: 'asc' },
     });

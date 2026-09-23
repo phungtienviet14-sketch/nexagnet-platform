@@ -156,6 +156,7 @@ export class DriverFieldReadService {
       receiptHandover: handovers.at(-1)?.state ?? null,
       nextActions: fieldActionsFor({
         legKind: input.leg.kind,
+        legStatus: input.leg.status,
         recordedTypes,
         documentTypes,
         requiredDocumentTypes: loaded ? this.documentPolicy.requiredOnLoadedLeg : [],

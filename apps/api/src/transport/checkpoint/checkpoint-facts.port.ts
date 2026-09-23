@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FleetRepository } from '../fleet/fleet.repository.js';
 import { MovementRepository } from '../movement/movement.repository.js';
-import type { RunLegKind, VehicleRunStatus } from '../movement/movement.types.js';
+import type { RunLegKind, RunLegStatus, VehicleRunStatus } from '../movement/movement.types.js';
 import { TrackingRepository } from '../proof/tracking.repository.js';
 
 /**
@@ -33,6 +33,11 @@ export interface CheckpointLegFacts {
   readonly runId: string;
   /** Chang CO HANG hay CHAY RONG — chang rong khong nhan moc hang hoa (`#332`). */
   readonly kind: RunLegKind;
+  /**
+   * Trang thai chang LUC DOC — `#354`. Chi de tu choi SOM cho re: ban doc nay co the da cu truoc khi
+   * lenh ghi lay duoc khoa, nen cong that nam DUOI khoa, tren `RunWriteScope.legs`.
+   */
+  readonly status: RunLegStatus;
 }
 
 export abstract class TransportCheckpointCoreFacts {
@@ -96,7 +101,7 @@ export class TransportCheckpointCoreFactsAdapter extends TransportCheckpointCore
 
   async findLeg(legId: string): Promise<CheckpointLegFacts | null> {
     const leg = await this.movement.findLeg(legId);
-    return leg ? { id: leg.id, runId: leg.runId, kind: leg.kind } : null;
+    return leg ? { id: leg.id, runId: leg.runId, kind: leg.kind, status: leg.status } : null;
   }
 
   async wasDriverEverAssignedToRun(runId: string, driverId: string): Promise<boolean> {

@@ -194,6 +194,27 @@ export const JOURNEY_EVENT_KINDS = ['CHECKPOINT', 'FUEL'] as const;
 export type JourneyEventKind = (typeof JOURNEY_EVENT_KINDS)[number];
 
 /**
+ * VI SAO mot su kien nam o chang do — `#369` R-2/R-5.
+ *
+ * Khong phai trang tri: hai su kien cung hien tren cung mot chang co the den tu hai duong khac han,
+ * va nguoi doc phai phan biet duoc. Mot moc hien truong KHAI thang chang cua no; mot phieu dau chuyen
+ * v1 duoc SUY ra chang qua `TransportTripRunLegLink` (khong mot lan ghi nao — xem
+ * `FuelDerivedRunContext`); mot phieu dau Run-first khong khai chang thi thuoc CA vong chay.
+ *
+ * Gop ba thu do lam mot se lam mot bao cao doi soat noi rang ban ghi goc "co" mot chang ma no chua
+ * bao gio mang.
+ */
+export const JOURNEY_EVENT_PLACEMENTS = [
+  /** Ban ghi goc TU KHAI chang nay. */
+  'DECLARED',
+  /** SUY RA tu `TransportTripRunLegLink` — quan he 1-1, khong doan. */
+  'DERIVED_FROM_TRIP_LINK',
+  /** Su kien cua CA vong chay: khong thuoc chang nao (`legId` la `null`). */
+  'RUN_LEVEL',
+] as const;
+export type JourneyEventPlacement = (typeof JOURNEY_EVENT_PLACEMENTS)[number];
+
+/**
  * MOT SU KIEN doc duoc tren dong thoi gian.
  *
  * KHONG mot cau tieng Viet nao — cung luat voi `control-tower.types.ts`. `code` la ma, va man hinh
@@ -206,6 +227,8 @@ export interface JourneyEvent {
   /** Gio MAY CHU. Dong thoi gian khong bao gio xep theo gio may khach (`#243` F7). */
   readonly at: string;
   readonly legId: string | null;
+  /** `#369` R-2/R-5 — vi sao su kien nay nam o `legId` do. Xem `JOURNEY_EVENT_PLACEMENTS`. */
+  readonly placement: JourneyEventPlacement;
   readonly hasLocationProof: boolean;
   /** Ban ghi goc — de man hinh bam nguoc ve. */
   readonly subjectId: string;

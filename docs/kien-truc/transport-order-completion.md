@@ -23,6 +23,11 @@ Chủ thể của lần **kết thúc thương mại** là `TransportOrder`, **k
 → chỉ khi đó đơn mới vào được một kỳ đối soát MỚI
 ```
 
+> **"Đơn giao xong" là một lần bấm của văn phòng — `#376`.** Hàng chờ chỉ nhận đơn `FULFILLED`, và
+> `OPEN → FULFILLED` **không** tự suy từ mốc "Khách đã nhận hàng" hay từ lần hệ thống đóng vòng chạy
+> (`Run closed != Order completed`). Người có `transport.order.manage` bấm `Xác nhận đã giao xong` ở
+> khối **Giao xong đơn** của màn Đơn hàng & vòng chạy; sau đó đơn mới hiện ở "Kết thúc đơn".
+
 ---
 
 ## 1. Lane K sửa gì của Lane I

@@ -5,6 +5,7 @@ import {
   evaluateCheckpoint,
   isRepeatable,
   isRunScoped,
+  legAcceptsNewCheckpoints,
   requiredPredecessor,
   type CheckpointEvaluation,
 } from './checkpoint-lifecycle.js';
@@ -23,10 +24,69 @@ const base = (overrides: Partial<CheckpointEvaluation> = {}): CheckpointEvaluati
   runTerminal: false,
   hasLeg: true,
   legKind: 'LOADED',
+  legStatus: 'IN_TRANSIT',
   recordedTypes: [],
   hasObservation: false,
   policy: DEFAULT_CHECKPOINT_POLICY,
   ...overrides,
+});
+
+/**
+ * CHANG DA KET THUC — `#354`. Ma rieng, dung o giua PHAM VI va THU TU.
+ */
+describe('chang da ket thuc khong nhan moc moi (#354)', () => {
+  it('chang COMPLETED hay CANCELLED: tu choi bang ma rieng', () => {
+    for (const legStatus of ['COMPLETED', 'CANCELLED'] as const) {
+      expect(evaluateCheckpoint(base({ legStatus }))).toMatchObject({
+        allowed: false,
+        reason: 'CHECKPOINT_LEG_TERMINAL',
+      });
+    }
+  });
+
+  it('chang PLANNED hay IN_TRANSIT: luat cu giu nguyen', () => {
+    for (const legStatus of ['PLANNED', 'IN_TRANSIT'] as const) {
+      expect(evaluateCheckpoint(base({ legStatus }))).toMatchObject({
+        allowed: true,
+        reason: 'CHECKPOINT_RECORDED',
+      });
+    }
+    expect(legAcceptsNewCheckpoints('PLANNED')).toBe(true);
+    expect(legAcceptsNewCheckpoints('IN_TRANSIT')).toBe(true);
+    expect(legAcceptsNewCheckpoints('COMPLETED')).toBe(false);
+    expect(legAcceptsNewCheckpoints('CANCELLED')).toBe(false);
+  });
+
+  it('vong chay da dong thi van la CHECKPOINT_RUN_TERMINAL — vong chay dung truoc chang', () => {
+    expect(evaluateCheckpoint(base({ runTerminal: true, legStatus: 'COMPLETED' }))).toMatchObject({
+      reason: 'CHECKPOINT_RUN_TERMINAL',
+    });
+  });
+
+  it('moc hang hoa tren chang RONG da COMPLETED van la CHECKPOINT_CARGO_ON_EMPTY_LEG (#350)', () => {
+    const decision = evaluateCheckpoint(
+      base({ type: 'DELIVERY_ARRIVAL', legKind: 'EMPTY', legStatus: 'COMPLETED' }),
+    );
+    expect(decision).toMatchObject({ reason: 'CHECKPOINT_CARGO_ON_EMPTY_LEG' });
+  });
+
+  it('chang da ket thuc dung TRUOC thu tu va trung lap', () => {
+    const missing = evaluateCheckpoint(
+      base({ type: 'PICKUP_DEPARTURE', recordedTypes: [], legStatus: 'COMPLETED' }),
+    );
+    const duplicate = evaluateCheckpoint(
+      base({ type: 'PICKUP_ARRIVAL', recordedTypes: ['PICKUP_ARRIVAL'], legStatus: 'COMPLETED' }),
+    );
+    expect(missing).toMatchObject({ reason: 'CHECKPOINT_LEG_TERMINAL' });
+    expect(duplicate).toMatchObject({ reason: 'CHECKPOINT_LEG_TERMINAL' });
+  });
+
+  it('moc muc vong chay khong kem chang thi khong co dieu kien chang nao', () => {
+    const decision = evaluateCheckpoint(
+      base({ type: 'ASSIGNED', hasLeg: false, legKind: null, legStatus: null }),
+    );
+    expect(decision).toMatchObject({ allowed: true, reason: 'CHECKPOINT_RECORDED' });
+  });
 });
 
 describe('pham vi moc', () => {

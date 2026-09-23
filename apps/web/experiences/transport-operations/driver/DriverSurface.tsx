@@ -8,11 +8,18 @@ import { expenseCategoryLabel, FUEL_PAYMENT_METHOD_LABEL, formatMoney } from '..
 import { FUEL_PAYMENT_METHODS, type FuelPaymentMethod } from '../transport-types';
 import {
   DEFAULT_DRIVER_PAYMENT_METHOD,
+  allowsDriverCash,
+  driverFuelContextOptions,
   occurredAtProblem,
   toDateTimeLocalValue,
+  toDriverFuelContext,
   toDriverFuelSubmission,
   type DriverFuelForm,
 } from '../workspace/fuel-declaration';
+import { useDriverFuelRuns } from '../hooks/useDriverFuelRuns';
+import { canPerform } from '../transport-actions';
+import type { DriverFuelSlipView } from '../transport-types';
+import { fuelContextLabel } from '../workspace/fuel';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
@@ -34,26 +41,34 @@ import {
   driverTripActions,
   EVIDENCE_UPLOAD_HINT,
   toDriverFuelSlipRows,
-  toDriverHome,
   toDriverTripCard,
 } from '../workspace/driver';
 import { toDriverPayslipRows } from '../workspace/payroll';
 import { DriverFieldWork } from './FieldScreen';
+import { DriverHome } from './HomeScreen';
 import { DriverSiteIntake } from './SiteIntakeScreen';
 
 /**
  * BE MAT LAI XE — `GD-23`, va moi payload di qua kieu khung nhin rieng khong co doanh thu (`INV-09`).
  *
- * Uu tien la 1–2 cham cho viec thuong lam (#161 §3): trang chu tra ve DUNG MOT chuyen dang lam kem
- * thao tac cua chinh no, chu khong tra ve mot danh sach de nguoi ta tu tim.
+ * Uu tien la 1–2 cham cho viec thuong lam (#161 §3): trang chu tra ve DUNG MOT viec dang lam, chu
+ * khong tra ve mot danh sach de nguoi ta tu tim — va tu `#340` viec do doc tu VONG CHAY da duoc
+ * dieu (`HomeScreen.tsx`), kem mot cham vao man Hien truong de lam no.
  *
  * MOI man hinh o day deu goi duoc mot duong that. Truoc T7D co HAI man chi doc duoc — nop phieu
  * dau (thieu `vehicleId`) va phieu luong (chua co route) — va ca hai da duoc #168 mo.
  */
-export function DriverSurface({ screen }: { readonly screen: DriverScreenId }) {
+export function DriverSurface({
+  screen,
+  onNavigate,
+}: {
+  readonly screen: DriverScreenId;
+  /** Dieu huong TRONG ung dung — cung duong voi thanh tab duoi, de Back van la "ra khoi man nay". */
+  readonly onNavigate: (screen: DriverScreenId) => void;
+}) {
   switch (screen) {
     case 'home':
-      return <DriverHome />;
+      return <DriverHome onNavigate={onNavigate} />;
     case 'site-intake':
       return <DriverSiteIntake />;
     case 'field':
@@ -71,88 +86,6 @@ export function DriverSurface({ screen }: { readonly screen: DriverScreenId }) {
     case 'payslip':
       return <DriverPayslip />;
   }
-}
-
-function DriverHome() {
-  const navigation = useNavigationInput();
-  const trips = toSectionQuery(useDriverTrips(navigation));
-  const fund = toSectionQuery(useDriverFund(navigation));
-  const queryClient = useQueryClient();
-  const [failure, setFailure] = useState<string | null>(null);
-
-  const setStatus = useMutation({
-    mutationFn: (input: { readonly id: string; readonly to: 'IN_TRANSIT' | 'DELIVERED' }) =>
-      transportApi.me.setTripStatus(input.id, input.to),
-    onSuccess: () => {
-      setFailure(null);
-      void queryClient.invalidateQueries({ queryKey: ['transport', 'me'] });
-    },
-    onError: (error: Error) => setFailure(error.message),
-  });
-
-  if (trips.errorMessage !== null) {
-    return <ErrorState message={trips.errorMessage} onRetry={trips.refetch} />;
-  }
-  if (trips.isLoading) return <LoadingState label="Đang đọc chuyến của bạn…" />;
-
-  const model = toDriverHome({ trips: trips.data ?? [], fund: fund.data ?? null });
-
-  return (
-    <>
-      <h1 className="tx-driver__title">Trang chủ</h1>
-      {failure === null ? null : <ErrorState message={failure} />}
-
-      <section className="tx-driver__card" aria-label="Chuyến hiện tại">
-        <h2>Chuyến hiện tại</h2>
-        <p className="tx-driver__lead">{model.headline}</p>
-        {model.currentTrip === null ? (
-          <EmptyState title="Chưa có chuyến nào được phân công cho bạn." />
-        ) : (
-          <>
-            <dl className="tx-driver__facts">
-              <dt>Mã chuyến</dt>
-              <dd>{model.currentTrip.code}</dd>
-              <dt>Tuyến</dt>
-              <dd>{model.currentTrip.route}</dd>
-              <dt>Khách hàng</dt>
-              <dd>{model.currentTrip.customerLabel}</dd>
-              <dt>Xe</dt>
-              <dd>{model.currentTrip.vehicleLabel}</dd>
-              <dt>Hàng</dt>
-              <dd>{model.currentTrip.cargoDescription ?? '—'}</dd>
-            </dl>
-            <div className="tx-driver__actions">
-              {model.actions.map((action) => (
-                <button
-                  key={action.to}
-                  type="button"
-                  className="tx-btn tx-btn--go tx-btn--wide"
-                  disabled={setStatus.isPending}
-                  onClick={() => {
-                    const id = model.currentTrip?.id;
-                    if (id !== undefined) setStatus.mutate({ id, to: action.to });
-                  }}
-                >
-                  {setStatus.isPending ? 'Đang gửi…' : action.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
-
-      {model.fund === null ? null : (
-        <section className="tx-cards" aria-label="Số dư quỹ">
-          <MetricCard
-            label="Số dư quỹ"
-            value={model.fund.balanceLabel}
-            hint={model.fund.stanceLabel}
-          />
-          <MetricCard label="Chuyến đang mở" value={String(model.openTripCount)} />
-        </section>
-      )}
-    </>
-  );
 }
 
 function DriverTrip() {
@@ -252,6 +185,22 @@ const emptyDriverFuelForm = (): DriverFuelForm => ({
   paymentMethod: DEFAULT_DRIVER_PAYMENT_METHOD,
 });
 
+/**
+ * DONG "XE + NGU CANH" cua mot phieu — `#364`: uu tien bien so; vong xe/chang khi khai tren viec
+ * duoc dieu; ma chuyen chi con la thong tin tuong thich cua phieu cu.
+ */
+function slipContextLine(slips: readonly DriverFuelSlipView[], id: string) {
+  const slip = slips.find((candidate) => candidate.id === id);
+  if (slip === undefined) return null;
+  const context = fuelContextLabel(slip);
+  const label = slip.tripCode === null ? context : `Chuyến cũ ${context}`;
+  return (
+    <span>
+      Xe {slip.vehiclePlate ?? '—'} · {label}
+    </span>
+  );
+}
+
 function DriverFuel() {
   const navigation = useNavigationInput();
   const queryClient = useQueryClient();
@@ -284,8 +233,39 @@ function DriverFuel() {
     readonly slipId: string;
     readonly evidenceId: string;
   } | null>(null);
+  /*
+   * `#364` — NGU CANH cua phieu: viec DUOC DIEU (vong xe) di truoc, chuyen v1 chi la loi phu. May chu
+   * tu tim vong xe dang mo cua chinh lai xe (`GET /transport/me/fuel/runs`) va kiem lai moi thu luc
+   * nop — o chon o day chi DE XUAT.
+   */
+  const fuelRuns = toSectionQuery(
+    useDriverFuelRuns(canPerform(navigation.role, 'transport.driver.self.fuel.submit')),
+  );
+  const [contextKey, setContextKey] = useState<string | null>(null);
+  const [legId, setLegId] = useState('');
 
   const trip = currentDriverTrip(trips.data ?? []);
+  const contextOptions = driverFuelContextOptions({
+    runs: fuelRuns.data ?? [],
+    legacyTrip:
+      trip === null
+        ? null
+        : {
+            id: trip.id,
+            code: trip.code,
+            vehicleId: trip.vehicleId,
+            vehiclePlate: trip.vehicleRegistrationPlate,
+          },
+  });
+  const contextOption =
+    contextOptions.find((option) => option.key === contextKey) ?? contextOptions[0] ?? null;
+  const fuelContext =
+    contextOption === null
+      ? null
+      : toDriverFuelContext(
+          contextOption,
+          contextOption.legs.some((leg) => leg.legId === legId) ? legId : null,
+        );
   const rows = toDriverFuelSlipRows(slips.data ?? []);
 
   const invalidate = () => {
@@ -294,8 +274,13 @@ function DriverFuel() {
 
   const submit = useMutation({
     mutationFn: async () => {
-      if (trip === null || trip.vehicleId === null) {
-        throw new Error('Chuyến hiện tại chưa được phân công xe.');
+      if (fuelContext === null) {
+        throw new Error('Chưa có việc được điều nào để ghi phiếu — báo điều hành.');
+      }
+      if (form.paymentMethod === 'DRIVER_CASH' && !allowsDriverCash(fuelContext)) {
+        throw new Error(
+          'Tiền mặt lái xe ứng chỉ ghi được trên chuyến cũ. Với việc được điều, chọn cây xăng ghi nợ.',
+        );
       }
       const problem = occurredAtProblem(form.occurredAtLocal, new Date());
       if (problem !== null) throw new Error(problem);
@@ -303,7 +288,7 @@ function DriverFuel() {
         // MOT khoa cho MOT lan bam, giu qua cac lan thu lai — va CUNG form -> CUNG than yeu cau.
         toDriverFuelSubmission({
           form,
-          trip: { id: trip.id, vehicleId: trip.vehicleId },
+          context: fuelContext,
           correlationKey,
           timeZone: tenant.transport?.timeZone,
         }),
@@ -396,8 +381,7 @@ function DriverFuel() {
   });
 
   const canSubmit =
-    trip !== null &&
-    trip.vehicleId !== null &&
+    fuelContext !== null &&
     form.supplierId !== '' &&
     form.liters.trim() !== '' &&
     form.amount.trim() !== '' &&
@@ -416,13 +400,24 @@ function DriverFuel() {
 
       <section className="tx-driver__card" aria-label="Ghi phiếu đổ nhiên liệu">
         <h2>Ghi phiếu đổ nhiên liệu</h2>
-        {trip === null ? (
-          <EmptyState title="Bạn chưa có chuyến nào đang mở, nên chưa ghi phiếu được." />
-        ) : trip.vehicleId === null ? (
-          <p className="tx-note tx-note--warn">
-            Chuyến {trip.code} chưa được phân công xe. Hãy báo điều hành phân xe trước khi ghi
-            phiếu.
-          </p>
+        {/*
+         * `#364` — doc viec duoc dieu hong/dang doc thi NOI RA, khong bao gio doc thanh "khong co viec".
+         * Doi CA hai nguon (vong xe + chuyen cu) roi moi dung form: dung som thi o chon se tu doi tu
+         * "chuyen cu" sang "vong xe" duoi tay lai xe khi danh sach vong xe ve toi.
+         */}
+        {fuelRuns.isLoading || trips.isLoading ? (
+          <LoadingState label="Đang đọc việc được điều cho bạn…" />
+        ) : fuelRuns.errorMessage !== null && contextOptions.length === 0 ? (
+          <ErrorState message={fuelRuns.errorMessage} onRetry={fuelRuns.refetch} />
+        ) : contextOption === null ? (
+          trip !== null && trip.vehicleId === null ? (
+            <p className="tx-note tx-note--warn">
+              Chuyến {trip.code} chưa được phân công xe. Hãy báo điều hành phân xe trước khi ghi
+              phiếu.
+            </p>
+          ) : (
+            <EmptyState title="Bạn chưa có việc được điều nào đang mở, nên chưa ghi phiếu được. Cần đổ nhiên liệu thì báo điều hành." />
+          )
         ) : (
           <form
             className="tx-driver__form"
@@ -431,9 +426,53 @@ function DriverFuel() {
               submit.mutate();
             }}
           >
-            <p className="tx-note">
-              Chuyến {trip.code} · xe {trip.vehicleRegistrationPlate ?? '—'}
-            </p>
+            {fuelRuns.errorMessage === null ? null : (
+              // Con chuyen cu de chon, nhung danh sach viec duoc dieu KHONG doc duoc — noi ra.
+              <p className="tx-note tx-note--warn">
+                Chưa đọc được việc được điều ({fuelRuns.errorMessage}) — danh sách dưới đây có thể
+                thiếu vòng xe của bạn.
+              </p>
+            )}
+            {contextOptions.length > 1 ? (
+              <label className="tx-field">
+                <span>Việc được điều</span>
+                <select
+                  aria-label="Việc được điều"
+                  value={contextOption.key}
+                  onChange={(event) => {
+                    setContextKey(event.target.value);
+                    setLegId('');
+                  }}
+                >
+                  {contextOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label} · xe {option.vehicleLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="tx-note">
+                {contextOption.label} · xe {contextOption.vehicleLabel}
+              </p>
+            )}
+            {contextOption.legs.length === 0 ? null : (
+              <label className="tx-field">
+                <span>Chặng (không bắt buộc)</span>
+                <select
+                  aria-label="Chặng"
+                  value={legId}
+                  onChange={(event) => setLegId(event.target.value)}
+                >
+                  <option value="">Không gắn chặng</option>
+                  {contextOption.legs.map((leg) => (
+                    <option key={leg.legId} value={leg.legId}>
+                      {leg.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="tx-field">
               <span>Cây xăng</span>
               <select
@@ -550,8 +589,16 @@ function DriverFuel() {
                 }
               >
                 {FUEL_PAYMENT_METHODS.map((method) => (
-                  <option key={method} value={method}>
+                  <option
+                    key={method}
+                    value={method}
+                    // `#364` — tien mat ung chi ghi duoc tren chuyen cu (so quy di theo chuyen).
+                    disabled={method === 'DRIVER_CASH' && !allowsDriverCash(fuelContext)}
+                  >
                     {FUEL_PAYMENT_METHOD_LABEL[method]}
+                    {method === 'DRIVER_CASH' && !allowsDriverCash(fuelContext)
+                      ? ' (chỉ chuyến cũ)'
+                      : ''}
                   </option>
                 ))}
               </select>
@@ -601,6 +648,8 @@ function DriverFuel() {
                     {row.occurredAtLabel} · {row.paymentLabel}
                     {row.invoiceNo === null ? null : ` · Hoá đơn ${row.invoiceNo}`}
                   </span>
+                  {/* `#364` — XE + ngu canh (vong xe/chang, hoac chuyen cu), khong bat buoc chuyen. */}
+                  {slipContextLine(slips.data ?? [], row.id)}
                   {row.stationLabel === null ? null : <span>Trạm: {row.stationLabel}</span>}
                   <span>{row.evidenceCountLabel} ảnh</span>
                   {row.reviewReasonLabels.length === 0 ? null : (

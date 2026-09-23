@@ -2,12 +2,14 @@ import type { BusinessDate } from '../business-date.js';
 import type { FuelMatchReason } from './fuel-decisions.js';
 import { compareFuelInvoiceNumbers, type FuelInvoiceRelation } from './fuel-invoice-number.js';
 import type { FuelReconciliationStatus } from './fuel-lifecycle.js';
+import { isSupplierPayable } from './fuel-payable.js';
+import type { FuelPaymentMethod } from './fuel.types.js';
 
 /**
  * SO KHOP BANG KE <-> PHIEU DO DAU — ham THUAN, TAT DINH, khong biet Nest/Prisma.
  *
  * ===========================================================================
- * BA DIEU HAM NAY KHONG BAO GIO LAM, va moi dieu la mot bat bien co nguon:
+ * BON DIEU HAM NAY KHONG BAO GIO LAM, va moi dieu la mot bat bien co nguon:
  *
  *   1. KHONG doan khi nhap nhang (`GD-09`). Nhieu ung vien thi KHONG cap nao duoc khop — ca cum
  *      di ra thanh mot chenh lech cho nguoi quyet. Tu chon mot trong hai la doan, va doan sai thi
@@ -19,6 +21,10 @@ import type { FuelReconciliationStatus } from './fuel-lifecycle.js';
  *   3. KHONG sinh mot nghia vu tien nao (`INV-07`, `INV-27`). Dau ra chi la de nghi khop va chenh
  *      lech; khong co khoan phai tra, khong co no cua lai xe, khong co khau tru luong. Tien chi di
  *      tiep khi mot NGUOI quyet `ACCEPT_SUPPLIER_AMOUNT`.
+ *
+ *   4. KHONG khop mot dong bang ke voi phieu lai xe DA TRA TIEN MAT (`#371`). Bang ke la chung tu
+ *      CONG NO; chi phieu `SUPPLIER_ACCOUNT` la ung vien cua no. Phieu `DRIVER_CASH` da vao Quy lai
+ *      xe — khop no voi bang ke la tra cung mot lan do dau HAI lan. Xem `fuel-payable.ts`.
  *
  * ===========================================================================
  * TAT DINH nghia la gi o day, cu the:
@@ -67,6 +73,14 @@ export interface MatchableFuelEntry {
   readonly invoiceNo: string | null;
   /** `INV-26` — bang ke da de ra phieu nay. `null` o moi phieu do lai xe khai. */
   readonly sourceStatementId: string | null;
+  /**
+   * `#371` — AI DA TRA lan do nay. Chi `SUPPLIER_ACCOUNT` (ghi no) la ung vien cua bang ke CONG NO;
+   * `DRIVER_CASH` da vao Quy lai xe va KHONG BAO GIO duoc khop.
+   *
+   * KHONG tuy chon, cung ly do voi `invoiceNo`: mot noi goi quen dien truong nay la mot noi goi
+   * lang le mo lai duong tra hai lan.
+   */
+  readonly paymentMethod: FuelPaymentMethod;
   readonly reconciliationStatus: FuelReconciliationStatus;
 }
 
@@ -95,6 +109,15 @@ export const FUEL_DISCREPANCY_KINDS = [
    * chieu to hoa don giay voi dong bang ke, khong phai hoi cay xang ve so tien.
    */
   'INVOICE_CONFLICT',
+  /**
+   * `#371` — dong CHI con ung vien la phieu lai xe DA TRA TIEN MAT (`DRIVER_CASH`): cay xang ghi no
+   * mot lan do ma Quy lai xe da tra.
+   *
+   * Tach khoi `STATEMENT_LINE_ONLY` vi he thong BIET chinh xac ly do, va vi nguoi soat phai lam mot
+   * viec khac han: khong phai "chap nhan so cay xang" (se tra hai lan — tang mien CHAN duong do, xem
+   * `isCashPaidLineAcceptance`), ma tu choi dong, hoac sua phieu neu lai xe khai sai cach tra.
+   */
+  'PAYMENT_METHOD_CONFLICT',
 ] as const;
 export type FuelDiscrepancyKind = (typeof FUEL_DISCREPANCY_KINDS)[number];
 
@@ -223,17 +246,36 @@ const byId = <T extends { id: string }>(items: readonly T[]): T[] =>
  *
  * Phep chon van HAI CHIEU va KHONG LAP: dong chon phieu, phieu chon dong, chi khi hai lan chon gap nhau
  * moi khop. Khong co vong "loai cap da khop roi chay lai" — do la duong tham lam ma `GD-09` cam.
+ *
+ * ===========================================================================
+ * CACH TRA (`#371`) — CONG, KHONG PHAI BO PHAN BIET.
+ *
+ * Phieu `DRIVER_CASH` qua duoc xe/ngay/tien/`INV-26` thi di vao mot tap RIENG (`cashPaid`), KHONG vao
+ * tap ung vien — o CA HAI chieu. Hai he qua co y:
+ *
+ *   · mot phieu tien mat KHONG lam mot ung vien ghi no hop le thanh nhap nhang: dong co mot phieu
+ *     ghi no va mot phieu tien mat gan giong nhau van khop phieu ghi no;
+ *   · dong chi con phieu tien mat thi ra `PAYMENT_METHOD_CONFLICT`, khong phai `STATEMENT_LINE_ONLY`
+ *     chung chung — va o `STATEMENT_LINE_ONLY` nguoi soat duoc phep "chap nhan so cay xang".
+ *
+ * Hoi TRUOC so hoa don: mot phieu tien mat khong bao gio thanh cap khop, du so hoa don trung hay
+ * trai, nen no khong duoc dem vao phep "so hoa don co la thu tach cac ung vien" (`decidedByInvoice`).
  */
 export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
   const lines = byId(input.lines.filter((line) => isOpen(line.reconciliationStatus)));
   const entries = byId(input.entries.filter((entry) => isOpen(entry.reconciliationStatus)));
 
-  /** Ung vien HOP LE cua tung dong: cung xe, trong dung sai, khong bi `INV-26` chan, khong xung dot so hoa don. */
+  /**
+   * Ung vien HOP LE cua tung dong: cung xe, trong dung sai, khong bi `INV-26` chan, phieu GHI NO,
+   * khong xung dot so hoa don.
+   */
   const eligible = new Map<string, Pairing[]>();
   /** Ung vien bi `INV-26` chan — giu rieng de bao dung ly do thay vi noi "khong tim thay". */
   const selfSourced = new Map<string, Pairing[]>();
   /** Cung xe, dung ngay, nhung lech tien vuot dung sai. */
   const outOfTolerance = new Map<string, Pairing[]>();
+  /** `#371` — dung xe/ngay/tien, nhung phieu do lai xe DA TRA TIEN MAT: khong bao gio la cong no. */
+  const cashPaid = new Map<string, Pairing[]>();
   /** `#317` G4 — du bon cong cu, nhung so hoa don hai ben TRAI nguoc. */
   const invoiceConflicts = new Map<string, Pairing[]>();
 
@@ -241,6 +283,7 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
     const eligibleForLine: Pairing[] = [];
     const selfSourcedForLine: Pairing[] = [];
     const outOfToleranceForLine: Pairing[] = [];
+    const cashPaidForLine: Pairing[] = [];
     const conflictsForLine: Pairing[] = [];
 
     for (const entry of entries) {
@@ -272,6 +315,13 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
         continue;
       }
 
+      // `#371` — bang ke la chung tu CONG NO. Phieu lai xe da tra tien mat dung ve moi mat van KHONG
+      // la ung vien: no chi con la bang chung rang dong nay co the la mot lan cay xang ghi no nham.
+      if (!isSupplierPayable(entry.paymentMethod)) {
+        cashPaidForLine.push(pairing);
+        continue;
+      }
+
       // `#317` G4 — so hoa don duoc hoi CUOI CUNG, tren mot cap da dung ve moi mat khac. Xung dot chi
       // loai DUNG cap nay; cac cap khac cua cung dong/phieu van la ung vien.
       if (pairing.invoiceRelation === 'CONFLICT') {
@@ -285,6 +335,7 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
     eligible.set(line.id, eligibleForLine);
     selfSourced.set(line.id, selfSourcedForLine);
     outOfTolerance.set(line.id, outOfToleranceForLine);
+    cashPaid.set(line.id, cashPaidForLine);
     invoiceConflicts.set(line.id, conflictsForLine);
   }
 
@@ -323,7 +374,13 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
     const conflicts = invoiceConflicts.get(line.id) ?? [];
 
     if (candidates.length === 0) {
-      const discrepancy = emptyCandidateDiscrepancy(line, selfSourced, conflicts, outOfTolerance);
+      const discrepancy = emptyCandidateDiscrepancy(
+        line,
+        selfSourced,
+        cashPaid,
+        conflicts,
+        outOfTolerance,
+      );
       discrepancies.push(discrepancy);
       for (const id of discrepancy.candidateEntryIds) entryIdsInDiscrepancy.add(id);
       continue;
@@ -385,6 +442,12 @@ export function runFuelMatching(input: FuelMatchingInput): FuelMatchingResult {
    * Chi tinh cac phieu KHONG khop VA khong nam trong mot chenh lech nao khac. Neu khong loai tru
    * nhom thu hai thi mot phieu nhap nhang se hien ra hai lan — mot lan la "nhap nhang", mot lan la
    * "khong thay tren bang ke" — va hai dong do mau thuan nhau tren cung mot man hinh.
+   *
+   * `#371` KHONG doi nhanh nay: phieu `DRIVER_CASH` khong nam trong chenh lech nao van ra
+   * `FUEL_ENTRY_ONLY` nhu truoc `#371`. Vang mat tren bang ke CONG NO la trang thai dung cua mot lan
+   * tra tien mat; co dua phieu tien mat ra khoi pham vi doi soat hay khong la mot quyet dinh nghiep vu
+   * rieng, chua ai quyet — va no khong mo duong tien nao (`FUEL_ENTRY_ONLY` khong co dong bang ke de
+   * chap nhan, `MATCH_CONFIRMED` bi chan theo cach tra).
    */
   for (const entry of entries) {
     if (matchedEntryIds.has(entry.id) || entryIdsInDiscrepancy.has(entry.id)) continue;
@@ -420,16 +483,22 @@ function discriminate(pairings: readonly Pairing[]): Pairing | null {
 }
 
 /**
- * BON LY DO khac nhau cho cung mot hien tuong "dong nay khong khop duoc voi gi".
+ * NAM LY DO khac nhau cho cung mot hien tuong "dong nay khong khop duoc voi gi".
  *
  * Thu tu uu tien khong tuy y: `INV-26` truoc, vi no la ly do NGHIEM TRONG nhat — no noi rang co ai
- * do dang co khop mot bang ke voi chinh no. Roi den xung dot so hoa don (`#317` G4 — ung vien DUNG
- * ve xe/ngay/tien, chi trai so hoa don, tuc gan nhat voi mot cap that), roi lech dung sai (co ung vien
- * that, chi la so khong khop), roi cuoi cung la "khong co gi ca".
+ * do dang co khop mot bang ke voi chinh no. Roi den phieu lai xe DA TRA TIEN MAT (`#371` — dung ve
+ * xe/ngay/tien, tuc chinh lan do dau do, va chap nhan dong nay la tra lan thu hai), roi xung dot so hoa
+ * don (`#317` G4 — ung vien DUNG ve xe/ngay/tien, chi trai so hoa don, tuc gan nhat voi mot cap that),
+ * roi lech dung sai (co ung vien that, chi la so khong khop), roi cuoi cung la "khong co gi ca".
+ *
+ * Tien mat dung TRUOC xung dot so hoa don vi ly do tien: hai ly do cung co mat thi dong nay co the la
+ * lan do tien mat, va `INVOICE_CONFLICT` cho nguoi soat "chap nhan so cay xang" — dung duong tra hai
+ * lan ma `PAYMENT_METHOD_CONFLICT` chan.
  */
 function emptyCandidateDiscrepancy(
   line: MatchableStatementLine,
   selfSourced: ReadonlyMap<string, Pairing[]>,
+  cashPaid: ReadonlyMap<string, Pairing[]>,
   conflicts: readonly Pairing[],
   outOfTolerance: ReadonlyMap<string, Pairing[]>,
 ): FuelDiscrepancyProposal {
@@ -442,6 +511,18 @@ function emptyCandidateDiscrepancy(
       candidateEntryIds: blocked.map((pairing) => pairing.entry.id).sort(),
       candidateLineIds: [],
       reason: 'MATCH_SELF_SOURCED_BLOCKED',
+    };
+  }
+
+  const paidInCash = cashPaid.get(line.id) ?? [];
+  if (paidInCash.length > 0) {
+    return {
+      kind: 'PAYMENT_METHOD_CONFLICT',
+      statementLineId: line.id,
+      fuelEntryId: null,
+      candidateEntryIds: paidInCash.map((pairing) => pairing.entry.id).sort(),
+      candidateLineIds: [],
+      reason: 'MATCH_PAYMENT_METHOD_CONFLICT',
     };
   }
 

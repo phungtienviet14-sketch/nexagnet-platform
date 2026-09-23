@@ -249,6 +249,29 @@ async function wipeFuelDecisionHistory(prisma: PrismaClient): Promise<number> {
 }
 
 /**
+ * XOA PHAN BO GIA THANH NHIEN LIEU — `#364`.
+ *
+ * `transport_fuel_cost_attribution_append_only` tu choi moi `DELETE`, va moi dong tro toi mot phieu
+ * bang khoa ngoai `Restrict` — nen neu khong co buoc nay, vong lap xoa ben duoi chet ngay o
+ * `transportFuelEntry` khi co mot phieu Run-first da phan bo.
+ *
+ * Cung khuon voi `wipeFuelDecisionHistory()`: chi chay sau `assertDemoResetAllowed()`, tat trigger TRONG
+ * DUNG mot giao dich roi bat lai. Dong DAO xoa TRUOC dong cap phat ma no tro toi (`reversalOfId` la
+ * khoa ngoai `Restrict`).
+ */
+async function wipeFuelCostAttributions(prisma: PrismaClient): Promise<number> {
+  const [, reversals, allocations] = await prisma.$transaction([
+    prisma.$executeRawUnsafe('ALTER TABLE "TransportFuelCostAttribution" DISABLE TRIGGER USER'),
+    prisma.$executeRawUnsafe(
+      'DELETE FROM "TransportFuelCostAttribution" WHERE "reversalOfId" IS NOT NULL',
+    ),
+    prisma.$executeRawUnsafe('DELETE FROM "TransportFuelCostAttribution"'),
+    prisma.$executeRawUnsafe('ALTER TABLE "TransportFuelCostAttribution" ENABLE TRIGGER USER'),
+  ]);
+  return (reversals ?? 0) + (allocations ?? 0);
+}
+
+/**
  * Xoa lich su Order/doi soat CHI trong reset demo da qua hai cong bao ve.
  *
  * Cac trigger append-only dung de bao ve giao dich that. Reset demo la thao tac pha huy co chu
@@ -355,6 +378,8 @@ export async function resetTransportDemoData(
   Object.assign(deleted, await wipeCustomerArDemoHistory(prisma));
   const fuelDecisions = await wipeFuelDecisionHistory(prisma);
   if (fuelDecisions > 0) deleted['transportFuelDiscrepancy'] = fuelDecisions;
+  const fuelCostAttributions = await wipeFuelCostAttributions(prisma);
+  if (fuelCostAttributions > 0) deleted['transportFuelCostAttribution'] = fuelCostAttributions;
 
   for (const table of TRANSPORT_TABLES_CHILD_FIRST) {
     const delegate = prisma[table] as unknown as { deleteMany: () => Promise<{ count: number }> };
@@ -1042,6 +1067,7 @@ async function writePlan(
             amount: true,
             invoiceNo: true,
             sourceStatementId: true,
+            paymentMethod: true,
           },
         });
         const matchableEntries: MatchableFuelEntry[] = supplierEntries.map((entry) => ({
@@ -1051,6 +1077,10 @@ async function writePlan(
           amount: Number(entry.amount),
           invoiceNo: entry.invoiceNo,
           sourceStatementId: entry.sourceStatementId,
+          // `#371` — cung luat voi san pham: phieu lai xe tra tien mat khong bao gio khop bang ke
+          // cong no. Ban gieo KHONG duoc de ra mot cap khop ma `FuelReconciliationService` tu choi
+          // (trigger `TransportFuelMatch_payable_entry_only` se lam lenh gieo chet neu quen).
+          paymentMethod: entry.paymentMethod,
           reconciliationStatus: 'UNMATCHED',
         }));
 

@@ -188,7 +188,9 @@ export interface FuelConsumptionAnchor {
 
 export interface FuelConsumptionLink {
   readonly entryId: string;
-  readonly tripId: string;
+  /** `#364` — chi hien thi; `null` o phieu khai theo vong xe. Chuoi km di theo XE, khong theo chuyen. */
+  readonly tripId: string | null;
+  readonly runId: string | null;
   readonly businessDate: BusinessDate;
   readonly occurredAt: string;
   readonly verificationStatus: FuelVerificationStatus;
