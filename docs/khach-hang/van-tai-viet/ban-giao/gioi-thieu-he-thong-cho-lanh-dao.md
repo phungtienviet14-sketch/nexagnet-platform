@@ -28,7 +28,7 @@ Hệ thống trả lời bốn nỗi lo đó bằng **một nguồn dữ liệu 
 | -------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Nhận đơn             | Ghi tên điểm lấy, điểm giao bằng chữ                    | **Điểm lấy và điểm giao được xác định trên bản đồ, không còn chỉ là một dòng chữ**                         |
 | Điều xe              | Lập chuyến bằng tay, tự nhớ đoạn nào xe chạy không hàng | Chọn xe. Hệ thống lập **vòng xe**, tự tách **chặng rỗng** và **chặng có hàng**, rồi giao cho lái xe của xe |
-| Theo dõi hiện trường | Gọi điện hỏi lái xe                                     | Lái xe bấm mốc trên điện thoại, chụp giấy tờ. Văn phòng thấy ngay                                          |
+| Theo dõi hiện trường | Gọi điện hỏi lái xe                                     | Lái xe bấm mốc trên điện thoại, chụp giấy tờ. Văn phòng thấy khi mở hoặc tải lại màn hình                  |
 | Chốt đơn với khách   | Dò giấy tờ rời rạc                                      | Hàng đợi **Kết thúc đơn**. Mỗi quyết định ghi rõ người và giờ                                              |
 | Tiền dầu             | Lẫn giữa tiền lái xe tự trả và tiền nợ cây xăng         | **Hai đường riêng**, không bao giờ cộng lẫn                                                                |
 | Nhìn tổng thể        | Tổng hợp cuối tháng                                     | Một màn hình cho giám đốc, số liệu theo ngày                                                               |
@@ -45,14 +45,18 @@ Hệ thống trả lời bốn nỗi lo đó bằng **một nguồn dữ liệu 
 
 Khi chọn xe, hệ thống lập một **vòng xe**:
 
-- **chặng rỗng**: từ bãi xe tới điểm lấy hàng, chỉ có khi xe chưa đứng sẵn ở đó;
+- **chặng rỗng**: từ bãi xe tới điểm lấy hàng. Mỗi vòng xe mới được coi là xuất phát từ bãi xe công ty đã khai. Hệ thống chỉ bỏ chặng này khi điểm lấy mang đúng tên bãi, không xét xe thực tế đang đứng ở đâu;
 - **chặng có hàng**: từ điểm lấy tới điểm giao.
 
 Lái xe của xe đó nhận việc ngay trên điện thoại, không phải tự đi nhận. Ở hiện trường, lái xe bấm các mốc và chụp biên nhận. Đây là **bằng chứng**; mốc lái xe bấm không tự đẩy tiến độ.
 
 Văn phòng xem bằng chứng, tiến từng chặng, rồi **xác nhận đơn đã giao xong**.
 
-**Việc đóng vòng xe do hệ thống tự quyết**, không ai phải bấm. Hệ thống đóng khi chặng cuối kết thúc ở bãi xe. Nếu xe không về bãi, hệ thống đóng sau thời gian nghỉ công ty đã khai, hiện là **12 giờ**.
+**Việc đóng vòng xe do hệ thống tự quyết**, không ai phải bấm.
+
+- Hệ thống đóng ngay khi chặng hoàn tất sau cùng kết thúc đúng ở bãi xe.
+- Kế hoạch hiện chưa có chặng về bãi, nên thường vòng xe đóng sau thời gian nghỉ công ty đã khai, hiện là **12 giờ**, tính từ lúc văn phòng hoàn tất chặng cuối.
+- Hệ thống **không** đóng khi hiện trường còn ghi hàng trên xe, hoặc còn phiên chờ người nhận đang mở.
 
 **Dòng 2: tiền thu.** Giao xong chưa phải là nợ của khách. Kế toán lần lượt:
 
@@ -69,25 +73,25 @@ Văn phòng xem bằng chứng, tiến từng chặng, rồi **xác nhận đơn
 
 ## 3. Những từ cần biết
 
-| Từ                      | Nghĩa                                                                                                                                           |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Đơn hàng**            | Việc công ty nhận với khách: lấy ở đâu, giao ở đâu, cước bao nhiêu. Mọi việc bắt đầu từ đây                                                     |
-| **Vòng xe**             | Một lượt đi của một xe để làm đơn. Trên màn hình văn phòng còn gọi là **vòng chạy**. Hiện nay mỗi đơn có một vòng xe riêng                      |
-| **Chặng**               | Một đoạn đường trong vòng xe, có điểm đầu và điểm cuối                                                                                          |
-| **Chặng rỗng**          | Xe chạy không hàng, ví dụ từ bãi tới điểm lấy. Hệ thống tự lập và tô đỏ để dễ thấy xe chạy rỗng nhiều                                           |
-| **Chặng có hàng**       | Xe chở hàng của đơn, từ điểm lấy tới điểm giao                                                                                                  |
-| **Kế hoạch vận chuyển** | Danh sách chặng hệ thống đề xuất khi văn phòng chọn xe. Văn phòng xem rồi bấm xác nhận                                                          |
-| **Mốc hiện trường**     | Lái xe bấm trên điện thoại: đã tới điểm lấy, đang xếp hàng, rời điểm lấy, đã đến nơi, khách đã nhận hàng. Là bằng chứng, không tự đổi tiến độ   |
-| **Phiên chờ**           | Thời gian lái xe chờ người nhận ở điểm giao. Tự kết thúc khi lái xe bấm “Khách đã nhận hàng”                                                    |
-| **Hoàn tất chặng**      | Văn phòng xác nhận một chặng đã chạy xong                                                                                                       |
-| **Đóng vòng xe**        | Hệ thống tự làm khi xe hết việc và về bãi, hoặc sau thời gian nghỉ                                                                              |
-| **Giao xong đơn**       | Văn phòng xác nhận hàng đã tới khách. Việc này không tạo công nợ                                                                                |
-| **Kết thúc đơn**        | Kế toán xác nhận đủ căn cứ, và đơn được vào đối soát với khách                                                                                  |
-| **Phải thu**            | Tiền khách nợ công ty, chỉ tính sau khi đối soát                                                                                                |
-| **Phải trả**            | Tiền công ty nợ đối tác: cây xăng, nhà xe thuê ngoài, hoa hồng nguồn đơn                                                                        |
-| **Quỹ lái xe**          | Sổ tiền riêng của từng lái xe với công ty: tạm ứng, tiền lái xe tự trả rồi được hoàn, hoàn quỹ                                                  |
-| **Biên trực tiếp**      | Doanh thu trừ chi phí trực tiếp của đơn (dầu, phí…). **Chưa gồm chi phí cố định** như khấu hao, lương văn phòng. Không phải lợi nhuận cuối cùng |
-| **Chuyến cũ**           | Chuyến lập tay theo cách làm trước đây. Chỉ còn để khép sổ và vẫn được tính trong báo cáo, không cộng hai lần                                   |
+| Từ                      | Nghĩa                                                                                                                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Đơn hàng**            | Việc công ty nhận với khách: lấy ở đâu, giao ở đâu, cước bao nhiêu. Mọi việc bắt đầu từ đây                                                                                                                            |
+| **Vòng xe**             | Một lượt đi của một xe để làm đơn. Trên màn hình văn phòng còn gọi là **vòng chạy**. Hiện nay mỗi đơn có một vòng xe riêng                                                                                             |
+| **Chặng**               | Một đoạn đường trong vòng xe, có điểm đầu và điểm cuối                                                                                                                                                                 |
+| **Chặng rỗng**          | Xe chạy không hàng, ví dụ từ bãi tới điểm lấy. Hệ thống tự lập và tô đỏ để dễ thấy xe chạy rỗng nhiều                                                                                                                  |
+| **Chặng có hàng**       | Xe chở hàng của đơn, từ điểm lấy tới điểm giao                                                                                                                                                                         |
+| **Kế hoạch vận chuyển** | Danh sách chặng hệ thống đề xuất khi văn phòng chọn xe. Văn phòng xem rồi bấm xác nhận                                                                                                                                 |
+| **Mốc hiện trường**     | Lái xe bấm trên điện thoại: đã tới điểm lấy, đã vào cổng, đang xếp hàng, rời điểm lấy, đã đến nơi, khách đã nhận hàng. Là bằng chứng, không tự đổi tiến độ                                                             |
+| **Phiên chờ**           | Thời gian lái xe chờ người nhận ở điểm giao. Tự kết thúc khi lái xe bấm “Khách đã nhận hàng”                                                                                                                           |
+| **Hoàn tất chặng**      | Văn phòng xác nhận một chặng đã chạy xong                                                                                                                                                                              |
+| **Đóng vòng xe**        | Hệ thống tự làm khi xe hết việc và về bãi, hoặc sau 12 giờ nghỉ                                                                                                                                                        |
+| **Giao xong đơn**       | Văn phòng xác nhận hàng đã tới khách. Việc này không tạo công nợ                                                                                                                                                       |
+| **Kết thúc đơn**        | Kế toán xác nhận đủ căn cứ, và đơn được vào đối soát với khách                                                                                                                                                         |
+| **Phải thu**            | Tiền khách nợ công ty, chỉ tính sau khi đối soát                                                                                                                                                                       |
+| **Phải trả**            | Tiền công ty nợ đối tác: cây xăng, nhà xe thuê ngoài, hoa hồng nguồn đơn                                                                                                                                               |
+| **Quỹ lái xe**          | Sổ tiền riêng của từng lái xe với công ty: tạm ứng, tiền lái xe tự trả rồi được hoàn, hoàn quỹ                                                                                                                         |
+| **Biên trực tiếp**      | Doanh thu trừ chi phí trực tiếp. Chuyến cũ trừ dầu, cầu đường, bốc xếp…; đơn theo vòng xe hiện chỉ trừ tiền dầu đã phân bổ. **Chưa gồm chi phí cố định** như khấu hao, lương văn phòng. Không phải lợi nhuận cuối cùng |
+| **Chuyến cũ**           | Chuyến lập tay theo cách làm trước đây. Chỉ còn để khép sổ và vẫn được tính trong báo cáo, không cộng hai lần                                                                                                          |
 
 ---
 
@@ -100,6 +104,8 @@ Văn phòng xem bằng chứng, tiến từng chặng, rồi **xác nhận đơn
 | **Kế toán**             | Kết thúc đơn, đối soát với khách, ghi tiền về, xác thực phiếu dầu, đối soát bảng kê cây xăng, quỹ lái xe, lương  |
 | **Giám đốc**            | Xem tổng hợp mỗi ngày. Làm được mọi việc của văn phòng và kế toán, và thêm các việc chỉ giám đốc được làm        |
 | **Hệ thống**            | Lập chặng, giao việc cho lái xe của xe, đóng vòng xe, tính biên trực tiếp, nhắc giấy tờ và bảo dưỡng sắp hết hạn |
+
+Hệ thống hiện có ba loại tài khoản: giám đốc, kế toán và lái xe. Chưa có loại riêng cho văn phòng điều hành; việc điều hành làm bằng tài khoản kế toán hoặc giám đốc.
 
 Có ba điểm lãnh đạo nên biết.
 
@@ -144,7 +150,7 @@ Ngoài hai cách trên còn có danh sách **Địa điểm đã biết**, gồm
    - Tên in trên đơn sửa được mà không làm dịch điểm.
    - Dòng “Đường chim bay ≈ 133 km” chỉ để tham khảo, **không phải quãng đường xe chạy**.
 2. **Hai ghim Lấy và Giao** trên bản đồ, cạnh danh sách địa điểm đã biết.
-3. **Nút “Tạo đơn” chỉ mở khi đủ**: hai điểm, mã đơn, khách hàng, cước. Dòng “Còn thiếu” nói rõ còn thiếu gì.
+3. **Nút “Tạo đơn” chỉ mở khi đủ**: hai điểm có tên, mã đơn, khách hàng, ngày vận hành, cước. Dòng “Còn thiếu” nói rõ còn thiếu gì.
 
 Bản đồ nền là bản đồ mở, không cần tài khoản Google.
 
@@ -156,7 +162,7 @@ Sau khi tạo đơn, văn phòng làm ba bước ngay trên trang đơn:
 2. bấm **“Xem kế hoạch”**;
 3. bấm **“Xác nhận kế hoạch và giao xe”**.
 
-Lái xe đang gắn với xe được giao việc tự động. Nếu xe chưa có lái xe, hoặc có hai lái xe cùng lúc, hệ thống không cho xác nhận.
+Lái xe đang gắn với xe được giao việc tự động. Hệ thống không cho xác nhận nếu xe chưa có lái xe, có hai lái xe cùng lúc, hoặc lái xe đã ngừng hoạt động hay chưa có tài khoản đăng nhập.
 
 ![Chi tiết đơn: vòng chạy phục vụ đơn, chặng rỗng, chặng có hàng, trạng thái đóng vòng và ô giao xong](assets/lanh-dao/04-don-vong-xe-chang.jpg)
 
@@ -184,8 +190,10 @@ Lái xe đang gắn với xe được giao việc tự động. Nếu xe chưa c
    5. Đã đến nơi giao
    6. Chờ người nhận
    7. Đã giao xong
-
-   Thẻ chuyển cột theo mốc lái xe bấm. Riêng cột cuối nghĩa là **vòng xe đã đóng**, không có nghĩa là đơn đã được xác nhận giao.
+   - Thẻ rời cột “Đã lên kế hoạch” khi văn phòng bấm “Bắt đầu chạy”.
+   - Sau đó thẻ theo mốc lái xe bấm trên chặng đầu tiên chưa xong. Vì vậy khi văn phòng chưa hoàn tất chặng rỗng, mốc trên chặng có hàng chưa làm thẻ chuyển cột.
+   - Lái xe đã giao hàng nhưng vòng xe chưa đóng thì thẻ nằm ở “Trên đường”.
+   - Cột cuối nghĩa là **vòng xe đã đóng**, không có nghĩa là đơn đã được xác nhận giao.
 
 3. **Thẻ vòng chạy** cho biết đang ở chặng nào. Chặng rỗng được tô đỏ.
 
@@ -203,15 +211,15 @@ Lái xe đang gắn với xe được giao việc tự động. Nếu xe chưa c
    Lái xe không phải đi nhận việc lại.
 
 2. **Hiện trường**:
-   - Chỉ hiện đúng nút kế tiếp, ở đây là “Đã tới điểm lấy hàng”.
+   - Chỉ hiện những nút được phép bấm ở bước đó, ở đây là “Đã tới điểm lấy hàng”. Có bước hiện vài nút cùng lúc, ví dụ “Đã vào cổng”, “Đang xếp hàng”, “Rời điểm lấy hàng”.
    - Dòng “Còn thiếu” nhắc giấy tờ bắt buộc, hiện là biên nhận giao hàng.
-   - Chặng rỗng không có nút nào, vì văn phòng tự tiến chặng đó.
+   - Chặng rỗng không có nút nào, vì không có mốc hàng. Văn phòng tiến chặng này như mọi chặng khác.
    - Hai mốc “Đã đến nơi” và “Khách đã nhận hàng” lấy vị trí điện thoại ngay lúc bấm. Nếu máy chưa bật định vị, mốc **không được ghi**, và máy nói rõ phải làm gì.
 3. **Nhiên liệu: lái xe chọn ai trả tiền.** Máy nói rõ ngay dưới ô chọn tiền sẽ đi đâu (mục 6).
 
 Lái xe có chín mục ở thanh dưới: Trang chủ, Nhận việc, Hiện trường, Chuyến, Nhiên liệu, Chi phí, Quỹ, Lịch sử, Phiếu lương.
 
-Hệ thống cần sóng điện thoại. Nếu mất sóng, lái xe bấm lại khi có sóng; bấm nhiều lần không tạo mốc trùng.
+Hệ thống cần sóng điện thoại. Nếu mất sóng, lái xe bấm lại khi có sóng; bấm lại cùng một mốc không tạo mốc trùng. Riêng “Đang xếp hàng” được ghi nhiều lần theo thiết kế.
 
 _Hình màn lái xe chụp trên một bản cài riêng của đúng phiên bản phần mềm đang chạy. Giao diện và cách hoạt động giống hệt._
 
@@ -220,7 +228,7 @@ _Hình màn lái xe chụp trên một bản cài riêng của đúng phiên b�
 ![Kết thúc đơn: bộ lọc, cột giao hàng và chứng từ, cột đủ điều kiện đối soát](assets/lanh-dao/07-ket-thuc-don.jpg)
 
 1. **Lọc theo trạng thái**: chờ kết thúc, đã kết thúc, cần bổ sung, từ chối.
-2. **Giao hàng và chứng từ**: chỉ đơn đã được văn phòng xác nhận giao xong mới vào đây. Cột “Chứng từ” cho biết có giấy tờ số hay bản giấy.
+2. **Giao hàng và chứng từ**: chỉ đơn đã được văn phòng xác nhận giao xong mới vào đây. Cột “Chứng từ” cho biết số chứng từ số; “Bản giấy” nghĩa là chưa có bản số.
 3. **Đủ điều kiện đối soát**: chỉ đơn đã giao xong **và** đã được kế toán bấm “Đã kết thúc” mới vào kỳ đối soát với khách.
 
 Kế toán có ba lựa chọn cho mỗi đơn: “Đã kết thúc”, “Cần bổ sung”, “Từ chối”. Mỗi quyết định phải có căn cứ:
@@ -237,7 +245,7 @@ Hệ thống lưu người quyết và giờ máy chủ.
 1. **Bốn con số tách bạch**:
    - tổng còn nợ;
    - trong đó quá hạn;
-   - chờ đối soát, tức đã giao nhưng **chưa phải công nợ**;
+   - chờ đối soát, tức đơn kế toán đã bấm “Đã kết thúc” nhưng chưa đối soát với khách, nên **chưa phải công nợ**;
    - tiền nhận trước, tức tiền đã về nhưng chưa gắn vào chứng từ nào.
 2. **Tuổi nợ**: trong hạn, quá hạn 1–30 ngày, 31–60 ngày, trên 60 ngày.
 3. **Chứng từ còn nợ theo khách**: ngày, hạn thanh toán, còn nợ, tuổi nợ.
@@ -250,7 +258,7 @@ Màn này chỉ giữ **một dòng tiền: cước khách hàng**. Tiền nợ 
 
 1. **Doanh thu, chi phí trực tiếp, biên trực tiếp**. Biên trực tiếp luôn kèm câu **“Chưa gồm chi phí cố định”**.
 2. **Theo nguồn**: đơn theo vòng xe (cách làm hiện nay) và chuyến cũ (cách làm trước đây) nằm cạnh nhau. Một đơn sinh từ chuyến cũ chỉ được tính một lần.
-3. **Lưu ý về con số**. Hệ thống tự nói khi con số chưa đủ, thay vì lặng lẽ cho ra số đẹp:
+3. **Lưu ý về con số**. Hệ thống tự nói khi con số chưa đủ, thay vì lặng lẽ cho ra số đẹp. Màn này ghi lời nhắc cho cả công ty; ở **Hiệu quả từng chuyến**, từng đơn mang nhãn tương ứng:
    - “Dầu chưa phân bổ”: có phiếu dầu trên vòng xe nhưng kế toán chưa phân bổ vào chi phí, nên biên thật có thể thấp hơn.
    - “Chưa ghi chi phí”: đơn chưa có khoản chi nào. **Biên 100% ở đây là “chưa ghi chi phí”, không phải “không tốn chi phí”.**
 
@@ -282,7 +290,7 @@ Bên dưới là **việc cần xử lý**.
 **Một ngày của giám đốc** đi theo bốn bước:
 
 1. Mở **Tổng hợp giám đốc** và đọc ba khối.
-2. Có việc đỏ thì mở **Bảng điều hành** để xem đủ hàng việc và người phải làm.
+2. Có việc đỏ thì mở **Bảng điều hành** để xem đủ hàng việc và mở thẳng màn cần xử lý.
 3. Cần chi tiết tiền thì mở **Phải thu khách hàng** hoặc **Hiệu quả từng chuyến**. Màn thứ hai có một dòng cho mỗi đơn hoặc chuyến, kèm lý do nếu dòng đó chưa đủ số.
 4. Cần xem xe đang ở bước nào thì cũng mở **Bảng điều hành**.
 
@@ -292,10 +300,10 @@ Bên dưới là **việc cần xử lý**.
 
 Khi khai phiếu đổ dầu trên vòng xe, lái xe chọn một trong hai cách thanh toán.
 
-| Cách trả                | Tiền đi đâu                                                                                                                                                         | Ai làm                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| **Lái xe trả tiền mặt** | Kế toán xác thực phiếu. Số tiền được **trừ vào quỹ của lái xe**, ghi là chi phí của vòng xe, để công ty hoàn lại cho lái xe. **Không** ghi nợ cây xăng              | Lái xe khai, kế toán xác thực |
-| **Ghi nợ cây xăng**     | Kế toán nhập bảng kê của cây xăng và cho máy so khớp từng phiếu. Khi kế toán **đóng kỳ**, khoản nợ mới vào **phải trả cây xăng**. **Không** đụng tới quỹ của lái xe | Lái xe khai, kế toán đối soát |
+| Cách trả                | Tiền đi đâu                                                                                                                                                                                       | Ai làm                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Lái xe trả tiền mặt** | Kế toán xác thực phiếu. Khoản này ghi vào **sổ quỹ của lái xe**, làm số dư giảm. Nếu lái xe đã chi quá tạm ứng, công ty còn nợ lái xe và trả lại ở “Quyết toán lái xe”. **Không** ghi nợ cây xăng | Lái xe khai, kế toán xác thực |
+| **Ghi nợ cây xăng**     | Kế toán nhập bảng kê của cây xăng và cho máy so khớp từng phiếu. Khi kế toán **đóng kỳ**, khoản nợ mới vào **phải trả cây xăng**. **Không** đụng tới quỹ của lái xe                               | Lái xe khai, kế toán đối soát |
 
 Khi so khớp, hệ thống bắt các chỗ lệch:
 
@@ -312,8 +320,8 @@ Tiền dầu **không tự** vào chi phí của đơn. Kế toán phân bổ ph
 
 ## 7. Bản đồ và vị trí: dùng để làm gì
 
-- **Bản đồ để chọn đúng điểm.** Điểm lấy và giao là một vị trí trên bản đồ. Tên chỉ để đọc cho dễ. Nhờ vậy hệ thống tính được chặng rỗng từ bãi tới điểm lấy mà không phải đoán từ chữ.
-- **Tìm địa điểm theo tên** dựa trên dữ liệu bản đồ công cộng. Đây là tiện ích và có thể tắt khi chạy với dữ liệu thật của công ty. Khi đó bản đồ, danh sách địa điểm đã biết và nút “Vị trí của tôi” vẫn dùng được.
+- **Bản đồ để chọn đúng điểm.** Điểm lấy và giao là một vị trí trên bản đồ. Tên chỉ để đọc cho dễ. Toạ độ giúp màn “Điều xe” ước lượng xe nào gần điểm lấy. Riêng việc lập chặng rỗng hiện vẫn so tên điểm lấy với tên bãi đã khai, và km của chặng chưa được tính.
+- **Tìm địa điểm theo tên** dựa trên dữ liệu bản đồ công cộng. Đây là tiện ích, mặc định tắt, và **máy chủ không cho bật** khi hệ thống được khai là chạy dữ liệu thật của công ty. Khi đó bản đồ, danh sách địa điểm đã biết và nút “Vị trí của tôi” vẫn dùng được, nhưng tên điểm phải gõ tay.
 - **“Vị trí của tôi” lúc tạo đơn chỉ là gợi ý**, không phải bằng chứng xe đã ở đó.
 - **Bằng chứng vị trí** là vị trí điện thoại lái xe gửi lên đúng lúc bấm “Đã đến nơi” và “Khách đã nhận hàng”.
 - Hệ thống **chưa** theo dõi liên tục cả hành trình, và **chưa** nối với thiết bị giám sát hành trình gắn trên xe.
@@ -335,7 +343,7 @@ Giới hạn này do máy chủ giữ. Lái xe có cố mở đường khác th�
 
 ## 9. Hạn chế hiện tại
 
-Chỉ ghi những điều có ảnh hưởng tới quyết định. Các điểm dưới đây đều đã được ghi nhận để sửa.
+Chỉ ghi những điều có ảnh hưởng tới quyết định.
 
 ### Ảnh hưởng tới tiền
 
@@ -347,20 +355,21 @@ Chỉ ghi những điều có ảnh hưởng tới quyết định. Các điểm
 
 ### Ảnh hưởng tới vận hành
 
-| Hạn chế                                                                                                                               | Ảnh hưởng                                       | Làm tạm                         |
-| ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------- |
-| Ở **Kết thúc đơn**, chọn chứng từ số bằng chuột chưa được                                                                             | Kế toán ghi rõ đã nhận giấy gì thay vì chọn tệp | Quyết định vẫn lưu người và giờ |
-| Vòng xe giao xong xa bãi được **giữ mở tới 12 giờ**. Trong thời gian đó, cùng lái xe **không ghi được hai mốc giao hàng** của đơn mới | Một lái xe khó làm hai đơn liền trong ngày      | Giao đơn kế tiếp cho xe khác    |
-| **Tự đóng vòng xe sau 12 giờ nghỉ** đã được cài nhưng **chưa quan sát** trên bản đang chạy. Đóng khi xe về bãi thì đã chạy thật       | Có thể thấy vòng xe ở trạng thái “Đang giữ” lâu | Không cần làm gì; đang theo dõi |
-| Một số việc văn phòng **chưa có nút**: huỷ đơn, đóng phiên chờ thay lái xe, duyệt phụ cấp chờ, ghi nhận lái xe đã nộp biên nhận giấy  | Các việc này phải xử lý ngoài hệ thống          | Ghi chú lại cho tới khi có nút  |
-| Lái xe **chưa xem được lịch sử vòng xe đã xong**. Mục “Chuyến” và “Lịch sử” chỉ có chuyến cũ                                          | Lái xe hỏi lại văn phòng khi cần                | —                               |
+| Hạn chế                                                                                                                                                                                                                                  | Ảnh hưởng                                                                                      | Làm tạm                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Ở **Kết thúc đơn**, chọn chứng từ số bằng chuột chưa được                                                                                                                                                                                | Kế toán ghi rõ đã nhận giấy gì thay vì chọn tệp                                                | Quyết định vẫn lưu người và giờ                                     |
+| Vòng xe giao xong xa bãi được **giữ mở tới 12 giờ**. Trong thời gian đó, cùng lái xe **không ghi được hai mốc giao hàng** của đơn mới                                                                                                    | Một lái xe khó làm hai đơn liền trong ngày                                                     | Giao đơn kế tiếp cho xe khác                                        |
+| **Tự đóng vòng xe sau 12 giờ nghỉ** đã được cài nhưng **chưa quan sát** trên bản đang chạy. Đóng khi xe về bãi thì đã chạy thật                                                                                                          | Có thể thấy vòng xe ở trạng thái “Đang giữ” lâu                                                | Không cần làm gì; đang theo dõi                                     |
+| Văn phòng **hoàn tất chặng có hàng bằng ghi đè** khi hiện trường còn ghi hàng trên xe, hoặc phiên chờ còn mở                                                                                                                             | Vòng xe **không bao giờ tự đóng**. Trong lúc đó xe bị đếm là đang chạy, thẻ nằm ở “Trên đường” | Chỉ ghi đè khi thật cần; nhắc lái xe bấm “Khách đã nhận hàng” trước |
+| Một số việc văn phòng **chưa có nút**: huỷ đơn; huỷ hoặc đổi xe sau khi đã xác nhận kế hoạch; thêm hoặc huỷ chặng; đóng phiên chờ thay lái xe; duyệt phụ cấp chờ; ghi nhận lái xe đã nộp biên nhận giấy; nhập danh sách địa điểm đã biết | Các việc này phải xử lý ngoài hệ thống                                                         | Ghi chú lại cho tới khi có nút                                      |
+| Lái xe **chưa xem được lịch sử vòng xe đã xong**. Mục “Chuyến” và “Lịch sử” chỉ có chuyến cũ                                                                                                                                             | Lái xe hỏi lại văn phòng khi cần                                                               | —                                                                   |
 
 ### Ngoài phạm vi đợt này
 
 - **Mỗi đơn một vòng xe.** Chưa gom nhiều đơn lên một vòng xe.
 - **Chưa nối thiết bị giám sát hành trình trên xe.** Vị trí chỉ lấy lúc lái xe bấm hai mốc giao hàng.
 - **Phí đường bộ tự động (ETC)** chưa nằm trong đợt này.
-- **Tìm địa điểm theo tên** có thể tắt khi chạy dữ liệu thật (mục 7).
+- **Tìm địa điểm theo tên** không bật được khi chạy dữ liệu thật (mục 7).
 
 ---
 
@@ -374,7 +383,7 @@ Chỉ ghi những điều có ảnh hưởng tới quyết định. Các điểm
    - ưu tiên sửa hạn chế “giữ mở 12 giờ”;
    - cân nhắc gom nhiều đơn lên một vòng xe.
 4. **Thời gian nghỉ 12 giờ để tự đóng vòng xe có hợp lý không?**
-5. **Danh sách bãi xe, nhà máy, kho của khách cần nhập sẵn**, vì tìm địa điểm theo tên có thể tắt.
+5. **Danh sách bãi xe, nhà máy, kho của khách cần nhập sẵn**, vì tìm địa điểm theo tên sẽ tắt khi chạy dữ liệu thật. Hiện danh sách này do đội triển khai nhập, chưa có màn hình.
 6. **Ai được tạo đơn và điều xe.** Hiện kế toán cũng làm được.
 
 ---

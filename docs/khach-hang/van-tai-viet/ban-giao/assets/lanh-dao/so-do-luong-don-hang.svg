@@ -71,7 +71,7 @@
 
   <!-- He thong tu dong vong xe -->
   <rect x="214" y="160" width="552" height="34" rx="8" fill="#f1efea" stroke="#6d7277" stroke-dasharray="4 3"/>
-  <text class="b" x="228" y="182"><tspan class="who ht">Hệ thống</tspan> tự đóng vòng xe khi xe về bãi, hoặc sau thời gian nghỉ đã khai</text>
+  <text class="b" x="228" y="182"><tspan class="who ht">Hệ thống</tspan> tự đóng vòng xe khi xe về bãi, hoặc 12 giờ sau chặng cuối</text>
 
   <!-- noi sang dong 2 -->
   <path class="ln" d="M870 146V212H40V252"/>
@@ -132,8 +132,8 @@
   <text class="h2" x="504" y="428">Kế toán xác thực phiếu</text>
   <text class="b" x="504" y="449">đối chiếu ảnh và số liệu</text>
   <rect class="box" x="730" y="402" width="226" height="66" rx="8" stroke="#56652a"/>
-  <text class="h2" x="744" y="428">Trừ vào quỹ lái xe</text>
-  <text class="b" x="744" y="449">công ty hoàn lại cho lái xe</text>
+  <text class="h2" x="744" y="428">Ghi vào quỹ lái xe</text>
+  <text class="b" x="744" y="449">chi quá tạm ứng thì công ty hoàn</text>
 
   <!-- duong b: ghi no cay xang -->
   <rect class="box" x="264" y="486" width="196" height="66" rx="8" stroke="#b0661a"/>
