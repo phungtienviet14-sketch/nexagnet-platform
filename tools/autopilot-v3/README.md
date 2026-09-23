@@ -6,7 +6,7 @@ Thư mục này **không phải** một gói orchestration. Nó chỉ có:
 |---|---|---|
 | `gate.mjs` | Cổng kích hoạt lớp 2: đọc lại Issue + quyền người gắn nhãn qua API, quyết định với mã lý do có kiểu. Không phụ thuộc gói ngoài | Job `gate` của [`.github/workflows/claude-builder.yml`](../../.github/workflows/claude-builder.yml) — token chỉ đọc, **không** secret |
 | `gate.test.mjs` | Hành vi của cổng trước mọi đường không tin cậy (người lạ, bot, Issue của người lạ, trùng login khác ID, re-run, nhãn khác, trạng thái đổi, API lỗi, token không lọt log) | `pnpm test` → job `verify` |
-| `claude-builder.contract.test.mjs` | 19 bất biến cấu hình của workflow mà ranh giới an ninh dựa vào — hàng rào của phiên Claude kiểm **theo nghĩa** của luật deny, không theo chuỗi | `pnpm test` → job `verify` |
+| `claude-builder.contract.test.mjs` | 19 bất biến cấu hình của workflow mà ranh giới an ninh dựa vào — hàng rào của phiên Claude kiểm **theo nghĩa** của luật deny, không theo chuỗi — cộng 2 bài **đối chứng âm chạy mỗi lần** (gỡ từng guard → bộ kiểm phải báo đúng lỗi) | `pnpm test` → job `verify` |
 
 Bối cảnh, ranh giới tin cậy, tắt khẩn cấp:
 [`docs/phat-trien/van-hanh/autopilot-v3-cloud-builder.md`](../../docs/phat-trien/van-hanh/autopilot-v3-cloud-builder.md).
@@ -59,20 +59,36 @@ Không gọi mạng, không cần secret, không cần DB.
 18. Không biểu mẫu Issue nào tự gắn nhãn kích hoạt.
 19. Runner `ubuntu-24.04` GitHub-hosted, có timeout; concurrency theo Issue, không huỷ lần đang chạy.
 
-**Nghĩa của luật deny** mà bài 12–15 dùng lấy từ tài liệu permissions của Claude Code (mục "Read and
-Edit", đọc 23/09/2026), không đoán: cú pháp gitignore neo ở thư mục hiện tại; **tên trần khớp ở mọi cấp**
-(`Read(.env)` ≡ `Read(**/.env)`); luật **deny** một đoạn thư mục (`deploy/**`) khớp thư mục đó ở **mọi
-cấp**; luật nhiều đoạn (`tools/autopilot-v3/**`) chỉ khớp ở vị trí neo. Dạng khác → test đỏ.
+**Đối chứng âm chạy mỗi lần** (bài 20–21) — "test có cắn thật" không chỉ là một lần kiểm đột biến lúc
+viết:
+
+20. Từ chính sách **thật**, gỡ từng guard **theo nghĩa** (bỏ mọi luật đang phủ đường dẫn đó, không bỏ theo
+    chuỗi) và đòi bộ kiểm báo đúng lỗi: gỡ deny `delete_files`, viết nó có ngoặc, deny cả server
+    `file_ops`, đổi SHA action; gỡ rào của **từng** mục bắt buộc của review độc lập (`AGENTS.md`,
+    `CLAUDE.md`, `.github/`, `.claude/`, `.mcp.json`, `tools/autopilot-v3/`, `deploy/`, `tenants/`) và các
+    mục thêm (`CLAUDE.local.md`, `AGENTS.md` lồng, skill lồng trong `.claude/`, `.git/`); thêm `Edit(src)`
+    (chặn nhầm mã ứng dụng); tiền tố `/`; `--setting-sources`. Bỏ một mục khỏi `CONTROL_PLANE` cũng đỏ.
+21. Trên một cây fixture dựng trong thư mục tạm: mã ứng dụng trong thư mục tên `deploy/` (luật deny một
+    đoạn chặn nhầm) → báo; symlink (junction trên Windows) → báo; `nested/CLAUDE.md` **tồn tại** mà rào
+    của nó bị gỡ → báo; cây rỗng → bộ quét không được xanh.
+
+**Nghĩa của luật deny** mà bài 12–15, 20–21 dùng lấy từ tài liệu permissions của Claude Code (mục "Read
+and Edit", đọc 23/09/2026), không đoán: cú pháp gitignore neo ở thư mục hiện tại; **tên trần khớp ở mọi
+cấp** (`Read(.env)` ≡ `Read(**/.env)`); luật **deny** một đoạn thư mục (`deploy/**`) khớp thư mục đó ở
+**mọi cấp**; luật nhiều đoạn (`tools/autopilot-v3/**`) chỉ khớp ở vị trí neo. Dạng khác → test đỏ. Đặc tả
+`isControlPlane` cố ý neo `.github/`, `deploy/`, `tenants/` ở gốc: một thư mục lồng trùng tên sẽ làm bài 15
+đỏ — mã ứng dụng bị chặn nhầm phải là quyết định có chủ đích, không im lặng.
 
 ## Đã kiểm bằng đột biến, không chỉ bằng "xanh" (23/09/2026, trên bộ test cuối)
 
-Mỗi đột biến chạy trên **bản sao** (biến `AUTOPILOT_V3_WORKFLOW` / `AUTOPILOT_V3_TEMPLATES` /
-`AUTOPILOT_V3_REPO_ROOT`, hoặc bản sao `gate.mjs` ở thư mục tạm) — working tree không bị đụng. Luật
-tính: đối chứng trên bản gốc phải xanh (19/19 + 17/17); đột biến phải đổi ít nhất một dòng **không phải
-chú thích** (lần chạy đầu có đúng một "không bắt được" giả — thay thế rơi vào chú thích — đã sửa bộ
-chạy, không sửa test); bản đột biến của `gate.mjs` phải qua `node --check`; chỉ bài test **có tên** mới
-được tính là "bắt được". **61/61 bị bắt; 3/3 đối chứng tương đương vẫn xanh** (test không báo động giả
-khi viết lại luật thành dạng cùng nghĩa). Số ở cột phải là số bất biến ở trên.
+Mỗi đột biến chạy trên **bản sao** (biến `AUTOPILOT_V3_WORKFLOW` / `AUTOPILOT_V3_TEMPLATES`, hoặc bản
+sao `gate.mjs` ở thư mục tạm) — working tree không bị đụng. Luật tính: đối chứng trên bản gốc phải xanh
+(21/21 + 17/17); đột biến phải đổi ít nhất một dòng **không phải chú thích** (lần chạy đầu có đúng một
+"không bắt được" giả — thay thế rơi vào chú thích — đã sửa bộ chạy, không sửa test); bản đột biến của
+`gate.mjs` phải qua `node --check`; chỉ bài test **có tên** mới được tính là "bắt được". **57/57 bị bắt;
+3/3 đối chứng tương đương vẫn xanh** (test không báo động giả khi viết lại luật thành dạng cùng nghĩa). Số
+ở cột phải là số bài ở trên. Các kịch bản cây fixture (symlink, `CLAUDE.md` lồng không rào, `deploy/` lồng,
+cây rỗng) nay là bài 21, chạy mỗi lần — không còn nằm trong bộ chạy đột biến.
 
 | # | Đột biến | Bài đỏ |
 |---|---|---|
@@ -90,28 +106,25 @@ khi viết lại luật thành dạng cùng nghĩa). Số ở cột phải là s
 | M15 / M16 | thêm `runs-on: self-hosted` / `cancel-in-progress: true` | 19 |
 | M17 | job `gate` đọc `secrets.CLAUDE_CODE_OAUTH_TOKEN` | 4, 5 |
 | M19 | một biểu mẫu Issue có `labels: ["agent:claude"]` | 18 |
-| **D1** | **bỏ deny `mcp__github_file_ops__delete_files`** | 11 |
-| D2 | gõ sai `…__delete_file` (thiếu `s`) | 11 |
-| D3 | deny cả server `mcp__github_file_ops` (mất `commit_files`) | 11 |
+| **D1** | **bỏ deny `mcp__github_file_ops__delete_files`** | 11, 20 |
+| D2 / D3 | gõ sai `…__delete_file` (thiếu `s`) / deny cả server `mcp__github_file_ops` (mất `commit_files`) | 11, 20 |
 | D4 | `use_commit_signing: false` | 8, 11 |
 | D5 | đổi SHA action mà không kiểm kê lại công cụ MCP | 6, 11 |
-| D6 | `mcp__github_file_ops__delete_files(paths:*)` — có ngoặc, bị Claude Code bỏ qua | 11, 13 |
-| **P1** / P2 | **bỏ `Edit(**/AGENTS.md)`** / gõ sai thành `Edit(**/AGENT.md)` | 12, 15 |
-| **P3** | **bỏ `Edit(**/CLAUDE.md)`** | 12, 15 |
-| P4 | bỏ `Edit(**/CLAUDE.local.md)` | 12 |
-| P5 / P6 / P7 | bỏ `Edit(**/.claude/**)` / hẹp thành `Edit(.claude/*)` / hẹp thành `Edit(.claude/settings.json)` | 12, 15 (P6: cả 13) |
-| P8 | bỏ `Edit(.mcp.json)` | 12 |
-| P9 / P10 | bỏ `Edit(tools/autopilot-v3/**)` / viết `Edit(/tools/autopilot-v3/**)` (neo ở `~/.claude/`) | 12, 15 (P10: cả 13) |
-| P11 / P12 / P13 | bỏ `Edit(.github/**)` / `Edit(deploy/**)` / `Edit(tenants/**)` | 12, 15 |
-| P14 | bỏ `Edit(.git/**)` | 12 |
+| D6 | `mcp__github_file_ops__delete_files(paths:*)` — có ngoặc, bị Claude Code bỏ qua | 11, 13, 20 |
+| **P1** / P2 | **bỏ `Edit(**/AGENTS.md)`** / gõ sai thành `Edit(**/AGENT.md)` | 12, 15, 20, 21 |
+| **P3** | **bỏ `Edit(**/CLAUDE.md)`** | 12, 15, 20, 21 |
+| P4 | bỏ `Edit(**/CLAUDE.local.md)` | 12, 20 |
+| P5 / P7 | bỏ `Edit(**/.claude/**)` / hẹp thành `Edit(.claude/settings.json)` | 12, 15, 20 |
+| P6 | hẹp thành `Edit(.claude/*)` (một cấp) | 12, 13, 15, 20 |
+| P8 / P14 | bỏ `Edit(.mcp.json)` / bỏ `Edit(.git/**)` | 12, 20 |
+| P9 / P11 / P13 | bỏ `Edit(tools/autopilot-v3/**)` / `Edit(.github/**)` / `Edit(tenants/**)` | 12, 15, 20 |
+| P10 | viết `Edit(/tools/autopilot-v3/**)` (neo ở `~/.claude/`) | 12, 13, 15, 20 |
+| P12 | bỏ `Edit(deploy/**)` | 12, 15, 20, 21 |
 | E1 / E4 | thêm `Edit(**)` / thêm `Edit` trần | 13 |
-| E2 / E3 / E5 | thêm `Edit(apps/**)` / `Edit(docs/**)` / `Edit(src)` (tên trần khớp mọi cấp) | 14, 15 |
+| E2 / E5 | thêm `Edit(apps/**)` / `Edit(src)` (tên trần khớp mọi cấp) | 14, 15 |
+| E3 | thêm `Edit(docs/**)` | 14, 15, 21 |
 | A1 | `claude_args` + `--setting-sources project` (bỏ nguồn `user` = bỏ cả deny) | 9 |
 | A2 / A3 / A4 | `claude_args` + `--allowedTools mcp__github__delete_file` / `--mcp-config …` / `--permission-mode bypassPermissions` | 9 |
-| S1 | cây fixture có symlink (junction) từ `.claude/` trỏ ra vùng sửa được | 15 |
-| S2 | cây fixture có `nested/CLAUDE.md` **tồn tại** + bỏ `Edit(**/CLAUDE.md)` | 12, 15 |
-| S3 | cây fixture rỗng — bài quét không được xanh vì không thấy gì | 15 |
-| S4 | cây fixture có mã ứng dụng trong thư mục tên `deploy/` — luật deny một đoạn chặn nhầm | 15 |
 | Q1 / Q2 / Q3 | **tương đương**: `**/AGENTS.md`→`AGENTS.md`; `**/.claude/**`→`.claude/**`; `.mcp.json`→`./.mcp.json` | **xanh** — đúng kỳ vọng |
 | G1 | bỏ kiểm `sender.id` trong `gate.mjs` | 3 bài của `gate.test.mjs` |
 | G2 | so người gắn theo login thay vì ID | "trùng LOGIN mà khác ID" |

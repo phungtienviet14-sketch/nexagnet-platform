@@ -8,21 +8,31 @@
 // lam bo tach thong minh hon.
 //
 // Duong dan doi duoc bang bien moi truong de chay dot bien tren BAN SAO (khong dong vao working tree —
-// pre-push kiem working tree, khong kiem commit). `AUTOPILOT_V3_REPO_ROOT` chi doi goc cua bai QUET
-// cay (tep chi dan dang co, symlink) — de doi chung am tren mot cay fixture.
+// pre-push kiem working tree, khong kiem commit).
 //
 // Hang rao cua phien Claude duoc kiem theo NGHIA, khong theo chuoi: moi duong dan cua mat phang dieu
 // khien (ke ca tep MOI va tep o cap long) phai bi mot luat `Edit(...)` PHU, vung lam viec binh thuong
-// thi KHONG bi phu, va cong cu MCP xoa tep — thu luat `Edit(...)` khong rang buoc — phai bi cam.
+// thi KHONG bi phu, va cong cu MCP xoa tep — thu luat `Edit(...)` khong rang buoc — phai bi cam. Hai
+// bai cuoi tep la DOI CHUNG AM chay moi lan: go tung guard khoi chinh sach that (theo nghia) va doi bo
+// kiem bao dung loi — de "test co can that" khong chi la mot lan kiem dot bien luc viet.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoFile = (rel) => fileURLToPath(new URL(`../../${rel}`, import.meta.url));
-const REPO_ROOT = process.env.AUTOPILOT_V3_REPO_ROOT ?? repoFile('');
+const REPO_ROOT = repoFile('');
 const WORKFLOW =
   process.env.AUTOPILOT_V3_WORKFLOW ?? repoFile('.github/workflows/claude-builder.yml');
 const TEMPLATES = process.env.AUTOPILOT_V3_TEMPLATES ?? repoFile('.github/ISSUE_TEMPLATE');
@@ -97,6 +107,26 @@ const EDITABLE = [
   'tools/git-hooks/pre-push.mjs',
   'README.md',
   'package.json',
+];
+
+/**
+ * Dai dien cho danh sach BAT BUOC rao cua review doc lap PR #366 (AGENTS.md, CLAUDE.md, .github/**,
+ * .claude/**, .mcp.json, tools/autopilot-v3/**, deploy/**, tenants/**) cong phan ban sua them. Doi chung
+ * am go rao cua TUNG muc va doi bo kiem goi dung ten no — bo mot muc khoi `CONTROL_PLANE` cung do.
+ */
+const REQUIRED_PROTECTED = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.github/workflows/claude-builder.yml',
+  '.claude/settings.json',
+  '.mcp.json',
+  'tools/autopilot-v3/gate.mjs',
+  'deploy/netviet/render-secrets.sh',
+  'tenants/ultty/tenant.json',
+  'CLAUDE.local.md',
+  'apps/api/AGENTS.md',
+  'apps/web/.claude/skills/probe/SKILL.md',
+  '.git/config',
 ];
 
 /** Tep chi dan ma mot coding agent tu nap/doc — bat ke dang o cap nao. */
@@ -200,8 +230,10 @@ function parseEditRule(rule) {
 }
 
 /**
- * Dac ta mat phang dieu khien cho moi tep DANG CO, viet DOC LAP voi workflow. Bai quet cay so no voi
- * nghia cua cac luat deny tren tung tep: lech theo chieu nao cung do (thieu rao / rao nham ma ung dung).
+ * Dac ta mat phang dieu khien cho moi tep DANG CO, viet DOC LAP voi workflow. Co y NEO O GOC cho
+ * `.github/`, `deploy/`, `tenants/` du luat deny mot doan khop o moi cap: mot thu muc long trung ten
+ * (vd `apps/x/deploy/`) se lam bai quet cay DO — ma ung dung bi chan nham phai la mot quyet dinh co y,
+ * khong im lang.
  */
 function isControlPlane(path) {
   return (
@@ -217,13 +249,96 @@ function sessionPermissions() {
   return JSON.parse(blockScalar(claudeStep, 'settings')).permissions ?? {};
 }
 
-function editRules() {
-  return (sessionPermissions().deny ?? [])
+const editRulesOf = (deny) =>
+  deny
     .filter((rule) => /^Edit\b/u.test(rule))
     .map((rule) => ({ rule, covers: parseEditRule(rule) }));
+const coveredBy = (rules, path) => rules.find(({ covers }) => covers?.(path));
+/** Go MOI luat dang phu `path` — "go mot guard" theo NGHIA, khong theo chuoi. */
+const withoutCoverageOf = (deny, path) => deny.filter((rule) => !parseEditRule(rule)?.(path));
+
+// --- bo kiem THUAN: tra ve danh sach vi pham ----------------------------------------------------
+// Chay tren chinh sach THAT (phai rong) va tren doi chung am o cuoi tep (phai bao DUNG loi) — nen
+// doi chung am chay moi lan `pnpm test`, khong chi mot lan khi viet test.
+
+const CLAUDE_ARGS_FLAGS = ['--append-system-prompt', '--max-turns'];
+
+/**
+ * `--allowedTools`/`--mcp-config` cap them cong cu ghi (vd `mcp__github__*` dung server GitHub MCP voi
+ * token App — ghi thang, khong qua tep cuc bo); `--setting-sources` bo duoc nguon `user`, noi action
+ * ghi `settings` (tuc ca danh sach deny); `--permission-mode`/`--dangerously-*` doi che do.
+ */
+function argsViolations(args) {
+  const flags = [
+    ...args.replace(/"[^"]*"|'[^']*'/gu, '""').matchAll(/(?:^|\s)(-{1,2}[A-Za-z][\w-]*)/gu),
+  ]
+    .map((m) => m[1])
+    .sort();
+  const ok = JSON.stringify(flags) === JSON.stringify(CLAUDE_ARGS_FLAGS);
+  return ok && /--max-turns \d+/u.test(args)
+    ? []
+    : [`claude_args mang ${JSON.stringify(flags)}, chi duoc ${JSON.stringify(CLAUDE_ARGS_FLAGS)}`];
 }
 
-const coveredBy = (rules, path) => rules.find(({ covers }) => covers?.(path));
+function mcpViolations(deny, pinnedSha) {
+  const out = [];
+  if (pinnedSha !== PINNED_ACTION_WRITE_TOOLS.sha) {
+    out.push(`action @${pinnedSha} chua duoc kiem ke cong cu MCP ghi (PINNED_ACTION_WRITE_TOOLS)`);
+  }
+  for (const tool of PINNED_ACTION_WRITE_TOOLS.mustDeny) {
+    if (!deny.includes(tool))
+      out.push(`deny thieu ${tool} — no xoa duoc BAT KY tep nao trong repo`);
+  }
+  for (const tool of PINNED_ACTION_WRITE_TOOLS.pathBound) {
+    const server = tool.split('__').slice(0, 2).join('__');
+    for (const blocker of [tool, server, `${server}__*`]) {
+      if (deny.includes(blocker)) out.push(`${blocker} chan mat ${tool} — agent khong commit duoc`);
+    }
+  }
+  return out;
+}
+
+function shapeViolations(deny) {
+  return deny.flatMap((rule) => {
+    if (/^Edit\b/u.test(rule) && !parseEditRule(rule)) {
+      return [`${rule}: dang khong co nghia ro — viet lai, dung de test doan`];
+    }
+    // Tai lieu: khi nap tep settings, Claude Code BO QUA luat `mcp__` co ngoac — im lang vo hieu
+    // (loc theo tham so MCP phai dung --disallowedTools).
+    if (/^mcp__.*\(/u.test(rule))
+      return [`${rule}: luat mcp__ co ngoac bi bo qua khi nap settings`];
+    return [];
+  });
+}
+
+function controlPlaneViolations(deny) {
+  const rules = editRulesOf(deny);
+  return CONTROL_PLANE.filter((path) => !coveredBy(rules, path)).map((p) => `${p}: KHONG bi rao`);
+}
+
+function editableViolations(deny) {
+  const rules = editRulesOf(deny);
+  return EDITABLE.flatMap((path) => {
+    const hit = coveredBy(rules, path);
+    return hit ? [`${path}: bi ${hit.rule} chan nham`] : [];
+  });
+}
+
+function treeViolations(deny, entries) {
+  if (!entries.some(({ path }) => path === 'AGENTS.md')) {
+    return ['khong thay AGENTS.md o goc — bo quet hong'];
+  }
+  const rules = editRulesOf(deny);
+  return entries.flatMap(({ path, symlink }) => {
+    // Tien de cua `commit_files`: no doc noi dung theo DICH cua symlink nhung ghi vao duong dan cua
+    // LINK — mot symlink trong vung bi rao tro ra vung sua duoc se la duong vuot rao.
+    if (symlink) return [`${path}: symlink`];
+    const hit = coveredBy(rules, path);
+    if (isControlPlane(path) && !hit) return [`${path}: KHONG bi rao`];
+    if (!isControlPlane(path) && hit) return [`${path}: bi ${hit.rule} chan nham`];
+    return [];
+  });
+}
 
 /**
  * Muc sinh ra/cuc bo, khong nam trong cay agent nhan tu checkout. `.git` bo ca khi la TEP (worktree);
@@ -231,13 +346,13 @@ const coveredBy = (rules, path) => rules.find(({ covers }) => covers?.(path));
  */
 const WALK_SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'coverage']);
 
-/** Moi tep trong cay lam viec cua repo, duong dan dang `a/b/c`. Khong theo symlink. */
-function* walkRepo(dir = '') {
-  for (const entry of readdirSync(join(REPO_ROOT, dir), { withFileTypes: true })) {
+/** Moi tep trong mot cay, duong dan dang `a/b/c`. Khong theo symlink. */
+function* walkTree(root, dir = '') {
+  for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
     const path = dir ? `${dir}/${entry.name}` : entry.name;
     if (WALK_SKIP.has(entry.name) || path === '.claude/worktrees') continue;
     if (entry.isSymbolicLink()) yield { path, symlink: true };
-    else if (entry.isDirectory()) yield* walkRepo(path);
+    else if (entry.isDirectory()) yield* walkTree(root, path);
     else yield { path, symlink: false };
   }
 }
@@ -253,6 +368,7 @@ const appTokenStep =
   buildSteps.find((s) => s.some((l) => l.includes('actions/create-github-app-token@'))) ?? [];
 const gateIf = blockScalar(gate, 'if');
 const LABEL = /github\.event\.label\.name == '([^']+)'/u.exec(gateIf)?.[1];
+const pinnedActionSha = () => /anthropics\/claude-code-action@([0-9a-f]{40})/u.exec(text)?.[1];
 
 // --- bat bien --------------------------------------------------------------------------------
 
@@ -373,17 +489,7 @@ test('action Claude: ghi bang token App, chi doc comment cua chu repo, khong mo 
 });
 
 test('claude_args khong noi/ghi de chinh sach phien: chi --max-turns va --append-system-prompt', () => {
-  // `--allowedTools`/`--mcp-config` cap them cong cu ghi (vd `mcp__github__*` dung server GitHub MCP
-  // voi token App — ghi thang, khong qua tep cuc bo); `--setting-sources` bo duoc nguon `user`, noi
-  // action ghi `settings` (tuc ca danh sach deny); `--permission-mode`/`--dangerously-*` doi che do.
-  const args = blockScalar(claudeStep, 'claude_args');
-  assert.match(args, /--max-turns \d+/u);
-  const flags = [
-    ...args.replace(/"[^"]*"|'[^']*'/gu, '""').matchAll(/(?:^|\s)(-{1,2}[A-Za-z][\w-]*)/gu),
-  ]
-    .map((m) => m[1])
-    .sort();
-  assert.deepEqual(flags, ['--append-system-prompt', '--max-turns'], `co la trong claude_args`);
+  assert.deepEqual(argsViolations(blockScalar(claudeStep, 'claude_args')), []);
 });
 
 test('phien Claude: chan doc ngoai workspace, cam Bash/Web; luat duong dan chi Edit/Read; khong defaultMode/allow', () => {
@@ -409,73 +515,25 @@ test('phien Claude: chan doc ngoai workspace, cam Bash/Web; luat duong dan chi E
 });
 
 test('MCP xoa tep bi CAM (luat Edit khong rang buoc no); commit_files van dung duoc; kiem ke theo ban ghim', () => {
-  const pinned = /anthropics\/claude-code-action@([0-9a-f]{40})/u.exec(text)?.[1];
-  assert.equal(
-    pinned,
-    PINNED_ACTION_WRITE_TOOLS.sha,
-    'doi ban action => doc lai cong cu MCP ghi cua ban moi va sua PINNED_ACTION_WRITE_TOOLS',
-  );
   assert.equal(valueOf(claudeStep, 'use_commit_signing'), 'true', 'commit qua API, khong co Bash');
-  const deny = sessionPermissions().deny ?? [];
-  for (const tool of PINNED_ACTION_WRITE_TOOLS.mustDeny) {
-    assert.ok(deny.includes(tool), `deny thieu ${tool} — no xoa duoc BAT KY tep nao trong repo`);
-  }
-  for (const tool of PINNED_ACTION_WRITE_TOOLS.pathBound) {
-    const server = tool.split('__').slice(0, 2).join('__');
-    for (const blocker of [tool, server, `${server}__*`]) {
-      assert.ok(!deny.includes(blocker), `${blocker} chan mat ${tool} — agent khong commit duoc`);
-    }
-  }
+  assert.deepEqual(mcpViolations(sessionPermissions().deny ?? [], pinnedActionSha()), []);
 });
 
 test('mat phang dieu khien: MOI duong dan bat buoc — ca tep moi, tep o cap long — bi mot luat Edit(...) phu', () => {
-  const rules = editRules();
-  for (const path of CONTROL_PLANE) {
-    assert.ok(coveredBy(rules, path), `khong luat Edit(...) nao phu ${path}`);
-  }
+  assert.deepEqual(controlPlaneViolations(sessionPermissions().deny ?? []), []);
 });
 
 test('moi luat co dang ma Claude Code THUC SU xet: Edit(...) dang tai lieu viet ro, mcp__ khong ngoac', () => {
-  for (const { rule, covers } of editRules()) {
-    assert.ok(covers, `luat ${rule} khong thuoc dang co nghia ro — viet lai, dung de test doan`);
-  }
-  // Tai lieu: khi nap tep settings, Claude Code BO QUA moi luat `mcp__` co ngoac — luat do im lang vo
-  // hieu (muon loc theo tham so MCP phai dung --disallowedTools).
-  for (const rule of sessionPermissions().deny ?? []) {
-    assert.doesNotMatch(rule, /^mcp__.*\(/u, `luat ${rule} bi Claude Code bo qua khi nap settings`);
-  }
+  assert.deepEqual(shapeViolations(sessionPermissions().deny ?? []), []);
 });
 
 test('vung lam viec binh thuong (ma nguon, tai lieu) van sua duoc — rao khong nuot ca repo', () => {
-  const rules = editRules();
-  for (const path of EDITABLE) {
-    const hit = coveredBy(rules, path);
-    assert.equal(hit, undefined, `${hit?.rule} chan ca ${path}`);
-  }
+  assert.deepEqual(editableViolations(sessionPermissions().deny ?? []), []);
 });
 
 test('tren MOI tep dang co: bi rao <=> thuoc mat phang dieu khien (ke ca AGENTS.md, CLAUDE.md); khong symlink', () => {
-  const rules = editRules();
-  const entries = [...walkRepo()];
-  assert.ok(
-    entries.some(({ path }) => path === 'AGENTS.md'),
-    'khong thay AGENTS.md o goc — bo quet hong',
-  );
-  const wrong = entries
-    .filter(({ symlink }) => !symlink)
-    .map(({ path }) => ({ path, hit: coveredBy(rules, path)?.rule, want: isControlPlane(path) }))
-    .filter(({ hit, want }) => Boolean(hit) !== want)
-    .map(({ path, hit, want }) =>
-      want ? `${path}: KHONG bi rao` : `${path}: bi ${hit} chan nham`,
-    );
-  assert.deepEqual(wrong.slice(0, 10), [], `${wrong.length} tep lech dac ta`);
-  // Tien de cua `commit_files`: no doc noi dung theo DICH cua symlink nhung ghi vao duong dan cua LINK
-  // — mot symlink trong vung bi rao tro ra vung sua duoc se la duong vuot rao.
-  assert.deepEqual(
-    entries.filter(({ symlink }) => symlink).map(({ path }) => path),
-    [],
-    'symlink trong cay lam viec',
-  );
+  const violations = treeViolations(sessionPermissions().deny ?? [], [...walkTree(REPO_ROOT)]);
+  assert.deepEqual(violations.slice(0, 10), [], `${violations.length} vi pham`);
 });
 
 test('khong buoc nao SAU agent chay ma tu workspace (workspace luc do la cay agent vua sua)', () => {
@@ -534,4 +592,89 @@ test('runner GitHub-hosted dung mot lan, co timeout; concurrency theo Issue va k
     build.join('\n').includes('group: claude-builder-issue-${{ github.event.issue.number }}'),
   );
   assert.equal(valueOf(build, 'cancel-in-progress'), 'false');
+});
+
+// --- doi chung am CHAY MOI LAN ------------------------------------------------------------------
+
+function expectFlagged(violations, needle, why) {
+  assert.ok(
+    violations.some((v) => v.includes(needle)),
+    `${why}: bo kiem khong bao "${needle}" — nhan ${JSON.stringify(violations)}`,
+  );
+}
+
+function without(deny, rule) {
+  assert.ok(deny.includes(rule), `chinh sach that thieu ${rule}`);
+  return deny.filter((r) => r !== rule);
+}
+
+test('doi chung am: go TUNG guard khoi chinh sach THAT (theo nghia) -> bo kiem bao DUNG loi', () => {
+  const deny = sessionPermissions().deny ?? [];
+  const sha = pinnedActionSha();
+
+  const [del] = PINNED_ACTION_WRITE_TOOLS.mustDeny;
+  expectFlagged(mcpViolations(without(deny, del), sha), `deny thieu ${del}`, 'go deny xoa tep');
+  expectFlagged(
+    shapeViolations(deny.map((r) => (r === del ? `${del}(paths:*)` : r))),
+    'bi bo qua',
+    'deny xoa tep viet co ngoac',
+  );
+  expectFlagged(
+    mcpViolations([...deny, 'mcp__github_file_ops'], sha),
+    'chan mat mcp__github_file_ops__commit_files',
+    'deny ca server file_ops',
+  );
+  expectFlagged(mcpViolations(deny, 'f'.repeat(40)), 'chua duoc kiem ke', 'doi ban action');
+
+  for (const path of REQUIRED_PROTECTED) {
+    const stripped = withoutCoverageOf(deny, path);
+    assert.ok(stripped.length < deny.length, `chinh sach that khong co luat nao phu ${path}`);
+    expectFlagged(controlPlaneViolations(stripped), `${path}: KHONG bi rao`, `go rao ${path}`);
+  }
+
+  expectFlagged(
+    editableViolations([...deny, 'Edit(src)']),
+    'apps/api/src/main.ts: bi ',
+    'luat ten tran qua rong',
+  );
+  expectFlagged(
+    shapeViolations([...deny, 'Edit(/tools/autopilot-v3/**)']),
+    'khong co nghia ro',
+    'tien to / (neo o ~/.claude)',
+  );
+  const args = blockScalar(claudeStep, 'claude_args');
+  expectFlagged(
+    argsViolations(`${args}\n--setting-sources project`),
+    '--setting-sources',
+    'co bo nguon user',
+  );
+});
+
+test('doi chung am cho bai quet cay: tep chi dan TON TAI ma khong rao, ma ung dung bi rao nham, symlink, cay rong', (t) => {
+  const deny = sessionPermissions().deny ?? [];
+  const root = mkdtempSync(join(tmpdir(), 'autopilot-v3-tree-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const put = (rel) => {
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    writeFileSync(join(root, rel), 'x');
+  };
+  put('AGENTS.md');
+  put('nested/CLAUDE.md');
+  put('apps/api/src/deploy/x.ts');
+  put('docs/y.md');
+  // Windows: junction (khong can quyen quan tri); POSIX bo qua kieu va tao symlink thuong.
+  symlinkSync(join(root, 'docs'), join(root, 'link'), 'junction');
+  const entries = [...walkTree(root)];
+
+  const found = treeViolations(deny, entries);
+  expectFlagged(found, 'apps/api/src/deploy/x.ts: bi ', 'deny mot doan chan ma ung dung');
+  expectFlagged(found, 'link: symlink', 'symlink');
+  assert.equal(found.length, 2, `vi pham la: ${JSON.stringify(found)}`);
+
+  expectFlagged(
+    treeViolations(withoutCoverageOf(deny, 'nested/CLAUDE.md'), entries),
+    'nested/CLAUDE.md: KHONG bi rao',
+    'CLAUDE.md ton tai ma khong rao',
+  );
+  assert.deepEqual(treeViolations(deny, []), ['khong thay AGENTS.md o goc — bo quet hong']);
 });
