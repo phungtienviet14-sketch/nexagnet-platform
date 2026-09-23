@@ -282,7 +282,7 @@ const fieldWork = (runs: readonly DriverFieldRun[]): DriverFieldWork => ({
   runs,
 });
 
-/** Mac dinh: khach co DU ba man (Hien truong, Nhan viec, Nhien lieu) — dung goi `transport-preview`. */
+/** Mac dinh: khach co DU hai man (Hien truong, Nhan viec) — dung goi `transport-preview`. */
 const home = (over: Partial<DriverHomeInput> = {}): DriverHomeModel =>
   toDriverHome({
     runWork: ready(fieldWork([])),
@@ -290,7 +290,6 @@ const home = (over: Partial<DriverHomeInput> = {}): DriverHomeModel =>
     fund: null,
     canOpenField: true,
     canIntakeAtSite: true,
-    canRecordFuel: true,
     ...over,
   });
 
@@ -389,7 +388,6 @@ describe('trang chu lai xe — viec DUOC DIEU di truoc (#340)', () => {
     });
     expect(model.legacyTrip).toBeNull();
     expect(model.assignedNote).toBeNull();
-    expect(model.fuelNotice).toBeNull();
     expect(model.openWorkCount).toBe(0);
   });
 
@@ -406,12 +404,17 @@ describe('trang chu lai xe — viec DUOC DIEU di truoc (#340)', () => {
     expect('actions' in model.primary).toBe(false);
   });
 
+  it('doc chuyen cu hong khi viec duoc dieu dang hien: noi ra o loi phu, khong giau di', () => {
+    const model = home({ runWork: assignedRun, trips: failed('Máy chủ đang bận') });
+    expect(model.primary.kind).toBe('RUN_CURRENT');
+    expect(model.legacyNotice).toBe('Chưa đọc được chuyến theo cách làm trước đây.');
+  });
+
   it('doc viec duoc dieu HONG: khong bao gio doc thanh "khong co viec", ke ca khi Trip rong', () => {
     const model = home({ runWork: failed('Mất kết nối tạm thời'), trips: ready([]) });
 
     expect(model.primary).toEqual({ kind: 'FAILED', message: 'Mất kết nối tạm thời' });
     expect(model.siteIntakeHint).toBeNull();
-    expect(model.fuelNotice).toBeNull();
     expect(model.openWorkCount).toBeNull();
   });
 
@@ -501,37 +504,21 @@ describe('trang chu lai xe — hai duong nhan viec khong lan vao nhau (#340)', (
 });
 
 /**
- * NHIEN LIEU VAN GHI THEO CHUYEN (Trip) — `#340` yeu cau 8.
+ * NHIEN LIEU — `#340` yeu cau 8, doc lai sau `#364`.
  *
- * Man Nhien lieu lay ma xe tu chuyen dang mo (`currentDriverTrip`). Viec chi co vong chay thi man
- * do KHONG ghi phieu duoc, va trang chu phai noi ra thay vi de lai xe tu phat hien — khong bia mot
- * chuyen gia de lap cho trong.
+ * Truoc `#364` man Nhien lieu lay xe tu chuyen dang mo, nen trang chu canh bao "phieu van ghi theo
+ * chuyen" khi viec chi co vong chay. Tu `#364` o khai phieu doc CHINH viec duoc dieu
+ * (`/transport/me/fuel/runs`): cau do nay la SAI, nen trang chu khong noi gi ve nhien lieu — va
+ * cung khong bia mot chuyen nao.
  */
-describe('trang chu lai xe — nhien lieu chua hoi tu voi vong chay (#340)', () => {
-  it('viec chi co vong chay, khong co chuyen cu dang mo: noi ro nhien lieu van ghi theo chuyen', () => {
-    const notice = home({ runWork: assignedRun, trips: ready([]) }).fuelNotice;
-    expect(notice).toContain('Phiếu nhiên liệu vẫn ghi theo chuyến ở màn Chuyến');
-    expect(notice).toContain('báo điều hành');
-  });
+describe('trang chu lai xe — nhien lieu da khai theo viec duoc dieu (#340 sau #364)', () => {
+  it('viec chi co vong chay, khong co chuyen cu: KHONG con bao "phieu van ghi theo chuyen"', () => {
+    const model = home({ runWork: assignedRun, trips: ready([]) });
 
-  it('co chuyen cu dang mo thi phieu nhien lieu con cho ghi — khong canh bao thua', () => {
-    const model = home({ runWork: assignedRun, trips: ready([driverTrip({ status: 'PLANNED' })]) });
-    expect(model.fuelNotice).toBeNull();
-  });
-
-  it('khach khong bat Nhien lieu thi khong noi gi ve nhien lieu', () => {
-    expect(home({ runWork: assignedRun, canRecordFuel: false }).fuelNotice).toBeNull();
-  });
-
-  it('chua doc xong (hoac doc hong) chuyen cu thi KHONG ket luan "khong co chuyen"', () => {
-    expect(home({ runWork: assignedRun, trips: loading() }).fuelNotice).toBeNull();
-    expect(home({ runWork: assignedRun, trips: failed('x') }).fuelNotice).toBeNull();
-  });
-
-  it('doc chuyen cu hong khi viec duoc dieu dang hien: noi ra o loi phu, khong giau di', () => {
-    const model = home({ runWork: assignedRun, trips: failed('Máy chủ đang bận') });
     expect(model.primary.kind).toBe('RUN_CURRENT');
-    expect(model.legacyNotice).toBe('Chưa đọc được chuyến theo cách làm trước đây.');
+    expect(model.legacyTrip).toBeNull();
+    expect(model).not.toHaveProperty('fuelNotice');
+    expect(JSON.stringify(model)).not.toContain('nhiên liệu');
   });
 });
 
@@ -555,7 +542,6 @@ describe('trang chu lai xe — khach chua co Hien truong (hop dong cu)', () => {
     expect(model.primary.actions).toEqual([{ to: 'DELIVERED', label: 'Đã giao' }]);
     expect(model.primary.headline).toContain('Hà Nội → Thái Nguyên');
     expect(model.legacyTrip).toBeNull();
-    expect(model.fuelNotice).toBeNull();
   });
 
   it('khong co chuyen thi noi thang la chua duoc phan cong', () => {

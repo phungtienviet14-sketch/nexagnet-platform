@@ -74,7 +74,6 @@ export function DriverHome({
     fund: fund.data ?? null,
     canOpenField: open.has('field'),
     canIntakeAtSite: open.has('site-intake'),
-    canRecordFuel: open.has('fuel'),
   });
 
   return (
@@ -271,16 +270,7 @@ function RunFacts({ card }: { readonly card: DriverHomeRunCard }) {
 }
 
 function AssignedNotes({ model }: { readonly model: DriverHomeModel }) {
-  return (
-    <>
-      {model.assignedNote === null ? null : <p className="tx-note">{model.assignedNote}</p>}
-      {model.fuelNotice === null ? null : (
-        <p className="tx-note tx-note--warn" data-testid="home-fuel-notice">
-          {model.fuelNotice}
-        </p>
-      )}
-    </>
-  );
+  return model.assignedNote === null ? null : <p className="tx-note">{model.assignedNote}</p>;
 }
 
 /** Hop dong CU, nguyen van — chi con cho khach chua bat man Hien truong. */

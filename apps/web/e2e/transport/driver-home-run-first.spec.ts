@@ -193,10 +193,14 @@ test.describe('trang chu lai xe Run-first — #340', () => {
     await expect(card).toContainText('không cần vào Nhận việc để nhận lại');
     await expect(page.getByRole('region', { name: 'Nhận việc tại điểm' })).toHaveCount(0);
 
-    /* --- 4. NHIEN LIEU VAN THEO CHUYEN: noi ro, khong bia chuyen --- */
-    await expect(page.getByTestId('home-fuel-notice')).toContainText(
-      'Phiếu nhiên liệu vẫn ghi theo chuyến ở màn Chuyến',
-    );
+    /*
+     * --- 4. NHIEN LIEU: tu `#364` phieu khai theo CHINH viec duoc dieu, nen trang chu KHONG con bao
+     * "phieu van ghi theo chuyen, chua ghi duoc" — cau do se day lai xe di bao dieu hanh cho mot
+     * phieu ho tu ghi duoc o man Nhien lieu. Va van khong bia mot chuyen nao.
+     */
+    await expect(main).not.toContainText('vẫn ghi theo chuyến');
+    await expect(main).not.toContainText('chưa ghi được phiếu');
+    await expect(page.getByRole('region', { name: LEGACY_HEADING })).toHaveCount(0);
 
     /* --- 5. NUT CHINH dung duoc o 390px, trang khong cuon ngang --- */
     const cta = page.getByRole('button', { name: 'Mở Hiện trường' });
@@ -254,8 +258,6 @@ test.describe('trang chu lai xe Run-first — #340', () => {
     // Nut doi trang thai Trip KHONG len trang chu khi vong chay la viec chinh.
     await expect(page.getByRole('button', { name: 'Đã giao' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Bắt đầu chuyến' })).toHaveCount(0);
-    // Co chuyen dang mo thi phieu nhien lieu van ghi duoc — khong canh bao thua.
-    await expect(page.getByTestId('home-fuel-notice')).toHaveCount(0);
     await page.screenshot({
       path: 'e2e-evidence/driver-home-run-and-legacy-390px.png',
       fullPage: true,

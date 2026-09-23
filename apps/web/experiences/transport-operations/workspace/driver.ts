@@ -364,8 +364,11 @@ export interface DriverHomeModel {
   readonly assignedNote: string | null;
   /** Loi vao Nhan viec tai diem — CHI khi van phong chua dieu viec nao (`#340` yeu cau 5). */
   readonly siteIntakeHint: string | null;
-  /** Nhien lieu van ghi theo chuyen: noi ro khi viec hien tai chi co vong chay (`#340` yeu cau 8). */
-  readonly fuelNotice: string | null;
+  /*
+   * KHONG co canh bao nhien lieu (`#340` yeu cau 8): tu `#364` o khai phieu cua lai xe doc CHINH
+   * viec duoc dieu (`/transport/me/fuel/runs`). Cau cu "phieu van ghi theo chuyen, chua ghi duoc"
+   * nay la SAI — no day lai xe di bao dieu hanh cho mot phieu ho tu ghi duoc o man Nhien lieu.
+   */
   /** `null` khi khach chua bat `transport-costing` — khong bia so 0. */
   readonly fund: FundBalanceModel | null;
   /** So chuyen dang mo theo DUNG nguon dang quyet dinh; `null` khi chua doc duoc — khong bia 0. */
@@ -381,7 +384,6 @@ export interface DriverHomeInput {
   /** Man Hien truong co mo cho nguoi nay khong — trang chu chi chi vao mot man co that. */
   readonly canOpenField: boolean;
   readonly canIntakeAtSite: boolean;
-  readonly canRecordFuel: boolean;
 }
 
 const OPEN_STATUSES = new Set(['PLANNED', 'IN_TRANSIT']);
@@ -391,22 +393,18 @@ const TRIP_HEADING = 'Chuyến hiện tại';
 const ASSIGNED_NOTE = 'Văn phòng đã giao việc này cho bạn — không cần vào Nhận việc để nhận lại.';
 const SITE_INTAKE_HINT =
   'Nếu bạn đang ở điểm lấy hàng mà văn phòng chưa giao việc, dùng Nhận việc để báo đã đến.';
-const FUEL_NOTICE =
-  'Phiếu nhiên liệu vẫn ghi theo chuyến ở màn Chuyến, chưa theo việc này — và bạn chưa có chuyến ' +
-  'nào đang mở ở đó, nên chưa ghi được phiếu. Cần đổ nhiên liệu thì báo điều hành.';
 const LEGACY_READ_FAILED = 'Chưa đọc được chuyến theo cách làm trước đây.';
 
 /** Phan cua mo hinh do VIEC DUOC DIEU quyet dinh — tach khoi phan chung (loi phu, quy). */
 type RunPart = Pick<
   DriverHomeModel,
-  'primary' | 'assignedNote' | 'siteIntakeHint' | 'fuelNotice' | 'openWorkCount'
+  'primary' | 'assignedNote' | 'siteIntakeHint' | 'openWorkCount'
 >;
 
-/** Chua doc xong / doc hong: KHONG ket luan gi — ke ca "khong co viec" hay "khong co chuyen". */
+/** Chua doc xong / doc hong: KHONG ket luan gi — ke ca "khong co viec". */
 const NOTHING_KNOWN = {
   assignedNote: null,
   siteIntakeHint: null,
-  fuelNotice: null,
   openWorkCount: null,
 } as const;
 
@@ -429,7 +427,6 @@ export const toDriverHome = (input: DriverHomeInput): DriverHomeModel => {
       legacyNotice: null,
       assignedNote: null,
       siteIntakeHint: null,
-      fuelNotice: null,
       fund,
       ...tripPart(trips),
     };
@@ -441,14 +438,12 @@ export const toDriverHome = (input: DriverHomeInput): DriverHomeModel => {
     legacyTrip: legacy === null ? null : toDriverTripCard(legacy),
     legacyNotice: trips.status === 'FAILED' ? LEGACY_READ_FAILED : null,
     fund,
-    // "Khong co chuyen dang mo" chi ket luan duoc tu mot lan doc TOT — chua doc xong thi `null`.
-    ...runPart(run, trips.status === 'READY' ? legacy !== null : null, input),
+    ...runPart(run, input),
   };
 };
 
 const runPart = (
   run: Exclude<ReadOutcome<DriverFieldWork>, { readonly status: 'BLOCKED' }>,
-  hasOpenTrip: boolean | null,
   input: DriverHomeInput,
 ): RunPart => {
   if (run.status === 'LOADING') {
@@ -472,7 +467,6 @@ const runPart = (
       },
       assignedNote: null,
       siteIntakeHint: input.canIntakeAtSite ? SITE_INTAKE_HINT : null,
-      fuelNotice: null,
       openWorkCount: 0,
     };
   }
@@ -486,7 +480,6 @@ const runPart = (
         : runCurrent(field.current, field.headline),
     assignedNote: input.canIntakeAtSite ? ASSIGNED_NOTE : null,
     siteIntakeHint: null,
-    fuelNotice: input.canRecordFuel && hasOpenTrip === false ? FUEL_NOTICE : null,
     openWorkCount: runs.size,
   };
 };
