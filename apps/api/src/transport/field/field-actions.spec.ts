@@ -4,6 +4,7 @@ import {
   evaluateCheckpoint,
 } from '../checkpoint/checkpoint-lifecycle.js';
 import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
+import { evaluateWaitingStart } from '../waiting/waiting-lifecycle.js';
 import { fieldActionsFor } from './field-actions.js';
 
 /**
@@ -17,6 +18,7 @@ import { fieldActionsFor } from './field-actions.js';
 
 const input = (over: Partial<Parameters<typeof fieldActionsFor>[0]> = {}) => ({
   legKind: 'LOADED' as const,
+  legStatus: 'IN_TRANSIT' as const,
   recordedTypes: [],
   documentTypes: [],
   requiredDocumentTypes: ['DELIVERY_RECEIPT' as const],
@@ -278,9 +280,10 @@ describe('Chang chay rong khong moi viec hang hoa — #332', () => {
 
   /**
    * HAI BAN LUAT KHONG DUOC LECH: moi nut `CHECKPOINT` ma man hinh hien phai la mot lan bam ma
-   * `evaluateCheckpoint` — chinh ham `CheckpointService` dung — se cho qua, tren CA hai loai chang.
+   * `evaluateCheckpoint` — chinh ham `CheckpointService` dung — se cho qua, tren CA hai loai chang
+   * va CA bon trang thai chang (`#354`).
    */
-  it('moi nut moc duoc hien deu la mot lan bam may chu chap nhan, tren ca hai loai chang', () => {
+  it('moi nut moc duoc hien deu la mot lan bam may chu chap nhan, tren moi loai va trang thai chang', () => {
     const histories: readonly (readonly RunCheckpointType[])[] = [
       [],
       ['PICKUP_ARRIVAL'],
@@ -289,22 +292,125 @@ describe('Chang chay rong khong moi viec hang hoa — #332', () => {
       ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE', 'DELIVERY_ARRIVAL'],
     ];
     for (const legKind of ['EMPTY', 'LOADED'] as const) {
+      for (const legStatus of ['PLANNED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED'] as const) {
+        for (const recordedTypes of histories) {
+          const offered = fieldActionsFor(input({ legKind, legStatus, recordedTypes })).filter(
+            (action) => action.kind === 'CHECKPOINT',
+          );
+          for (const action of offered) {
+            const decision = evaluateCheckpoint({
+              type: action.checkpointType!,
+              runTerminal: false,
+              hasLeg: true,
+              legKind,
+              legStatus,
+              recordedTypes,
+              hasObservation: action.requiresLocation,
+              policy: DEFAULT_CHECKPOINT_POLICY,
+            });
+            expect({
+              legKind,
+              legStatus,
+              recordedTypes,
+              type: action.checkpointType,
+              decision,
+            }).toMatchObject({ decision: { allowed: true } });
+          }
+        }
+      }
+    }
+  });
+});
+
+/**
+ * CHANG DA KET THUC — `#354`.
+ *
+ * `toFieldScreen` (web) chon "chang dang lam" = chang DAU TIEN con nut. Truoc `#354`, mot chang CO
+ * HANG da `COMPLETED` (vd van phong ghi de khi chua co `DELIVERY_ACCEPTED`) hay da `CANCELLED` van
+ * con nut moc — nen no thanh "chang dang lam", va nut dau tien ghi moc len mot chang da dong.
+ */
+describe('Chang da ket thuc khong moi mot moc nao — #354', () => {
+  const partial = ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE', 'DELIVERY_ARRIVAL'] as const;
+
+  it('chang CO HANG da COMPLETED, hien truong chua giao xong: KHONG nut moc nao', () => {
+    const actions = fieldActionsFor(input({ legStatus: 'COMPLETED', recordedTypes: partial }));
+    expect(actions.filter((action) => action.kind === 'CHECKPOINT')).toEqual([]);
+    // Doi chung: CUNG lich su tren chang con chay thi co nut `Khach da nhan hang`.
+    expect(labels({ legStatus: 'IN_TRANSIT', recordedTypes: partial })).toContain(
+      'Khách đã nhận hàng',
+    );
+  });
+
+  it('chang da HUY khi chua chay: KHONG nut moc nao', () => {
+    const actions = fieldActionsFor(input({ legStatus: 'CANCELLED' }));
+    expect(actions.filter((action) => action.kind === 'CHECKPOINT')).toEqual([]);
+    expect(labels({ legStatus: 'PLANNED' })).toEqual(['Đã tới điểm lấy hàng']);
+  });
+
+  /*
+   * PHAM VI `#354` LA MOC. Chung tu va ban giao bien nhan di qua capability khac, voi luat rieng —
+   * to bien nhan cua mot chang da giao van can chup va ban giao sau khi chang dong.
+   */
+  it('chung tu va ban giao bien nhan cua chang da giao xong KHONG bi dong theo', () => {
+    const delivered = [...partial, 'DELIVERY_ACCEPTED'] as const;
+    expect(labels({ legStatus: 'COMPLETED', recordedTypes: delivered })).toEqual(
+      expect.arrayContaining(['Chụp biên nhận giao hàng', 'Tôi đang giữ biên nhận']),
+    );
+  });
+});
+
+/**
+ * NUT `Bat dau cho` TREN CHANG DA KET THUC — `#358`.
+ *
+ * `#354` go moi nut MOC khoi chang `COMPLETED`/`CANCELLED`, nhung `WAITING_START` khong di qua cong
+ * do: chang CO HANG da `Da den noi`, bi van phong hoan tat bang ghi de `#350`, van chao `Bat dau cho`
+ * — va lan bam do mo mot phien giu vong chay mai o `OPEN_WAITING_SESSION`.
+ */
+describe('Chang da ket thuc khong moi `Bat dau cho` — #358', () => {
+  const arrived = ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE', 'DELIVERY_ARRIVAL'] as const;
+  const waitingButtons = (over: Partial<Parameters<typeof fieldActionsFor>[0]>) =>
+    fieldActionsFor(input(over)).filter((action) => action.kind === 'WAITING_START');
+
+  it('chang da COMPLETED hay CANCELLED sau `Da den noi`: khong co nut `Bat dau cho`', () => {
+    for (const legStatus of ['COMPLETED', 'CANCELLED'] as const) {
+      expect({
+        legStatus,
+        buttons: waitingButtons({ legStatus, recordedTypes: [...arrived] }),
+      }).toEqual({ legStatus, buttons: [] });
+    }
+    // Doi chung: CUNG lich su tren chang chua ket thuc thi nut van o do.
+    for (const legStatus of ['PLANNED', 'IN_TRANSIT'] as const) {
+      expect(waitingButtons({ legStatus, recordedTypes: [...arrived] })).toHaveLength(1);
+    }
+  });
+
+  /**
+   * HAI BAN LUAT KHONG DUOC LECH — theo CA HAI chieu: nut `Bat dau cho` hien KHI VA CHI KHI
+   * `evaluateWaitingStart` (chinh ham `WaitingSessionService` dung de tu choi) cho mo, tren moi trang
+   * thai chang, moi lich su moc va ca khi da co mot phien dang mo.
+   */
+  it('nut `Bat dau cho` hien khi va chi khi may chu se cho mo phien, tren moi trang thai chang', () => {
+    const histories: readonly (readonly RunCheckpointType[])[] = [
+      [],
+      ['PICKUP_ARRIVAL', 'PICKUP_DEPARTURE'],
+      [...arrived],
+      [...arrived, 'DELIVERY_ACCEPTED'],
+    ];
+    for (const legStatus of ['PLANNED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED'] as const) {
       for (const recordedTypes of histories) {
-        const offered = fieldActionsFor(input({ legKind, recordedTypes })).filter(
-          (action) => action.kind === 'CHECKPOINT',
-        );
-        for (const action of offered) {
-          const decision = evaluateCheckpoint({
-            type: action.checkpointType!,
+        for (const hasOpenWaiting of [false, true]) {
+          const offered = waitingButtons({ legStatus, recordedTypes, hasOpenWaiting }).length > 0;
+          const decision = evaluateWaitingStart({
             runTerminal: false,
-            hasLeg: true,
-            legKind,
-            recordedTypes,
-            hasObservation: action.requiresLocation,
-            policy: DEFAULT_CHECKPOINT_POLICY,
+            legStatus,
+            legCheckpointTypes: recordedTypes,
+            hasOpenSession: hasOpenWaiting,
           });
-          expect({ legKind, recordedTypes, type: action.checkpointType, decision }).toMatchObject({
-            decision: { allowed: true },
+          expect({ legStatus, recordedTypes, hasOpenWaiting, offered }).toEqual({
+            legStatus,
+            recordedTypes,
+            hasOpenWaiting,
+            offered: decision.allowed,
           });
         }
       }

@@ -309,6 +309,48 @@ describe('#317 G4 — chenh lech xung dot so hoa don', () => {
   });
 });
 
+/**
+ * `#371` — ban sao cua luat may chu, KHONG phai ranh gioi: may chu tu choi ca khop tay vao phieu tien
+ * mat lan "chap nhan so cay xang" tren dong nay (403). Man hinh chi khong mo nut cho mot lenh chac
+ * chan bi tu choi.
+ */
+describe('#371 — dong ung voi phieu lai xe da tra tien mat', () => {
+  it('khong mo xac nhan khop, khong mo chap nhan so cay xang', () => {
+    const resolutions = discrepancyResolutionOptions('PAYMENT_METHOD_CONFLICT').map(
+      (option) => option.resolution,
+    );
+    expect(resolutions).toEqual([
+      'REJECT_SUPPLIER_LINE',
+      'ENTRY_CORRECTION_REQUIRED',
+      'IGNORE_WITH_REASON',
+    ]);
+  });
+
+  it('doi y sau khi mo lai ky cung khong mo duong chap nhan so cay xang', () => {
+    const [row] = toReconciliationWorkspace(
+      workspace({
+        reconciliation: reconciliation({ state: 'REOPENED' }),
+        discrepancies: [
+          discrepancy({
+            kind: 'PAYMENT_METHOD_CONFLICT',
+            fuelEntryId: null,
+            candidateEntryIds: ['fu-tien-mat'],
+            status: 'RESOLVED',
+            resolution: 'IGNORE_WITH_REASON',
+          }),
+        ],
+        pendingDiscrepancyCount: 0,
+      }),
+      'ADMIN',
+    ).discrepancyRows;
+    expect(row?.kindLabel).toBe('Lái xe đã trả tiền mặt — không phải công nợ');
+    expect(row?.reviseOptions.map((option) => option.resolution)).toEqual([
+      'REJECT_SUPPLIER_LINE',
+      'ENTRY_CORRECTION_REQUIRED',
+    ]);
+  });
+});
+
 /* ================================================================== *
  * HOP THU PHIEU NHIEN LIEU — #222 P1-B
  * ================================================================== */
@@ -317,6 +359,10 @@ const inboxRow = (overrides: Partial<FuelEntryInboxRow> = {}): FuelEntryInboxRow
   id: 'phieu-1',
   tripId: 'chuyen-1',
   tripCode: 'UAT-VIET-01',
+  runId: null,
+  runCode: null,
+  legId: null,
+  legSequence: null,
   driverId: 'lai-xe-1',
   driverName: 'Nguyễn Văn Bình',
   vehicleId: 'xe-1',
@@ -362,7 +408,8 @@ describe('#222 P1-B — hop thu bay du thu ke toan can de quyet', () => {
     const model = toFuelInboxModel(inboxPage([inboxRow()]), 'ACCOUNTING');
     const row = model.rows[0]!;
 
-    expect(row.tripCode).toBe('UAT-VIET-01');
+    // Phieu chuyen v1 giu NGUYEN ma chuyen lam nhan ngu canh (`#364`).
+    expect(row.contextLabel).toBe('UAT-VIET-01');
     expect(row.driverLabel).toBe('Nguyễn Văn Bình');
     expect(row.vehicleLabel).toBe('15C-556.33');
     expect(row.supplierLabel).toBe('Cây xăng Petrolimex 12');

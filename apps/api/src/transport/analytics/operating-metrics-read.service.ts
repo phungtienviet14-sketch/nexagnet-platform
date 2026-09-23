@@ -1,6 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { AnalyticsCostFacts, AnalyticsMovementFacts } from './analytics.ports.js';
-import { foldRunMargin, type LegCostFact, type RunMargin } from './operating-metrics.js';
+import { Injectable, Optional } from '@nestjs/common';
+import {
+  AnalyticsCostFacts,
+  AnalyticsFuelAttributionFacts,
+  AnalyticsMovementFacts,
+} from './analytics.ports.js';
+import {
+  foldRunMargin,
+  type AttributedCostFact,
+  type LegCostFact,
+  type RunMargin,
+} from './operating-metrics.js';
 
 /**
  * BAO CAO CHI SO VAN HANH — CHI DOC, va khong mot ham nao o day ghi gi.
@@ -26,6 +35,14 @@ export class OperatingMetricsReadService {
   constructor(
     private readonly movement: AnalyticsMovementFacts,
     private readonly costs: AnalyticsCostFacts,
+    /**
+     * `#369` R-1 — NGUON THU HAI cua chi phi truc tiep: lop phan bo gia thanh nhien lieu Run-first.
+     *
+     * `@Optional()`: `transport-fuel` KHONG nam trong phu thuoc cua `transport-costing` (chieu nguoc
+     * lai moi dung). Khach tat nhien lieu thi token vang mat va bao cao cong bo `FUEL_COST_ATTRIBUTION`
+     * trong `unavailableSources` — con so no dua ra van la tong THAT cua nhung hang no doc duoc.
+     */
+    @Optional() private readonly fuelAttributions?: AnalyticsFuelAttributionFacts,
   ) {}
 
   /**
@@ -62,6 +79,25 @@ export class OperatingMetricsReadService {
     ];
     const orders = await this.movement.findOrders(orderIds);
 
-    return foldRunMargin(runId, legs, orders, expenseGroups.flat());
+    /*
+     * `#369` R-1 — NGUON THU HAI, doc bang MOT lan hoi theo vong chay.
+     *
+     * Hai nguon ROI NHAU theo cau truc (`#364` §3: mot phieu chi nam o mot so cai), nen cong thang
+     * la dung — khong mot phep tru nao o day, va khong mot phep loc "dong nay da vao TX-03 chua".
+     * Neu mot ngay nao do luat do doi, cho sua la o `#364`, khong phai o day.
+     */
+    const attributions = this.fuelAttributions
+      ? (await this.fuelAttributions.listForRun(runId)).map((row): AttributedCostFact => ({
+          attributionId: row.id,
+          runId: row.runId,
+          legId: row.legId,
+          signedAmount: row.signedAmount,
+        }))
+      : [];
+
+    return foldRunMargin(runId, legs, orders, expenseGroups.flat(), {
+      attributions,
+      unavailableSources: this.fuelAttributions ? [] : ['FUEL_COST_ATTRIBUTION'],
+    });
   }
 }

@@ -83,15 +83,32 @@ const fuelEntryFields = {
 const submitPaymentMethod = z.enum(FUEL_PAYMENT_METHODS).default(DEFAULT_FUEL_PAYMENT_METHOD);
 
 /**
- * BE MAT VAN HANH nop ho mot phieu — co `driverId`/`vehicleId` tuong minh.
+ * NGU CANH cua lenh nop — `#364`. BON truong, DEU tuy chon O DAY.
+ *
+ * Luat ghep chung (`tripId` HOAC `runId`; `legId` can `runId`; chuyen v1 can `vehicleId`; khong
+ * ngu canh thi FAIL CLOSED) nam o `FuelService.resolveContext()`, KHONG o schema: do la luat NGHIEP
+ * VU, va nguoi goi phai nhan mot ly do CO MA (`FUEL_ENTRY_CONTEXT_REQUIRED`, ...) chu khong phai mot
+ * `400` chung chung "sai dinh dang". Zod chi chan nhung thu khong the la mot id.
+ */
+const contextFields = {
+  /** Chuyen v1 — chi de TUONG THICH. */
+  tripId: z.string().trim().min(1).max(64).nullable().optional(),
+  /** Vong chay v2 — ngu canh van hanh; may chu kiem lai lai xe/xe/chang, khong tin client. */
+  runId: z.string().trim().min(1).max(64).nullable().optional(),
+  legId: z.string().trim().min(1).max(64).nullable().optional(),
+  /** Bat buoc voi `tripId`; voi `runId` thi bo trong duoc (xe cua vong chay), gui kem thi phai khop. */
+  vehicleId: z.string().trim().min(1).max(64).nullable().optional(),
+};
+
+/**
+ * BE MAT VAN HANH nop ho mot phieu — co `driverId` tuong minh.
  *
  * Be mat LAI XE thi KHONG (xem `driverFuelSubmitSchema`): danh tinh o do den tu phien, va mot
  * truong `driverId` trong than yeu cau se la duong de mot lai xe nop phieu duoi ten nguoi khac.
  */
 export const submitFuelEntrySchema = z
   .object({
-    tripId: nonEmpty,
-    vehicleId: nonEmpty,
+    ...contextFields,
     driverId: nonEmpty,
     ...fuelEntryFields,
     paymentMethod: submitPaymentMethod,
@@ -107,8 +124,7 @@ export const submitFuelEntrySchema = z
  */
 export const driverFuelSubmitSchema = z
   .object({
-    tripId: nonEmpty,
-    vehicleId: nonEmpty,
+    ...contextFields,
     ...fuelEntryFields,
     paymentMethod: submitPaymentMethod,
     correlationKey,
@@ -202,6 +218,8 @@ export const fuelEntryInboxQuerySchema = z.object({
     .default(null),
   /** MA CHUYEN doc duoc (`UAT-VIET-01`), khong phai `tripId`. Xem `resolveTripFilter`. */
   tripCode: optionalFilter,
+  /** `#364` — MA VONG CHAY doc duoc (`RUN-...`), cung quy uoc voi `tripCode`. */
+  runCode: optionalFilter,
   driverId: optionalFilter,
   vehicleId: optionalFilter,
   supplierId: optionalFilter,
@@ -256,6 +274,36 @@ export const reviseDiscrepancySchema = z
   .strict();
 
 export const reopenReconciliationSchema = z.object({ reason: nonEmpty.max(500) }).strict();
+
+/* ------------------------------------------------------------------ *
+ * PHAN BO GIA THANH phieu Run-first — `#364`
+ * ------------------------------------------------------------------ */
+
+/**
+ * CAP PHAT mot phan tien cua phieu vao MOT vong chay hoac MOT chang.
+ *
+ * `correlationKey` BAT BUOC o day, khac lenh nop phieu: phieu co the nop tay tu curl, con phan bo la
+ * mot quyet dinh TIEN do man hinh ke toan gui — va `#364` §3.1 doi "retry khong sinh dong thu hai".
+ * Mot khoa tuy chon la mot lan gui lai tu mot client quen gui khoa, va do la mot dong phan bo thu
+ * hai.
+ *
+ * Dich `LEG` KHONG mang `runId`: may chu doi chang -> vong chay cua CHINH no. Mot `runId` gui kem se
+ * la mot cho de hai su that mau thuan nhau.
+ */
+export const recordFuelCostAttributionSchema = z
+  .object({
+    target: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('RUN'), runId: nonEmpty.max(64) }).strict(),
+      z.object({ kind: z.literal('LEG'), legId: nonEmpty.max(64) }).strict(),
+    ]),
+    amount: vndAmount,
+    note: optionalText,
+    correlationKey: z.string().trim().min(8).max(120),
+  })
+  .strict();
+
+/** DAO mot cap phat — ly do BAT BUOC, di vao dong dao va dau vet kiem toan. */
+export const reverseFuelCostAttributionSchema = z.object({ reason: nonEmpty.max(500) }).strict();
 
 export const createFuelSupplierSchema = z
   .object({

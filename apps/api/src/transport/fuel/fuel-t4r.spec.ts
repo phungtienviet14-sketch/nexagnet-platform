@@ -14,12 +14,15 @@ import {
   FuelCostingPort,
   TransportFuelCoreFacts,
   type FuelCostPostingCommand,
+  type FuelDriverCashPostingCommand,
   type FuelDriverFacts,
   type FuelTripFacts,
   type FuelVehicleFacts,
 } from './fuel.ports.js';
 import { FuelService, type SubmitFuelEntryCommand } from './fuel.service.js';
+import { MovementFuelRunContextAdapter } from './fuel-run-context.port.js';
 import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
+import { InMemoryMovementRepository } from '../movement/movement.repository.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
 
 /**
@@ -92,6 +95,10 @@ class SilentCostingPort extends FuelCostingPort {
   async postFuelCost(command: FuelCostPostingCommand): Promise<string> {
     return `expense-of-${command.correlationKey}`;
   }
+
+  async postRunFirstDriverCash(command: FuelDriverCashPostingCommand): Promise<string> {
+    return `fund-of-${command.correlationKey}`;
+  }
 }
 
 const CORE_POLICY: TransportCorePolicy = { timeZone: 'Asia/Ho_Chi_Minh' };
@@ -113,6 +120,7 @@ beforeEach(async () => {
     repository,
     new InMemoryFuelStationRepository(),
     new StubCoreFacts(),
+    new MovementFuelRunContextAdapter(new InMemoryMovementRepository()),
     new SilentCostingPort(),
     audit,
     CORE_POLICY,

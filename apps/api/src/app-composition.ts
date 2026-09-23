@@ -116,11 +116,13 @@ import {
 import { FuelEvidenceController } from './transport/evidence/fuel-evidence.controller.js';
 import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
 import { FuelConsumptionController } from './transport/fuel/fuel-consumption.controller.js';
+import { FuelCostAttributionController } from './transport/fuel/fuel-cost-attribution.controller.js';
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
 import { FuelDocumentController } from './transport/fuel/fuel-document.controller.js';
 import { FuelStationController } from './transport/fuel/fuel-station.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
+import { TransportFuelAnalyticsBridgeModule } from './transport/fuel/fuel-analytics-bridge.module.js';
 import { TollController } from './transport/toll/toll.controller.js';
 import { TransportTollModule } from './transport/toll/transport-toll.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
@@ -321,6 +323,14 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
   // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
   owned('transport-fuel', TransportFuelModule),
+  // CAU NOI phan bo gia thanh nhien lieu -> bien truc tiep cua vong chay (`#369` R-1). `@Global()`,
+  // va CHI xuat mot cong CHI DOC.
+  //
+  // Den cung `transport-fuel` va bien mat cung no: khach tat nhien lieu thi token khong ton tai,
+  // `OperatingMetricsReadService` nhan `undefined` qua `@Optional()`, va `runMargin` cong bo
+  // `FUEL_COST_ATTRIBUTION` trong `unavailableSources` — mot nguon vang mat DOC DUOC tren bao cao,
+  // thay vi mot so 0 khong ai giai thich duoc.
+  owned('transport-fuel', TransportFuelAnalyticsBridgeModule),
   // NAP DU LIEU ETC / PHI DUONG BO (Lane J, #269). Den cung `transport-toll` va bien mat cung no:
   // mot khach chua doi soat ETC khong duoc nap mot bang nao cua `TX-08` mo rong.
   owned('transport-toll', TransportTollModule),
@@ -491,6 +501,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // DRILL-DOWN TIEU HAO theo xe/ky (`#313`) — mot route GET chi doc, cung capability, KHONG mot ma
   // quyen moi (`transport.fuel.entry.read`).
   owned('transport-fuel', FuelConsumptionController),
+  // PHAN BO GIA THANH phieu Run-first (`#364`) — lop RIENG khoi su that "xe vua do dau". Cung
+  // capability; hai duong ghi mang ma rieng `transport.fuel.cost_attribution.record`.
+  owned('transport-fuel', FuelCostAttributionController),
   // ETC — tai khoan giao thong, nap nguon, va hop thu doi soat. MOT controller cho ca ba vi chung
   // dung chung mot tien to route va mot vong doi; ba ma quyen RIENG moi la thu tach chung ra.
   owned('transport-toll', TollController),

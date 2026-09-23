@@ -34,7 +34,14 @@ import type { FuelPaymentMethod } from './fuel.types.js';
  * dung cho cu: hai phieu khac nhau bi coi la mot.
  */
 export interface FuelEntryIdentity {
-  readonly tripId: string;
+  /**
+   * `#364` — NGU CANH la mot phan cua "phieu nao". Mot lenh gui lai cung khoa nhung doi chuyen,
+   * doi vong chay hay doi chang khong phai lan gui lai cua lenh cu: no noi mot lan do dau KHAC
+   * dien ra trong mot cong viec khac.
+   */
+  readonly tripId: string | null;
+  readonly runId: string | null;
+  readonly legId: string | null;
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
@@ -61,7 +68,9 @@ export const normalizeOptionalText = (value: string | null | undefined): string 
 };
 
 export const fuelEntryIdentityOf = (input: {
-  readonly tripId: string;
+  readonly tripId: string | null | undefined;
+  readonly runId: string | null | undefined;
+  readonly legId: string | null | undefined;
   readonly vehicleId: string;
   readonly driverId: string;
   readonly supplierId: string;
@@ -75,7 +84,10 @@ export const fuelEntryIdentityOf = (input: {
   readonly invoiceNo: string | null | undefined;
   readonly note: string | null | undefined;
 }): FuelEntryIdentity => ({
-  tripId: input.tripId,
+  // `undefined` (lenh khong gui truong) va `null` (khong co ngu canh) la MOT, giong `stationId`.
+  tripId: input.tripId ?? null,
+  runId: input.runId ?? null,
+  legId: input.legId ?? null,
   vehicleId: input.vehicleId,
   driverId: input.driverId,
   supplierId: input.supplierId,

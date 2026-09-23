@@ -21,6 +21,16 @@ export const CHECKPOINT_RECORD_REASONS = [
    */
   'CHECKPOINT_DRIVER_NOT_ASSIGNED',
   'CHECKPOINT_RUN_TERMINAL',
+  /**
+   * CHANG dich da `COMPLETED`/`CANCELLED` — `#354`.
+   *
+   * Ma RIENG, khong gop vao `CHECKPOINT_RUN_TERMINAL`: vong chay van dang chay, chi CHANG NAY da
+   * dong — lai xe va dieu hanh phai phan biet duoc "ca chuyen da xong" voi "chang nay da xong". Cung
+   * khong gop vao `CHECKPOINT_LEG_NOT_APPLICABLE` (loai moc khong thuoc muc chang) hay
+   * `CHECKPOINT_ALREADY_RECORDED` (trung moc): dem rieng duoc hinh dang nay la cach biet lich su bat
+   * kha ma `#332` do tren DB live con xay ra hay khong.
+   */
+  'CHECKPOINT_LEG_TERMINAL',
   'CHECKPOINT_LEG_NOT_FOUND',
   /** Chang do thuoc mot vong chay khac — mot cach muon chang cua nguoi khac. */
   'CHECKPOINT_LEG_NOT_IN_RUN',
@@ -72,6 +82,7 @@ export const TRANSPORT_CHECKPOINT_DECISIONS = defineDecisionVocabulary({
     CHECKPOINT_RUN_NOT_FOUND: 'Khong tim thay vong chay',
     CHECKPOINT_DRIVER_NOT_ASSIGNED: 'Lai xe chua tung duoc phan cong vao vong chay nay',
     CHECKPOINT_RUN_TERMINAL: 'Vong chay da o trang thai cuoi, khong ghi them moc duoc',
+    CHECKPOINT_LEG_TERMINAL: 'Chang da ket thuc, khong ghi them moc vao chang nay',
     CHECKPOINT_LEG_NOT_FOUND: 'Khong tim thay chang',
     CHECKPOINT_LEG_NOT_IN_RUN: 'Chang do khong thuoc vong chay nay',
     CHECKPOINT_LEG_REQUIRED: 'Loai moc nay phai gan vao mot chang cu the',

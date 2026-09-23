@@ -46,12 +46,22 @@ export type { RunWriteScope, RunWriteTransaction } from './movement.repository.j
  * khoa, va do la cong thuc cua deadlock chi lo ra duoi tai that.
  *
  * ============================================================================================
+ * CHANG CUNG DI QUA KHOA NAY — `#354`
+ * ============================================================================================
+ *
+ * Truoc `#354` lan doi trang thai chang (`MovementService.transitionLeg`/`cancelLeg`) ghi THANG,
+ * khong khoa gi: mot moc doc thay chang con mo, van phong hoan tat chang, roi moc ghi vao mot chang
+ * da ket thuc. Bay gio `MovementRepository.setLegStatus()` gianh CHINH khoa hang vong chay (va ghi
+ * co dieu kien), con `RunWriteScope.legs` dua ra chang DOC LAI duoi khoa. Mot khoa, mot thu tu:
+ * lan ghi moc va lan ket thuc chang khong bao gio nhin thay hai su that khac nhau.
+ *
+ * ============================================================================================
  * CONG NAY KHONG QUYET DINH GI
  * ============================================================================================
  *
  * No khong biet `WAITING_RUN_TERMINAL` hay `CHECKPOINT_RUN_TERMINAL` la gi, va no khong tu choi
- * mot lan ghi nao. No lam dung hai viec: giu khoa, va dua ra trang thai vong chay DOC LAI duoi
- * khoa do. Ma tu choi thuoc ve capability so huu lan ghi — vi chinh capability do moi biet cau tu
+ * mot lan ghi nao. No lam dung hai viec: giu khoa, va dua ra trang thai vong chay (cung cac chang
+ * cua no) DOC LAI duoi khoa do. Ma tu choi thuoc ve capability so huu lan ghi — vi chinh capability do moi biet cau tu
  * choi hien len man hinh ai, bang chu gi, va duoi ma nao.
  */
 export abstract class RunWriteGuard {

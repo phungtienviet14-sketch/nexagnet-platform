@@ -1,4 +1,5 @@
-import type { RunLegKind } from '../movement/movement.types.js';
+import { isTerminalLegStatus } from '../movement/movement-lifecycle.js';
+import type { RunLegKind, RunLegStatus } from '../movement/movement.types.js';
 import type { CheckpointRecordReason } from './checkpoint-decisions.js';
 import type { RunCheckpointType } from './checkpoint.types.js';
 
@@ -69,6 +70,21 @@ export const carriesCargoMeaning = (type: RunCheckpointType): boolean => CARRIES
  */
 export const isCheckpointAllowedOnLeg = (type: RunCheckpointType, kind: RunLegKind): boolean =>
   kind === 'LOADED' || !carriesCargoMeaning(type);
+
+/**
+ * Chang o trang thai nay con NHAN MOC MOI khong — `#354`.
+ *
+ * Mot ham chung cho BA ben: `evaluateCheckpoint` (tu choi som), `CheckpointService` (tu choi DUOI
+ * khoa, tren chang doc lai) va `fieldActionsFor` (nut nao hien) — cung ly le voi
+ * `isCheckpointAllowedOnLeg`: ba ban luat se lech nhau o lan sua thu ba.
+ *
+ * Chang `COMPLETED`/`CANCELLED` la mot doan lich su DA DONG. Mot moc moi neo vao no noi ve mot viec
+ * xay ra sau khi chang ket thuc — dung hinh dang DB live 20/09 (`DELIVERY_*` ghi mot ngay sau khi
+ * chang RONG #1 da `COMPLETED`). Gui lai mot lenh DA thanh cong khong di qua day: `append()` tra ve
+ * ban cu truoc moi phep kiem.
+ */
+export const legAcceptsNewCheckpoints = (status: RunLegStatus): boolean =>
+  !isTerminalLegStatus(status);
 
 /**
  * Dieu kien truc tiep truoc mot moc. `null` = khong doi gi.
@@ -152,6 +168,11 @@ export interface CheckpointEvaluation {
    * mot ben goi quen dien se lam cong `#332` im lang cho qua.
    */
   readonly legKind: RunLegKind | null;
+  /**
+   * TRANG THAI cua chang duoc kem — `null` khi khong kem chang nao. BAT BUOC vi cung ly do voi
+   * `legKind` (`#354`). Day la ban doc TRUOC khoa: cong nay chi tu choi som; cong that nam duoi khoa.
+   */
+  readonly legStatus: RunLegStatus | null;
   /** Loai moc DA GHI tren dung pham vi dang xet (chang do, hoac muc vong chay). */
   readonly recordedTypes: readonly RunCheckpointType[];
   /** Co kem ban dinh vi khong. */
@@ -162,9 +183,10 @@ export interface CheckpointEvaluation {
 /**
  * Mot moc co duoc ghi khong — tra ve LY DO, khong phai `boolean`.
  *
- * THU TU KIEM la mot phan cua hop dong. Pham vi truoc thu tu, thu tu truoc trung lap, trung lap
- * truoc vi tri: mot yeu cau sai ca pham vi lan vi tri phai bao loi pham vi, vi do la cai nguoi
- * goi phai sua truoc. Doi thu tu se cho ra mot ma DUNG VE KET QUA nhung SAI VE NGUYEN NHAN.
+ * THU TU KIEM la mot phan cua hop dong. Pham vi truoc trang thai chang, trang thai chang truoc thu
+ * tu, thu tu truoc trung lap, trung lap truoc vi tri: mot yeu cau sai ca pham vi lan vi tri phai bao
+ * loi pham vi, vi do la cai nguoi goi phai sua truoc. Doi thu tu se cho ra mot ma DUNG VE KET QUA
+ * nhung SAI VE NGUYEN NHAN.
  */
 export function evaluateCheckpoint(input: CheckpointEvaluation): CheckpointDecision {
   if (input.runTerminal) return deny('CHECKPOINT_RUN_TERMINAL');
@@ -175,6 +197,14 @@ export function evaluateCheckpoint(input: CheckpointEvaluation): CheckpointDecis
   // Van la PHAM VI — chang nao duoc nhan moc nay — nen dung truoc thu tu (`#332`).
   if (input.legKind !== null && !isCheckpointAllowedOnLeg(input.type, input.legKind)) {
     return deny('CHECKPOINT_CARGO_ON_EMPTY_LEG');
+  }
+  /*
+   * SAU pham vi (`#354`): moc hang hoa tren chang RONG sai CHO truoc khi sai LUC, va `#350` dem
+   * rieng dung hinh dang do — ke ca khi chang RONG da `COMPLETED`, nhu lich su DB live 20/09.
+   * TRUOC thu tu: "chang nay da xong" la cau tra loi dung cho moi moc con lai, ke ca mot moc da ghi.
+   */
+  if (input.legStatus !== null && !legAcceptsNewCheckpoints(input.legStatus)) {
+    return deny('CHECKPOINT_LEG_TERMINAL');
   }
 
   const predecessor = requiredPredecessor(input.type);

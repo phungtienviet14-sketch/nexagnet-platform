@@ -26,6 +26,11 @@ export const TRANSPORT_FUEL_VALIDATION_REASONS = [
   'FUEL_LITERS_INVALID',
   /** Odo am hoac khong phai so nguyen. KHONG dung cho odo lui — do la `ODOMETER_NOT_ADVANCED`. */
   'FUEL_ODOMETER_INVALID',
+  /**
+   * `#364` — phieu theo CHUYEN v1 thieu `vehicleId`. Nhanh vong chay khong can: xe cua no la xe cua
+   * vong chay. Nhanh chuyen v1 thi van can, vi mot chuyen co the doi xe giua chung (`GD-06`).
+   */
+  'FUEL_ENTRY_VEHICLE_REQUIRED',
   /** Dinh dang file bang ke khong co adapter nao doc duoc. */
   'FUEL_STATEMENT_FORMAT_UNSUPPORTED',
   /** Anh xa cot cua goi khach khong tim thay mot cot bat buoc trong hang tieu de cua file. */

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { BusinessDate } from '../business-date.js';
 import { TRANSPORT_CURRENCY } from '../money.js';
+import { TransportDomainError } from '../transport.errors.js';
 import {
   CostingRepository,
   FundPeriodFrozenError,
@@ -64,7 +65,10 @@ export class InMemoryCostingRepository extends CostingRepository {
   private readonly snapshots: FundPeriodSnapshot[] = [];
 
   async ensureAccount(driverId: string, at: Date): Promise<DriverFundAccount> {
-    const existing = await this.findAccountByDriver(driverId);
+    // KHONG `await` giua lan tim va lan tao — ban sao cua `upsert` tren `driverId` unique o kho Prisma.
+    // Mot `await` o giua cho hai lenh song song cung thay "chua co" roi tao HAI so quy cho mot lai xe
+    // (`#369`: hai lan duyet dong thoi mot phieu `DRIVER_CASH` Run-first di dung duong nay).
+    const existing = [...this.accounts.values()].find((entry) => entry.driverId === driverId);
     if (existing) return existing;
     const stamp = iso(at);
     const account: DriverFundAccount = {
@@ -103,6 +107,21 @@ export class InMemoryCostingRepository extends CostingRepository {
       const frozen = covering.find((period) => isFrozenFundPeriod(period.status));
       if (frozen) throw new FundPeriodFrozenError(frozen);
     }
+    /*
+     * `#369` — ban sao cua unique `correlationKey` o CA HAI bang, CUNG loi voi kho Prisma
+     * (`translatePostingError`). Service doc phat lai truoc khi goi `post()`, nen o duong mot luong
+     * dong nay khong bao gio no; no chi no khi hai lenh CUNG khoa chen nhau giua lan doc va lan ghi —
+     * dung ca ma tang mien phai hoi tu (`RunExpenseService`) thay vi ghi them mot dong tien.
+     */
+    if (
+      (input.entry && this.entries.some((row) => row.correlationKey === input.correlationKey)) ||
+      (input.expense && this.expenses.some((row) => row.correlationKey === input.correlationKey))
+    ) {
+      throw TransportDomainError.conflict(
+        'CORRELATION_KEY_REUSED',
+        `Khoa chong ghi trung ${input.correlationKey} vua duoc dung boi mot lan ghi khac`,
+      );
+    }
     const stamp = iso(input.at);
     let entry: DriverFundEntry | null = null;
     let expense: TripExpense | null = null;
@@ -116,6 +135,8 @@ export class InMemoryCostingRepository extends CostingRepository {
         currencyCode: TRANSPORT_CURRENCY,
         businessDate: input.entry.businessDate,
         tripId: input.entry.tripId,
+        runId: input.entry.runId ?? null,
+        legId: input.entry.legId ?? null,
         correlationKey: input.correlationKey,
         reversalOfId: input.entry.reversalOfId ?? null,
         note: input.entry.note ?? null,

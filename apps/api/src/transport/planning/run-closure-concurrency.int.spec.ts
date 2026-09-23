@@ -751,6 +751,23 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const reasonOfRejection = (error: unknown): string =>
       error instanceof TransportDomainError ? error.reason : `UNEXPECTED:${String(error)}`;
 
+    /**
+     * Ket cuc cua lenh doi thu, bat NGAY khi no duoc gai.
+     *
+     * Tu `#354` (moc) va `#358` (phien cho), lenh tren chang da ket thuc bi tu choi o phep kiem SOM —
+     * truoc khi lan dong tra ve — nen mot `.then` gan sau `attempt()` de lai mot rejection chua ai
+     * bat, va vitest tinh do la loi cua ca lan chay du moi bai deu xanh.
+     */
+    interface RacerOutcome {
+      readonly ok: boolean;
+      readonly reason: string;
+    }
+    const outcomeOf = (work: Promise<unknown>): Promise<RacerOutcome> =>
+      work.then(
+        () => ({ ok: true, reason: '' }),
+        (error: unknown) => ({ ok: false, reason: reasonOfRejection(error) }),
+      );
+
     it('R-IT-10 — mo phien cho DUNG LUC dong: khong vong chay dong nao mang phien mo', async () => {
       const { run, driverId, legId } = await closableRunWithDriver();
       const stack = checkpointStack();
@@ -770,24 +787,25 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         note: null,
       });
 
-      let racer: Promise<unknown> = Promise.resolve();
+      // Bat ket cuc NGAY khi gai — tu `#358` lenh mo bi tu choi o phep kiem SOM, truoc khi lan dong
+      // tra ve (cung ly do voi `outcomeOf` o R-IT-11).
+      let racer: Promise<RacerOutcome> = Promise.resolve({ ok: false, reason: 'NOT_RACED' });
       const race = raceOnRecheck(stack.waitingBlockers, () => {
-        racer = stack.waitingService.start({
-          runId: run.id,
-          legId,
-          arrivalCheckpointId: anchor.id,
-          reason: 'RECEIVER_NOT_READY',
-          clientEventId: next('WAIT'),
-          authUserId: AUTH,
-        });
+        racer = outcomeOf(
+          stack.waitingService.start({
+            runId: run.id,
+            legId,
+            arrivalCheckpointId: anchor.id,
+            reason: 'RECEIVER_NOT_READY',
+            clientEventId: next('WAIT'),
+            authUserId: AUTH,
+          }),
+        );
       });
 
       const outcome = await race.closures.attempt(run.id, 'IDLE_SWEEP');
       expect(race.raced()).toBe(true);
-      const started = await racer.then(
-        () => ({ ok: true, reason: '' }) as const,
-        (error: unknown) => ({ ok: false, reason: reasonOfRejection(error) }) as const,
-      );
+      const started = await racer;
 
       const status = await statusOf(run.id);
       const open = await prisma.transportDeliveryWaitingSession.count({
@@ -801,19 +819,20 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        */
       expect(status === 'COMPLETED' && open > 0).toBe(false);
 
-      if (status === 'COMPLETED') {
-        // Lan dong thang: lenh mo phien bi TU CHOI, bang mot ly do that chu khong mot `500`.
-        expect(outcome.closed).toBe(true);
-        expect(open).toBe(0);
-        expect(started).toEqual({ ok: false, reason: 'WAITING_RUN_TERMINAL' });
-      } else {
-        // Phien thang: lan dong GIU LAI, va giu bang dung ma chan cua Lane O.
-        expect(started.ok).toBe(true);
-        expect(open).toBe(1);
-        expect(outcome.closed).toBe(false);
-        expect(outcome.verdict.blockers).toContain('OPEN_WAITING_SESSION');
-        expect(await closeAuditCount(run.id)).toBe(0);
-      }
+      /*
+       * `#358`: moi chang cua mot vong chay DONG DUOC deu da o diem cuoi, va chang o diem cuoi khong
+       * mo phien cho moi. Nen nhanh "phien thang, lan dong giu lai" cua cuoc dua nay KHONG con ton
+       * tai — bat bien o tren gio duoc giu boi HAI cong doc lap. Lenh mo bi tu choi o cong chang (neu
+       * no doc vong chay truoc khi lan dong commit) hoac o cong vong chay (neu sau); ca hai deu dung,
+       * va ca hai la mot ly do that chu khong mot `500`. Cua so khoa giua lenh mo va lan dong (chang
+       * roi vong chay ket thuc trong khe truoc khoa) van duoc do rieng o WL-IT-11 cua
+       * `waiting-terminal-leg.int.spec.ts`; nhanh "phien thang" cua CHANG con mo o WL-IT-06.
+       */
+      expect(status).toBe('COMPLETED');
+      expect(outcome.closed).toBe(true);
+      expect(open).toBe(0);
+      expect(started.ok).toBe(false);
+      expect(['WAITING_LEG_TERMINAL', 'WAITING_RUN_TERMINAL']).toContain(started.reason);
     });
 
     it('R-IT-11 — ghi moc hang-tren-thung DUNG LUC dong: khong vong chay dong nao con hang', async () => {
@@ -825,33 +844,43 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * duoc ghi TRUOC cuoc dua. Mot minh no chi cho ra giai doan `AT_PICKUP` — CHUA phai hang tren
        * thung — va khang dinh ngay duoi ghim dieu do lai: cuoc dua bat dau tu mot vong chay KHONG
        * co gi chan.
+       *
+       * GIEO thang vao kho, cung cach R-IT-10 gieo moc neo cua no: chang CO HANG o day da
+       * `COMPLETED` (vong chay phai het viec moi dong duoc), va tu `#354` duong dich vu tu choi moi
+       * moc MOI tren chang da ket thuc — chinh lan ghi `PICKUP_ARRIVAL` qua dich vu truoc day la hinh
+       * dang `#354` cam.
        */
-      await stack.checkpointService.recordAsDriver({
+      await stack.checkpointRepo.create({
         type: 'PICKUP_ARRIVAL',
         runId: run.id,
         legId,
-        authUserId: AUTH,
+        recordedBy: AUTH,
+        driverId: await theDriver(),
+        observationId: null,
         clientEventId: next('PA'),
+        capturedAt: null,
+        receivedAt: new Date(),
+        businessDate: '2026-09-11',
+        note: null,
       });
       expect(await stack.blockers.blockersForRun(run.id)).toEqual([]);
 
-      let racer: Promise<unknown> = Promise.resolve();
+      let racer: Promise<RacerOutcome> = Promise.resolve({ ok: false, reason: 'NOT_RACED' });
       const race = raceOnRecheck(stack.blockers, () => {
-        racer = stack.checkpointService.recordAsDriver({
-          type: 'LOADING',
-          runId: run.id,
-          legId,
-          authUserId: AUTH,
-          clientEventId: next('LD'),
-        });
+        racer = outcomeOf(
+          stack.checkpointService.recordAsDriver({
+            type: 'LOADING',
+            runId: run.id,
+            legId,
+            authUserId: AUTH,
+            clientEventId: next('LD'),
+          }),
+        );
       });
 
       const outcome = await race.closures.attempt(run.id, 'IDLE_SWEEP');
       expect(race.raced()).toBe(true);
-      const recorded = await racer.then(
-        () => ({ ok: true, reason: '' }) as const,
-        (error: unknown) => ({ ok: false, reason: reasonOfRejection(error) }) as const,
-      );
+      const recorded = await racer;
 
       const status = await statusOf(run.id);
       const carrying = (await stack.blockers.blockersForRun(run.id)).includes(
@@ -860,16 +889,65 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       expect(status === 'COMPLETED' && carrying).toBe(false);
 
-      if (status === 'COMPLETED') {
-        expect(outcome.closed).toBe(true);
-        expect(recorded).toEqual({ ok: false, reason: 'CHECKPOINT_RUN_TERMINAL' });
-      } else {
-        expect(recorded.ok).toBe(true);
-        expect(carrying).toBe(true);
-        expect(outcome.closed).toBe(false);
-        expect(outcome.verdict.blockers).toContain('CARGO_STILL_CARRIED');
-        expect(await closeAuditCount(run.id)).toBe(0);
+      /*
+       * `#354`: moi chang cua mot vong chay DONG DUOC deu da o diem cuoi, va chang o diem cuoi khong
+       * nhan moc moi. Nen nhanh "moc thang, lan dong giu lai" cua cuoc dua nay KHONG con ton tai —
+       * bat bien o tren gio duoc giu boi HAI cong doc lap. Lenh ghi bi tu choi o cong chang (neu no
+       * doc vong chay truoc khi lan dong commit) hoac o cong vong chay (neu sau); ca hai deu dung.
+       * Cua so khoa giua moc va lan dong van duoc do rieng o R-IT-11b.
+       */
+      expect(status).toBe('COMPLETED');
+      expect(outcome.closed).toBe(true);
+      expect(carrying).toBe(false);
+      expect(recorded.ok).toBe(false);
+      expect(['CHECKPOINT_LEG_TERMINAL', 'CHECKPOINT_RUN_TERMINAL']).toContain(recorded.reason);
+    });
+
+    /**
+     * R-IT-11b — CUA SO KHOA giua MOC va LAN DONG, sau `#354`.
+     *
+     * R-IT-11 khong con cham toi khoa: moc hang hoa tren chang da ket thuc bi chan ngay o phep kiem
+     * som. Cai con lai la moc MUC VONG CHAY — no khong neo vao chang nao, nen di toi tan cong duoi
+     * khoa. Doi thu duoc gai trong luc lan dong GIU khoa, doc thay `ACTIVE` o phep kiem som, roi phai
+     * XEP HANG sau lan dong: khi no lay duoc khoa thi vong chay da `COMPLETED`, va cong duoi khoa tu
+     * choi. Khong co khoa chung thi moc do se duoc ghi vao mot vong chay da dong.
+     */
+    it('R-IT-11b — moc MUC VONG CHAY dung luc dong: xep hang sau lan dong va bi chan DUOI khoa', async () => {
+      const { run } = await closableRunWithDriver();
+      const stack = checkpointStack();
+      // `COMPLETED` (muc vong chay) doi `DEPARTED`, `DEPARTED` doi `ASSIGNED` — ghi khi vong chay con chay.
+      for (const type of ['ASSIGNED', 'DEPARTED'] as const) {
+        await stack.checkpointService.recordAsDriver({
+          type,
+          runId: run.id,
+          authUserId: AUTH,
+          clientEventId: next(type),
+        });
       }
+      expect(await stack.blockers.blockersForRun(run.id)).toEqual([]);
+
+      let racer: Promise<RacerOutcome> = Promise.resolve({ ok: false, reason: 'NOT_RACED' });
+      const race = raceOnRecheck(stack.blockers, () => {
+        racer = outcomeOf(
+          stack.checkpointService.recordAsDriver({
+            type: 'COMPLETED',
+            runId: run.id,
+            authUserId: AUTH,
+            clientEventId: next('DONE'),
+          }),
+        );
+      });
+
+      const outcome = await race.closures.attempt(run.id, 'IDLE_SWEEP');
+      expect(race.raced()).toBe(true);
+      const recorded = await racer;
+
+      expect(outcome.closed).toBe(true);
+      expect(await statusOf(run.id)).toBe('COMPLETED');
+      expect(recorded).toEqual({ ok: false, reason: 'CHECKPOINT_RUN_TERMINAL' });
+      expect(
+        await prisma.transportRunCheckpoint.count({ where: { runId: run.id, type: 'COMPLETED' } }),
+      ).toBe(0);
     });
   },
 );

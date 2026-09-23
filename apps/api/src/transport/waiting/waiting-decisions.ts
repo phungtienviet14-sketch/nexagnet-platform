@@ -18,6 +18,13 @@ export const WAITING_START_REASONS = [
   'WAITING_RUN_TERMINAL',
   'WAITING_LEG_NOT_FOUND',
   'WAITING_LEG_NOT_IN_RUN',
+  /**
+   * Chang da `COMPLETED`/`CANCELLED` — `#358`. RIENG voi `WAITING_RUN_TERMINAL`: vong chay van
+   * `ACTIVE`, chi chang nay da xong. Mot phien mo o day khong bao gio dong duoc bang moc nhan hang
+   * (`#354` chan moi moc moi tren chang da ket thuc) va chi con giu vong chay o
+   * `OPEN_WAITING_SESSION`.
+   */
+  'WAITING_LEG_TERMINAL',
   /** Chua co moc `DELIVERY_ARRIVAL` nao — khong cho o mot noi minh chua den. */
   'WAITING_ARRIVAL_NOT_FOUND',
   /** Moc neo khong phai `DELIVERY_ARRIVAL`, hoac thuoc mot chang khac. */
@@ -74,6 +81,7 @@ export const TRANSPORT_WAITING_DECISIONS = defineDecisionVocabulary({
     WAITING_RUN_TERMINAL: 'Vong chay da o trang thai cuoi, khong mo phien cho duoc',
     WAITING_LEG_NOT_FOUND: 'Khong tim thay chang',
     WAITING_LEG_NOT_IN_RUN: 'Chang do khong thuoc vong chay nay',
+    WAITING_LEG_TERMINAL: 'Chang da o trang thai cuoi, khong mo phien cho moi tren chang nay',
     WAITING_ARRIVAL_NOT_FOUND: 'Chua ghi moc den noi giao cho chang nay',
     WAITING_ARRIVAL_NOT_APPLICABLE: 'Moc do khong phai lan den noi giao cua chang nay',
     WAITING_ARRIVAL_NOT_OWNED: 'Lan den noi do khong phai cua ban',
