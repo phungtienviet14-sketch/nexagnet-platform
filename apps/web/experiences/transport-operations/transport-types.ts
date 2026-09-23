@@ -2696,6 +2696,8 @@ export interface CompanyMarginBasis {
   readonly runFirstOrders: MarginSubtotal & {
     readonly counted: number;
     readonly excluded: Readonly<Record<MarginExclusion, number>>;
+    /** Don DA vao tong nhung chua co mot dong chi phi nao — bien 100% cua chung chua phan anh gi. */
+    readonly withoutRecordedCost: number;
   };
   /** Don CHIEU tu chuyen cu — da tinh qua chuyen, khong tinh lai. */
   readonly projectedOrderCount: number;

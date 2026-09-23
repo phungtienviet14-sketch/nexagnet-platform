@@ -4,7 +4,7 @@ import {
   type DriverFuelRunView,
   type FuelEntryCostAttributionView,
 } from '../../transport-types';
-import { fuelContextLabel } from '../fuel';
+import { fuelContextLabel, verifyConsequence } from '../fuel';
 import { toFuelCostAttributionModel } from '../fuel-cost-attribution';
 import {
   DRIVER_PAYMENT_METHOD_HINT,
@@ -262,5 +262,27 @@ describe('panel gia thanh cua ke toan — lop RIENG, mot phieu mot so cai', () =
     );
     expect(model.lines.map((line) => line.isActiveAllocation)).toEqual([false, false]);
     expect(model.lines[1]!.kindLabel).toBe('Đảo');
+  });
+});
+
+describe('#385 — hop xac nhan duyet noi DUNG tien di dau theo cach tra', () => {
+  it('tien mat lai xe tren vong xe: tru quy, KHONG vao cong no cay xang, gia thanh phan bo sau', () => {
+    const text = verifyConsequence({ paymentMethod: 'DRIVER_CASH', amount: 460_000, tripId: null });
+    expect(text).toContain('trừ vào quỹ lái xe');
+    expect(text).toContain('không vào công nợ cây xăng');
+    expect(text).toContain('phân bổ sau');
+    expect(text).not.toContain('kỳ đối soát bảng kê');
+  });
+
+  it('tien mat lai xe tren chuyen cu: tru quy va vao chi phi chuyen', () => {
+    expect(
+      verifyConsequence({ paymentMethod: 'DRIVER_CASH', amount: 1, tripId: 'chuyen-1' }),
+    ).toContain('chi phí của chuyến');
+  });
+
+  it('ghi no cay xang: van la ky doi soat bang ke', () => {
+    expect(
+      verifyConsequence({ paymentMethod: 'SUPPLIER_ACCOUNT', amount: 1, tripId: null }),
+    ).toContain('kỳ đối soát bảng kê');
   });
 });

@@ -264,6 +264,21 @@ describe('buildCompanyMargin — chi phi chua biet KHONG thanh 0', () => {
     });
   });
 
+  it('don chua ghi khoan chi phi nao: VAN vao tong, nhung duoc dem rieng', () => {
+    const view = build({
+      runFirst: [
+        order('A', [run('A', { fuelCostAttribution: 0 })]),
+        order('B', [
+          run('B', { fuelCostAttribution: 0, pendingFuel: { amount: 1, entryCount: 1 } }),
+        ]),
+        order('C', [run('C')]),
+      ],
+    });
+    expect(view.totals.basis.runFirstOrders.counted).toBe(3);
+    // A: khong phan bo, khong phieu treo. B co phieu treo (da noi o `pendingFuelCost`). C co chi phi.
+    expect(view.totals.basis.runFirstOrders.withoutRecordedCost).toBe(1);
+  });
+
   it('phan bo tren vong xe khong gan duoc voi viec nao: khong vao dong nao, nhung duoc noi ra', () => {
     const view = build({ unassignedRunFirstCost: { amount: 700_000, runCount: 1 } });
     expect(view.totals.deductionAmount).toBe(0);

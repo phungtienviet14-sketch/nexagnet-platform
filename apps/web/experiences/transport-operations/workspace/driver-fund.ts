@@ -66,6 +66,20 @@ export interface FundLedgerRow {
  * API khong co co `isReversed`, nen phai suy tu chinh bo du lieu — va suy MOT LAN o day thay vi
  * moi cho mot kieu.
  */
+/**
+ * DIEN GIAI do MAY viet khi mot phieu dau vao Quy — `fuel.service.ts` ghi `Phieu do dau <ma phieu>`
+ * (ASCII + ma noi bo), ca o chan TX-03 lan chan `RUN_EXPENSE`. Nguoi doc so quy khong dung duoc mot
+ * ma cuid; ho can biet day la TIEN DAU lai xe tu tra. Cac dien giai khac (nguoi go tay) giu nguyen.
+ */
+const FUEL_POSTING_NOTE = /^Phieu do dau \S+$/;
+
+export const fundEntryNote = (entry: Pick<DriverFundEntry, 'kind' | 'note'>): string | null => {
+  if (entry.note === null || !FUEL_POSTING_NOTE.test(entry.note)) return entry.note;
+  return entry.kind === 'RUN_EXPENSE'
+    ? 'Tiền dầu lái xe trả tiền mặt (phiếu đổ dầu theo vòng xe)'
+    : 'Tiền dầu lái xe trả tiền mặt (phiếu đổ dầu)';
+};
+
 const reversedIds = (entries: readonly DriverFundEntry[]): ReadonlySet<string> => {
   const ids = new Set<string>();
   for (const entry of entries) {
@@ -90,7 +104,7 @@ export const toFundLedgerRows = (
       isCredit: entry.signedAmount >= 0,
       businessDateLabel: formatBusinessDate(entry.businessDate),
       tripId: entry.tripId,
-      note: entry.note,
+      note: fundEntryNote(entry),
       recordedBy: actorLabel(entry.recordedBy),
       createdAtLabel: formatInstant(entry.createdAt),
       isReversed,

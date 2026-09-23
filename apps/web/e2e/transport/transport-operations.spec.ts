@@ -90,6 +90,7 @@ const MARGIN_TOTALS = {
     runFirstOrders: {
       counted: 1,
       excluded: { FREIGHT_MISSING: 0, NO_RUN_YET: 1, SHARED_RUN: 0, COST_SOURCE_UNAVAILABLE: 0 },
+      withoutRecordedCost: 0,
       revenueAmount: 6_000_000,
       deductionAmount: 1_320_000,
       marginAmount: 4_680_000,

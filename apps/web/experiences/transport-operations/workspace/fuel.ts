@@ -32,6 +32,7 @@ import type {
   FuelEntryInboxPage,
   FuelEntryInboxRow,
   FuelInboxEvidenceRef,
+  FuelPaymentMethod,
   FuelReconciliation,
   FuelReconciliationStatus,
   FuelReconciliationWorkspace,
@@ -75,6 +76,8 @@ export interface FuelEntryRow {
   readonly reviewReasons: readonly string[];
   readonly invoiceNo: string | null;
   readonly canVerify: boolean;
+  /** Cau cua hop xac nhan "Xác thực" — xem `verifyConsequence`. */
+  readonly verifyConsequence: string;
   readonly canReject: boolean;
   readonly canAmend: boolean;
   /** Ly do khong sua duoc — HAI ly do khac nhau, doi hai viec khac nhau cua nguoi dung. */
@@ -132,6 +135,7 @@ export const toFuelEntryRow = (
     invoiceNo: entry.invoiceNo,
     // `verify` goi lai duoc nhieu lan theo thiet ke, nhung chi co nghia khi con `DECLARED`.
     canVerify: mayVerify && entry.verificationStatus === 'DECLARED',
+    verifyConsequence: verifyConsequence(entry),
     canReject: mayVerify && entry.verificationStatus === 'DECLARED',
     canAmend: mayVerify && blocked === null,
     amendBlockedReason: blocked,
@@ -192,9 +196,36 @@ export interface FuelInboxRowModel {
   readonly evidenceCountLabel: string;
   readonly evidence: readonly FuelInboxEvidenceRef[];
   readonly canVerify: boolean;
+  /** Cau cua hop xac nhan "Xác thực" — xem `verifyConsequence`. */
+  readonly verifyConsequence: string;
   readonly canReject: boolean;
   readonly canResubmit: boolean;
 }
+
+/**
+ * HAU QUA cua lan XAC THUC, noi truoc khi bam — theo CACH TRA, vi hai cach tra dan tien di hai ngả.
+ *
+ * `DRIVER_CASH` tru quy lai xe NGAY luc duyet (chuyen cu qua `TX-03`, viec duoc dieu qua mot but toan
+ * `RUN_EXPENSE`, `#369` R-4) va KHONG BAO GIO vao cong no cay xang. Cau cu "vao ky doi soat bang ke"
+ * dung cho phieu ghi no, nhung noi sai voi phieu tien mat (`#385`).
+ */
+export const verifyConsequence = (entry: {
+  readonly paymentMethod: FuelPaymentMethod;
+  readonly amount: number;
+  readonly tripId: string | null;
+}): string => {
+  if (entry.paymentMethod === 'SUPPLIER_ACCOUNT') {
+    return 'Sau khi xác thực, phiếu vào được kỳ đối soát bảng kê; công nợ cây xăng chỉ ghi khi chốt kỳ.';
+  }
+  const cost =
+    entry.tripId === null
+      ? 'Giá thành của phiếu được phân bổ sau ở mục Giá thành nhiên liệu.'
+      : 'Khoản này đồng thời vào chi phí của chuyến.';
+  return (
+    `Sau khi xác thực, ${formatMoney(entry.amount)} trừ vào quỹ lái xe (lái xe đã trả tiền mặt) — ` +
+    `không vào công nợ cây xăng. ${cost}`
+  );
+};
 
 /**
  * NGU CANH CUA MOT PHIEU o dang chu — `#364`. Mot ham cho hop thu ke toan VA danh sach phieu lai xe.
@@ -270,6 +301,7 @@ export const toFuelInboxRow = (
     evidenceCountLabel: formatCount(row.evidenceCount),
     evidence: row.evidence,
     canVerify: mayVerify && row.verificationStatus === 'DECLARED',
+    verifyConsequence: verifyConsequence(row),
     canReject: mayVerify && row.verificationStatus === 'DECLARED',
     canResubmit: mayVerify && row.verificationStatus === 'REJECTED',
   };

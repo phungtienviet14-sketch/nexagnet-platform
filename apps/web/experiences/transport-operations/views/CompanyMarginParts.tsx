@@ -46,8 +46,8 @@ export function MarginSourceSplit({ sources }: { readonly sources: readonly Marg
                     aria-hidden="true"
                   />
                   {source.label}
-                  {source.revenueShare === null ? null : (
-                    <span className="tx-split__share"> · {source.revenueShare}% doanh thu</span>
+                  {source.revenueShareLabel === null ? null : (
+                    <span className="tx-split__share"> · {source.revenueShareLabel} doanh thu</span>
                   )}
                 </th>
                 <td>{source.countLabel}</td>
