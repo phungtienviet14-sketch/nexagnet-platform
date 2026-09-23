@@ -978,6 +978,18 @@
   color: var(--tx-wait);
 }
 
+/*
+ * `#376` — LY DO trong o "Việc văn phòng" phai XUONG DONG.
+ *
+ * O bang mac dinh `nowrap`, nen mot cau ly do dai ("Hiện trường chưa ghi khách đã nhận hàng — …") day
+ * cot ra het be ngang va bang tran ngang — nua sau cua cau, dung cho nguoi truc can doc, bi cat mat.
+ */
+.tx-table .tx-cellnote {
+  margin: 0.3rem 0 0;
+  max-width: 34ch;
+  white-space: normal;
+}
+
 .tx-worklist,
 .tx-timeline,
 .tx-driver__list {
