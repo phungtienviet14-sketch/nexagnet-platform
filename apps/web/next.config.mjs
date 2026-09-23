@@ -7,6 +7,20 @@ copyMaplibreWorker();
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  /*
+   * Nen ban do mac dinh goi `tiles.openfreemap.org` tu MOI trang ban do (#374), trong khi dia chi
+   * trang co the mang ma vong chay (`?selected=RUN-…`). Chinh sach nay giu `Referer` gui ra ngoai
+   * chi la ORIGIN — khai tuong minh thay vi dua vao mac dinh cua tung trinh duyet. Cung gia tri edge
+   * Caddy da dat cho cac stack tren VM (`deploy/netviet/edge/Caddyfile`).
+   */
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

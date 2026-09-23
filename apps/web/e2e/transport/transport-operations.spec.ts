@@ -2008,7 +2008,12 @@ test.describe('ban do vong chay (Lane N)', () => {
      */
     const worker = page.waitForResponse((response) => response.url().endsWith(MAPLIBRE_WORKER_URL));
     await mockTransport(page, 'ADMIN');
-    await page.goto('/?section=journey&selected=RUN-E2E-1');
+    const pageResponse = await page.goto('/?section=journey&selected=RUN-E2E-1');
+    /*
+     * Nen mac dinh cua san pham goi ra `tiles.openfreemap.org`; dia chi trang mang ma vong chay.
+     * Chinh sach nay (khai trong `next.config.mjs`) giu `Referer` gui ra ngoai chi la origin.
+     */
+    expect(pageResponse?.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');
 
     await expect(page.getByRole('heading', { level: 1, name: 'Bản đồ vòng chạy' })).toBeVisible();
 
@@ -2509,7 +2514,10 @@ async function openRoundTrip(page: Page): Promise<Locator> {
   await page.goto('/?section=journey&selected=RUN-E2E-1');
   const map = page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' });
   await expect(map).toBeVisible({ timeout: 30_000 });
-  await expect(map).toHaveAttribute('data-basemap', 'OPENFREEMAP');
+  /*
+   * KHONG khang dinh `OPENFREEMAP` o day: khi o tile hong, nen lui ve cuc bo trong vai chuc ms — co
+   * the truoc ca lan doc nay. Bai nao can trang thai dau tien thi tu giu mang roi moi khang dinh.
+   */
   return map;
 }
 
@@ -2587,6 +2595,13 @@ async function screenshotMapRegion(page: Page, path: string): Promise<void> {
 }
 
 test.describe('nen OpenFreeMap (#374) @openfreemap-basemap', () => {
+  /*
+   * Khoi chay tay tren `next dev`: bai dau tien gap may chu vua bien dich lai goi ban do (vd sau
+   * khi doi `next.config.mjs`), bai "song" di mang that va cho man hinh ve xong ba lan. 30 s mac
+   * dinh do toc do bien dich, khong do san pham.
+   */
+  test.describe.configure({ timeout: 120_000 });
+
   test.skip(
     !OPENFREEMAP_MODE,
     'Can may chu dev bat voi NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER=openfreemap',
@@ -2612,7 +2627,8 @@ test.describe('nen OpenFreeMap (#374) @openfreemap-basemap', () => {
 
     const map = await openRoundTrip(page);
 
-    /* Dang tai: khong mot cau thong bao nao, nhung may doc duoc la nen chua xong. */
+    /* Dang tai (style dang bi GIU): nen van la OpenFreeMap, khong cau thong bao, `aria-busy`. */
+    await expect(map).toHaveAttribute('data-basemap', 'OPENFREEMAP');
     await expect(map).toHaveAttribute('aria-busy', 'true');
     await expect(page.getByTestId('tx-map-notice')).toHaveCount(0);
     /* Yeu cau DAU TIEN ra ngoai la style Liberty — khong khoa, khong tham so. */
@@ -2637,11 +2653,15 @@ test.describe('nen OpenFreeMap (#374) @openfreemap-basemap', () => {
   });
 
   test('style da ap nhung moi o tile hong → lui nen MUON, tuyen van con', async ({ page }) => {
+    let styleServed = false;
+    let tilesAborted = 0;
     await page.route(OPENFREEMAP_URLS, async (route) => {
       if (route.request().url() === OPENFREEMAP_LIBERTY_STYLE_URL) {
+        styleServed = true;
         await json(route, OPENFREEMAP_LIKE_STYLE);
         return;
       }
+      tilesAborted += 1;
       await route.abort('blockedbyclient');
     });
 
@@ -2649,6 +2669,12 @@ test.describe('nen OpenFreeMap (#374) @openfreemap-basemap', () => {
 
     await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK', { timeout: 30_000 });
     await expect(map).toHaveAttribute('data-basemap-fallback', 'OPENFREEMAP_TILES_FAILED');
+    /*
+     * Hong MUON that: style da duoc tra va AP (MapLibre chi xin o tile sau khi style ap vao), roi
+     * moi o tile tu worker moi hong. Ket luan den tu loi o tile cuoi — khong can `idle`.
+     */
+    expect(styleServed).toBe(true);
+    expect(tilesAborted).toBeGreaterThan(0);
     await expect(page.getByTestId('tx-map-notice')).toHaveText(BASEMAP_UNAVAILABLE_NOTICE);
     await expectBusinessOverlayIntact(page, map);
   });
@@ -2660,14 +2686,13 @@ test.describe('nen OpenFreeMap (#374) @openfreemap-basemap', () => {
       process.env.TRANSPORT_MAP_OPENFREEMAP_LIVE !== '1',
       'Can TRANSPORT_MAP_OPENFREEMAP_LIVE=1',
     );
-    /* Mang that + ba lan cho man hinh ve xong (thanh cong, keo, phong): 30 s mac dinh la khong du. */
-    test.setTimeout(120_000);
     const external = recordExternalRequests(page);
     const googleChunks = recordGoogleCodeChunks(page);
 
     const map = await openRoundTrip(page);
 
     await expect(map).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
+    await expect(map).toHaveAttribute('data-basemap', 'OPENFREEMAP');
     expect(await map.getAttribute('data-basemap-fallback')).toBeNull();
     /* Nen thanh cong thi KHONG mot bang ron nha cung cap nao. */
     await expect(page.getByTestId('tx-map-notice')).toHaveCount(0);

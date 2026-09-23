@@ -5,6 +5,7 @@ import Map, {
   NavigationControl,
   ScaleControl,
   useControl,
+  type ErrorEvent as MapErrorEvent,
   type MapRef,
   type ViewState,
 } from 'react-map-gl/maplibre';
@@ -14,6 +15,7 @@ import { buildJourneyLayers } from './journey-layers';
 import { MAPLIBRE_WORKER_URL } from './maplibre-worker-url';
 import {
   watchExternalBasemap,
+  type BasemapErrorEvent,
   type ExternalBasemapStatus,
   type ExternalBasemapWatch,
 } from './maplibre-basemap-watch';
@@ -91,6 +93,20 @@ const initialViewStateFor = (
       };
 
 /**
+ * Su kien `error` cua MapLibre → dieu watch can: loi cua NGUON nao (o tile / TileJSON co `tile` /
+ * `sourceId`; sprite, phong chu thi khong), va luc do moi o dang xin da xong het chua. MapLibre dat
+ * `tile.state = 'errored'` TRUOC khi phat loi, nen cau hoi nay dung ngay o loi cuoi cung.
+ */
+const toWatchError = (event: MapErrorEvent): BasemapErrorEvent => {
+  const detail = event as unknown as { readonly tile?: unknown; readonly sourceId?: string };
+  return {
+    tile: detail.tile,
+    sourceId: detail.sourceId,
+    tilesSettled: event.target.areTilesLoaded(),
+  };
+};
+
+/**
  * Watch song TRONG effect, khong trong luc ve: tao no la bat dong ho. Cac handler su kien doc watch
  * dang song qua `ref`; `reactStrictMode` gan-go-gan thi watch thu nhat da `dispose` va im lang.
  */
@@ -164,7 +180,11 @@ export function MapLibreBasemap({
        * Chi thay trinh bao loi mac dinh (`console.error` moi o tile) khi CO watch: ly do da nam tren
        * `data-basemap-fallback`. Nen cuc bo giu nguyen trinh bao mac dinh cua react-map-gl.
        */
-      onError={onExternalStatus === undefined ? undefined : () => watch.current?.onError()}
+      onError={
+        onExternalStatus === undefined
+          ? undefined
+          : (event) => watch.current?.onError(toWatchError(event))
+      }
     >
       <NavigationControl position="top-right" showCompass={false} />
       <ScaleControl position="bottom-left" unit="metric" />

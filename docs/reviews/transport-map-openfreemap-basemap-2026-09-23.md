@@ -7,24 +7,24 @@
 
 ## Phương pháp
 
-| Mục        | Giá trị |
-| ---------- | ------- |
-| Web        | `next dev` **thật** của nhánh, gói khách `tenants/transport-preview`, Chromium (Playwright 1.62.1), khung **1440×900** |
-| API        | Chặn ở tầng mạng như bộ e2e (`page.route`) — vòng chạy Hà Nội ⇄ Hải Phòng: chặng CÓ HÀNG (mốc neo + vệt GPS thô) và chặng RỖNG (vệt GPS thô). Toạ độ vệt thô là **dữ liệu thử gần đúng** dọc QL5 / cao tốc, không phải GPS thật |
-| Nền        | A–B gọi **instance công khai thật** `tiles.openfreemap.org`; C giữ rồi chặn mọi yêu cầu tới máy chủ đó ngay trong trình duyệt; C2 trả một style giả dạng OpenFreeMap rồi chặn mọi ô tile; D là chế độ CI (`provider=local`) |
-| Đo tuyến   | Đếm điểm ảnh gần `--tx-go` (CÓ HÀNG) / `--tx-stop` (RỖNG) trên ảnh chụp khung bản đồ |
-| Đo khớp    | Kéo bản đồ một quãng biết trước, đo trọng tâm các điểm ảnh tuyến dời bao nhiêu — lớp tuyến dùng chung camera với nền thì dời **đúng** bằng quãng kéo |
-| Bài kiểm   | `apps/web/e2e/transport/transport-operations.spec.ts`: khối `@openfreemap-basemap` (A–C2) và bài Lane N đầu tiên (D) |
+| Mục      | Giá trị                                                                                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web      | `next dev` **thật** của nhánh, gói khách `tenants/transport-preview`, Chromium (Playwright 1.62.1), khung **1440×900**                                                                                                          |
+| API      | Chặn ở tầng mạng như bộ e2e (`page.route`) — vòng chạy Hà Nội ⇄ Hải Phòng: chặng CÓ HÀNG (mốc neo + vệt GPS thô) và chặng RỖNG (vệt GPS thô). Toạ độ vệt thô là **dữ liệu thử gần đúng** dọc QL5 / cao tốc, không phải GPS thật |
+| Nền      | A–B gọi **instance công khai thật** `tiles.openfreemap.org`; C giữ rồi chặn mọi yêu cầu tới máy chủ đó ngay trong trình duyệt; C2 trả một style giả dạng OpenFreeMap rồi chặn mọi ô tile; D là chế độ CI (`provider=local`)     |
+| Đo tuyến | Đếm điểm ảnh gần `--tx-go` (CÓ HÀNG) / `--tx-stop` (RỖNG) trên ảnh chụp khung bản đồ                                                                                                                                            |
+| Đo khớp  | Kéo bản đồ một quãng biết trước, đo trọng tâm các điểm ảnh tuyến dời bao nhiêu — lớp tuyến dùng chung camera với nền thì dời **đúng** bằng quãng kéo                                                                            |
+| Bài kiểm | `apps/web/e2e/transport/transport-operations.spec.ts`: khối `@openfreemap-basemap` (A–C2) và bài Lane N đầu tiên (D)                                                                                                            |
 
 ## Kết quả
 
-| #   | Kịch bản | `data-basemap` | `data-basemap-fallback` | Tuyến (px CÓ HÀNG / RỖNG) | Ra ngoài máy chủ web | Ảnh |
-| --- | -------- | -------------- | ----------------------- | ------------------------- | -------------------- | --- |
-| A   | OpenFreeMap thật, không cấu hình gì | `OPENFREEMAP`, `aria-busy="false"`, **không** câu thông báo | — | 6384 / 4437 | chỉ `tiles.openfreemap.org`: style, TileJSON, ô tile, sprite, phông; **0** tham số truy vấn; `Referer` chỉ là origin; **0** chunk Google | ![](transport-map-openfreemap-basemap/assets/01-openfreemap-thanh-cong.png) |
-| B   | Lùi 1 mức → kéo (−140, +60) px → kéo ngược → phóng 2 mức | `OPENFREEMAP` | — | 7473 / 4911 (sau khi phóng) | như A | ![](transport-map-openfreemap-basemap/assets/02-openfreemap-keo-phong.png) |
-| C   | Style bị **giữ** (bản đồ + lớp deck.gl đã khởi tạo trên nền OpenFreeMap, tuyến đã vẽ) rồi bị **chặn** | `LOCAL_FALLBACK` | `OPENFREEMAP_STYLE_FAILED` | 6379 / 4436 | yêu cầu đầu tiên đúng là `…/styles/liberty`; mọi yêu cầu chỉ tới OpenFreeMap | ![](transport-map-openfreemap-basemap/assets/03-openfreemap-bi-chan-lui-ve-cuc-bo.png) |
-| C2  | Style **áp vào**, rồi **mọi** ô tile hỏng (hỏng MUỘN) | `LOCAL_FALLBACK` | `OPENFREEMAP_TILES_FAILED` | 6379 / 4436 | — | — |
-| D   | Chế độ CI (`provider=local`), vòng chỉ có chặng CÓ HÀNG | `LOCAL_FALLBACK` | `LOCAL_SELECTED` | CÓ HÀNG > 200 / RỖNG **0** (đúng dữ liệu) | **0** yêu cầu ra ngoài, **0** chunk Google; worker `/maplibre/maplibre-gl-worker.mjs` 200 `application/javascript` | ![](transport-map-openfreemap-basemap/assets/04-ci-nen-cuc-bo-khong-mang.png) |
+| #   | Kịch bản                                                                                              | `data-basemap`                                              | `data-basemap-fallback`    | Tuyến (px CÓ HÀNG / RỖNG)                 | Ra ngoài máy chủ web                                                                                                                     | Ảnh                                                                                    |
+| --- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| A   | OpenFreeMap thật, không cấu hình gì                                                                   | `OPENFREEMAP`, `aria-busy="false"`, **không** câu thông báo | —                          | 6384 / 4437                               | chỉ `tiles.openfreemap.org`: style, TileJSON, ô tile, sprite, phông; **0** tham số truy vấn; `Referer` chỉ là origin; **0** chunk Google | ![](transport-map-openfreemap-basemap/assets/01-openfreemap-thanh-cong.png)            |
+| B   | Lùi 1 mức → kéo (−140, +60) px → kéo ngược → phóng 2 mức                                              | `OPENFREEMAP`                                               | —                          | 7473 / 4911 (sau khi phóng)               | như A                                                                                                                                    | ![](transport-map-openfreemap-basemap/assets/02-openfreemap-keo-phong.png)             |
+| C   | Style bị **giữ** (bản đồ + lớp deck.gl đã khởi tạo trên nền OpenFreeMap, tuyến đã vẽ) rồi bị **chặn** | `LOCAL_FALLBACK`                                            | `OPENFREEMAP_STYLE_FAILED` | 6379 / 4436                               | yêu cầu đầu tiên đúng là `…/styles/liberty`; mọi yêu cầu chỉ tới OpenFreeMap                                                             | ![](transport-map-openfreemap-basemap/assets/03-openfreemap-bi-chan-lui-ve-cuc-bo.png) |
+| C2  | Style **áp vào**, rồi **mọi** ô tile hỏng (hỏng MUỘN)                                                 | `LOCAL_FALLBACK`                                            | `OPENFREEMAP_TILES_FAILED` | 6379 / 4436                               | —                                                                                                                                        | —                                                                                      |
+| D   | Chế độ CI (`provider=local`), vòng chỉ có chặng CÓ HÀNG                                               | `LOCAL_FALLBACK`                                            | `LOCAL_SELECTED`           | CÓ HÀNG > 200 / RỖNG **0** (đúng dữ liệu) | **0** yêu cầu ra ngoài, **0** chunk Google; worker `/maplibre/maplibre-gl-worker.mjs` 200 `application/javascript`                       | ![](transport-map-openfreemap-basemap/assets/04-ci-nen-cuc-bo-khong-mang.png)          |
 
 Chấm tròn chữ “N” ở góc trái dưới các ảnh là chỉ báo chế độ dev của Next.js (`nextjs-portal`), không
 phải một phần của sản phẩm.
@@ -59,6 +59,26 @@ mock → `next dev` biên dịch trang 404 (~10 s) ngay giữa lúc bản đồ 
 đẩy ô tile đầu tiên qua hạn 15 s và ra `OPENFREEMAP_TIMEOUT`. Khối `@openfreemap-basemap` nay mock
 danh sách đó; hạn 15 s giữ nguyên cho người dùng thật (tệp worker tĩnh).
 
+**`idle` không đến khi mọi ô tile hỏng** (đo trên trình duyệt thật, kịch bản C2): ô tile bị chặn lúc
+15,2 s, tới 25,1 s vẫn chưa có `idle`, nên bản đầu ra `OPENFREEMAP_TIMEOUT` thay vì
+`OPENFREEMAP_TILES_FAILED` (và chậm 10 s). Nguyên nhân trong MapLibre 6.8 (`TileManager._loadTile`):
+ô tile lỗi khác 404 được đặt `errored` rồi phát `error` nhưng **không** gọi `update()`, nên không gì
+lên lịch khung vẽ mới — `idle` chỉ đến nếu tình cờ có khung khác. Sửa: ở mỗi lỗi của nguồn, watch hỏi
+`map.areTilesLoaded()` (ô `errored` tính là xong); xong hết mà chưa ô nào nạp được thì kết luận ngay.
+Sau sửa, khối `@openfreemap-basemap` chạy `--repeat-each=2`: **6/6 xanh**, C2 kết luận trong ~14–16 s
+tổng thời gian bài (gồm cả mở trang), không còn phụ thuộc thời điểm.
+
+## Review mã độc lập trước khi đẩy — hai điểm, đã sửa
+
+1. **(Cao)** Watch dừng đồng hồ ngay khi ô tile đầu tiên về, rồi chỉ chờ `idle`. Một ô tile / bộ
+   phông chữ **treo** sau đó (không lỗi, không xong) ⇒ `idle` không bao giờ đến ⇒ `aria-busy="true"`
+   mãi, không trạng thái cuối. Sửa: hết hạn **luôn** ra trạng thái cuối — đã có ô tile thì `READY`
+   (nền đang hiện, không lùi), chưa có thì `TIMEOUT`. Bài mới trong `maplibre-basemap-watch.spec.ts`
+   **đỏ** trên mã trước sửa (1 failed / 14 passed), xanh sau sửa.
+2. **(Trung bình)** “`Referer` chỉ là origin” dựa vào mặc định của trình duyệt. Sửa: `next.config.mjs`
+   khai tường minh `Referrer-Policy: strict-origin-when-cross-origin` (cùng giá trị edge Caddy đã đặt
+   trên VM); bài Lane N của CI kiểm header.
+
 ## Chưa chứng minh / tồn đọng
 
 - **Instance công khai không SLA** — khi nó sập, người dùng thấy nền cục bộ + câu thông báo (C), mất
@@ -72,6 +92,9 @@ danh sách đó; hạn 15 s giữ nguyên cho người dùng thật (tệp worke
 - Ở `next dev` (có `reactStrictMode`, gắn–gỡ–gắn mỗi component) khung bản đồ mang **hai** canvas
   `deckgl-overlay`: một 1112×418 đang vẽ, một 300×150 không kích thước CSS còn lại từ lần gắn thứ
   nhất. Trong hai lần chạy **lạnh** (máy chủ dev đang biên dịch trang 404), ảnh screencast của trace
-  có lúc cho thấy lớp tuyến bị phóng to lệch khung; **không tái hiện** ở bốn lần chạy sau (số điểm ảnh
-  tuyến ổn định 6379–6384, độ lệch khi kéo 0,07 px). Chưa đo trên bản build production — ở đó mỗi
-  component chỉ gắn một lần. Ghi lại để người review biết, không phải đã loại trừ.
+  có lúc cho thấy lớp tuyến bị phóng to lệch khung; **không tái hiện** ở các lần chạy sau (số điểm ảnh
+  tuyến ổn định 6379–6384 ở mọi lần, độ lệch khi kéo 0,07 px). Chưa đo trên bản build production — ở
+  đó mỗi component chỉ gắn một lần. Ghi lại để người review biết, không phải đã loại trừ.
+- Hạn 15 s tính từ lúc gắn bản đồ, gồm cả tải worker (~500 KB chưa nén) + style + ô tile đầu. Mạng
+  rất chậm có thể lùi về nền cục bộ dù OpenFreeMap vẫn sống — tuyến và mốc không mất, chỉ mất nền cho
+  lần mở đó.

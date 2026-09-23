@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EXTERNAL_BASEMAP_TIMEOUT_MS,
   watchExternalBasemap,
+  type BasemapErrorEvent,
   type ExternalBasemapStatus,
   type ExternalBasemapWatch,
 } from '../maplibre-basemap-watch';
@@ -28,6 +29,25 @@ function harness(): Harness {
 
 const TILE = { tileID: { z: 9, x: 408, y: 228 } };
 
+/* Loi tai style: khong o tile, khong nguon — MapLibre phat TRUOC moi `styledata`. */
+const STYLE_ERROR: BasemapErrorEvent = { tilesSettled: true };
+/* Loi sprite / phong chu sau khi style da ap: cung khong o tile, khong nguon. */
+const ASSET_ERROR: BasemapErrorEvent = { tilesSettled: true };
+/* Loi mot o tile trong khi o khac con dang xin. */
+const TILE_ERROR_PENDING: BasemapErrorEvent = {
+  tile: TILE,
+  sourceId: 'openmaptiles',
+  tilesSettled: false,
+};
+/* Loi o tile CUOI CUNG — moi o dang xin da xong (MapLibre dat `errored` truoc khi phat loi). */
+const TILE_ERROR_LAST: BasemapErrorEvent = {
+  tile: TILE,
+  sourceId: 'openmaptiles',
+  tilesSettled: true,
+};
+/* TileJSON cua nguon khong tai duoc: loi co `sourceId`, khong co o tile nao. */
+const SOURCE_METADATA_ERROR: BasemapErrorEvent = { sourceId: 'openmaptiles', tilesSettled: true };
+
 describe('nen MapLibre ngoai cua mot ban do', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -52,7 +72,7 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
   it('tai style that bai (mang chan, may chu sap) → FAILED(STYLE_FAILED)', () => {
     const { watch, statuses } = harness();
 
-    watch.onError();
+    watch.onError(STYLE_ERROR);
 
     expect(statuses).toEqual([{ status: 'FAILED', failure: 'STYLE_FAILED' }]);
   });
@@ -62,11 +82,62 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
     const { watch, statuses } = harness();
 
     watch.onStyleData();
-    watch.onError();
-    watch.onError();
+    watch.onError(TILE_ERROR_PENDING);
+    watch.onError(TILE_ERROR_PENDING);
     watch.onIdle();
 
     expect(statuses).toEqual([{ status: 'FAILED', failure: 'TILES_FAILED' }]);
+  });
+
+  /*
+   * Do tren trinh duyet that 23/09/2026: moi o tile bi chan luc 15,2 s, toi 25,1 s van KHONG co
+   * `idle` — MapLibre khong len lich khung ve moi sau loi o tile khong phai 404. Watch ket luan ngay
+   * o loi cua o tile cuoi cung, khong cho `idle`.
+   */
+  it('moi o tile hong va KHONG co idle → TILES_FAILED ngay o loi cuoi, khong cho het han', () => {
+    const { watch, statuses } = harness();
+
+    watch.onStyleData();
+    watch.onError(TILE_ERROR_PENDING);
+    expect(statuses).toEqual([]);
+
+    watch.onError(TILE_ERROR_LAST);
+    expect(statuses).toEqual([{ status: 'FAILED', failure: 'TILES_FAILED' }]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('TileJSON cua nguon khong tai duoc, khong o nao khac dang xin → TILES_FAILED', () => {
+    const { watch, statuses } = harness();
+
+    watch.onStyleData();
+    watch.onError(SOURCE_METADATA_ERROR);
+
+    expect(statuses).toEqual([{ status: 'FAILED', failure: 'TILES_FAILED' }]);
+  });
+
+  it('loi sprite / phong chu KHONG bao gio ket luan hong tile, ke ca khi chua o nao dang xin', () => {
+    const { watch, statuses } = harness();
+
+    watch.onStyleData();
+    watch.onError(ASSET_ERROR);
+    expect(statuses).toEqual([]);
+
+    watch.onSourceData({ tile: TILE });
+    watch.onIdle();
+    expect(statuses).toEqual([{ status: 'READY' }]);
+  });
+
+  it('mot o tile hong trong khi o khac con tai → chua ket luan; o khac ve thi READY', () => {
+    const { watch, statuses } = harness();
+
+    watch.onStyleData();
+    watch.onError(TILE_ERROR_PENDING);
+    watch.onSourceData({ tile: TILE });
+    watch.onError(TILE_ERROR_LAST);
+    expect(statuses).toEqual([]);
+
+    watch.onIdle();
+    expect(statuses).toEqual([{ status: 'READY' }]);
   });
 
   it('o tile 404 thi MapLibre im lang — idle khong mot o nao van ra TILES_FAILED', () => {
@@ -83,9 +154,9 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
     const { watch, statuses } = harness();
 
     watch.onStyleData();
-    watch.onError();
+    watch.onError(ASSET_ERROR);
     watch.onSourceData({ tile: TILE });
-    watch.onError();
+    watch.onError(TILE_ERROR_LAST);
     watch.onIdle();
 
     expect(statuses).toEqual([{ status: 'READY' }]);
@@ -117,15 +188,32 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
     expect(statuses).toHaveLength(1);
   });
 
-  it('mot o tile hien ra truoc han → khong bao gio TIMEOUT, du idle den cham', () => {
+  it('mot o tile hien ra, idle den truoc han → READY, khong bao gio TIMEOUT', () => {
     const { watch, statuses } = harness();
 
     watch.onStyleData();
     watch.onSourceData({ tile: TILE });
-    vi.advanceTimersByTime(EXTERNAL_BASEMAP_TIMEOUT_MS * 4);
+    vi.advanceTimersByTime(EXTERNAL_BASEMAP_TIMEOUT_MS - 1);
+    watch.onIdle();
+    vi.advanceTimersByTime(EXTERNAL_BASEMAP_TIMEOUT_MS);
+
+    expect(statuses).toEqual([{ status: 'READY' }]);
+  });
+
+  /*
+   * Review 23/09/2026: mot o tile da ve, roi mot o khac / mot bo phong chu TREO (khong loi, khong
+   * xong) — `idle` khong bao gio den. Watch van phai ra trang thai cuoi, neu khong `aria-busy` treo
+   * mai. Nen dang hien mot phan, nen do la READY chu khong lui ve cuc bo.
+   */
+  it('da co o tile nhung mot yeu cau khac treo mai (khong idle) → READY dung han', () => {
+    const { watch, statuses } = harness();
+
+    watch.onStyleData();
+    watch.onSourceData({ tile: TILE });
+    vi.advanceTimersByTime(EXTERNAL_BASEMAP_TIMEOUT_MS - 1);
     expect(statuses).toEqual([]);
 
-    watch.onIdle();
+    vi.advanceTimersByTime(1);
     expect(statuses).toEqual([{ status: 'READY' }]);
   });
 
@@ -135,7 +223,7 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
     watch.onStyleData();
     watch.onSourceData({ tile: TILE });
     watch.onIdle();
-    watch.onError();
+    watch.onError(TILE_ERROR_LAST);
     watch.onIdle();
     vi.advanceTimersByTime(EXTERNAL_BASEMAP_TIMEOUT_MS * 2);
 
@@ -145,8 +233,8 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
   it('FAILED la trang thai CUOI — loi thu hai khong lam ban do nhay them lan nua', () => {
     const { watch, statuses } = harness();
 
-    watch.onError();
-    watch.onError();
+    watch.onError(STYLE_ERROR);
+    watch.onError(STYLE_ERROR);
     watch.onStyleData();
     watch.onIdle();
     vi.advanceTimersByTime(EXTERNAL_BASEMAP_TIMEOUT_MS);
@@ -167,7 +255,7 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
     expect(vi.getTimerCount()).toBe(1);
 
     watch.dispose();
-    watch.onError();
+    watch.onError(STYLE_ERROR);
     vi.advanceTimersByTime(EXTERNAL_BASEMAP_TIMEOUT_MS);
 
     expect(statuses).toEqual([]);
@@ -180,7 +268,7 @@ describe('nen MapLibre ngoai cua mot ban do', () => {
     ready.watch.onSourceData({ tile: TILE });
     ready.watch.onIdle();
     const failed = harness();
-    failed.watch.onError();
+    failed.watch.onError(STYLE_ERROR);
 
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -199,7 +287,7 @@ describe('OpenFreeMap hong → man hinh doi sang nen cuc bo (bai 13)', () => {
     const configured = resolveBasemap({});
     const { watch, statuses } = harness();
 
-    watch.onError();
+    watch.onError(STYLE_ERROR);
     const latest = statuses.at(-1);
     const shown = effectiveBasemap(configured, {
       mapLibre: latest?.status === 'FAILED' ? latest.failure : null,
