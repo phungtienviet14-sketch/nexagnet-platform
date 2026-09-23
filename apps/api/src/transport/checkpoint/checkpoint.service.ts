@@ -279,7 +279,6 @@ export class CheckpointService {
       capturedAt = observation.capturedAt;
     }
 
-    const receivedAt = this.now();
     try {
       /*
        * GHI MOC TREN DUONG DA KHOA — `#293` R2/R4.
@@ -297,6 +296,20 @@ export class CheckpointService {
       const checkpoint = await this.runs.underRunLock(command.runId, async (scope) => {
         this.revalidateUnderLock(scope, command, legId);
 
+        /*
+         * GIO NHAN lay DUOI khoa, khong phai truoc — `#363`.
+         *
+         * Khoa quyet dinh thu tu COMMIT cua moi lan ghi tren vong chay; mot gio lay TRUOC khoa thi
+         * khong theo thu tu do. Lan nhan hang toi cua khoa truoc, dong dau gio, roi xep hang sau mot
+         * lenh mo phien cho da lay khoa (dong dau MUON hon) se mang mot `receivedAt` nam TRUOC
+         * `startedAt` cua chinh phien ma no dong: `evaluateWaitingClose` tu choi y nhu voi mot dong
+         * ho bi keo lui (`WAITING_END_BEFORE_START`), phien o lai `OPEN` va giu vong chay o
+         * `OPEN_WAITING_SESSION` — du thu tu commit hoan toan hop le.
+         *
+         * Lay o day thi moi gio da dong dau truoc khi lan ghi truoc commit deu som hon gio nay (tren
+         * cung mot dong ho may chu): cac moc cua mot vong chay mang gio theo dung thu tu commit.
+         */
+        const receivedAt = this.now();
         return this.checkpoints.create(
           {
             type: command.type,
