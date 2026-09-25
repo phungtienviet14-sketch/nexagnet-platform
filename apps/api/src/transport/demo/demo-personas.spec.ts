@@ -116,7 +116,13 @@ describe('backfillDemoPersonaLogins — chi noi khi luat noi tai khoan cho phep 
   let first: { phone: string; login: string };
   let second: { phone: string; login: string };
 
+  // Tra lai dung gia tri cu cua moi truong, khong xoa bua — tep khac cung tien trinh co the can.
+  let previousTenant: string | undefined;
+  let previousTenantDir: string | undefined;
+
   beforeEach(() => {
+    previousTenant = process.env.TENANT;
+    previousTenantDir = process.env.TENANT_DIR;
     process.env.TENANT = 'transport-preview';
     delete process.env.TENANT_DIR;
     resetTenantCache();
@@ -141,7 +147,8 @@ describe('backfillDemoPersonaLogins — chi noi khi luat noi tai khoan cho phep 
   });
 
   afterEach(() => {
-    delete process.env.TENANT;
+    restoreEnv('TENANT', previousTenant);
+    restoreEnv('TENANT_DIR', previousTenantDir);
     resetTenantCache();
   });
 
@@ -218,3 +225,8 @@ describe('backfillDemoPersonaLogins — chi noi khi luat noi tai khoan cho phep 
     expect(prisma.drivers[0]?.authUserId).toBe('u-a');
   });
 });
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}

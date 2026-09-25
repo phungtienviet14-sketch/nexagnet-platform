@@ -502,7 +502,10 @@ export async function backfillDemoPersonaLoginsReport(
   return { created: created + drivers.created, skipped: drivers.skipped };
 }
 
-/** Giu nguyen hop dong cu: `seed-transport-demo.mjs` doc mot CON SO. */
+/**
+ * Ban chi tra CON SO tai khoan da tao — hop dong cu, giu cho cac bai kiem va cong cu doc so.
+ * `seed-transport-demo.mjs` dung `backfillDemoPersonaLoginsReport` de in ca ly do bo qua.
+ */
 export async function backfillDemoPersonaLogins(
   prisma: PrismaClient,
   options: Pick<DemoSeedOptions, 'driverPassword' | 'hashPassword'> = {},

@@ -193,6 +193,9 @@ describe('DriverAccountLinkService (#395 §1.8)', () => {
     expect(await reasonOf(service.setDriverAccount('khong-co', null, ACTOR))).toBe(
       'DRIVER_NOT_FOUND',
     );
+    await expect(service.setDriverAccount('khong-co', 'lx-an', ACTOR)).rejects.toThrow(
+      'Không tìm thấy hồ sơ lái xe này.',
+    );
   });
 
   /**

@@ -120,7 +120,7 @@ export class DriverAccountLinkService {
   private async write(driverId: string, authUserId: string | null): Promise<Driver> {
     try {
       const after = await this.fleet.updateDriver(driverId, { authUserId });
-      if (!after) throw this.driverNotFound(driverId);
+      if (!after) throw driverNotFound();
       return after;
     } catch (error) {
       if (authUserId !== null && isUniqueViolationOn(error, DRIVER_ACCOUNT_UNIQUE)) {
@@ -132,12 +132,8 @@ export class DriverAccountLinkService {
 
   private async requireDriver(driverId: string): Promise<Driver> {
     const driver = await this.fleet.findDriver(driverId);
-    if (!driver) throw this.driverNotFound(driverId);
+    if (!driver) throw driverNotFound();
     return driver;
-  }
-
-  private driverNotFound(driverId: string): TransportDomainError {
-    return TransportDomainError.notFound('DRIVER_NOT_FOUND', `Khong tim thay lai xe ${driverId}`);
   }
 
   private deny(reason: AccountLinkErrorReason, detail: Readonly<Record<string, unknown>>): never {
@@ -158,4 +154,9 @@ export class DriverAccountLinkService {
       detail,
     });
   }
+}
+
+/** Cau cho nguoi dung — co dau, khong lo ma ho so (ma nam o `reason` + duong dan route). */
+function driverNotFound(): TransportDomainError {
+  return TransportDomainError.notFound('DRIVER_NOT_FOUND', 'Không tìm thấy hồ sơ lái xe này.');
 }
