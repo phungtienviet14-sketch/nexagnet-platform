@@ -1,8 +1,9 @@
 # Phát hành Nexagent Transport — Android & iOS (#394)
 
-> Trạng thái đo **25/09/2026**: `NATIVE_ANDROID_RELEASE_READY_NOT_PLAY_SUBMITTED` ·
-> `NATIVE_IOS_STORE_READY_BUT_NOT_SUBMITTED`. Chưa có tài khoản cửa hàng, chưa có khoá ký — mọi bản
-> CI dựng ra hôm nay là bản **ký khoá debug / không ký**, **không** nộp lên cửa hàng được.
+> Mốc dừng của #394: `NATIVE_ANDROID_RELEASE_READY_NOT_PLAY_SUBMITTED` ·
+> `NATIVE_IOS_STORE_READY_BUT_NOT_SUBMITTED` — **CHƯA đạt** (đo 25/09/2026; thiếu gì: §6). Chưa có
+> tài khoản cửa hàng, chưa có khoá ký — mọi bản CI dựng ra hôm nay là bản **ký khoá debug / không
+> ký**, **không** nộp lên cửa hàng được.
 
 ## 1. Danh tính — chủ sở hữu phải xác nhận TRƯỚC lần tải lên đầu tiên
 
@@ -97,7 +98,20 @@ là `native:prebuild`.
 
 ## 6. Còn thiếu để nói "đã phát hành"
 
-- Chủ sở hữu: tài khoản Play + Apple, khoá tải lên + 4 secret, chốt tên hiển thị và bundle ID.
+Trong ứng dụng — việc của repo, chặn hai mốc dừng ở đầu tệp:
+
+- Lái xe: tab **Nhiên liệu** và **Tiền** mới là màn giữ chỗ ("Đang dựng màn này") — chưa ghi được
+  nhiên liệu, chưa xem được quỹ.
+- Kế toán: **Thu tiền** và **Lái xe** hiện chỉ đọc.
+- Đổi mật khẩu trong ứng dụng chưa có: tài khoản bị buộc đổi (`PASSWORD_CHANGE_REQUIRED`) phải đổi
+  trên web; hàng đợi tạm dừng rồi tự gửi tiếp khi đăng nhập lại. Chờ hợp đồng đổi mật khẩu của #395.
+- Máy ảnh/tệp: bằng chứng tự động duy nhất là flow Maestro 05 **tuỳ chọn** (chọn ảnh thư viện trên
+  máy ảo, không chặn job). Máy ảnh thật chưa kiểm trên thiết bị thật.
+- iOS: mới dựng + mở được trên iPhone Simulator; chưa có smoke đăng nhập/luồng trên iOS.
+
+Việc của chủ sở hữu:
+
+- Tài khoản Play + Apple, khoá tải lên + 4 secret, chốt tên hiển thị và bundle ID.
 - Chạy `mobile.yml` xanh với secret ⇒ `build-metadata.json` phải ghi `signing: upload-key`.
 - Play: closed testing 14 ngày/12 người (M-02); nếu bật bám nền production thì khai báo + video (M-01).
 - Chưa có thiết bị thật: bám vị trí nền vẫn là **RESEARCHED / NOT DEVICE-PROVEN** (§7.4 của

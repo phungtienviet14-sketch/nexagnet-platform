@@ -4,7 +4,7 @@
 # he thong (Android Photo Picker) doi giao dien theo ban Google Play system update cua image — vi
 # tri anh dau tien khong on dinh giua cac lan cap nhat image. Flow nay chay o buoc rieng
 # `continue-on-error`; xanh la tin tot, do KHONG chan ban dung. Duong camera that: kiem tay tren may
-# that (docs/phat-hanh.md §7).
+# that (docs/phat-hanh.md §6).
 #
 # Anh day len thu vien may ao = icon cua ung dung (anh bat ky; may chu khong doc noi dung anh).
 # May chu ghi rui ro `PHOTO_FROM_GALLERY` cho anh lay tu thu vien — dung hanh vi mong doi.
