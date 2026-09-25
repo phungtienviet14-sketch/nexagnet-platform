@@ -5,6 +5,11 @@ import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import {
+  ClientDescriptorController,
+  clientTenantDescriptorProvider,
+} from './client-descriptor.controller.js';
+import { NativeSessionController } from './native-session.controller.js';
 import { Argon2PasswordService, PasswordService } from './password.service.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
 import { InMemoryUserRepository, UserRepository } from './user.repository.js';
@@ -13,7 +18,12 @@ import { UsersController } from './users.controller.js';
 @Global()
 @Module({
   imports: [PrismaModule, OperationalSettingsModule],
-  controllers: [AuthController, UsersController],
+  controllers: [
+    AuthController,
+    NativeSessionController,
+    UsersController,
+    ClientDescriptorController,
+  ],
   providers: [
     {
       provide: UserRepository,
@@ -25,6 +35,7 @@ import { UsersController } from './users.controller.js';
     },
     { provide: PasswordService, useClass: Argon2PasswordService },
     AuthService,
+    clientTenantDescriptorProvider,
   ],
   exports: [AuthService, UserRepository, PasswordService],
 })

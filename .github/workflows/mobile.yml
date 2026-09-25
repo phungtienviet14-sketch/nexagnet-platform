@@ -1,0 +1,429 @@
+name: mobile
+
+# UNG DUNG DI DONG Nexagent Transport (#394) — Android + iOS dung THAT tren runner GitHub.
+#
+# Workflow RIENG, khong phai job trong ci.yml: bay job cua ci.yml la status check BAT BUOC khop theo
+# TEN (docs/phat-trien/van-hanh/ci-cd.md). Them job o day khong doi tap check bat buoc; muon bat buoc
+# thi sua ruleset rieng (github-governance.md).
+#
+# `android/` va `ios/` KHONG commit (Continuous Native Generation): moi job tu `expo prebuild` tu
+# app.config.ts. Goi `pnpm exec expo prebuild` TRUC TIEP — khong goi mot script ten `prebuild`/
+# `pre*`: pnpm chay no nhu hook truoc `build` (da lam do `pnpm build` cua verify).
+#
+# Khong can secret nao de XANH: thieu khoa tai len thi release ky bang khoa debug cong khai va
+# build-metadata.json ghi `signing: debug-key-NOT-FOR-STORE`. Khong buoc nao nop len Play/App Store.
+
+on:
+  pull_request:
+    paths:
+      - 'apps/transport-mobile/**'
+      - 'packages/driver-outbox/**'
+      - 'apps/api/src/auth/**'
+      - 'apps/api/src/transport/**'
+      - 'apps/api/prisma/**'
+      - 'tenants/transport-preview/**'
+      - 'deploy/netviet/seed-transport-demo.mjs'
+      - 'tools/mobile-smoke/**'
+      - '.github/workflows/mobile.yml'
+      - 'pnpm-lock.yaml'
+      - '.pnpmfile.cjs'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/transport-mobile/**'
+      - 'packages/driver-outbox/**'
+      - 'apps/api/src/auth/**'
+      - 'apps/api/src/transport/**'
+      - 'apps/api/prisma/**'
+      - 'tenants/transport-preview/**'
+      - 'deploy/netviet/seed-transport-demo.mjs'
+      - 'tools/mobile-smoke/**'
+      - '.github/workflows/mobile.yml'
+      - 'pnpm-lock.yaml'
+      - '.pnpmfile.cjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Expo CLI khong goi api.expo.dev (khong EAS, khong dang nhap) — moi thu dung tu repo.
+  EXPO_OFFLINE: '1'
+  EXPO_NO_TELEMETRY: '1'
+
+jobs:
+  # --------------------------------------------------------------------------------------------
+  # JS + hop dong cau hinh native — nhanh, chay truoc; hai job native doi no.
+  # --------------------------------------------------------------------------------------------
+  mobile-js:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - name: Build goi workspace ma app di dong phu thuoc
+        run: pnpm --filter "@nexagnet/transport-mobile^..." build
+      - run: pnpm --filter @nexagnet/transport-mobile typecheck
+      - run: pnpm --filter @nexagnet/transport-mobile test
+      # Doc AndroidManifest/Info.plist/PrivacyInfo/build.gradle SINH RA boi prebuild that, 5 to hop bien.
+      - name: Hop dong cau hinh native (prebuild android + ios)
+        run: pnpm --filter @nexagnet/transport-mobile test:native-config
+      - name: Bo doc ho so ban dung Android
+        run: pnpm --filter @nexagnet/transport-mobile test:release-tools
+      - name: Bundle Hermes Android + iOS (expo export)
+        run: pnpm --filter @nexagnet/transport-mobile build
+      # Buoc RIENG va chua chan: ban web (PWA) con dang duoc lam song song. Khi no on dinh thi bo
+      # `continue-on-error` de loi web cung lam do job.
+      - name: Export web (PWA)
+        continue-on-error: true
+        run: pnpm --filter @nexagnet/transport-mobile export:web
+
+  # --------------------------------------------------------------------------------------------
+  # ANDROID — ba ban dung song song (ma tran), moi ban mot lan prebuild --clean:
+  #   preview-apk    APK cai tay cho nguoi thu (ID .preview)
+  #   production-aab AAB cho Play (ID goc) — chi len store duoc khi ky bang khoa tai len
+  #   e2e-apk        APK x86_64 cho may ao: HTTP tran CHI toi 10.0.2.2, KHONG phan phoi
+  # --------------------------------------------------------------------------------------------
+  mobile-android:
+    needs: mobile-js
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - id: preview-apk
+            variant: preview
+            background: 'on'
+            cleartext: 'off'
+            server: ''
+            task: ':app:assembleRelease'
+            output: app/build/outputs/apk/release/app-release.apk
+            kind: apk
+            abis: 'armeabi-v7a,arm64-v8a,x86_64'
+            artifact: nexagent-transport-preview-apk
+            retention: 30
+            signable: true
+          - id: production-aab
+            variant: production
+            background: 'off'
+            cleartext: 'off'
+            server: ''
+            task: ':app:bundleRelease'
+            output: app/build/outputs/bundle/release/app-release.aab
+            kind: aab
+            abis: 'armeabi-v7a,arm64-v8a,x86,x86_64'
+            artifact: nexagent-transport-production-aab
+            retention: 30
+            signable: true
+          - id: e2e-apk
+            variant: preview
+            background: 'on'
+            cleartext: 'on'
+            server: 'http://10.0.2.2:3001'
+            task: ':app:assembleRelease'
+            output: app/build/outputs/apk/release/app-release.apk
+            kind: apk
+            abis: 'x86_64'
+            artifact: nexagent-transport-e2e-apk
+            retention: 7
+            signable: false
+    env:
+      APP_VARIANT: ${{ matrix.build.variant }}
+      APP_BACKGROUND_LOCATION: ${{ matrix.build.background }}
+      APP_E2E_CLEARTEXT: ${{ matrix.build.cleartext }}
+      APP_BUILD_NUMBER: ${{ github.run_number }}
+      APP_GIT_SHA: ${{ github.sha }}
+      EXPO_PUBLIC_DEFAULT_SERVER_URL: ${{ matrix.build.server }}
+      # Mat khau khoa tai len: chi cho ban phan phoi duoc. Ban e2e KHONG BAO GIO ky bang khoa that.
+      # Secret vang (fork, chua cau hinh) => chuoi rong => plugin giu khoa debug.
+      ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ matrix.build.signable && secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD || '' }}
+      ANDROID_UPLOAD_KEY_ALIAS: ${{ matrix.build.signable && secrets.ANDROID_UPLOAD_KEY_ALIAS || '' }}
+      ANDROID_UPLOAD_KEY_PASSWORD: ${{ matrix.build.signable && secrets.ANDROID_UPLOAD_KEY_PASSWORD || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      # NDK ma catalog cua RN 0.86 ghim KHONG co san tren ubuntu-24.04 (image co 27.3). CMake 3.22.1
+      # la mac dinh cua AGP khi module khong ghi phien ban.
+      - name: Cai NDK 27.1.12297006 + CMake 3.22.1
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.1.12297006" "cmake;3.22.1" > /dev/null
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches/modules-2
+          key: gradle-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/transport-mobile/app.config.ts') }}
+          restore-keys: gradle-deps-${{ runner.os }}-
+      - name: Build goi workspace ma app di dong phu thuoc
+        run: pnpm --filter "@nexagnet/transport-mobile^..." build
+      # Khoi phuc khoa tai len TU SECRET, chi khi co. Tep nam trong $RUNNER_TEMP (ngoai workspace,
+      # khong bao gio vao artifact); gia tri khong in ra log.
+      - name: Khoi phuc khoa tai len (neu co secret)
+        if: matrix.build.signable
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "Khong co ANDROID_UPLOAD_KEYSTORE_BASE64 -> release ky bang khoa DEBUG (debug-key-NOT-FOR-STORE)."
+            exit 0
+          fi
+          keystore="$RUNNER_TEMP/upload-keystore.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          echo "ANDROID_UPLOAD_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+      - name: expo prebuild android (${{ matrix.build.variant }})
+        working-directory: apps/transport-mobile
+        run: pnpm exec expo prebuild --platform android --no-install --clean
+      - name: Gradle ${{ matrix.build.task }}
+        working-directory: apps/transport-mobile/android
+        run: >-
+          ./gradlew ${{ matrix.build.task }}
+          --no-daemon --stacktrace
+          -PreactNativeArchitectures=${{ matrix.build.abis }}
+          -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+      - name: Ho so ban dung (build-metadata.json)
+        working-directory: apps/transport-mobile
+        run: |
+          out="$RUNNER_TEMP/out"
+          mkdir -p "$out"
+          file="nexagent-transport-${{ matrix.build.id }}-${{ github.run_number }}.${{ matrix.build.kind }}"
+          cp "android/${{ matrix.build.output }}" "$out/$file"
+          node scripts/android-artifact-metadata.mjs \
+            --artifact "$out/$file" --kind ${{ matrix.build.kind }} \
+            --variant ${{ matrix.build.variant }} --background ${{ matrix.build.background }} \
+            --gradle android/app/build.gradle --out "$out/build-metadata.json"
+          node -e '
+            const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const rows = ["artifact","applicationId","versionName","versionCode","signing","sha256","sizeBytes"];
+            console.log(`### ${m.artifact}\n\n| | |\n|---|---|\n` + rows.map((k) => `| ${k} | \`${m[k]}\` |`).join("\n"));
+          ' "$out/build-metadata.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.build.artifact }}
+          path: ${{ runner.temp }}/out/
+          retention-days: ${{ matrix.build.retention }}
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------------------------
+  # SMOKE MAESTRO tren may ao Android, noi API THAT + Postgres THAT cua chinh runner nay.
+  # --------------------------------------------------------------------------------------------
+  mobile-android-e2e:
+    needs: mobile-android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: netviet
+          POSTGRES_PASSWORD: netviet_local
+          POSTGRES_DB: netviet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U netviet"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://netviet:netviet_local@localhost:5432/netviet
+      TENANT: transport-preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - name: Build API + goi workspace
+        run: pnpm --filter "@netviet/api..." build
+      - name: Migrate Postgres tam
+        run: pnpm --filter @netviet/api exec prisma migrate deploy --schema prisma/schema.prisma
+      # Mat khau cho CA ba vai mau + bi mat phien: ngau nhien moi lan chay, che trong log truoc khi
+      # dung. Chi song trong runner nay.
+      - name: Sinh thong tin dang nhap dung mot lan
+        run: |
+          minted_login="$(openssl rand -hex 24)"
+          minted_session="$(openssl rand -hex 32)"
+          echo "::add-mask::${minted_login}"
+          echo "::add-mask::${minted_session}"
+          {
+            echo "SMOKE_PASSWORD=${minted_login}"
+            echo "TRANSPORT_DEMO_DRIVER_PASSWORD=${minted_login}"
+            echo "SESSION_SECRET=${minted_session}"
+          } >> "$GITHUB_ENV"
+      # DUONG GIEO CHINH THUC cua stack xem truoc (deploy-stack.sh/Railway dung dung tep nay). KHONG
+      # dung bai IT `src/transport/demo` cua ci.yml: bai do bam mat khau gia va XOA SACH du lieu o
+      # afterAll — chay no xong DB rong, khong ai dang nhap duoc.
+      - name: Gieo the gioi van tai mau
+        run: node deploy/netviet/seed-transport-demo.mjs
+      - name: Khoi dong API (nen) — AUTH_MODE=session, PERSISTENCE=prisma
+        working-directory: apps/api
+        env:
+          AUTH_MODE: session
+          PERSISTENCE: prisma
+          TENANT_DIR: ${{ github.workspace }}/tenants/transport-preview
+          PORT: '3001'
+          NODE_ENV: development
+        run: |
+          nohup node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/health > /dev/null; then echo "API da len"; exit 0; fi
+            sleep 2
+          done
+          tail -100 "$RUNNER_TEMP/api.log"
+          exit 1
+      - name: Dung vong chay ACTIVE cho lai xe (qua API, bang phien Giam doc)
+        run: node tools/mobile-smoke/prepare.mjs
+        env:
+          SMOKE_API_URL: http://127.0.0.1:3001
+          SMOKE_OUTPUT: ${{ runner.temp }}/mobile-smoke.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexagent-transport-e2e-apk
+          path: ${{ runner.temp }}/e2e-apk
+      - name: Bat KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Cai Maestro 2.10.0
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | MAESTRO_VERSION=2.10.0 bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: May ao API 35 + Maestro
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          MAESTRO_CLI_NO_ANALYTICS: '1'
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: '180000'
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash tools/mobile-smoke/run-maestro.sh "${{ runner.temp }}/e2e-apk" "${{ runner.temp }}/e2e-out"
+      - name: Gom nhat ky
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          cp "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/e2e-out/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/mobile-smoke.json" "$RUNNER_TEMP/e2e-out/" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nexagent-transport-e2e-report
+          path: ${{ runner.temp }}/e2e-out/
+          retention-days: 14
+
+  # --------------------------------------------------------------------------------------------
+  # iOS — ban Simulator (khong ky) tren macos-26: SDK 57 can Xcode >= 26.4, macos-15 toi da 26.3.
+  # --------------------------------------------------------------------------------------------
+  mobile-ios:
+    needs: mobile-js
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      APP_VARIANT: preview
+      APP_BUILD_NUMBER: ${{ github.run_number }}
+      APP_GIT_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chon Xcode 26.6
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          else
+            echo "::warning::Khong co /Applications/Xcode_26.6.app — dung Xcode mac dinh cua image."
+            ls -d /Applications/Xcode*.app
+          fi
+          xcodebuild -version
+      - uses: ./.github/actions/setup-workspace
+      - name: Build goi workspace ma app di dong phu thuoc
+        run: pnpm --filter "@nexagnet/transport-mobile^..." build
+      - name: expo prebuild ios (preview)
+        working-directory: apps/transport-mobile
+        run: pnpm exec expo prebuild --platform ios --no-install --clean
+      - name: pod install
+        working-directory: apps/transport-mobile/ios
+        run: pod install
+      # Ten workspace/scheme SUY tu du an vua sinh (Expo lam sach `name`: "Nexagent Transport (Thử)"
+      # -> NexagentTransportTh), khong ghi cung.
+      - name: xcodebuild Release cho iOS Simulator (khong ky)
+        working-directory: apps/transport-mobile
+        run: |
+          project="$(basename "$(ls -d ios/*.xcodeproj | head -n 1)" .xcodeproj)"
+          echo "IOS_PROJECT=$project" >> "$GITHUB_ENV"
+          xcodebuild -workspace "ios/$project.xcworkspace" -scheme "$project" \
+            -configuration Release -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/xcodebuild.log" 2>&1 \
+            || { tail -200 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+          tail -5 "$RUNNER_TEMP/xcodebuild.log"
+      - name: Nen .app + ho so ban dung
+        working-directory: apps/transport-mobile
+        run: |
+          app="build/Build/Products/Release-iphonesimulator/$IOS_PROJECT.app"
+          out="$RUNNER_TEMP/ios-out"
+          mkdir -p "$out"
+          zip_name="nexagent-transport-ios-simulator-${{ github.run_number }}.zip"
+          ditto -c -k --keepParent "$app" "$out/$zip_name"
+          plist="$app/Info.plist"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" \
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" \
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" \
+          SHA="$(shasum -a 256 "$out/$zip_name" | cut -d' ' -f1)" \
+          SIZE="$(stat -f%z "$out/$zip_name")" \
+          node -e '
+            const e = process.env;
+            const m = { artifact: process.argv[1], kind: "ios-simulator-app", variant: e.APP_VARIANT,
+              bundleId: e.BUNDLE_ID, version: e.VERSION, build: e.BUILD, gitSha: e.GITHUB_SHA,
+              sha256: e.SHA, sizeBytes: Number(e.SIZE), signing: "unsigned-simulator-NOT-FOR-STORE" };
+            require("fs").writeFileSync(process.argv[2], JSON.stringify(m, null, 2) + "\n");
+            console.log(JSON.stringify(m, null, 2));
+          ' "$zip_name" "$out/build-metadata.json"
+          echo "APP_PATH=$PWD/$app" >> "$GITHUB_ENV"
+          echo "IOS_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexagent-transport-ios-simulator-app
+          path: ${{ runner.temp }}/ios-out/
+          retention-days: 30
+          if-no-files-found: error
+      # Mo that tren Simulator: cai, chay, cho 25 giay, chup man hinh, va doi tien trinh CON SONG
+      # (sap luc khoi dong la loi pho bien nhat ma xcodebuild xanh khong bat duoc).
+      - name: Cai + mo tren iPhone Simulator, chup man hinh
+        run: |
+          udid="$(xcrun simctl list devices available -j | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
+            const all = Object.entries(d).filter(([rt]) => rt.includes("iOS")).flatMap(([, v]) => v);
+            const pick = all.find((x) => x.name === "iPhone 17") ?? all.find((x) => x.name.startsWith("iPhone"));
+            if (!pick) process.exit(1);
+            console.log(pick.udid);
+          ')"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" "$APP_PATH"
+          xcrun simctl launch "$udid" "$IOS_BUNDLE_ID"
+          sleep 25
+          mkdir -p "$RUNNER_TEMP/ios-shot"
+          xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/ios-shot/ios-simulator-launch.png"
+          if ! xcrun simctl spawn "$udid" launchctl list | grep -q "$IOS_BUNDLE_ID"; then
+            echo "::error::Ung dung khong con chay sau 25 giay — sap luc khoi dong?"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nexagent-transport-ios-simulator-screenshot
+          path: ${{ runner.temp }}/ios-shot/
+          retention-days: 14
+          if-no-files-found: ignore

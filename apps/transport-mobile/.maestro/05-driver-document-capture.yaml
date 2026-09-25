@@ -1,0 +1,96 @@
+# TUY CHON — LAI XE chon anh chung tu tu THU VIEN (khong chup camera).
+#
+# Vi sao tuy chon: camera may ao la anh gia lap (hoac tat han `-camera-back none`), va bo chon anh
+# he thong (Android Photo Picker) doi giao dien theo ban Google Play system update cua image — vi
+# tri anh dau tien khong on dinh giua cac lan cap nhat image. Flow nay chay o buoc rieng
+# `continue-on-error`; xanh la tin tot, do KHONG chan ban dung. Duong camera that: kiem tay tren may
+# that (docs/phat-hanh.md §6).
+#
+# Anh day len thu vien may ao = icon cua ung dung (anh bat ky; may chu khong doc noi dung anh).
+# May chu ghi rui ro `PHOTO_FROM_GALLERY` cho anh lay tu thu vien — dung hanh vi mong doi.
+appId: com.nexagnet247.transport.preview
+tags:
+  - driver
+  - optional
+---
+- addMedia:
+    - ../assets/icon.png
+- setLocation:
+    latitude: ${MAESTRO_PICKUP_LAT}
+    longitude: ${MAESTRO_PICKUP_LNG}
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_DRIVER_USERNAME}
+- setPermissions:
+    permissions:
+      location: allow
+- extendedWaitUntil:
+    visible:
+      id: driver-next-action
+    timeout: 45000
+# Chung tu chi duoc goi y SAU moc tuong ung (may chu, field-actions.ts DOCUMENT_AFTER:
+# GATE_ENTRY -> GATE_PASS, LOADING -> LOADING_SLIP, PICKUP_DEPARTURE -> WEIGH_TICKET). Khi to chung
+# tu la VIEC CHINH, chinh nut ho phach `driver-next-action` mo to truot chon cach lay anh
+# (NextActionCard: hero DOCUMENT; run 36106374189 dung o do); `document-<TYPE>` chi la nut PHU.
+# Bam toi khi to truot hien ra. Regex khop TRON id nen `document-X-queued`/`-blocked` khong bi bam.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: capture-gallery
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: 'document-[A-Z_]+'
+          commands:
+            - tapOn:
+                id: 'document-[A-Z_]+'
+      - runFlow:
+          when:
+            notVisible:
+              id: capture-gallery
+          commands:
+            - tapOn:
+                id: driver-next-action
+      - extendedWaitUntil:
+          visible:
+            id: capture-gallery
+          timeout: 15000
+          optional: true
+- takeScreenshot: 05-chon-cach-lay-anh
+- tapOn:
+    id: capture-gallery
+# Bo chon anh he thong (Android Photo Picker, module MediaProvider; chon MOT anh thi tra ve ngay,
+# khong co nut Xong). O anh co id `<module>:id/icon_thumbnail`; ban khac mo ta anh bang
+# "Photo taken on …". KHONG bam toa do: bo chon mo dang nua-man, bam trung vung toi la huy.
+- extendedWaitUntil:
+    visible:
+      id: '.*icon_thumbnail'
+    timeout: 15000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: '.*icon_thumbnail'
+    commands:
+      - tapOn:
+          id: '.*icon_thumbnail'
+          index: 0
+- runFlow:
+    when:
+      visible: 'Photo taken on.*'
+    commands:
+      - tapOn: 'Photo taken on.*'
+- takeScreenshot: 05-da-chon-anh
+- extendedWaitUntil:
+    visible:
+      id: driver-flash
+    timeout: 30000
+- takeScreenshot: 05-da-luu-chung-tu
+- extendedWaitUntil:
+    visible: '.*thư viện.*'
+    timeout: 20000
+    optional: true
+- takeScreenshot: 05-anh-ghi-la-tu-thu-vien

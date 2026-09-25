@@ -102,3 +102,15 @@ tmp/
 # Bao cao tin hieu deploy — sinh ra o goc checkout luc chay CD (deploy-ci.sh), khong commit.
 deploy-signals.json
 deploy-signals.log
+
+# UNG DUNG DI DONG (#394) — Continuous Native Generation: `android/` va `ios/` duoc SINH tu
+# `app.config.ts` bang `expo prebuild`, khong commit. Sua quyen/icon/ID o app.config.ts, khong o day.
+apps/transport-mobile/android/
+apps/transport-mobile/ios/
+apps/transport-mobile/.expo/
+apps/transport-mobile/dist-web/
+# Kho ky phat hanh KHONG BAO GIO vao git — xem apps/transport-mobile/docs/phat-hanh.md
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

@@ -43,3 +43,7 @@ tenants/*
 # deliberately mirror a tenant package (`tenant.json`, `knowledge.json`) to exercise fail-fast loading.
 # Keep the structural image guard strict: exclude the test trees instead of teaching it fixture names.
 **/__tests__
+
+# UNG DUNG DI DONG (#394) — ma nguon Expo/React Native, KHONG chay trong image may chu. Loai khoi
+# build context de `COPY . .` khong keo no (va ban dung native sinh ra neu co) vao image.
+apps/transport-mobile

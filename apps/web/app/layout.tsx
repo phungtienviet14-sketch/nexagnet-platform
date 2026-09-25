@@ -1,4 +1,4 @@
-import { loadTenantConfig } from '@netviet/tenant';
+import { loadTenantConfig, toPublicTenantDescriptor } from '@netviet/tenant';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
@@ -10,7 +10,6 @@ import '../experiences/b2b-sales-operations/b2b-workspace.css';
 import '../experiences/transport-operations/transport-operations.css';
 import { Providers } from './providers';
 import { AuthGate } from '../components/auth/AuthGate';
-import { toPublicTenantDescriptor } from '../lib/tenant-runtime';
 
 /**
  * MOT IMAGE CHAY DUOC MOI KHACH. Mac dinh Next.js prerender TINH cac route nay luc `next build`,

@@ -13,6 +13,11 @@ export default tseslint.config(
       '**/next-env.d.ts',
       '**/logs/**',
       '**/.claude/worktrees/**',
+      // Ban xuat Expo (Hermes/web) va thu muc native SINH boi `expo prebuild` — khong phai nguon.
+      'apps/transport-mobile/dist*/**',
+      'apps/transport-mobile/android/**',
+      'apps/transport-mobile/ios/**',
+      'apps/transport-mobile/.expo/**',
       // Bo cong cu agent duoc cai vao repo ('.agents/', 'agents/'): do la ma nguon VENDOR cua
       // skill/plugin, khong phai ma nguon du an, va no khong theo rule TypeScript cua ta. De lai
       // thi mot lan cai skill se sinh hang nghin loi lint va CHAN moi lan push (17/08/2026: 1249
@@ -39,6 +44,14 @@ export default tseslint.config(
     files: ['apps/web/**/*.{ts,tsx}'],
     languageOptions: {
       globals: { ...globals.browser },
+    },
+  },
+  {
+    // Ung dung Android/iOS/PWA (#394): React Native co `fetch`/`FormData`/`AbortController` nhu
+    // trinh duyet, cong `__DEV__` cua Metro. Test thuan chay tren Node (`node:sqlite`).
+    files: ['apps/transport-mobile/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node, __DEV__: 'readonly' },
     },
   },
   {

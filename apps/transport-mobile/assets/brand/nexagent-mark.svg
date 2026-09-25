@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Nexagent Transport</title>
+  <!--
+    DAU HIEU UNG DUNG — nguon DUY NHAT cua moi icon/splash native (#394).
+
+    Hop dong voi scripts/generate-assets.mjs: trinh sinh doc NGUYEN khoi <defs> ben duoi va dung lai
+    hai id `monogram` + `road` de dung tung bien the (icon iOS phu kin, adaptive Android co vung an
+    toan, monochrome, splash, favicon). Doi hinh o day roi chay `pnpm assets:generate`; doi ten id
+    thi trinh sinh se dung lai va bao loi, khong lang le ve thieu.
+
+    Luoi 1024: chu N dac (than 124 px, net cheo ~115 px) + vach duong vang o day. O 48 px than chu
+    con ~6 px, vach duong ~3 px — van doc ra "N tren mat duong" chu khong thanh mot vet mo.
+  -->
+  <defs>
+    <path id="monogram" d="M272 688V200h124l232 300V200h124v488H628L396 388v300z" />
+    <g id="road">
+      <rect x="176" y="776" width="440" height="72" rx="36" />
+      <rect x="656" y="776" width="192" height="72" rx="36" />
+    </g>
+  </defs>
+  <rect id="tile" width="1024" height="1024" rx="224" fill="#0E5C63" />
+  <use href="#monogram" fill="#FFFFFF" />
+  <use href="#road" fill="#F2A516" />
+</svg>

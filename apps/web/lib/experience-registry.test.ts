@@ -1,6 +1,7 @@
 import {
   EXPERIENCE_IDS,
   EXPERIENCE_REQUIREMENTS,
+  toPublicTenantDescriptor,
   type CapabilityId,
   type TenantConfig,
 } from '@netviet/tenant';
@@ -10,7 +11,7 @@ import {
   resolveActiveSettingsSection,
   selectSettingsSectionIds,
 } from '../components/settings/settings-composition';
-import { hasZaloIntegration, toPublicTenantDescriptor } from './tenant-runtime';
+import { hasZaloIntegration } from './tenant-runtime';
 
 const operationsTenant = {
   schemaVersion: 2,

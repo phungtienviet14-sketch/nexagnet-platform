@@ -1,0 +1,28 @@
+# KE TOAN (vai ACCOUNTING) dang nhap va vao dung trai nghiem ke toan — 4 tab.
+#
+# Vai ACCOUNTING KHONG phai ADMIN bi cat bot: may chu tu choi no dung ba hanh dong (transport-
+# actions.ts). Smoke nay chi khang dinh ung dung chon DUNG bo man theo vai may chu tra ve.
+appId: com.nexagnet247.transport.preview
+tags:
+  - accounting
+  - smoke
+---
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_ACCOUNTING_USERNAME}
+- extendedWaitUntil:
+    visible: 'Cần duyệt'
+    timeout: 45000
+- assertVisible: 'Cần duyệt'
+- assertVisible: 'Thu tiền'
+- assertVisible: 'Lái xe'
+- assertVisible: 'Tổng quan'
+- assertNotVisible: 'Hôm nay'
+- takeScreenshot: 04-ke-toan-can-duyet
+- tapOn: 'Thu tiền'
+- takeScreenshot: 04-ke-toan-thu-tien
+- tapOn: 'Lái xe'
+- takeScreenshot: 04-ke-toan-lai-xe
+- tapOn: 'Tổng quan'
+- takeScreenshot: 04-ke-toan-tong-quan

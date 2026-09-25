@@ -23,6 +23,7 @@ import { PlanningService } from './planning.service.js';
 import type { TransportPlanningPolicy } from './planning.types.js';
 import { PrismaRunPlanRepository } from './prisma-planning.repository.js';
 import { RunClosureService } from './run-closure.service.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 
 /**
  * DONG VONG CHAY tren POSTGRES THAT — `#293` Lane R.
@@ -64,15 +65,6 @@ const PLATE_PREFIX = 'IT-R293-XE';
 const PHONE_PREFIX = '0966R293';
 const ACTOR = 'it-lane-r';
 const AUTH = 'it-r293-lai-xe';
-
-/**
- * KHOA TU VAN dung chung voi MOI tep IT cham vao trigger cua mien moc/phien cho.
- *
- * Con so nay khong co y nghia nghiep vu — no chi can GIONG NHAU o moi tep (xem
- * `transport-waiting.int.spec.ts`). Doi no o mot tep ma quen tep kia se lam khoa mat tac dung mot
- * cach im lang.
- */
-const WAITING_TRIGGER_LOCK = 279_005;
 
 const PROTECTED_TABLES = [
   ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
@@ -160,26 +152,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * la `Restrict` — khong co duong `CASCADE` nao. Lan don dep phai TAT trigger mot cach tuong
        * minh roi bat lai ngay.
        *
-       * `pg_advisory_lock` tren DUNG con so ma `transport-waiting.int.spec.ts` dung: trigger la mot
-       * doi tuong CHUNG cua ca CSDL, va CI chay cac tep `*.int.spec.ts` SONG SONG. Mot tep BAT lai
-       * trigger dung luc tep kia dang xoa se lam lan xoa do chet vi chinh cai trigger vua bat. Doi
-       * con so o mot tep ma quen tep kia se lam khoa mat tac dung mot cach im lang.
+       * Khoa tu van dung chung (`withProtectedTriggersDisabled`): trigger la mot doi tuong CHUNG
+       * cua ca CSDL, va CI chay cac tep `*.int.spec.ts` SONG SONG. Mot tep BAT lai trigger dung luc
+       * tep kia dang xoa se lam lan xoa do chet vi chinh cai trigger vua bat.
        */
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${WAITING_TRIGGER_LOCK})`);
-      for (const [table, trigger] of PROTECTED_TABLES) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-      }
-      try {
-        await prisma.transportDeliveryWaitingSession.deleteMany({
+      await withProtectedTriggersDisabled(prisma, PROTECTED_TABLES, async (tx) => {
+        await tx.transportDeliveryWaitingSession.deleteMany({
           where: { runId: { in: runIds } },
         });
-        await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
-      } finally {
-        for (const [table, trigger] of PROTECTED_TABLES) {
-          await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-        }
-        await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${WAITING_TRIGGER_LOCK})`);
-      }
+        await tx.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+      });
 
       await prisma.transportOrderRunPlan.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });

@@ -1,0 +1,81 @@
+# TUY CHON — LAI XE ghi MOT phieu do dau tu dien thoai: tab Nhien lieu -> Ghi phieu -> nhap -> Luu ->
+# phieu nam tren may -> hang doi gui -> the phieu hien trong "Đã lên hệ thống" (doc lai tu may chu).
+#
+# Vi sao tuy chon: bieu mau dai tren man 320x640 cua may ao (phai cuon), cay xang va vong xe den tu
+# the gioi mau cua job. Xanh on dinh qua vai lan chay thi chuyen thanh bat buoc.
+# So km lui hon phieu cu KHONG bi tu choi — may chu chi gan co `ODOMETER_NOT_ADVANCED` cho ke toan.
+appId: com.nexagnet247.transport.preview
+tags:
+  - driver
+  - optional
+---
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_DRIVER_USERNAME}
+- extendedWaitUntil:
+    visible: 'Nhiên liệu'
+    timeout: 45000
+- tapOn: 'Nhiên liệu'
+- extendedWaitUntil:
+    visible:
+      id: fuel-new
+    timeout: 30000
+- tapOn:
+    id: fuel-new
+- extendedWaitUntil:
+    visible:
+      id: fuel-form
+    timeout: 20000
+# Mot vong xe / mot cay xang thi da duoc chon san (bam lai la chon lai chinh no); nhieu thi chon dau.
+- extendedWaitUntil:
+    visible:
+      id: 'fuel-run-.*'
+    timeout: 30000
+- tapOn:
+    id: 'fuel-run-.*'
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: 'fuel-supplier-.*'
+    timeout: 30000
+- tapOn:
+    id: 'fuel-supplier-.*'
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: fuel-liters
+- tapOn:
+    id: fuel-liters
+- inputText: '45,5'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: fuel-amount
+- tapOn:
+    id: fuel-amount
+- inputText: '1250000'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: fuel-odometer
+- tapOn:
+    id: fuel-odometer
+- inputText: '120345'
+- hideKeyboard
+- takeScreenshot: 06-phieu-dau-da-nhap
+- scrollUntilVisible:
+    element:
+      id: fuel-submit
+- tapOn:
+    id: fuel-submit
+- extendedWaitUntil:
+    visible:
+      id: driver-fuel
+    timeout: 20000
+- takeScreenshot: 06-phieu-dau-nam-tren-may
+- extendedWaitUntil:
+    visible:
+      id: 'fuel-slip-.*'
+    timeout: 60000
+- takeScreenshot: 06-phieu-dau-len-he-thong

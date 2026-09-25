@@ -1,0 +1,73 @@
+# Mo ung dung tu trang thai SACH roi dang nhap bang LOGIN_USERNAME + MAESTRO_PASSWORD.
+#
+# `clearState` = `pm clear`: xoa phien trong SecureStore VA hang doi SQLite. Moi bai bat dau nhu mot
+# may vua cai — khong bai nao song nho phien cua bai truoc.
+#
+# Ban e2e dien san dia chi may chu (EXPO_PUBLIC_DEFAULT_SERVER_URL) nen thuong vao thang man dang
+# nhap; buoc "Doanh nghiep cua ban" chi chay khi no hien, de flow van dung neu bo dien san.
+appId: com.nexagnet247.transport.preview
+---
+# KHOI DONG AM, KHONG BAT BUOC. Lenh DAU TIEN cua mot phien Maestro co luc chet trong vai giay, khong
+# kem ly do (2 trong 4 phien gan nhat: run 36098809312, 36103488832) trong khi cac flow sau cung phien
+# deu qua. Mo app mot lan truoc de lenh that khong phai la lenh dau tien; do thi bo qua.
+- launchApp:
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 10000
+    optional: true
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+# Doi man DAU TIEN cua ung dung (chon may chu hoac dang nhap). Hop thoai ANR cua he dieu hanh (vd
+# "Pixel Launcher isn't responding" tren may ao boot lanh, run 36111720151) co the de len va mat
+# man cua ta — bam "Wait": ung dung ben duoi van chay. Mot lan kiem duy nhat co the hut hop thoai
+# hien ra sau do vai giay, nen lap toi khi thay man cua ta.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: 'server-address|login-screen'
+    commands:
+      - runFlow:
+          when:
+            visible: ".*isn.t responding.*"
+          commands:
+            - tapOn: 'Wait|WAIT|Đợi'
+      - extendedWaitUntil:
+          visible:
+            id: 'server-address|login-screen'
+          timeout: 15000
+          optional: true
+- runFlow:
+    when:
+      visible:
+        id: server-address
+    commands:
+      - tapOn:
+          id: server-address
+      - inputText: ${MAESTRO_SERVER_URL}
+      - hideKeyboard
+      - tapOn:
+          id: server-continue
+- extendedWaitUntil:
+    visible:
+      id: login-screen
+    timeout: 45000
+- tapOn:
+    id: login-username
+- inputText: ${LOGIN_USERNAME}
+- tapOn:
+    id: login-password
+- inputText: ${MAESTRO_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: login-submit
+# Hop thoai "luu mat khau" cua dich vu tu dien (neu may ao co) che mat tab bar — bo qua neu co.
+- tapOn:
+    text: 'Not now|Never|Không phải bây giờ|Không bao giờ'
+    optional: true
+- extendedWaitUntil:
+    notVisible:
+      id: login-screen
+    timeout: 45000

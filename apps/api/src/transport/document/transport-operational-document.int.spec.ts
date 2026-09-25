@@ -9,6 +9,7 @@ import { isUniqueViolationOn } from '../storage-conflict.js';
 import { DOCUMENT_CLIENT_EVENT, DOCUMENT_FILE_ONCE } from './document.repository.js';
 import { PrismaOperationalDocumentRepository } from './prisma-document.repository.js';
 import { PrismaPhysicalReceiptHandoverRepository } from './prisma-handover.repository.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 
 /**
  * CHUNG TU VAN HANH + BAN GIAO tren POSTGRES THAT — `#279` O1/O2/O7.
@@ -75,21 +76,17 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('chung tu van hanh tren Postgr
       ['TransportPhysicalReceiptHandover', 'transport_physical_receipt_handover_append_only'],
       ['TransportOperationalDocument', 'transport_operational_document_immutable'],
     ] as const;
-    await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${DOCUMENT_TRIGGER_LOCK})`);
-    for (const [table, trigger] of guarded) {
-      await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-    }
-    try {
-      await prisma.transportPhysicalReceiptHandover.deleteMany({
-        where: { orderId: { in: orderIds } },
-      });
-      await prisma.transportOperationalDocument.deleteMany({ where: { runId: { in: runIds } } });
-    } finally {
-      for (const [table, trigger] of guarded) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-      }
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${DOCUMENT_TRIGGER_LOCK})`);
-    }
+    await withProtectedTriggersDisabled(
+      prisma,
+      guarded,
+      async (tx) => {
+        await tx.transportPhysicalReceiptHandover.deleteMany({
+          where: { orderId: { in: orderIds } },
+        });
+        await tx.transportOperationalDocument.deleteMany({ where: { runId: { in: runIds } } });
+      },
+      DOCUMENT_TRIGGER_LOCK,
+    );
     await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });

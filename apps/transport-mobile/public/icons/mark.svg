@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nexagent Transport">
+  <!--
+    DAU NEXAGENT TRANSPORT — nguon DUY NHAT cua moi icon PWA (scripts/pwa-icons.mjs sinh PNG tu day).
+    O vuong bo goc mau dieu huong (#0E5C63), chu N dam mau trang dung bang HINH (khong dung font: ket
+    qua giong nhau tren moi may dung), va dai ho phach (#F2A516) doc mep duoi — "con duong", cung
+    y voi BrandMark trong ung dung.
+  -->
+  <defs>
+    <clipPath id="tile">
+      <rect width="512" height="512" rx="112" ry="112"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="#0E5C63"/>
+    <rect y="448" width="512" height="64" fill="#F2A516"/>
+  </g>
+  <path fill="#FFFFFF" d="M132 352V104h80l88 129.9V104h80v248h-80l-88-129.9V352z"/>
+</svg>

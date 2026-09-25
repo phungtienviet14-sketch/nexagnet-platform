@@ -4,6 +4,7 @@ import { PrismaSessionStore } from '@quixo3/prisma-session-store';
 import type { AppEnv } from '@netviet/shared';
 import session, { type Store } from 'express-session';
 import { PrismaService } from '../config/prisma.service.js';
+import { nativeSessionCarrier } from './native-session.js';
 
 const SESSION_PRUNE_INTERVAL_MS = 2 * 60 * 1_000;
 
@@ -16,6 +17,9 @@ export function configureSession(
   if (!env.SESSION_SECRET) throw new Error('SESSION_SECRET must be validated before bootstrap');
   if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
   const store = createSessionStore(env, prisma);
+  // TRUOC express-session: ung dung native mang CUNG phien qua `Authorization: Bearer` va duoc phuc
+  // vu khong cookie. Xem chu thich o `native-session.ts` (#394).
+  app.use(nativeSessionCarrier(env.SESSION_COOKIE_NAME));
   app.use(
     session({
       name: env.SESSION_COOKIE_NAME,

@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { isInternalServiceRequest } from './internal-service.guard.js';
+import { isNativeClientRequest } from './native-session.js';
 import { csrfSync } from 'csrf-sync';
 import type { Request, Response } from 'express';
 
@@ -42,6 +43,10 @@ export class CsrfGuard implements CanActivate {
     // trinh khong co phien, khong co vai tro va khong co trinh duyet — doi no ba thu do nghia la
     // duong noi bo khong bao gio dung duoc o che do `session`.
     if (isInternalServiceRequest(request)) return true;
+    // Yeu cau NATIVE (#394) da bi bo moi cookie o `nativeSessionCarrier` — phien cua no chi den tu
+    // `Authorization: Bearer`, thu trinh duyet khong bao gio tu dinh kem. Khong con thong tin dang
+    // nhap NGAM nao de mot trang la cuoi len, tuc khong con gi cho CSRF bao ve.
+    if (isNativeClientRequest(request)) return true;
     const isExempt = this.reflector.getAllAndOverride<boolean>(CSRF_EXEMPT_KEY, [
       context.getHandler(),
       context.getClass(),

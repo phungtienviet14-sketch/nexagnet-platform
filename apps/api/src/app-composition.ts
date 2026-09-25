@@ -274,6 +274,7 @@ import { createPlaceSearchPort } from './transport/places/place-search-provider.
 import { TransportPlaceSearchPort } from './transport/places/place-search.port.js';
 import { TransportPlacesController } from './transport/places/places.controller.js';
 import { TransportModule } from './transport/transport.module.js';
+import { TransportAccessController } from './transport/access/transport-access.controller.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
 import { TripsController } from './transport/trips/trips.controller.js';
 import { WorkflowModule } from './workflow/workflow.module.js';
@@ -484,6 +485,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
   // Den cung `transport-core` va bien mat cung no.
   owned('transport-core', DriverTripsController),
+  // QUYEN CUA CHINH TOI (ung dung native) — CHI DOC, tinh bang dung ham `TransportActionGuard` goi.
+  // Den cung `transport-core` va bien mat cung no: khong co mien van tai thi khong co gi de hoi.
+  owned('transport-core', TransportAccessController),
   // CHI SO VAN HANH — CHI DOC, khong mot route ghi nao (#237: *"AI does not rewrite facts"*).
   owned('transport-costing', TransportAnalyticsController),
   owned('transport-costing', TripExpensesController),
