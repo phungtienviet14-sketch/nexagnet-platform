@@ -357,6 +357,9 @@ importers:
       expo-task-manager:
         specifier: ~57.0.20
         version: 57.0.20(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))
+      maplibre-gl:
+        specifier: 6.8.0
+        version: 6.8.0
       react:
         specifier: 19.2.3
         version: 19.2.3
@@ -391,12 +394,21 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.62.1
+        version: 1.62.1
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.0
       '@types/react':
         specifier: ~19.2.0
         version: 19.2.17
+      fake-indexeddb:
+        specifier: ^6.0.0
+        version: 6.2.5
+      sharp:
+        specifier: '>=0.35.4'
+        version: 0.35.4(@types/node@22.20.0)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -5217,6 +5229,10 @@ packages:
 
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
+
+  fake-indexeddb@6.2.5:
+    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
+    engines: {node: '>=18'}
 
   fast-check@3.23.2:
     resolution: {integrity: sha512-h5+1OzzfCC3Ef7VbtKdcv7zsstUQwUDlYpUTvjeUsJAssPgLn7QzbboPtL5ro04Mq0rPOsMzl7q5hIbRs2wD1A==}
@@ -13236,6 +13252,8 @@ snapshots:
       is-extendable: 1.0.1
 
   extend@3.0.2: {}
+
+  fake-indexeddb@6.2.5: {}
 
   fast-check@3.23.2:
     dependencies:
