@@ -79,6 +79,13 @@ export {
   type TenantIntegrations,
 } from './tenant.schema.js';
 export {
+  toPublicTenantDescriptor,
+  type BlockedCapabilityDescriptor,
+  type PreviewNoticeDescriptor,
+  type PublicTenantBranding,
+  type PublicTenantDescriptor,
+} from './public-descriptor.js';
+export {
   NO_WORKFLOW_ENGINE,
   WORKFLOW_ENGINE_ADAPTERS,
   idempotencySupportSchema,

@@ -2,6 +2,7 @@ import type { RunCheckpointType } from '../checkpoint/checkpoint.types.js';
 import type { RunLegPhase } from '../checkpoint/run-timeline.js';
 import type { OperationalDocumentType } from '../document/document.types.js';
 import type { ReceiptHandoverState } from '../document/handover.types.js';
+import type { GeoPoint } from '../geo/geo-point.js';
 import type { RunLegKind } from '../movement/movement.types.js';
 
 /**
@@ -92,6 +93,15 @@ export interface DriverFieldLeg {
   /** Ma don doc duoc. `null` o chang RONG — mot chang rong khong mang don. */
   readonly orderCode: string | null;
   readonly orderId: string | null;
+  /**
+   * DIEM LAY / DIEM GIAO cua DON tren chang nay (WGS84) — de ban do lai xe chi ra duoc noi can den.
+   *
+   * Lay tu don (`originPoint`/`destinationPoint`, #379), khong tu nhan va khong geocode. `null` o
+   * chang RONG (khong co don) va o don khong co toa do (don truoc #379): ban do khi do KHONG ve gi
+   * thay vi ve mot diem doan.
+   */
+  readonly pickupPoint: GeoPoint | null;
+  readonly deliveryPoint: GeoPoint | null;
   readonly phase: RunLegPhase;
   readonly recordedTypes: readonly RunCheckpointType[];
   /** Moc `DELIVERY_ARRIVAL` da ghi — NEO ma nut `Bat dau cho` can. */

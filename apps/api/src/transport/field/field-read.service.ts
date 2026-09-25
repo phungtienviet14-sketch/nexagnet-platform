@@ -18,7 +18,11 @@ import { TransportDomainError } from '../transport.errors.js';
 import { WaitingSessionRepository } from '../waiting/waiting.repository.js';
 import { elapsedSecondsOf } from '../waiting/waiting.types.js';
 import { fieldActionsFor } from './field-actions.js';
-import { TransportFieldCoreFacts, type FieldLegFacts } from './field-facts.port.js';
+import {
+  TransportFieldCoreFacts,
+  type FieldLegFacts,
+  type FieldOrderFacts,
+} from './field-facts.port.js';
 import type {
   DriverFieldDocument,
   DriverFieldLeg,
@@ -81,7 +85,8 @@ export class DriverFieldReadService {
     const runs: DriverFieldRun[] = [];
     for (const run of await this.core.listOpenRunsForDriver(driver.id)) {
       const legFacts = await this.core.listLegs(run.id);
-      const orderCodes = await this.core.orderCodes(
+      // MOT lan doc cho ca vong chay: ma don VA diem lay/giao di cung lo, khong mot lan doc rieng.
+      const orders = await this.core.orderFacts(
         legFacts.flatMap((leg) => (leg.orderId === null ? [] : [leg.orderId])),
       );
       const runCheckpoints = await this.checkpoints.listForRun(run.id);
@@ -92,7 +97,7 @@ export class DriverFieldReadService {
         legs.push(
           await this.buildLeg({
             leg,
-            orderCode: leg.orderId === null ? null : (orderCodes.get(leg.orderId) ?? null),
+            order: leg.orderId === null ? null : (orders.get(leg.orderId) ?? null),
             // CUNG dinh nghia ma cong duoi khoa cua moc/phien cho doc (`#333`): mot nut chi hien khi
             // lenh cua no con qua duoc. Lop loc o kho da bo vong chay terminal; day la lop thu hai.
             runTerminal: isTerminalRunStatus(run.status),
@@ -110,7 +115,7 @@ export class DriverFieldReadService {
 
   private async buildLeg(input: {
     leg: FieldLegFacts;
-    orderCode: string | null;
+    order: FieldOrderFacts | null;
     runTerminal: boolean;
     checkpoints: readonly RunCheckpoint[];
     documents: readonly OperationalDocument[];
@@ -137,8 +142,10 @@ export class DriverFieldReadService {
       kind: input.leg.kind,
       originLabel: input.leg.originLabel,
       destinationLabel: input.leg.destinationLabel,
-      orderCode: input.orderCode,
+      orderCode: input.order?.code ?? null,
       orderId: input.leg.orderId,
+      pickupPoint: input.order?.pickupPoint ?? null,
+      deliveryPoint: input.order?.deliveryPoint ?? null,
       phase: deriveLegPhase(recordedTypes),
       recordedTypes,
       arrivalCheckpointId: arrivalCheckpointIdOf(input.checkpoints),

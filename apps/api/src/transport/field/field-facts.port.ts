@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { GeoPoint } from '../geo/geo-point.js';
 import { MovementRepository } from '../movement/movement.repository.js';
 import type { RunLegKind, RunLegStatus, VehicleRunStatus } from '../movement/movement.types.js';
 
@@ -35,6 +36,22 @@ export interface FieldLegFacts {
   readonly orderId: string | null;
 }
 
+/**
+ * NHUNG GI man hinh lai xe duoc biet ve DON cua mot chang — va KHONG hon.
+ *
+ * Kieu HEP co chu y: `Order` mang doanh thu, khach hang, ghi chu thuong mai. Cua so nay chon tung
+ * truong mot, nen them mot cot tien vao `Order` cung khong lam no lot sang be mat lai xe (`INV-09`).
+ *
+ * Hai diem la diem LAY/GIAO cua DON (#379, WGS84) — noi hang duoc nhan va trao — khong phai hinh
+ * hoc cua chang. `null` khi don khong co toa do (don truoc #379, don chieu tu chuyen v1): he thong
+ * khong bia toa do tu nhan.
+ */
+export interface FieldOrderFacts {
+  readonly code: string;
+  readonly pickupPoint: GeoPoint | null;
+  readonly deliveryPoint: GeoPoint | null;
+}
+
 export abstract class TransportFieldCoreFacts {
   /**
    * Vong chay CON MO cua mot lai xe.
@@ -45,8 +62,8 @@ export abstract class TransportFieldCoreFacts {
    */
   abstract listOpenRunsForDriver(driverId: string): Promise<readonly FieldRunFacts[]>;
   abstract listLegs(runId: string): Promise<readonly FieldLegFacts[]>;
-  /** Ma don doc duoc, cho ca lo. `null` khi don khong con/khong co. */
-  abstract orderCodes(orderIds: readonly string[]): Promise<ReadonlyMap<string, string>>;
+  /** Ma don doc duoc + diem lay/giao, cho ca lo. Vang mat trong map khi don khong con/khong co. */
+  abstract orderFacts(orderIds: readonly string[]): Promise<ReadonlyMap<string, FieldOrderFacts>>;
 }
 
 @Injectable()
@@ -81,12 +98,25 @@ export class TransportFieldCoreFactsAdapter extends TransportFieldCoreFacts {
    * nam ngay trong duong ve cua man hinh ma lai xe mo lai nhieu lan nhat trong ngay — tren mang di
    * dong.
    */
-  async orderCodes(orderIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  async orderFacts(orderIds: readonly string[]): Promise<ReadonlyMap<string, FieldOrderFacts>> {
     if (orderIds.length === 0) return new Map();
     const wanted = new Set(orderIds);
     const orders = await this.movement.listOrders();
     return new Map(
-      orders.filter((order) => wanted.has(order.id)).map((order) => [order.id, order.code]),
+      orders
+        .filter((order) => wanted.has(order.id))
+        .map((order) => [
+          order.id,
+          {
+            code: order.code,
+            pickupPoint: pointOf(order.originPoint),
+            deliveryPoint: pointOf(order.destinationPoint),
+          },
+        ]),
     );
   }
 }
+
+/** Chep DUNG hai so — mot doi tuong diem tu kho khong duoc mang them truong nao ra ngoai. */
+const pointOf = (point: GeoPoint | null): GeoPoint | null =>
+  point === null ? null : { latitude: point.latitude, longitude: point.longitude };
