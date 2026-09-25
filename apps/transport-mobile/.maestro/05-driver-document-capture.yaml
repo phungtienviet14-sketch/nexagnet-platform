@@ -29,38 +29,60 @@ tags:
     visible:
       id: driver-next-action
     timeout: 45000
-# Nut chup chung tu chi hien SAU moc tuong ung (may chu, field-actions.ts DOCUMENT_AFTER:
-# GATE_ENTRY -> GATE_PASS, LOADING -> LOADING_SLIP, PICKUP_DEPARTURE -> WEIGH_TICKET). Viec ke tiep
-# khi flow nay chay la mot MOC (run 36100923144: bam no khong mo man chup), nen bam viec ke tiep toi
-# khi may chu goi y mot to chung tu (`document-*`).
+# Chung tu chi duoc goi y SAU moc tuong ung (may chu, field-actions.ts DOCUMENT_AFTER:
+# GATE_ENTRY -> GATE_PASS, LOADING -> LOADING_SLIP, PICKUP_DEPARTURE -> WEIGH_TICKET). Khi to chung
+# tu la VIEC CHINH, chinh nut ho phach `driver-next-action` mo to truot chon cach lay anh
+# (NextActionCard: hero DOCUMENT; run 36106374189 dung o do); `document-<TYPE>` chi la nut PHU.
+# Bam toi khi to truot hien ra. Regex khop TRON id nen `document-X-queued`/`-blocked` khong bi bam.
 - repeat:
-    times: 4
+    times: 5
     while:
       notVisible:
-        id: 'document-.*'
+        id: capture-gallery
     commands:
-      - tapOn:
-          id: driver-next-action
+      - runFlow:
+          when:
+            visible:
+              id: 'document-[A-Z_]+'
+          commands:
+            - tapOn:
+                id: 'document-[A-Z_]+'
+      - runFlow:
+          when:
+            notVisible:
+              id: capture-gallery
+          commands:
+            - tapOn:
+                id: driver-next-action
       - extendedWaitUntil:
           visible:
-            id: 'document-.*'
-          timeout: 20000
+            id: capture-gallery
+          timeout: 15000
           optional: true
-- tapOn:
-    id: 'document-.*'
-- extendedWaitUntil:
-    visible:
-      id: capture-gallery
-    timeout: 20000
 - takeScreenshot: 05-chon-cach-lay-anh
 - tapOn:
     id: capture-gallery
-# Photo Picker: o anh dau tien. Toa do tuong doi vi id cua picker doi theo ban module he thong.
-- tapOn:
-    point: '18%,22%'
-- tapOn:
-    text: 'Done|Xong|Add|Thêm'
+# Bo chon anh he thong (Android Photo Picker, module MediaProvider; chon MOT anh thi tra ve ngay,
+# khong co nut Xong). O anh co id `<module>:id/icon_thumbnail`; ban khac mo ta anh bang
+# "Photo taken on …". KHONG bam toa do: bo chon mo dang nua-man, bam trung vung toi la huy.
+- extendedWaitUntil:
+    visible:
+      id: '.*icon_thumbnail'
+    timeout: 15000
     optional: true
+- runFlow:
+    when:
+      visible:
+        id: '.*icon_thumbnail'
+    commands:
+      - tapOn:
+          id: '.*icon_thumbnail'
+          index: 0
+- runFlow:
+    when:
+      visible: 'Photo taken on.*'
+    commands:
+      - tapOn: 'Photo taken on.*'
 - takeScreenshot: 05-da-chon-anh
 - extendedWaitUntil:
     visible:
