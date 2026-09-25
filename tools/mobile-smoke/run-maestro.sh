@@ -34,9 +34,18 @@ wait_device_ready() {
   echo "May ao khong on dinh sau 120 giay" >&2
   return 1
 }
+# MAY AO BOOT LANH hay treo Pixel Launcher: hop thoai "Pixel Launcher isn't responding" DE LEN ung dung
+# va Maestro khong thay man nao cua ta (run 36111720151: ca 5 flow chet cho `login-screen`, man hinh
+# luc do CHI co hop thoai ANR; ung dung van "Running main", khong loi JS). Tat hop thoai loi he thong
+# (`hide_error_dialogs`) va dong hop thoai dang mo. Flow con mot lop do rieng (subflows/launch-and-login).
+quiet_system_dialogs() {
+  adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+}
 wait_device_ready
 sleep 20
 wait_device_ready
+quiet_system_dialogs
 
 adb install -r "$apk"
 
@@ -100,6 +109,7 @@ if [ "$status" -ne 0 ]; then diagnose; fi
 for optional in "$flows"/05-*.yaml "$flows"/06-*.yaml; do
   name="$(basename "$optional" .yaml)"
   wait_device_ready
+  quiet_system_dialogs
   maestro test "${maestro_env[@]}" \
     --format junit --output "$out_dir/maestro-$name.xml" \
     --test-output-dir "$out_dir/maestro-$name" \

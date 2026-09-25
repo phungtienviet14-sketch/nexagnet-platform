@@ -19,6 +19,26 @@ appId: com.nexagnet247.transport.preview
     clearState: true
     permissions:
       all: allow
+# Doi man DAU TIEN cua ung dung (chon may chu hoac dang nhap). Hop thoai ANR cua he dieu hanh (vd
+# "Pixel Launcher isn't responding" tren may ao boot lanh, run 36111720151) co the de len va mat
+# man cua ta — bam "Wait": ung dung ben duoi van chay. Mot lan kiem duy nhat co the hut hop thoai
+# hien ra sau do vai giay, nen lap toi khi thay man cua ta.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: 'server-address|login-screen'
+    commands:
+      - runFlow:
+          when:
+            visible: ".*isn.t responding.*"
+          commands:
+            - tapOn: 'Wait|WAIT|Đợi'
+      - extendedWaitUntil:
+          visible:
+            id: 'server-address|login-screen'
+          timeout: 15000
+          optional: true
 - runFlow:
     when:
       visible:
