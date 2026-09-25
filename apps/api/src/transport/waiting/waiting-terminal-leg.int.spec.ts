@@ -30,6 +30,7 @@ import { WaitingRunClosureBlockerSource } from './waiting-run-closure-blocker.so
 import type { CreateWaitingSessionInput, WaitingSessionRepository } from './waiting.repository.js';
 import { WaitingSessionService } from './waiting.service.js';
 import type { DeliveryWaitingSession } from './waiting.types.js';
+import { withProtectedTriggersDisabled } from '../__tests__/protected-trigger-cleanup.js';
 
 /**
  * CHANG DA KET THUC KHONG MO PHIEN CHO MOI — `#358`, tren POSTGRES THAT.
@@ -77,8 +78,6 @@ const PLATE_PREFIX = 'IT-W358-XE';
 const PHONE_PREFIX = '0977W358';
 const ACTOR = 'it-w358';
 
-/** Cung con so voi moi tep IT cham trigger cua moc/phien cho — xem `transport-waiting.int.spec.ts`. */
-const WAITING_TRIGGER_LOCK = 279_005;
 const PROTECTED_TABLES = [
   ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
   ['TransportRunCheckpoint', 'transport_run_checkpoint_append_only'],
@@ -219,21 +218,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         })
       ).map((run) => run.id);
 
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${WAITING_TRIGGER_LOCK})`);
-      for (const [table, trigger] of PROTECTED_TABLES) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-      }
-      try {
-        await prisma.transportDeliveryWaitingSession.deleteMany({
+      await withProtectedTriggersDisabled(prisma, PROTECTED_TABLES, async (tx) => {
+        await tx.transportDeliveryWaitingSession.deleteMany({
           where: { runId: { in: runIds } },
         });
-        await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
-      } finally {
-        for (const [table, trigger] of PROTECTED_TABLES) {
-          await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-        }
-        await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${WAITING_TRIGGER_LOCK})`);
-      }
+        await tx.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+      });
 
       await prisma.transportOrderRunPlan.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
