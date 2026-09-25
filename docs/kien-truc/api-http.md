@@ -53,6 +53,9 @@ Chuẩn NestJS, không bọc thêm:
 { "statusCode": 400, "message": "Cần manifest để xem trước", "error": "Bad Request" }
 ```
 
+Vận tải và quản trị tài khoản (`/settings/users`, `/auth`) **thêm** trường `reason` (mã có kiểu) và
+đôi khi `detail` — ba trường chuẩn giữ nguyên. Bảng mã của tài khoản ở §3.4 "Người dùng".
+
 | Mã | Khi nào |
 |---|---|
 | `400` | Body/param không qua zod. Thông điệp nêu đúng trường sai |
@@ -83,12 +86,31 @@ Một biến quyết định toàn bộ: **`AUTH_MODE`**.
 ```
 GET  /auth/config           -> { "mode": "session" }
 POST /auth/login            -> { user, csrfToken }        + đặt cookie phiên
-GET  /auth/me               -> { user, roles }
+GET  /auth/me               -> { user, roles, permissions }
 POST /auth/logout
 ```
 
-Đổi mật khẩu: `POST /auth/credentials/change`. Mọi mutation sau đăng nhập phải kèm
-`x-csrf-token`; token lấy lại bất cứ lúc nào bằng `GET /auth/csrf`.
+Đổi mật khẩu: `POST /auth/credentials/change` — trả `{ user, csrfToken }` với token **mới** (phiên
+được tạo lại): client phải thay token cũ bằng token này, nếu không lần ghi kế tiếp trượt CSRF. Mọi
+mutation sau đăng nhập phải kèm `x-csrf-token`; token lấy lại bất cứ lúc nào bằng `GET /auth/csrf`.
+
+**`#395` — quyền và mật khẩu tạm:**
+
+- `GET /auth/me.permissions` là tập quyền **hiệu lực** do máy chủ tính: quyền nền tảng
+  (`platform.accounts.manage` — chỉ `ADMIN`) cộng quyền của mọi miền đã đăng ký (vận tải:
+  `transport.*`, gồm vai khởi điểm ± quyền riêng của tài khoản). Web chỉ hiện lại, không tự suy từ vai.
+- `user` của `/auth/login` và `/auth/me` mang thêm `mustChangePassword`, `temporaryPasswordExpiresAt`,
+  `jobTitle`, `permissionGrants` (thêm trường, không đổi trường cũ).
+- Tài khoản mới tạo hoặc vừa được đặt lại mật khẩu dùng **mật khẩu tạm** (72 giờ). Khi
+  `mustChangePassword = true`, mọi route trả **`403 { reason: "PASSWORD_CHANGE_REQUIRED" }`** trừ
+  `GET /auth/me`, `POST /auth/credentials/change`, `POST /auth/logout`. Cổng nằm trong
+  `SessionAuthGuard` — chỗ duy nhất đặt `request.authUser` — nên REST, SSE `/events` và tải tệp
+  `/files` đều qua nó.
+- Đăng nhập bằng mật khẩu tạm đã hết hạn (sau khi mật khẩu đúng) →
+  **`401 { reason: "TEMPORARY_PASSWORD_EXPIRED" }`**, "Mật khẩu tạm đã hết hạn. Nhờ Giám đốc cấp mật
+  khẩu mới."; phiên đang mở của tài khoản đó cũng hết hiệu lực (401).
+- Đổi vai / quyền riêng có hiệu lực ở **yêu cầu kế tiếp** của cùng phiên (không cần đăng nhập lại).
+  Khoá tài khoản hoặc đặt lại mật khẩu làm **mọi phiên cũ** của tài khoản đó chết (401).
 
 ### Bốn vai
 
@@ -110,9 +132,9 @@ Ký hiệu: **·** = không khai báo vai (mọi phiên hợp lệ đều gọi 
 | GET | `/auth/config` | PUBLIC | |
 | GET | `/auth/csrf` | PUBLIC | |
 | POST | `/auth/login` | PUBLIC | 5 lần / 60s |
-| GET | `/auth/me` | · | |
-| POST | `/auth/logout` | · | |
-| POST | `/auth/credentials/change` | · | |
+| GET | `/auth/me` | · | Mở cả khi đang dùng mật khẩu tạm |
+| POST | `/auth/logout` | · | Mở cả khi đang dùng mật khẩu tạm |
+| POST | `/auth/credentials/change` | · | Mở cả khi đang dùng mật khẩu tạm; trả `csrfToken` mới |
 
 ### 3.2 Dòng sự kiện — `/events`
 
@@ -205,13 +227,67 @@ khách**; nội dung nhập từ gói khách luôn vào ở `draft`.
 
 #### Người dùng — `/settings/users`
 
-| Method | Path | Vai | Giới hạn |
-|---|---|---|---|
-| GET | `/settings/users` | ADMIN | |
-| POST | `/settings/users` | ADMIN | 10 / 60s |
-| PATCH | `/settings/users/:id/role` | ADMIN | |
-| POST | `/settings/users/:id/disable` | ADMIN | |
-| POST | `/settings/users/:id/credentials/reset` | ADMIN | 5 / 60s |
+Tài khoản & phân quyền (`#395`). Mọi route chỉ `ADMIN` — quyền nền tảng `platform.accounts.manage`,
+**không cấp được bằng quyền riêng** (một `MANAGER` được cấp mọi quyền vận tải vẫn nhận 403 ở đây).
+Mọi route nằm dưới `/settings/users*` — tiền tố Caddy đã cổng; không mở tiền tố mới.
+
+| Method | Path | Vai | Giới hạn | Ghi chú |
+|---|---|---|---|---|
+| GET | `/settings/users?q=&status=active\|pending\|disabled&role=` | ADMIN | | `AccountView[]`; `pending` = chờ đổi mật khẩu tạm |
+| GET | `/settings/users/permission-catalog` | ADMIN | | `{ domains: [{ id, groups, presets }], platform }` |
+| POST | `/settings/users/suggest-username` | ADMIN | | `{ name, prefix? }` → `{ username }` (bỏ dấu, `đ`→`d`, thêm `.2`… khi trùng); `200` |
+| POST | `/settings/users` | ADMIN | 10 / 60s | Xem "Tạo / đặt lại" dưới đây |
+| PATCH | `/settings/users/:id` | ADMIN | | `{ name?, email?, phone?, jobTitle? }`; `username` bất biến |
+| GET | `/settings/users/:id/access` | ADMIN | | `AccessBreakdown`: vai khởi điểm, quyền riêng, trạng thái từng việc, câu "Người này làm được gì?" |
+| PUT | `/settings/users/:id/access` | ADMIN | | `{ role, grants, confirmEscalation?, dryRun? }` — thay **trọn** bộ quyền riêng; `dryRun` → `AccessBreakdown` của bộ đề xuất (không ghi, không kiểm toán); ghi thật → `{ account, access }` |
+| PATCH | `/settings/users/:id/role` | ADMIN | | Đường cũ: `{ role, confirmEscalation? }` — đổi vai **và xoá mọi quyền riêng** trong cùng một giao dịch |
+| POST | `/settings/users/:id/disable` | ADMIN | | `{ confirmed: true, reason?: string ≤ 500 }` |
+| POST | `/settings/users/:id/enable` | ADMIN | | **Mới.** `{ confirmed: true }`; **không** đổi mật khẩu; `200` |
+| POST | `/settings/users/:id/credentials/reset` | ADMIN | 5 / 60s | `{ password? }` — xem dưới |
+| GET | `/settings/users/:id/history?limit=` | ADMIN | | `[{ at, actor, action, summary, before, after }]` từ `AuditLog` (`entityType = 'User'`), gồm cả `auth.login` |
+
+`AccountView` = người dùng như `/auth/me.user` **cộng** `mustChangePassword`,
+`temporaryPasswordExpiresAt`, `jobTitle`, `permissionGrants: [{ permission, effect: ALLOW|DENY }]`,
+`isProtected`.
+
+**Tạo / đặt lại — thay đổi hợp đồng (thêm trường, không bỏ trường nào):**
+
+- Phản hồi `POST /settings/users` và `POST …/credentials/reset` vẫn là tài khoản **ở mức ngoài**
+  như trước, **thêm** `credential: { temporaryPassword, expiresAt }`. Mật khẩu tạm chỉ xuất hiện
+  trong **đúng phản hồi này** — không vào sổ kiểm toán, telemetry hay log.
+- `password` **tuỳ chọn** ở cả hai: bỏ trống thì máy chủ sinh mật khẩu tạm 16 ký tự
+  (`xxxx-xxxx-xxxx-xxxx`, bảng chữ không gây nhầm). Dù có nhập hay không, tài khoản **luôn** phải đổi
+  mật khẩu ở lần đăng nhập đầu (`mustChangePassword = true`, hạn 72 giờ) — kể cả trên màn hình
+  `/settings` của các khách vận hành.
+- Tạo mới thêm `jobTitle?`, `grants?` (mặc định `[]`), `confirmEscalation?`. Tạo vai `ADMIN` bắt buộc
+  `confirmEscalation: true`.
+- **Đặt lại mật khẩu KHÔNG còn mở khoá tài khoản.** Trước `#395` bản Prisma lặng lẽ xoá `disabledAt`
+  khi đặt lại (bản bộ nhớ thì không). Tài khoản cũ bị di trú `20260812162000_auth_sessions` khoá
+  (`legacy_*`, mật khẩu `!legacy-user-disabled-until-reset!` — chú thích "An administrator must
+  explicitly reset/re-enable them") nay khôi phục bằng **`POST …/enable` rồi
+  `POST …/credentials/reset`**.
+
+**Lỗi có kiểu** — thân lỗi `{ statusCode, message (tiếng Việt), error, reason, detail? }`:
+
+| `reason` | Mã | Khi nào |
+|---|---|---|
+| `SELF_LOCKOUT` | 403 | Tự khoá / tự đổi vai-quyền / tự đặt lại mật khẩu qua đường quản trị (dùng `/auth/credentials/change`) |
+| `LAST_ACTIVE_ADMIN` | 409 | Khoá hoặc hạ vai Giám đốc **đang hoạt động cuối cùng**. Đếm dưới khoá (`SELECT … FOR UPDATE` trong một giao dịch) nên hai Giám đốc hạ vai nhau cùng lúc vẫn còn một |
+| `PROTECTED_SERVICE_ACCOUNT` | 409 | Khoá / đổi vai-quyền / đặt lại tài khoản có tên trong env `PROTECTED_ACCOUNT_USERNAMES` (deploy GCP truyền `PILOT_OPERATOR_USERNAME` — người vận hành mà `bootstrap-auth-user.mjs` đòi là ADMIN đang hoạt động). Sửa tên vẫn được |
+| `USERNAME_RESERVED` | 409 | **Chỉ khi tạo mới**: tên dành cho hệ thống (`operator`, `internal-service`, `system`, `import`, `mcp-agent`, `marketing-form` + tên miền khai, vd `demo-seed`). Tài khoản `operator` **đã có** (ADMIN thật trên gd1-test) vẫn đăng nhập bình thường |
+| `ACCOUNT_LINKED_TO_DRIVER` | 409 | Đổi vai khỏi `SALE` khi tài khoản đang nối hồ sơ lái xe (miền trả qua `checkAccessChange`) |
+| `ACCESS_INVALID` | 409 | Bộ quyền bị từ chối; `detail.violations = [{ code, permission?, detail? }]` (vd `ADMIN_PRESET_IS_FULL`, `DRIVER_PRESET_IS_SELF_SCOPE_ONLY`, `SOD_CONFLICT`, `UNKNOWN_PERMISSION`, `PLATFORM_PERMISSION_NOT_GRANTABLE`, `GRANT_DUPLICATED`) |
+| `ESCALATION_CONFIRMATION_REQUIRED` | 409 | Cấp vai Giám đốc hoặc quyền nhạy cảm mà thiếu `confirmEscalation: true` (`detail.violations` nêu vai / mã quyền) |
+| `ACCOUNT_NOT_FOUND` | 404 | |
+| `ACCOUNT_IDENTITY_TAKEN` | 409 | Tên đăng nhập / email / số điện thoại đã thuộc tài khoản khác |
+| `ACCOUNT_INPUT_INVALID` | 400 | Thân yêu cầu sai hình dạng (`detail.issues`) |
+
+Mỗi thay đổi ghi `AuditLog` có `before` + `after` với khoá sống qua lớp che: `auth.user.create`,
+`auth.user.profile.update` (`profile: { name, jobTitle, emailOnFile, phoneOnFile }`),
+`auth.user.access.change` (`role`, `grants`), `auth.user.access.escalate` (lên Giám đốc hoặc thêm
+quyền nhạy cảm — nêu từng mã), `auth.user.disable` (`disabledAt`, `reason`), `auth.user.enable`,
+`auth.credentials.reset` / `auth.credentials.change`
+(`onboarding: { passwordChangeRequired, temporaryCredentialExpiresAt }`).
 
 ### 3.5 Kênh Zalo — `/zalo`
 
