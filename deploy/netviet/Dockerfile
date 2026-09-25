@@ -10,7 +10,10 @@ RUN apt-get update \
 WORKDIR /app
 
 FROM base AS deps
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+# `.pnpmfile.cjs` BAT BUOC di cung lockfile: pnpm ghi `pnpmfileChecksum` vao lockfile va tu choi
+# `--frozen-lockfile` neu tep vang mat. Tep do cung la thu giu react-native (cua
+# `apps/transport-mobile`) ngoai do thi phu thuoc cua may chu — xem chu thich trong chinh tep.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .pnpmfile.cjs ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/tenant/package.json packages/tenant/
 COPY apps/api/package.json apps/api/
