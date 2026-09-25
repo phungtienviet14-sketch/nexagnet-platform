@@ -7,6 +7,14 @@
 # nhap; buoc "Doanh nghiep cua ban" chi chay khi no hien, de flow van dung neu bo dien san.
 appId: com.nexagnet247.transport.preview
 ---
+# KHOI DONG AM, KHONG BAT BUOC. Lenh DAU TIEN cua mot phien Maestro co luc chet trong vai giay, khong
+# kem ly do (2 trong 4 phien gan nhat: run 36098809312, 36103488832) trong khi cac flow sau cung phien
+# deu qua. Mo app mot lan truoc de lenh that khong phai la lenh dau tien; do thi bo qua.
+- launchApp:
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 10000
+    optional: true
 - launchApp:
     clearState: true
     permissions:

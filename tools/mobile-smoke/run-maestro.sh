@@ -76,6 +76,22 @@ diagnose() {
     "$out_dir/logcat.txt" 2>/dev/null \
     | sed -E 's/(Bearer |s:)[A-Za-z0-9_.+\/-]{16,}/\1<an>/g' | tail -80 || true
   echo "::endgroup::"
+  # Maestro chi in ly do khi mot ASSERTION sai; lenh chet vi ngoai le (vd lenh dau phien chet sau
+  # 4 giay, run 36103488832) chi nam trong nhat ky cua no. Chi in TEN lenh + thong bao loi — khong in
+  # tham so (inputText mang mat khau; mat khau con bi GitHub che san).
+  echo "::group::Chan doan — lenh Maestro that bai"
+  if command -v jq >/dev/null 2>&1; then
+    find "$out_dir" -name 'commands-*.json' 2>/dev/null | while read -r f; do
+      jq -r --arg f "$(basename "$f")" \
+        '.[]? | select(.metadata.status == "FAILED")
+          | "\($f) :: \(.command | keys | join(",")) :: \(.metadata.error.message // "khong co thong bao")"' \
+        "$f" 2>/dev/null || true
+    done | head -40 || true
+  fi
+  find "$out_dir" "$HOME/.maestro/tests" -name 'maestro.log' 2>/dev/null | while read -r f; do
+    grep -E "Exception|FAILED" "$f" 2>/dev/null | grep -v "inputText" | tail -20 || true
+  done | tail -60 || true
+  echo "::endgroup::"
 }
 if [ "$status" -ne 0 ]; then diagnose; fi
 
@@ -84,7 +100,7 @@ wait_device_ready
 maestro test "${maestro_env[@]}" \
   --format junit --output "$out_dir/maestro-optional-report.xml" \
   --test-output-dir "$out_dir/maestro-optional" \
-  "$flows/05-driver-document-capture.yaml" || echo "Flow tuy chon 05 do (khong chan job)."
+  "$flows/05-driver-document-capture.yaml" || { echo "Flow tuy chon 05 do (khong chan job)."; diagnose; }
 
 kill "$logcat_pid" 2>/dev/null || true
 exit "$status"
