@@ -88,6 +88,21 @@ export function toFundLedgerRows(entries: readonly DriverFundEntry[]): readonly 
   }));
 }
 
+/** So dong so quy hien san tren dien thoai; phan con lai sau nut "Xem tất cả". */
+export const LEDGER_PREVIEW_ROWS = 8;
+
+export interface LedgerWindow {
+  readonly rows: readonly FundLedgerRow[];
+  readonly hiddenCount: number;
+}
+
+/** May chu tra so cai CU truoc (`businessDate` tang dan) — dien thoai doc MOI truoc, cat gon. */
+export function ledgerWindow(rows: readonly FundLedgerRow[], showAll: boolean): LedgerWindow {
+  const newest = [...rows].reverse();
+  const shown = showAll ? newest : newest.slice(0, LEDGER_PREVIEW_ROWS);
+  return { rows: shown, hiddenCount: newest.length - shown.length };
+}
+
 export interface SettlementFigure {
   readonly key: string;
   readonly label: string;

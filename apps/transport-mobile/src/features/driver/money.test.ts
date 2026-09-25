@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LEDGER_PREVIEW_ROWS,
   fundEntryNote,
+  ledgerWindow,
   toFundBalance,
   toFundLedgerRows,
   toPayslipRow,
@@ -147,5 +149,32 @@ describe('toPayslipRow', () => {
     expect(row.paidAtLabel).toBeNull();
     expect(row.components[0]?.quantityLabel).toBe('22 × 500.000 ₫');
     expect(row.components[1]).toMatchObject({ isDeduction: true, quantityLabel: null });
+  });
+});
+
+describe('ledgerWindow — may chu tra so cai CU truoc, dien thoai doc MOI truoc', () => {
+  const rows = Array.from({ length: LEDGER_PREVIEW_ROWS + 3 }, (_, index) => ({
+    id: `e${index}`,
+    kindLabel: 'Tạm ứng',
+    amountLabel: '+1.000 ₫',
+    businessDateLabel: '25/09/2026',
+    note: null,
+    isReversed: false,
+    isReversal: false,
+  }));
+
+  it('gon: dong MOI NHAT dau tien, cat o LEDGER_PREVIEW_ROWS, dem so dong an', () => {
+    const view = ledgerWindow(rows, false);
+    expect(view.rows).toHaveLength(LEDGER_PREVIEW_ROWS);
+    expect(view.rows[0]?.id).toBe(`e${LEDGER_PREVIEW_ROWS + 2}`);
+    expect(view.hiddenCount).toBe(3);
+  });
+
+  it('xem het: du dong, van moi truoc; KHONG doi mang cua may chu', () => {
+    const view = ledgerWindow(rows, true);
+    expect(view.rows).toHaveLength(rows.length);
+    expect(view.rows[view.rows.length - 1]?.id).toBe('e0');
+    expect(view.hiddenCount).toBe(0);
+    expect(rows[0]?.id).toBe('e0');
   });
 });

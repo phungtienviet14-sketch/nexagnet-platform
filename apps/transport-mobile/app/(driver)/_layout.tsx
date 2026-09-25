@@ -59,6 +59,7 @@ export default function Layout() {
         name="capture"
         options={{ ...HIDDEN, title: 'Chụp chứng từ', tabBarStyle: { display: 'none' } }}
       />
+      <Tabs.Screen name="fuel-new" options={{ ...HIDDEN, title: 'Ghi phiếu đổ dầu' }} />
       <Tabs.Screen name="run/[runId]" options={{ ...HIDDEN, title: 'Vòng chạy' }} />
     </Tabs>
   );

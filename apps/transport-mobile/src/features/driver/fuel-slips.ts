@@ -1,4 +1,5 @@
 import { DASH, formatBusinessDate, formatClock, formatVnd } from '../../format';
+import { reasonText } from '../../i18n/reasons';
 import type { Tone } from '../../ui/Surface';
 import {
   FUEL_PAYMENT_METHOD_LABEL,
@@ -8,6 +9,7 @@ import {
   FUEL_VERIFICATION_TONE,
   fuelReviewReasonLabel,
 } from './labels';
+import { entryLabel, type QueueEntry } from './pending-actions';
 import type { DriverFuelSlipView, FuelReconciliationStatus } from './types';
 
 /**
@@ -121,4 +123,29 @@ export function toFuelSlipRows(
   timeZone: string,
 ): readonly FuelSlipRow[] {
   return slips.map((slip) => toFuelSlipRow(slip, timeZone));
+}
+
+export interface PendingFuelSlip {
+  readonly id: string;
+  readonly label: string;
+  readonly blocked: boolean;
+  readonly detail: string;
+}
+
+/**
+ * PHIEU DAU CON NAM TREN MAY (chua len may chu) — hien ngay tren tab de lai xe khong ghi lai lan
+ * nua. Phieu bi may chu tu choi noi LY DO; phieu con cho noi ro la se tu gui.
+ */
+export function pendingFuelSlips(entries: readonly QueueEntry[]): readonly PendingFuelSlip[] {
+  return entries
+    .filter((entry) => entry.payload.type === 'FUEL_SLIP')
+    .map((entry) => ({
+      id: entry.clientEventId,
+      label: entryLabel(entry),
+      blocked: entry.state === 'BLOCKED',
+      detail:
+        entry.state === 'BLOCKED'
+          ? reasonText(entry.lastError)
+          : 'Đang chờ gửi — có sóng sẽ tự gửi, không cần ghi lại.',
+    }));
 }

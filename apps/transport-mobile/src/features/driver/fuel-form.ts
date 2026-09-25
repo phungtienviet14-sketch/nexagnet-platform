@@ -1,3 +1,4 @@
+import type { FuelSlipAction } from '../../outbox/field-actions';
 import type { BusinessDate, DriverFuelRunView, FuelPaymentMethod } from './types';
 
 /**
@@ -202,6 +203,23 @@ export function toFuelSlipBody(input: {
 export function fuelSlipLabel(body: FuelSlipBody): string {
   const liters = body.liters.replace('.', ',');
   return `Phiếu đổ dầu ${liters} lít · ${groupThousands(String(body.amount))} ₫`;
+}
+
+/**
+ * LENH HANG DOI cho MOT phieu: than DONG BANG (ban sao — form doi sau do khong cham vao hang doi),
+ * nhan de "Việc trên máy" doc ra phieu nao.
+ */
+export function fuelSlipCommand(body: FuelSlipBody): FuelSlipAction {
+  return { type: 'FUEL_SLIP', label: fuelSlipLabel(body), body: { ...body } };
+}
+
+/**
+ * MOT lua chon duy nhat thi chon san — hang do HIEN RO la da chon, lai xe thay va doi duoc. Nhieu hon
+ * mot thi de trong: chon mac dinh an la mot quyet dinh lai xe chua dua ra.
+ */
+export function soleOptionId<T>(options: readonly T[], idOf: (option: T) => string): string | null {
+  const [only] = options;
+  return options.length === 1 && only !== undefined ? idOf(only) : null;
 }
 
 export interface FuelRunOption {

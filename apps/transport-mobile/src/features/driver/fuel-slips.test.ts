@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatLitersUnits, toFuelSlipRow } from './fuel-slips';
+import { formatLitersUnits, pendingFuelSlips, toFuelSlipRow } from './fuel-slips';
+import type { QueueEntry } from './pending-actions';
 import type { DriverFuelSlipView } from './types';
 
 function slip(overrides: Partial<DriverFuelSlipView> = {}): DriverFuelSlipView {
@@ -79,5 +80,36 @@ describe('toFuelSlipRow', () => {
   it('ly do soat noi bang cau, ma la thi giu ma', () => {
     const row = toFuelSlipRow(slip({ reviewReasons: ['ODOMETER_NOT_ADVANCED', 'MA_MOI'] }), 'UTC');
     expect(row.reviewReasonLabels).toEqual(['Số km chưa tăng so với lần đổ trước', 'MA_MOI']);
+  });
+});
+
+describe('pendingFuelSlips — phieu dau con nam tren may', () => {
+  function entry(overrides: Partial<QueueEntry> = {}): QueueEntry {
+    return {
+      clientEventId: 'k1',
+      state: 'PENDING',
+      lastError: null,
+      capturedAt: '2026-09-25T01:00:00.000Z',
+      payload: { type: 'FUEL_SLIP', label: 'Phiếu đổ dầu 45,5 lít · 1.250.000 ₫', body: {} },
+      ...overrides,
+    };
+  }
+
+  it('chi lay phieu dau, bo moc/chung tu cua man Viec', () => {
+    const rows = pendingFuelSlips([
+      entry(),
+      entry({ clientEventId: 'c1', payload: { type: 'CHECKPOINT', label: 'Đã đến nơi lấy' } }),
+    ]);
+    expect(rows.map((row) => row.id)).toEqual(['k1']);
+    expect(rows[0]).toMatchObject({
+      label: 'Phiếu đổ dầu 45,5 lít · 1.250.000 ₫',
+      blocked: false,
+    });
+  });
+
+  it('phieu bi may chu tu choi noi LY DO, khong noi "dang cho gui"', () => {
+    const [row] = pendingFuelSlips([entry({ state: 'BLOCKED', lastError: 'ODOMETER_REGRESSION' })]);
+    expect(row?.blocked).toBe(true);
+    expect(row?.detail).not.toMatch(/chờ gửi/);
   });
 });

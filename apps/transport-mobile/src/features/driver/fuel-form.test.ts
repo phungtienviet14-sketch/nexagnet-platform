@@ -4,12 +4,14 @@ import {
   digitsOnly,
   emptyFuelForm,
   fuelRunOptions,
+  fuelSlipCommand,
   fuelSlipLabel,
   groupThousands,
   hasProblems,
   isValidCorrelationKey,
   normalizeLiters,
   parseLocalDateTime,
+  soleOptionId,
   toFuelSlipBody,
   validateFuelForm,
   type FuelForm,
@@ -198,5 +200,34 @@ describe('fuelRunOptions', () => {
     expect(options.map((option) => option.runId)).toEqual(['a', 'b']);
     expect(options[0]?.legs).toEqual([{ legId: 'l1', label: 'Chặng 1: A → B' }]);
     expect(options[1]?.vehicleLabel).toBe('Xe của vòng xe');
+  });
+});
+
+describe('fuelSlipCommand — lenh hang doi cho MOT phieu', () => {
+  it('mang than DONG BANG y het va nhan doc duoc trong "Việc trên máy"', () => {
+    const body = toFuelSlipBody({
+      form: filled(),
+      correlationKey: 'fuel-key-0001',
+      timeZone: 'Asia/Ho_Chi_Minh',
+      now: NOW,
+    });
+    const command = fuelSlipCommand(body);
+    expect(command.type).toBe('FUEL_SLIP');
+    expect(command.label).toBe(fuelSlipLabel(body));
+    expect(command.body).toEqual(body);
+    expect(command.body).not.toBe(body);
+  });
+});
+
+describe('soleOptionId — chi chon san khi KHONG con lua chon nao khac', () => {
+  const id = (option: { readonly id: string }) => option.id;
+
+  it('mot lua chon -> chon san', () => {
+    expect(soleOptionId([{ id: 'r1' }], id)).toBe('r1');
+  });
+
+  it('khong co hoac nhieu lua chon -> de lai xe tu chon', () => {
+    expect(soleOptionId([], id)).toBeNull();
+    expect(soleOptionId([{ id: 'r1' }, { id: 'r2' }], id)).toBeNull();
   });
 });

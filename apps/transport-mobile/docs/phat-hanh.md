@@ -100,14 +100,16 @@ là `native:prebuild`.
 
 Trong ứng dụng — việc của repo, chặn hai mốc dừng ở đầu tệp:
 
-- Lái xe: tab **Nhiên liệu** và **Tiền** mới là màn giữ chỗ ("Đang dựng màn này") — chưa ghi được
-  nhiên liệu, chưa xem được quỹ.
+- Lái xe: ghi phiếu đổ dầu (kèm ảnh hoá đơn) và xem Tiền (quỹ, quyết toán, phiếu lương — chỉ đọc) đã
+  có; **chưa có** nộp lại phiếu bị từ chối, đính thêm chứng từ vào phiếu cũ, khoản chi chuyến cũ.
 - Kế toán: **Thu tiền** và **Lái xe** hiện chỉ đọc.
 - Đổi mật khẩu trong ứng dụng chưa có: tài khoản bị buộc đổi (`PASSWORD_CHANGE_REQUIRED`) phải đổi
   trên web; hàng đợi tạm dừng rồi tự gửi tiếp khi đăng nhập lại. Chờ hợp đồng đổi mật khẩu của #395.
 - Máy ảnh/tệp: bằng chứng tự động duy nhất là flow Maestro 05 **tuỳ chọn** (chọn ảnh thư viện trên
   máy ảo, không chặn job). Máy ảnh thật chưa kiểm trên thiết bị thật.
 - iOS: mới dựng + mở được trên iPhone Simulator; chưa có smoke đăng nhập/luồng trên iOS.
+
+Mức hỗ trợ từng việc trên PWA / Android / iOS: [ma-tran-tinh-nang.md](ma-tran-tinh-nang.md).
 
 Việc của chủ sở hữu:
 

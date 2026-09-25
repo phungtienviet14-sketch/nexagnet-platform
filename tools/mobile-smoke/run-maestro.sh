@@ -95,12 +95,16 @@ diagnose() {
 }
 if [ "$status" -ne 0 ]; then diagnose; fi
 
-# Flow TUY CHON (bo chon anh he thong) — ket qua ghi lai nhung KHONG quyet dinh mau cua job.
-wait_device_ready
-maestro test "${maestro_env[@]}" \
-  --format junit --output "$out_dir/maestro-optional-report.xml" \
-  --test-output-dir "$out_dir/maestro-optional" \
-  "$flows/05-driver-document-capture.yaml" || { echo "Flow tuy chon 05 do (khong chan job)."; diagnose; }
+# Flow TUY CHON (05 bo chon anh he thong, 06 bieu mau phieu dau dai) — MOI flow mot phien va mot bao
+# cao rieng; ket qua ghi lai nhung KHONG quyet dinh mau cua job.
+for optional in "$flows"/05-*.yaml "$flows"/06-*.yaml; do
+  name="$(basename "$optional" .yaml)"
+  wait_device_ready
+  maestro test "${maestro_env[@]}" \
+    --format junit --output "$out_dir/maestro-$name.xml" \
+    --test-output-dir "$out_dir/maestro-$name" \
+    "$optional" || { echo "Flow tuy chon $name do (khong chan job)."; diagnose; }
+done
 
 kill "$logcat_pid" 2>/dev/null || true
 exit "$status"
