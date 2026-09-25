@@ -1,11 +1,20 @@
 import { Tabs } from 'expo-router';
 import { TabIcon, useTabOptions } from '../../src/ui/tabs';
 
-/** LAI XE — Run-first: "Viec" (viec ke tiep + moc hien truong), ban do lay/giao, nhien lieu, tien (quy, quyet toan, phieu luong). */
+/**
+ * LAI XE — Run-first: "Việc" (viec ke tiep + moc hien truong), ban do lay/giao, nhien lieu, tien
+ * (quy, quyet toan, phieu luong).
+ *
+ * Cac man PHU (may anh, ghi phieu dau, nhan viec, ghi khoan chi, chi tiet vong chay) nam CUNG nhom
+ * nhung an khoi thanh tab (`href: null`). `backBehavior="history"`: nut lui quay ve DUNG man vua
+ * mo no (tab Nhien lieu -> Ghi phieu -> lui -> Nhien lieu), khong nhay ve tab dau.
+ */
+const HIDDEN = { href: null } as const;
+
 export default function Layout() {
   const options = useTabOptions();
   return (
-    <Tabs screenOptions={options}>
+    <Tabs screenOptions={options} backBehavior="history">
       <Tabs.Screen
         name="index"
         options={{
@@ -42,6 +51,11 @@ export default function Layout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="capture"
+        options={{ ...HIDDEN, title: 'Chụp chứng từ', tabBarStyle: { display: 'none' } }}
+      />
+      <Tabs.Screen name="run/[runId]" options={{ ...HIDDEN, title: 'Vòng chạy' }} />
     </Tabs>
   );
 }
