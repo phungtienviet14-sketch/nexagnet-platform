@@ -32,7 +32,11 @@ describe('so tra cuu dia diem cua dieu xe (#395)', () => {
       status: 'ACTIVE',
       recordedBy: 'test',
     });
-    const register = (label: string, subjectKind: 'DEPOT' | 'COUNTERPARTY_SITE', subjectId: string) =>
+    const register = (
+      label: string,
+      subjectKind: 'DEPOT' | 'COUNTERPARTY_SITE',
+      subjectId: string,
+    ) =>
       geofences.register({
         label,
         subjectKind,

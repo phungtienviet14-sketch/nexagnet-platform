@@ -264,7 +264,12 @@ describe('dia diem da biet chi hien hang rao con hieu luc that (#395)', () => {
       recordedBy: 'test',
     });
     const customer = await fleet.createCustomer({ name: 'Công ty TNHH Nhựa Tân Phú Hưng' });
-    await geofences.register({ ...REGISTER, label: 'Bãi xe Hà Nội', subjectKind: 'DEPOT', subjectId: 'DEPOT-HN' });
+    await geofences.register({
+      ...REGISTER,
+      label: 'Bãi xe Hà Nội',
+      subjectKind: 'DEPOT',
+      subjectId: 'DEPOT-HN',
+    });
     await geofences.register({
       ...REGISTER,
       label: 'Nhà máy thép Đình Vũ',

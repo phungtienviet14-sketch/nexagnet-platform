@@ -313,9 +313,7 @@ describe('diem dia diem mau (#379)', () => {
 
       const result = await backfillDemoPlaceMarkers(prisma);
 
-      expect(result.skipped).toEqual([
-        { label: 'Bãi xe Hà Nội', reason: 'DEPOT_ALREADY_MANAGED' },
-      ]);
+      expect(result.skipped).toEqual([{ label: 'Bãi xe Hà Nội', reason: 'DEPOT_ALREADY_MANAGED' }]);
       expect(result.created.geofence).toBe(2);
       expect(tables.geofences.filter((row) => row['subjectKind'] === 'DEPOT')).toHaveLength(1);
     },

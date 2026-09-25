@@ -6,7 +6,11 @@ import { CounterpartySiteRepository } from '../../counterparty/site.repository.j
 import type { CounterpartySite } from '../../counterparty/site.types.js';
 import { normalizePlaceLabel } from '../../dispatch/place-resolution.js';
 import { FleetRepository } from '../../fleet/fleet.repository.js';
-import { isWithinRoadNetworkBoundingBox, parseGeoPoint, type GeoPoint } from '../../geo/geo-point.js';
+import {
+  isWithinRoadNetworkBoundingBox,
+  parseGeoPoint,
+  type GeoPoint,
+} from '../../geo/geo-point.js';
 import { DepotDirectoryHub, type DepotDirectory } from '../../planning/depot-directory.js';
 import { DepotOpenWorkReader, type DepotOpenWork } from '../../planning/depot-open-work.js';
 import {
@@ -21,7 +25,10 @@ import {
 } from '../../proof/place-write.store.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from '../../proof/tracking-policy.js';
 import { TransportDomainError } from '../../transport.errors.js';
-import { TRANSPORT_PLACE_ADMIN_DECISIONS, type PlaceWriteReason } from '../place-admin-decisions.js';
+import {
+  TRANSPORT_PLACE_ADMIN_DECISIONS,
+  type PlaceWriteReason,
+} from '../place-admin-decisions.js';
 import { PlaceAdminError } from './place-admin-error.js';
 import { PlaceAdminViews } from './place-admin.view.js';
 import {
@@ -133,7 +140,10 @@ export class PlaceAdminService {
     return this.write('create', command.kind, async () => {
       const point = this.requirePoint(command.point);
       this.requireRadius(command.radiusMetres);
-      if (command.kind === 'DEPOT' && (command.owner !== undefined || command.siteId !== undefined)) {
+      if (
+        command.kind === 'DEPOT' &&
+        (command.owner !== undefined || command.siteId !== undefined)
+      ) {
         throw TransportDomainError.invalid(
           'PLACE_OWNER_INVALID',
           'Bãi xe là của chính công ty — không chọn chủ hay địa điểm của đơn vị khác.',
@@ -166,7 +176,11 @@ export class PlaceAdminService {
     });
   }
 
-  update(id: string, command: UpdatePlaceCommand, caller: PlaceWriteCaller): Promise<PlaceAdminView> {
+  update(
+    id: string,
+    command: UpdatePlaceCommand,
+    caller: PlaceWriteCaller,
+  ): Promise<PlaceAdminView> {
     return this.write('update', null, async () => {
       const point = command.point === undefined ? undefined : this.requirePoint(command.point);
       if (command.radiusMetres !== undefined) this.requireRadius(command.radiusMetres);
@@ -186,7 +200,10 @@ export class PlaceAdminService {
           });
           if (siteBefore) await this.requireSiteNameFree(tx, siteBefore, command.name);
           if (before.subjectKind === 'DEPOT' && before.status === 'ACTIVE') {
-            openWork = await this.requireOpenWorkAcknowledged(before.label, command.acknowledgeOpenWork);
+            openWork = await this.requireOpenWorkAcknowledged(
+              before.label,
+              command.acknowledgeOpenWork,
+            );
           }
         }
         const fence = await tx.geofences.update(before.id, {
@@ -493,10 +510,7 @@ export class PlaceAdminService {
     return tx.sites.find(fence.subjectId);
   }
 
-  private async requireManaged(
-    geofences: GeofenceRepository,
-    id: string,
-  ): Promise<GeofenceRecord> {
+  private async requireManaged(geofences: GeofenceRepository, id: string): Promise<GeofenceRecord> {
     const fence = await geofences.find(id);
     if (!fence || !isManagedPlaceKind(fence.subjectKind)) {
       throw TransportDomainError.notFound('PLACE_NOT_FOUND', 'Không tìm thấy địa điểm vận hành.');
@@ -523,20 +537,38 @@ export class PlaceAdminService {
     } catch (error) {
       const conflict = placeStorageConflict(error);
       if (!conflict) throw error;
-      if (isPlaceWriteReason(conflict.reason)) {
-        this.decide('denied', conflict.reason, null, null, { storage: true });
-      }
+      STORAGE_CONFLICTS.add(conflict);
       throw conflict;
     }
   }
 
+  /**
+   * MOT buoc `place.write` cho moi thao tac ghi. Moi tu choi mang ly do cua bo tu vung (ke ca tu
+   * luat chu cua dia diem, va tu chi muc DB) duoc ghi quyet dinh `denied` DUNG MOT lan, o day.
+   */
   private write<T>(
     operation: Operation,
     kind: GeofenceSubjectKind | null,
     run: () => Promise<T>,
   ): Promise<T> {
     const attributes = { operation, ...(kind === null ? {} : { kind }) };
-    return this.telemetry ? this.telemetry.step('place.write', run, attributes) : run();
+    const reported = async (): Promise<T> => {
+      try {
+        return await run();
+      } catch (error) {
+        this.reportDenied(operation, error);
+        throw error;
+      }
+    };
+    return this.telemetry ? this.telemetry.step('place.write', reported, attributes) : reported();
+  }
+
+  private reportDenied(operation: Operation, error: unknown): void {
+    if (!(error instanceof TransportDomainError) || !isPlaceWriteReason(error.reason)) return;
+    this.decide('denied', error.reason, operation, null, {
+      ...(error instanceof PlaceAdminError ? sanitizeDetail(error.detail) : {}),
+      ...(STORAGE_CONFLICTS.has(error) ? { storage: true } : {}),
+    });
   }
 
   private denied(
@@ -545,7 +577,6 @@ export class PlaceAdminService {
     message: string,
     detail: Readonly<Record<string, unknown>> = {},
   ): PlaceAdminError {
-    this.decide('denied', reason, null, null, sanitizeDetail(detail));
     return new PlaceAdminError(kind, reason, message, detail);
   }
 
@@ -726,6 +757,9 @@ export function nextDepotCode(name: string, taken: readonly (string | null)[]): 
   }
 }
 
+/** Loi da dich tu mot va cham chi muc DB (nguoi ghi ngoai khoa) — de quyet dinh ghi `storage`. */
+const STORAGE_CONFLICTS = new WeakSet<Error>();
+
 const PLACE_WRITE_REASON_SET: ReadonlySet<string> = new Set(
   Object.keys(TRANSPORT_PLACE_ADMIN_DECISIONS.labels),
 );
@@ -769,7 +803,8 @@ function sanitizeDetail(detail: Readonly<Record<string, unknown>>): Record<strin
   const out: Record<string, unknown> = {};
   if (Array.isArray(detail['runs'])) out['runCount'] = detail['runs'].length;
   if (Array.isArray(detail['orders'])) out['orderCount'] = detail['orders'].length;
-  if (typeof detail['conflictKindLabel'] === 'string') out['conflictKind'] = detail['conflictKindLabel'];
+  if (typeof detail['conflictKindLabel'] === 'string')
+    out['conflictKind'] = detail['conflictKindLabel'];
   if (typeof detail['operation'] === 'string') out['operation'] = detail['operation'];
   return out;
 }

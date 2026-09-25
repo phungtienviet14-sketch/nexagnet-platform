@@ -52,16 +52,11 @@ export async function resolveSiteOwner(
       'Hãy chọn địa điểm này của ai: một khách hàng, một đơn vị có sẵn, hoặc thêm đơn vị mới.',
     );
   }
-  const owner = await partyFor(tx, command.owner, actor);
-  const existing = await tx.sites.findByName(owner.party.id, command.name);
-  if (existing) {
-    throw new PlaceAdminError(
-      'CONFLICT',
-      'COUNTERPARTY_SITE_NAME_TAKEN',
-      `"${owner.party.name}" đã có địa điểm "${existing.name}" — chọn địa điểm đó để gắn vị trí.`,
-      { siteId: existing.id, siteName: existing.name, counterpartyName: owner.party.name },
-    );
-  }
+  // MOI phep kiem truoc lan ghi dau tien — ke ca trung ten dia diem trong phap nhan co san — de
+  // ban trong bo nho (khong co rollback) cung khong de lai phap nhan hay lien ket do dang.
+  const plan = await planParty(tx, command.owner);
+  if (plan.party !== null) await requireSiteNameFreeIn(tx, plan.party, command.name);
+  const owner = await applyParty(tx, plan, actor);
   const site = await tx.sites.create({
     counterpartyId: owner.party.id,
     name: command.name,
@@ -71,6 +66,21 @@ export async function resolveSiteOwner(
     recordedBy: actor,
   });
   return { ...owner, site, siteBefore: null };
+}
+
+async function requireSiteNameFreeIn(
+  tx: PlaceWriteTx,
+  party: Counterparty,
+  name: string,
+): Promise<void> {
+  const existing = await tx.sites.findByName(party.id, name);
+  if (!existing) return;
+  throw new PlaceAdminError(
+    'CONFLICT',
+    'COUNTERPARTY_SITE_NAME_TAKEN',
+    `"${party.name}" đã có địa điểm "${existing.name}" — chọn địa điểm đó để gắn vị trí.`,
+    { siteId: existing.id, siteName: existing.name, counterpartyName: party.name },
+  );
 }
 
 async function attachToExistingSite(
@@ -139,11 +149,18 @@ async function attachToExistingSite(
 
 type PartyOutcome = Omit<PlaceOwnerOutcome, 'site' | 'siteBefore'>;
 
-async function partyFor(
-  tx: PlaceWriteTx,
-  owner: PlaceOwnerInput,
-  actor: string,
-): Promise<PartyOutcome> {
+/**
+ * KE HOACH chu — doc het, KHONG ghi gi. `party` = phap nhan co san (NULL = se tao `newParty`);
+ * `linkCustomerId` = khach can noi vao phap nhan trong lan nay.
+ */
+interface PartyPlan {
+  readonly party: Counterparty | null;
+  readonly newParty: { readonly name: string; readonly taxCode: string | null } | null;
+  readonly customerId: string | null;
+  readonly linkCustomerId: string | null;
+}
+
+async function planParty(tx: PlaceWriteTx, owner: PlaceOwnerInput): Promise<PartyPlan> {
   if ('counterpartyId' in owner) {
     const party = await tx.counterparties.find(owner.counterpartyId);
     if (!party) {
@@ -153,20 +170,16 @@ async function partyFor(
     const links = await tx.counterparties.listLinks(party.id);
     return {
       party,
-      partyCreated: false,
-      linkCreated: null,
+      newParty: null,
       customerId: links.find((link) => link.kind === 'CUSTOMER')?.subjectId ?? null,
+      linkCustomerId: null,
     };
   }
-  if ('customerId' in owner) return customerParty(tx, owner.customerId, actor);
-  return newParty(tx, owner.newCounterparty);
+  if ('customerId' in owner) return planCustomerParty(tx, owner.customerId);
+  return planNewParty(tx, owner.newCounterparty);
 }
 
-async function customerParty(
-  tx: PlaceWriteTx,
-  customerId: string,
-  actor: string,
-): Promise<PartyOutcome> {
+async function planCustomerParty(tx: PlaceWriteTx, customerId: string): Promise<PartyPlan> {
   const customer = await tx.customers.findCustomer(customerId);
   if (!customer) {
     throw TransportDomainError.notFound('CUSTOMER_NOT_FOUND', 'Không tìm thấy khách hàng.');
@@ -180,29 +193,25 @@ async function customerParty(
       throw TransportDomainError.notFound('COUNTERPARTY_NOT_FOUND', 'Không tìm thấy đơn vị.');
     }
     if (party.status !== 'ACTIVE') throw ownerInactive(party.name);
-    return { party, partyCreated: false, linkCreated: null, customerId: customer.id };
+    return { party, newParty: null, customerId: customer.id, linkCustomerId: null };
   }
 
   const taxCode = customer.taxCode?.trim() ?? '';
   const usableTaxCode = TAX_CODE_SHAPE.test(taxCode) ? taxCode : null;
   const sameEntity = usableTaxCode ? await tx.counterparties.findByTaxCode(usableTaxCode) : null;
   if (sameEntity && sameEntity.status !== 'ACTIVE') throw ownerInactive(sameEntity.name);
-  const party =
-    sameEntity ??
-    (await tx.counterparties.create({ name: customer.name, taxCode: usableTaxCode, note: null }));
-  const created = await tx.counterparties.link({
-    counterpartyId: party.id,
-    kind: 'CUSTOMER',
-    subjectId: customer.id,
-    linkedBy: actor,
-  });
-  return { party, partyCreated: sameEntity === null, linkCreated: created, customerId: customer.id };
+  return {
+    party: sameEntity,
+    newParty: sameEntity ? null : { name: customer.name, taxCode: usableTaxCode },
+    customerId: customer.id,
+    linkCustomerId: customer.id,
+  };
 }
 
-async function newParty(
+async function planNewParty(
   tx: PlaceWriteTx,
   input: { readonly name: string; readonly taxCode?: string | null },
-): Promise<PartyOutcome> {
+): Promise<PartyPlan> {
   const taxCode = input.taxCode ?? null;
   if (taxCode !== null) {
     const holder = await tx.counterparties.findByTaxCode(taxCode);
@@ -215,6 +224,31 @@ async function newParty(
       );
     }
   }
-  const party = await tx.counterparties.create({ name: input.name, taxCode, note: null });
-  return { party, partyCreated: true, linkCreated: null, customerId: null };
+  return {
+    party: null,
+    newParty: { name: input.name, taxCode },
+    customerId: null,
+    linkCustomerId: null,
+  };
+}
+
+/** GHI theo ke hoach: phap nhan moi (neu can), roi lien ket khach (neu can). */
+async function applyParty(tx: PlaceWriteTx, plan: PartyPlan, actor: string): Promise<PartyOutcome> {
+  const party =
+    plan.party ??
+    (await tx.counterparties.create({
+      name: plan.newParty?.name ?? '',
+      taxCode: plan.newParty?.taxCode ?? null,
+      note: null,
+    }));
+  const linkCreated =
+    plan.linkCustomerId === null
+      ? null
+      : await tx.counterparties.link({
+          counterpartyId: party.id,
+          kind: 'CUSTOMER',
+          subjectId: plan.linkCustomerId,
+          linkedBy: actor,
+        });
+  return { party, partyCreated: plan.party === null, linkCreated, customerId: plan.customerId };
 }

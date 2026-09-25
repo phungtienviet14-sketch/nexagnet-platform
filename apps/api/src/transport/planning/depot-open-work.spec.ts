@@ -32,24 +32,55 @@ describe('viec dang mo tai mot bai xe (#395)', () => {
         businessDate: DAY,
       });
 
-    const planned = await movement.createRun({ code: 'VR-PLANNED', vehicleId: 'v1', businessDate: DAY });
+    const planned = await movement.createRun({
+      code: 'VR-PLANNED',
+      vehicleId: 'v1',
+      businessDate: DAY,
+    });
     await leg(planned.id, 1, '  bãi xe  hà nội ', 'Kho A');
-    const active = await movement.createRun({ code: 'VR-ACTIVE', vehicleId: 'v2', businessDate: DAY });
+    const active = await movement.createRun({
+      code: 'VR-ACTIVE',
+      vehicleId: 'v2',
+      businessDate: DAY,
+    });
     await leg(active.id, 1, 'Kho B', DEPOT);
     await movement.setRunStatus(active.id, 'ACTIVE', new Date());
     const done = await movement.createRun({ code: 'VR-DONE', vehicleId: 'v3', businessDate: DAY });
     await leg(done.id, 1, 'Kho C', DEPOT);
     await movement.setRunStatus(done.id, 'COMPLETED', new Date());
-    const elsewhere = await movement.createRun({ code: 'VR-XA', vehicleId: 'v4', businessDate: DAY });
+    const elsewhere = await movement.createRun({
+      code: 'VR-XA',
+      vehicleId: 'v4',
+      businessDate: DAY,
+    });
     await leg(elsewhere.id, 1, 'Kho D', 'Kho E');
     // Khac dau KHONG phai cung cho theo `sameSite()` — dung nhu khau lap ke hoach.
-    const unaccented = await movement.createRun({ code: 'VR-KD', vehicleId: 'v5', businessDate: DAY });
+    const unaccented = await movement.createRun({
+      code: 'VR-KD',
+      vehicleId: 'v5',
+      businessDate: DAY,
+    });
     await leg(unaccented.id, 1, 'Bai xe Ha Noi', 'Kho F');
 
-    const open = await movement.createOrder({ code: 'ORD-OPEN', businessDate: DAY, originLabel: DEPOT, destinationLabel: 'Kho G' });
-    const cancelled = await movement.createOrder({ code: 'ORD-HUY', businessDate: DAY, originLabel: 'Kho H', destinationLabel: DEPOT });
+    const open = await movement.createOrder({
+      code: 'ORD-OPEN',
+      businessDate: DAY,
+      originLabel: DEPOT,
+      destinationLabel: 'Kho G',
+    });
+    const cancelled = await movement.createOrder({
+      code: 'ORD-HUY',
+      businessDate: DAY,
+      originLabel: 'Kho H',
+      destinationLabel: DEPOT,
+    });
     await movement.cancelOrder(cancelled.id, { cancelledAt: new Date(), cancellationReason: 'x' });
-    const fulfilled = await movement.createOrder({ code: 'ORD-XONG', businessDate: DAY, originLabel: DEPOT, destinationLabel: 'Kho I' });
+    const fulfilled = await movement.createOrder({
+      code: 'ORD-XONG',
+      businessDate: DAY,
+      originLabel: DEPOT,
+      destinationLabel: 'Kho I',
+    });
     await movement.setOrderStatus(fulfilled.id, 'FULFILLED', new Date());
 
     const work = await new MovementDepotOpenWorkReader(movement, policy(12)).openWorkAt(DEPOT);
@@ -71,7 +102,12 @@ describe('viec dang mo tai mot bai xe (#395)', () => {
       destinationLabel: 'Kho A',
       businessDate: DAY,
     });
-    await movement.setLegStatus({ legId: leg.id, from: 'PLANNED', to: 'CANCELLED', at: new Date() });
+    await movement.setLegStatus({
+      legId: leg.id,
+      from: 'PLANNED',
+      to: 'CANCELLED',
+      at: new Date(),
+    });
 
     const work = await new MovementDepotOpenWorkReader(movement, policy(null)).openWorkAt(DEPOT);
 

@@ -12,7 +12,11 @@ import {
 import { resolveDepotFrom } from '../../planning/planning-policy.js';
 import type { GeofenceRecord, GeofenceRepository } from '../../proof/geofence.repository.js';
 import type { TransportCustomer } from '../../transport.types.js';
-import { listPlaceNameConflicts, loadPlaceNameIndex, type PlaceNameEntry } from './place-name-rule.js';
+import {
+  listPlaceNameConflicts,
+  loadPlaceNameIndex,
+  type PlaceNameEntry,
+} from './place-name-rule.js';
 import {
   MANAGED_PLACE_KINDS,
   PLACE_DISPLAY_KINDS,
@@ -106,7 +110,7 @@ export class PlaceAdminViews {
     const kind = fence.subjectKind as PlaceAdminView['kind'];
     const owner = ownerOf(fence, owners);
     const displayKind = displayKindOf(kind, owner?.customerId !== undefined);
-    const site = fence.subjectKind === 'COUNTERPARTY_SITE' ? owner?.siteId ?? null : null;
+    const site = fence.subjectKind === 'COUNTERPARTY_SITE' ? (owner?.siteId ?? null) : null;
     const conflicts = listPlaceNameConflicts(fence.label, index, {
       geofenceIds: [fence.id],
       siteId: site,
@@ -122,7 +126,11 @@ export class PlaceAdminViews {
       radiusMetres: fence.radiusMetres,
       status: fence.status,
       effectiveStatus:
-        fence.status !== 'ACTIVE' ? 'INACTIVE' : effective.has(fence.id) ? 'ACTIVE' : 'OWNER_INACTIVE',
+        fence.status !== 'ACTIVE'
+          ? 'INACTIVE'
+          : effective.has(fence.id)
+            ? 'ACTIVE'
+            : 'OWNER_INACTIVE',
       note: fence.note,
       owner,
       depot: kind === 'DEPOT' ? depotView(fence, depots) : null,
@@ -135,9 +143,7 @@ export class PlaceAdminViews {
   private async ownerFacts(fences: readonly GeofenceRecord[]): Promise<OwnerFacts> {
     const siteIds = subjectIds(fences, 'COUNTERPARTY_SITE');
     const siteRows = await Promise.all(siteIds.map((id) => this.sources.sites.find(id)));
-    const sites = new Map(
-      siteRows.flatMap((site) => (site ? [[site.id, site] as const] : [])),
-    );
+    const sites = new Map(siteRows.flatMap((site) => (site ? [[site.id, site] as const] : [])));
     const partyIds = [...new Set([...sites.values()].map((site) => site.counterpartyId))];
     const parties = new Map(
       (partyIds.length === 0 ? [] : await this.sources.counterparties.findMany(partyIds)).map(
@@ -225,7 +231,9 @@ function depotView(fence: GeofenceRecord, depots: readonly DepotEntry[]): PlaceD
 
 function matchesStatus(view: PlaceAdminView, status: 'active' | 'inactive' | 'all'): boolean {
   if (status === 'all') return true;
-  return status === 'active' ? view.effectiveStatus === 'ACTIVE' : view.effectiveStatus !== 'ACTIVE';
+  return status === 'active'
+    ? view.effectiveStatus === 'ACTIVE'
+    : view.effectiveStatus !== 'ACTIVE';
 }
 
 function searchText(view: PlaceAdminView): string {

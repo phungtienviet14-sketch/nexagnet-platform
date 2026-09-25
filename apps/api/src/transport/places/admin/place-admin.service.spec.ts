@@ -5,10 +5,7 @@ import type { TelemetryService } from '../../../observability/telemetry.service.
 import { InMemoryCounterpartyRepository } from '../../counterparty/counterparty.repository.js';
 import { InMemoryCounterpartySiteRepository } from '../../counterparty/site.repository.js';
 import { InMemoryFleetRepository } from '../../fleet/fleet.repository.js';
-import {
-  ConfigDepotDirectory,
-  DepotDirectoryHub,
-} from '../../planning/depot-directory.js';
+import { ConfigDepotDirectory, DepotDirectoryHub } from '../../planning/depot-directory.js';
 import type { DepotOpenWork, DepotOpenWorkReader } from '../../planning/depot-open-work.js';
 import { resolveDepotFrom } from '../../planning/planning-policy.js';
 import type { TransportPlanningPolicy } from '../../planning/planning.types.js';
@@ -85,7 +82,18 @@ function world() {
   );
   const audit = (action?: string) =>
     auditRows.list({ ...(action === undefined ? {} : { action }), limit: 200 });
-  return { service, geofences, sites, counterparties, fleet, depots, openWork, audit, decisions, steps };
+  return {
+    service,
+    geofences,
+    sites,
+    counterparties,
+    fleet,
+    depots,
+    openWork,
+    audit,
+    decisions,
+    steps,
+  };
 }
 
 type World = ReturnType<typeof world>;
@@ -133,7 +141,10 @@ describe('tao bai xe (#395)', () => {
   });
 
   it('bai dau tien: dang bat, ma do may chu sinh, khau lap ke hoach DANG DUNG', async () => {
-    const view = await w.service.create(depot('Bãi xe Hà Nội', { address: 'Thanh Trì, Hà Nội' }), DIRECTOR);
+    const view = await w.service.create(
+      depot('Bãi xe Hà Nội', { address: 'Thanh Trì, Hà Nội' }),
+      DIRECTOR,
+    );
 
     expect(view).toMatchObject({
       kind: 'DEPOT',
@@ -208,12 +219,12 @@ describe('luat dau vao chung (#395)', () => {
   });
 
   it('ngoai vung phuc vu -> PLACE_OUTSIDE_SERVICE_AREA (co ghi quyet dinh)', async () => {
-    expect(await reasonOf(() => w.service.create(depot('Bãi Paris', { point: PARIS }), DIRECTOR))).toBe(
-      'PLACE_OUTSIDE_SERVICE_AREA',
-    );
-    expect(w.decisions).toContainEqual(
+    expect(
+      await reasonOf(() => w.service.create(depot('Bãi Paris', { point: PARIS }), DIRECTOR)),
+    ).toBe('PLACE_OUTSIDE_SERVICE_AREA');
+    expect(w.decisions).toEqual([
       expect.objectContaining({ outcome: 'denied', reason: 'PLACE_OUTSIDE_SERVICE_AREA' }),
-    );
+    ]);
   });
 
   it('toa do hong (0,0) -> GEOFENCE_COORDINATE_REJECTED; ban kinh ngoai chinh sach -> tu choi', async () => {
@@ -229,10 +240,16 @@ describe('luat dau vao chung (#395)', () => {
 
   it('dia diem cua don vi khac doi quyen quan ly phap nhan -> 403 co ma', async () => {
     const error = await errorOf(() =>
-      w.service.create(site('Kho A', { owner: { newCounterparty: { name: 'Công ty A' } } }), FENCE_ONLY),
+      w.service.create(
+        site('Kho A', { owner: { newCounterparty: { name: 'Công ty A' } } }),
+        FENCE_ONLY,
+      ),
     );
 
-    expect(error).toMatchObject({ kind: 'DENIED', reason: 'PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE' });
+    expect(error).toMatchObject({
+      kind: 'DENIED',
+      reason: 'PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE',
+    });
     // Bai xe KHONG can quyen do.
     expect((await w.service.create(depot('Bãi A'), FENCE_ONLY)).status).toBe('ACTIVE');
   });
@@ -254,7 +271,10 @@ describe('trung ten (#395)', () => {
     await w.service.create(depot('Bãi xe Hà Nội'), DIRECTOR);
 
     const error = await errorOf(() =>
-      w.service.create(site('BAI XE  HA NOI', { owner: { newCounterparty: { name: 'Công ty B' } } }), DIRECTOR),
+      w.service.create(
+        site('BAI XE  HA NOI', { owner: { newCounterparty: { name: 'Công ty B' } } }),
+        DIRECTOR,
+      ),
     );
 
     expect(error).toMatchObject({ kind: 'CONFLICT', reason: 'PLACE_NAME_TAKEN' });
@@ -274,9 +294,14 @@ describe('trung ten (#395)', () => {
       note: null,
       recordedBy: 'test',
     });
-    await w.service.create(site('Kho Đình Vũ', { owner: { newCounterparty: { name: 'Công ty C' } } }), DIRECTOR);
+    await w.service.create(
+      site('Kho Đình Vũ', { owner: { newCounterparty: { name: 'Công ty C' } } }),
+      DIRECTOR,
+    );
 
-    expect(await reasonOf(() => w.service.create(depot('diem hen cu'), DIRECTOR))).toBe('PLACE_NAME_TAKEN');
+    expect(await reasonOf(() => w.service.create(depot('diem hen cu'), DIRECTOR))).toBe(
+      'PLACE_NAME_TAKEN',
+    );
     const error = await errorOf(() => w.service.create(depot('KHO DINH VU'), DIRECTOR));
     expect(error.detail).toEqual({
       conflictName: 'Kho Đình Vũ',
@@ -296,14 +321,24 @@ describe('trung ten (#395)', () => {
 
   /** Du lieu cu da trung ten: sua ban kinh van qua; man hinh hien va cham de nguoi dung tu sua. */
   it('sua khong dung ten van qua ke ca khi du lieu cu da trung ten', async () => {
-    const base = { subjectKind: 'CUSTOMER' as const, ...HA_NOI, radiusMetres: 100, note: null, recordedBy: 'test' };
+    const base = {
+      subjectKind: 'CUSTOMER' as const,
+      ...HA_NOI,
+      radiusMetres: 100,
+      note: null,
+      recordedBy: 'test',
+    };
     const customer = await w.fleet.createCustomer({ name: 'Khách K' });
     const legacy = await w.geofences.register({ ...base, label: 'Kho K', subjectId: customer.id });
     await w.geofences.register({ ...base, label: 'KHO K', subjectId: customer.id });
 
     const view = await w.service.update(legacy.id, { radiusMetres: 150 }, DIRECTOR);
 
-    expect(view).toMatchObject({ radiusMetres: 150, conflicts: ['KHO K'], kindLabel: 'Điểm khách hàng (kiểu cũ)' });
+    expect(view).toMatchObject({
+      radiusMetres: 150,
+      conflicts: ['KHO K'],
+      kindLabel: 'Điểm khách hàng (kiểu cũ)',
+    });
     expect(await reasonOf(() => w.service.update(legacy.id, { name: 'kho k ' }, DIRECTOR))).toBe(
       'PLACE_NAME_TAKEN',
     );
@@ -317,7 +352,9 @@ describe('trung ten (#395)', () => {
     ]);
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    const rejected = results.find(
+      (result) => result.status === 'rejected',
+    ) as PromiseRejectedResult;
     expect((rejected.reason as TransportDomainError).reason).toBe('PLACE_NAME_TAKEN');
   });
 });
@@ -329,7 +366,10 @@ describe('chu cua dia diem: khach hang, don vi co san, don vi moi, dia diem co s
   });
 
   it('khach chua co phap nhan -> tao phap nhan + lien ket + dia diem + hang rao, MOT lan', async () => {
-    const customer = await w.fleet.createCustomer({ name: 'Công ty CP Thép Đông Á', taxCode: '0200788341' });
+    const customer = await w.fleet.createCustomer({
+      name: 'Công ty CP Thép Đông Á',
+      taxCode: '0200788341',
+    });
 
     const view = await w.service.create(
       site('Nhà máy thép Đình Vũ', { owner: { customerId: customer.id }, address: 'KCN Đình Vũ' }),
@@ -353,7 +393,11 @@ describe('chu cua dia diem: khach hang, don vi co san, don vi moi, dia diem co s
       counterpartyId: party?.id,
     });
     expect(await w.sites.listForCounterparty(party?.id ?? '')).toEqual([
-      expect.objectContaining({ name: 'Nhà máy thép Đình Vũ', address: 'KCN Đình Vũ', status: 'ACTIVE' }),
+      expect.objectContaining({
+        name: 'Nhà máy thép Đình Vũ',
+        address: 'KCN Đình Vũ',
+        status: 'ACTIVE',
+      }),
     ]);
     expect((await w.audit()).map((row) => row.action).sort()).toEqual(
       [
@@ -367,44 +411,98 @@ describe('chu cua dia diem: khach hang, don vi co san, don vi moi, dia diem co s
 
   it('khach da co phap nhan cung ma so thue -> noi vao phap nhan do, khong tao ban thu hai', async () => {
     const existing = await w.counterparties.create({ name: 'Thép Đông Á', taxCode: '0200788341' });
-    const customer = await w.fleet.createCustomer({ name: 'Công ty CP Thép Đông Á', taxCode: '0200788341' });
+    const customer = await w.fleet.createCustomer({
+      name: 'Công ty CP Thép Đông Á',
+      taxCode: '0200788341',
+    });
 
-    const view = await w.service.create(site('Kho thép', { owner: { customerId: customer.id } }), DIRECTOR);
+    const view = await w.service.create(
+      site('Kho thép', { owner: { customerId: customer.id } }),
+      DIRECTOR,
+    );
 
     expect(view.owner?.counterpartyId).toBe(existing.id);
     expect(await w.counterparties.list()).toHaveLength(1);
+  });
+
+  /**
+   * Moi phep kiem chay TRUOC lan ghi dau tien: phap nhan cung ma so thue da co mot dia diem (chua
+   * co hang rao) trung ten -> tu choi, va KHONG mot lien ket khach nao duoc ghi (kho trong bo nho
+   * khong co rollback — neu kiem sau khi ghi, lien ket do se o lai).
+   */
+  it('phap nhan co san da co dia diem trung ten -> tu choi, khong ghi lien ket do dang', async () => {
+    const existing = await w.counterparties.create({ name: 'Thép Đông Á', taxCode: '0200788341' });
+    await w.sites.create({
+      counterpartyId: existing.id,
+      name: 'Kho thép',
+      address: null,
+      note: null,
+      status: 'ACTIVE',
+      recordedBy: 'ke-toan',
+    });
+    const customer = await w.fleet.createCustomer({
+      name: 'Công ty CP Thép Đông Á',
+      taxCode: '0200788341',
+    });
+
+    const error = await errorOf(() =>
+      w.service.create(site('Kho thép', { owner: { customerId: customer.id } }), DIRECTOR),
+    );
+
+    expect(error).toMatchObject({ reason: 'COUNTERPARTY_SITE_NAME_TAKEN' });
+    expect(error.detail).toMatchObject({ siteName: 'Kho thép', counterpartyName: 'Thép Đông Á' });
+    expect(await w.counterparties.findLinkBySubject('CUSTOMER', customer.id)).toBeNull();
+    expect(await w.counterparties.list()).toHaveLength(1);
+    expect(await w.audit()).toEqual([]);
   });
 
   it('khach da ngung hoat dong -> PLACE_OWNER_INACTIVE', async () => {
     const customer = await w.fleet.createCustomer({ name: 'Khách nghỉ', status: 'INACTIVE' });
 
     expect(
-      await reasonOf(() => w.service.create(site('Kho X', { owner: { customerId: customer.id } }), DIRECTOR)),
+      await reasonOf(() =>
+        w.service.create(site('Kho X', { owner: { customerId: customer.id } }), DIRECTOR),
+      ),
     ).toBe('PLACE_OWNER_INACTIVE');
   });
 
   it('don vi moi: nha may / kho doi tac; ma so thue da co -> noi ro don vi nao', async () => {
     const view = await w.service.create(
-      site('Nhà máy nhựa', { owner: { newCounterparty: { name: 'Công ty Nhựa', taxCode: '4600921537' } } }),
+      site('Nhà máy nhựa', {
+        owner: { newCounterparty: { name: 'Công ty Nhựa', taxCode: '4600921537' } },
+      }),
       DIRECTOR,
     );
     expect(view).toMatchObject({ displayKind: 'PARTNER_SITE', kindLabel: 'Nhà máy / kho đối tác' });
 
     const error = await errorOf(() =>
       w.service.create(
-        site('Kho nhựa 2', { owner: { newCounterparty: { name: 'Nhựa khác', taxCode: '4600921537' } } }),
+        site('Kho nhựa 2', {
+          owner: { newCounterparty: { name: 'Nhựa khác', taxCode: '4600921537' } },
+        }),
         DIRECTOR,
       ),
     );
     expect(error).toMatchObject({ reason: 'COUNTERPARTY_TAX_CODE_TAKEN' });
     expect(error.detail).toMatchObject({ counterpartyName: 'Công ty Nhựa' });
+    // Tu choi tu luat CHU cua dia diem van la MOT quyet dinh `denied` co ma — dung mot lan, khong
+    // mang ten don vi (ten o lai trong than loi).
+    const denied = w.decisions.filter((entry) => entry.outcome === 'denied');
+    expect(denied).toEqual([
+      expect.objectContaining({
+        reason: 'COUNTERPARTY_TAX_CODE_TAKEN',
+        detail: { operation: 'create' },
+      }),
+    ]);
   });
 
   it('don vi co san da ngung hoat dong -> PLACE_OWNER_INACTIVE', async () => {
     const party = await w.counterparties.create({ name: 'Công ty nghỉ', status: 'INACTIVE' });
 
     expect(
-      await reasonOf(() => w.service.create(site('Kho Y', { owner: { counterpartyId: party.id } }), DIRECTOR)),
+      await reasonOf(() =>
+        w.service.create(site('Kho Y', { owner: { counterpartyId: party.id } }), DIRECTOR),
+      ),
     ).toBe('PLACE_OWNER_INACTIVE');
   });
 
@@ -419,16 +517,24 @@ describe('chu cua dia diem: khach hang, don vi co san, don vi moi, dia diem co s
       recordedBy: 'ke-toan',
     });
 
-    const view = await w.service.create(site('Kho D Hải Phòng', { siteId: legacySite.id }), DIRECTOR);
+    const view = await w.service.create(
+      site('Kho D Hải Phòng', { siteId: legacySite.id }),
+      DIRECTOR,
+    );
 
     expect(view.owner).toMatchObject({ siteId: legacySite.id, siteName: 'Kho D Hải Phòng' });
-    expect(await reasonOf(() => w.service.create(site('Kho D khác', { siteId: legacySite.id }), DIRECTOR))).toBe(
-      'PLACE_SITE_ALREADY_FENCED',
-    );
+    expect(
+      await reasonOf(() =>
+        w.service.create(site('Kho D khác', { siteId: legacySite.id }), DIRECTOR),
+      ),
+    ).toBe('PLACE_SITE_ALREADY_FENCED');
     const other = await w.counterparties.create({ name: 'Công ty E' });
     expect(
       await reasonOf(() =>
-        w.service.create(site('Kho E', { siteId: legacySite.id, owner: { counterpartyId: other.id } }), DIRECTOR),
+        w.service.create(
+          site('Kho E', { siteId: legacySite.id, owner: { counterpartyId: other.id } }),
+          DIRECTOR,
+        ),
       ),
     ).toBe('PLACE_SITE_OWNER_MISMATCH');
   });
@@ -450,7 +556,9 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     const view = await w.service.create(depot('Bãi xe Hà Nội'), DIRECTOR);
     w.openWork.openWorkAt.mockResolvedValue(openWork);
 
-    const error = await errorOf(() => w.service.update(view.id, { name: 'Bãi xe Thanh Trì' }, DIRECTOR));
+    const error = await errorOf(() =>
+      w.service.update(view.id, { name: 'Bãi xe Thanh Trì' }, DIRECTOR),
+    );
     expect(error).toMatchObject({ kind: 'CONFLICT', reason: 'DEPOT_CHANGE_AFFECTS_OPEN_WORK' });
     expect(error.detail).toEqual({ runs: openWork.runs, orders: openWork.orders, idleHours: 12 });
     expect(w.openWork.openWorkAt).toHaveBeenCalledWith('Bãi xe Hà Nội');
@@ -548,11 +656,16 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     expect(error).toMatchObject({ reason: 'DEPOT_ALREADY_ACTIVE' });
     expect(error.detail).toMatchObject({ activeDepot: { name: 'Bãi xe Hà Nội' } });
 
-    const place = await w.service.create(site('Kho B', { owner: { newCounterparty: { name: 'Công ty B' } } }), DIRECTOR);
+    const place = await w.service.create(
+      site('Kho B', { owner: { newCounterparty: { name: 'Công ty B' } } }),
+      DIRECTOR,
+    );
     await w.service.deactivate(place.id, { reason: 'x' }, DIRECTOR);
     const party = await w.counterparties.find(place.owner?.counterpartyId ?? '');
     await w.counterparties.update(party?.id ?? '', { status: 'INACTIVE' });
-    expect(await reasonOf(() => w.service.activate(place.id, DIRECTOR))).toBe('PLACE_OWNER_INACTIVE');
+    expect(await reasonOf(() => w.service.activate(place.id, DIRECTOR))).toBe(
+      'PLACE_OWNER_INACTIVE',
+    );
 
     await w.counterparties.update(party?.id ?? '', { status: 'ACTIVE' });
     const on = await w.service.activate(place.id, DIRECTOR);
@@ -563,7 +676,10 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
   it('bat lai kiem lai trung ten', async () => {
     const first = await w.service.create(depot('Bãi A'), DIRECTOR);
     await w.service.deactivate(first.id, { reason: 'x' }, DIRECTOR);
-    await w.service.create(site('BÃI A', { owner: { newCounterparty: { name: 'Công ty' } } }), DIRECTOR);
+    await w.service.create(
+      site('BÃI A', { owner: { newCounterparty: { name: 'Công ty' } } }),
+      DIRECTOR,
+    );
 
     expect(await reasonOf(() => w.service.activate(first.id, DIRECTOR))).toBe('PLACE_NAME_TAKEN');
   });
@@ -599,7 +715,10 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     expect(w.openWork.openWorkAt).toHaveBeenCalledWith('Bãi xe Hà Nội');
     await w.service.makePrimaryDepot(standby.id, { acknowledgeOpenWork: true }, DIRECTOR);
 
-    const place = await w.service.create(site('Kho C', { owner: { newCounterparty: { name: 'C' } } }), DIRECTOR);
+    const place = await w.service.create(
+      site('Kho C', { owner: { newCounterparty: { name: 'C' } } }),
+      DIRECTOR,
+    );
     expect(await reasonOf(() => w.service.makePrimaryDepot(place.id, {}, DIRECTOR))).toBe(
       'PLACE_NOT_A_DEPOT',
     );
@@ -627,8 +746,14 @@ describe('danh sach va lich su (#395)', () => {
     const w = world();
     await w.service.create(depot('Bãi xe Hà Nội'), DIRECTOR);
     const customer = await w.fleet.createCustomer({ name: 'Công ty Khách' });
-    const customerSite = await w.service.create(site('Kho khách', { owner: { customerId: customer.id } }), DIRECTOR);
-    const partner = await w.service.create(site('Nhà máy đối tác', { owner: { newCounterparty: { name: 'Đối tác P' } } }), DIRECTOR);
+    const customerSite = await w.service.create(
+      site('Kho khách', { owner: { customerId: customer.id } }),
+      DIRECTOR,
+    );
+    const partner = await w.service.create(
+      site('Nhà máy đối tác', { owner: { newCounterparty: { name: 'Đối tác P' } } }),
+      DIRECTOR,
+    );
     await w.counterparties.update(partner.owner?.counterpartyId ?? '', { status: 'INACTIVE' });
 
     const all = await w.service.list();
@@ -640,13 +765,18 @@ describe('danh sach va lich su (#395)', () => {
     expect((await w.service.list({ kind: 'CUSTOMER_SITE' })).map((view) => view.id)).toEqual([
       customerSite.id,
     ]);
-    expect((await w.service.list({ status: 'inactive' })).map((view) => view.id)).toEqual([partner.id]);
+    expect((await w.service.list({ status: 'inactive' })).map((view) => view.id)).toEqual([
+      partner.id,
+    ]);
     expect((await w.service.list({ q: 'doi tac p' })).map((view) => view.id)).toEqual([partner.id]);
   });
 
   it('lich su: dong cua dia diem va cua dia diem phap nhan, moi nhat truoc', async () => {
     const w = world();
-    const view = await w.service.create(site('Kho A', { owner: { newCounterparty: { name: 'A' } } }), DIRECTOR);
+    const view = await w.service.create(
+      site('Kho A', { owner: { newCounterparty: { name: 'A' } } }),
+      DIRECTOR,
+    );
     await w.service.update(view.id, { name: 'Kho A2' }, DIRECTOR);
 
     const history = await w.service.history(view.id);
@@ -678,7 +808,9 @@ describe('va cham chi muc bai xe thanh ly do co kieu (#395)', () => {
     };
     await geofences.register(input);
 
-    const twoActive = await geofences.register({ ...input, label: 'Bãi B', subjectId: 'DEPOT-B' }).catch((e: unknown) => e);
+    const twoActive = await geofences
+      .register({ ...input, label: 'Bãi B', subjectId: 'DEPOT-B' })
+      .catch((e: unknown) => e);
     const sameCode = await geofences
       .register({ ...input, label: 'Bãi C', status: 'INACTIVE' })
       .catch((e: unknown) => e);

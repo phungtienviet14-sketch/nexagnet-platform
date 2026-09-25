@@ -15,8 +15,8 @@ import { resolveDepotFrom } from '../planning/planning-policy.js';
 import { PlanningService } from '../planning/planning.service.js';
 import type { TransportPlanningPolicy } from '../planning/planning.types.js';
 import { PrismaRunPlanRepository } from '../planning/prisma-planning.repository.js';
-import { PrismaGeofenceRepository } from '../proof/geofence.repository.js';
-import { PrismaPlaceWriteStore } from '../proof/place-write.store.js';
+import { PrismaGeofenceRepository, type GeofenceRepository } from '../proof/geofence.repository.js';
+import { PrismaPlaceWriteStore, type PlaceWriteStore } from '../proof/place-write.store.js';
 import { DEFAULT_TRANSPORT_PROOF_POLICY } from '../proof/tracking-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { PlaceAdminService } from './admin/place-admin.service.js';
@@ -30,7 +30,7 @@ import { KnownPlacesFactsAdapter } from './known-places.port.js';
  * Tep DUY NHAT cua bo song song GHI hang rao `DEPOT`: "toi da MOT bai dang bat" va "co hang rao
  * DEPOT nao thi nguon quan ly la su that" la su that CUA CA BANG, nen hai tep cung ghi bai xe se
  * dam nhau. `beforeAll` chup + TAT cac bai dang bat khong phai cua tep nay (vd `DEPOT-HN` cua may gieo
- * mau), `afterAll` XOA CUNG moi thu cua tep (tien to `IT395P`) roi BAT LAI dung cac bai da tat.
+ * mau), `afterAll` XOA CUNG moi thu cua tep (tien to `IT-S3PLC`) roi BAT LAI dung cac bai da tat.
  * Khong bao gio cham `DEPOT-HN` / "Bãi xe Hà Nội" ngoai lan tat-roi-bat-lai do.
  *
  * Nhung dieu CHI Postgres tra loi duoc:
@@ -40,8 +40,8 @@ import { KnownPlacesFactsAdapter } from './known-places.port.js';
  *   · khau lap ke hoach va dong vong chay doc CHINH bai vua khai.
  */
 
-const PREFIX = 'IT395P';
-const ACTOR = 'it-395p';
+const PREFIX = 'IT-S3PLC';
+const ACTOR = 'it-s3plc';
 const PLATE = `${PREFIX}-XE`;
 const PHONE = '0939S3';
 const CORE_POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
@@ -305,7 +305,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         .update({ where: { id: standby.id }, data: { status: 'ACTIVE' } })
         .catch((error: unknown) => error);
       expect((raw as { code?: string }).code).toBe('P2002');
-      expect(await reasonOf(() => places.activate(standby.id, DIRECTOR))).toBe('DEPOT_ALREADY_ACTIVE');
+      expect(await reasonOf(() => places.activate(standby.id, DIRECTOR))).toBe(
+        'DEPOT_ALREADY_ACTIVE',
+      );
       expect(main.status).toBe('ACTIVE');
     }, 60_000);
 
@@ -398,7 +400,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         DIRECTOR,
       );
 
-      expect(view).toMatchObject({ displayKind: 'CUSTOMER_SITE', kindLabel: 'Địa điểm khách hàng' });
+      expect(view).toMatchObject({
+        displayKind: 'CUSTOMER_SITE',
+        kindLabel: 'Địa điểm khách hàng',
+      });
       const link = await prisma.transportCounterpartyLink.findUnique({
         where: { kind_subjectId: { kind: 'CUSTOMER', subjectId: customer.id } },
       });
@@ -411,12 +416,76 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(fence).toMatchObject({ subjectKind: 'COUNTERPARTY_SITE', subjectId: site?.id });
 
       const knownPlace = (await known.listKnownPlaces()).find((place) => place.id === view.id);
-      expect(knownPlace).toMatchObject({ name: `${PREFIX} Kho khách`, detail: `${PREFIX} Công ty khách` });
+      expect(knownPlace).toMatchObject({
+        name: `${PREFIX} Kho khách`,
+        detail: `${PREFIX} Công ty khách`,
+      });
 
       // Route cu doi ten dia diem nay -> 409 co ma: no la dia diem van hanh.
       expect(
-        await reasonOf(() => siteService.update(site?.id ?? '', { name: `${PREFIX} Kho khác` }, ACTOR)),
+        await reasonOf(() =>
+          siteService.update(site?.id ?? '', { name: `${PREFIX} Kho khác` }, ACTOR),
+        ),
       ).toBe('COUNTERPARTY_SITE_MANAGED_AS_PLACE');
+    }, 60_000);
+
+    /**
+     * MOT giao dich that: lan ghi CUOI (hang rao) hong SAU KHI phap nhan + lien ket khach + dia diem
+     * da ghi trong giao dich -> Postgres cuon lai ca ba. Loi duoc gia lap tren CHINH giao dich cua
+     * `PrismaPlaceWriteStore` (cac kho con lai la kho Prisma that tren client giao dich).
+     */
+    it('lan ghi hang rao hong -> phap nhan, lien ket, dia diem cua lan do deu bi cuon lai', async () => {
+      const customer = await fleet.createCustomer({ name: `${PREFIX} Khách cuộn lại` });
+      const real = new PrismaPlaceWriteStore(prisma);
+      const failingAtFence: PlaceWriteStore = {
+        run: (work) =>
+          real.run((tx) =>
+            work({
+              ...tx,
+              geofences: Object.assign(Object.create(tx.geofences) as GeofenceRepository, {
+                register: async () => {
+                  throw new Error('gia lap: hong o lan ghi hang rao');
+                },
+              }),
+            }),
+          ),
+      };
+      const fragile = new PlaceAdminService(
+        failingAtFence,
+        geofences,
+        sites,
+        counterparties,
+        fleet,
+        depots,
+        new MovementDepotOpenWorkReader(movementRepo, POLICY),
+        DEFAULT_TRANSPORT_PROOF_POLICY,
+        audit,
+      );
+
+      await expect(
+        fragile.create(
+          {
+            kind: 'COUNTERPARTY_SITE',
+            name: `${PREFIX} Kho cuộn lại`,
+            point: HA_NOI,
+            radiusMetres: 200,
+            owner: { customerId: customer.id },
+          },
+          DIRECTOR,
+        ),
+      ).rejects.toThrow('gia lap');
+
+      expect(
+        await prisma.transportCounterpartyLink.count({
+          where: { kind: 'CUSTOMER', subjectId: customer.id },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.transportCounterparty.count({ where: { name: `${PREFIX} Khách cuộn lại` } }),
+      ).toBe(0);
+      expect(
+        await prisma.transportCounterpartySite.count({ where: { name: `${PREFIX} Kho cuộn lại` } }),
+      ).toBe(0);
     }, 60_000);
 
     /** Tu choi giua chung KHONG de lai phap nhan / dia diem do dang: tat ca trong MOT giao dich. */

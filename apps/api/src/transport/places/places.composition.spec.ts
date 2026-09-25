@@ -80,7 +80,9 @@ describe('composition cua man dia diem van hanh (#395)', () => {
       : entry;
 
   it('controller co mat khi bat `transport-proof`, vang mat o khach chi bat `transport-core`', () => {
-    expect(controllerNames(['transport-core', 'transport-proof'])).toContain('PlaceAdminController');
+    expect(controllerNames(['transport-core', 'transport-proof'])).toContain(
+      'PlaceAdminController',
+    );
     expect(controllerNames(['transport-core'])).not.toContain('PlaceAdminController');
   });
 

@@ -247,10 +247,10 @@ const matchesFilter = (fence: GeofenceRecord, filter: GeofenceListFilter): boole
 
 /** Loi DUNG hinh dang ma Prisma nem cho mot chi muc unique — de tang tren dich cung mot cach. */
 function uniqueViolation(index: UniqueIndexRef): Error {
-  return Object.assign(
-    new Error(`Unique constraint failed on the fields: (\`${index.column}\`)`),
-    { code: 'P2002', meta: { modelName: index.model, target: [index.column] } },
-  );
+  return Object.assign(new Error(`Unique constraint failed on the fields: (\`${index.column}\`)`), {
+    code: 'P2002',
+    meta: { modelName: index.model, target: [index.column] },
+  });
 }
 
 /**
@@ -429,7 +429,9 @@ export class PrismaGeofenceRepository extends GeofenceRepository {
   async listAll(filter: GeofenceListFilter = {}): Promise<readonly GeofenceRecord[]> {
     const rows = await this.prisma.transportGeofence.findMany({
       where: {
-        ...(filter.subjectKinds === undefined ? {} : { subjectKind: { in: [...filter.subjectKinds] } }),
+        ...(filter.subjectKinds === undefined
+          ? {}
+          : { subjectKind: { in: [...filter.subjectKinds] } }),
         ...(filter.subjectIds === undefined ? {} : { subjectId: { in: [...filter.subjectIds] } }),
         ...(filter.status === undefined ? {} : { status: filter.status }),
       },

@@ -221,7 +221,10 @@ describe('khau lap ke hoach doc bai xe duoc quan ly (#395)', () => {
   });
 
   const aVehicle = async () => {
-    const vehicle = await fleet.createVehicle({ registrationPlate: '29C-39501', vehicleClass: 'Đầu kéo' });
+    const vehicle = await fleet.createVehicle({
+      registrationPlate: '29C-39501',
+      vehicleClass: 'Đầu kéo',
+    });
     const driver = await fleet.createDriver({
       fullName: 'Lai xe 395',
       phone: '0903950001',
@@ -238,7 +241,12 @@ describe('khau lap ke hoach doc bai xe duoc quan ly (#395)', () => {
     const planning = build(managedHub());
     const vehicle = await aVehicle();
     const order = await movement.createOrder(
-      { code: 'ORD-395', originLabel: 'Kho Hà Nội', destinationLabel: 'Hải Phòng', businessDate: '2026-09-25' },
+      {
+        code: 'ORD-395',
+        originLabel: 'Kho Hà Nội',
+        destinationLabel: 'Hải Phòng',
+        businessDate: '2026-09-25',
+      },
       ACTOR,
     );
 
@@ -255,7 +263,8 @@ describe('khau lap ke hoach doc bai xe duoc quan ly (#395)', () => {
       source: 'MANAGED',
     });
     const depotDecision = records.find(
-      (record) => record.type === 'decision' && (record as { point?: string }).point === 'planning.depot',
+      (record) =>
+        record.type === 'decision' && (record as { point?: string }).point === 'planning.depot',
     ) as unknown as { reason: string; detail: Record<string, unknown> } | undefined;
     expect(depotDecision?.reason).toBe('DEPOT_RESOLVED');
     expect(depotDecision?.detail).toMatchObject({ source: 'MANAGED', code: 'DEPOT-GIA-LAM' });
@@ -266,7 +275,12 @@ describe('khau lap ke hoach doc bai xe duoc quan ly (#395)', () => {
     const planning = build(managedHub());
     const vehicle = await aVehicle();
     const order = await movement.createOrder(
-      { code: 'ORD-395B', originLabel: MANAGED_LABEL, destinationLabel: 'Hải Phòng', businessDate: '2026-09-25' },
+      {
+        code: 'ORD-395B',
+        originLabel: MANAGED_LABEL,
+        destinationLabel: 'Hải Phòng',
+        businessDate: '2026-09-25',
+      },
       ACTOR,
     );
     const { run, legs } = await planning.commit(
@@ -307,7 +321,12 @@ describe('khau lap ke hoach doc bai xe duoc quan ly (#395)', () => {
     const planning = build(managedHub());
     const vehicle = await aVehicle();
     const order = await movement.createOrder(
-      { code: 'ORD-395C', originLabel: 'Kho Hà Nội', destinationLabel: 'Hải Phòng', businessDate: '2026-09-25' },
+      {
+        code: 'ORD-395C',
+        originLabel: 'Kho Hà Nội',
+        destinationLabel: 'Hải Phòng',
+        businessDate: '2026-09-25',
+      },
       ACTOR,
     );
 
@@ -359,10 +378,18 @@ describe('cong chan sua dia diem qua duong cu (#395)', () => {
     const guard = new GeofenceSitePlaceGuard(geofences);
 
     expect(
-      await guard.checkLegacySiteChange({ siteId: 'site-1', changesName: true, changesStatus: false }),
+      await guard.checkLegacySiteChange({
+        siteId: 'site-1',
+        changesName: true,
+        changesStatus: false,
+      }),
     ).toEqual({ allowed: false, reason: 'COUNTERPARTY_SITE_MANAGED_AS_PLACE' });
     expect(
-      await guard.checkLegacySiteChange({ siteId: 'site-2', changesName: true, changesStatus: false }),
+      await guard.checkLegacySiteChange({
+        siteId: 'site-2',
+        changesName: true,
+        changesStatus: false,
+      }),
     ).toEqual({ allowed: true });
   });
 });
