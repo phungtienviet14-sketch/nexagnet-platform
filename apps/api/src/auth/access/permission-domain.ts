@@ -80,12 +80,6 @@ export interface AccessScopeNote {
   readonly sentence: string;
   /** Doi tuong duoc noi toi (ho so lai xe, ben huu quan), neu co. */
   readonly subject?: { readonly id: string; readonly name: string } | null;
-  /**
-   * Nhom KHONG cap duoc (`grantable: false`) trong danh muc cua mien ma pham vi nay mo ra, vd
-   * `lai-xe`. Man hinh "Nguoi nay lam duoc gi?" dung no de biet cac viec cua nhom do dang
-   * `SCOPE_ACTIVE` hay `SCOPE_INACTIVE`. Thieu = pham vi chi co cau mo ta, khong gan nhom nao.
-   */
-  readonly groupId?: string;
 }
 
 /* ------------------------------------------------------------------ *

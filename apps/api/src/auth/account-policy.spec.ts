@@ -38,7 +38,12 @@ describe('mat khau tam', () => {
     const pending = { mustChangePassword: true, temporaryPasswordExpiresAt: expiresAt };
     expect(isTemporaryPasswordExpired(pending, new Date('2026-09-27T23:59:59.000Z'))).toBe(false);
     expect(isTemporaryPasswordExpired(pending, expiresAt)).toBe(true);
-    expect(isTemporaryPasswordExpired({ mustChangePassword: true, temporaryPasswordExpiresAt: null }, now)).toBe(true);
+    expect(
+      isTemporaryPasswordExpired(
+        { mustChangePassword: true, temporaryPasswordExpiresAt: null },
+        now,
+      ),
+    ).toBe(true);
     expect(isTemporaryPasswordExpired({ mustChangePassword: false }, now)).toBe(false);
   });
 });

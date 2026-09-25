@@ -62,7 +62,11 @@ describe('tao tai khoan', () => {
     expect(leaked).not.toContain(created.credential.temporaryPassword);
     expect(h.telemetry.step).toHaveBeenCalledWith('account.create', expect.any(Function));
     expect(h.telemetry.decision).toHaveBeenCalledWith(
-      expect.objectContaining({ point: 'account.access', outcome: 'allowed', reason: 'ACCOUNT_CHANGE_ALLOWED' }),
+      expect.objectContaining({
+        point: 'account.access',
+        outcome: 'allowed',
+        reason: 'ACCOUNT_CHANGE_ALLOWED',
+      }),
     );
   });
 
@@ -87,7 +91,9 @@ describe('tao tai khoan', () => {
       statusCode: 409,
       error: 'Conflict',
       reason: 'ESCALATION_CONFIRMATION_REQUIRED',
-      detail: { violations: [{ code: 'ESCALATION_CONFIRMATION_REQUIRED', detail: { role: 'ADMIN' } }] },
+      detail: {
+        violations: [{ code: 'ESCALATION_CONFIRMATION_REQUIRED', detail: { role: 'ADMIN' } }],
+      },
     });
     expect(await h.repository.findByUsername('gd.moi')).toBeNull();
 
@@ -121,11 +127,9 @@ describe('tao tai khoan', () => {
       }),
     );
     expect(body.reason).toBe('ACCESS_INVALID');
-    expect((body.detail as { violations: { code: string }[] }).violations.map((v) => v.code)).toEqual([
-      'PLATFORM_PERMISSION_NOT_GRANTABLE',
-      'UNKNOWN_PERMISSION',
-      'GRANT_DUPLICATED',
-    ]);
+    expect(
+      (body.detail as { violations: { code: string }[] }).violations.map((v) => v.code),
+    ).toEqual(['PLATFORM_PERMISSION_NOT_GRANTABLE', 'UNKNOWN_PERMISSION', 'GRANT_DUPLICATED']);
   });
 
   it('quyen rieng tren vai khong tuy bien duoc (lai xe / Giam doc) → ACCESS_INVALID', async () => {
@@ -169,7 +173,10 @@ describe('doi vai va quyen rieng', () => {
       confirmEscalation: true,
     })) as { account: AccountView; access: AccessBreakdown };
 
-    expect(result.account.permissionGrants).toEqual([grant(KHO_GROUPS.nhay), grant(KHO_GROUPS.sua)]);
+    expect(result.account.permissionGrants).toEqual([
+      grant(KHO_GROUPS.nhay),
+      grant(KHO_GROUPS.sua),
+    ]);
     expect(result.access.sentences.length).toBeGreaterThan(0);
     expect(h.audit.append).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -201,10 +208,7 @@ describe('doi vai va quyen rieng', () => {
   });
 
   it('duong cu PATCH role: doi vai VA xoa moi quyen rieng; len Giam doc phai xac nhan', async () => {
-    const h = accountHarness([
-      DIRECTOR,
-      { ...MANAGER, permissionGrants: [grant(KHO_GROUPS.xem)] },
-    ]);
+    const h = accountHarness([DIRECTOR, { ...MANAGER, permissionGrants: [grant(KHO_GROUPS.xem)] }]);
     const updated = await h.service.assignRole(actor, MANAGER.id, { role: 'ACCOUNTING' });
     expect(updated).toMatchObject({ role: 'ACCOUNTING', permissionGrants: [] });
     expect(h.audit.append).toHaveBeenCalledWith(
@@ -229,6 +233,25 @@ describe('doi vai va quyen rieng', () => {
     );
     expect(body).toMatchObject({ statusCode: 409, reason: 'ACCOUNT_LINKED_TO_DRIVER' });
     expect((await h.repository.findById(DRIVER.id))?.role).toBe('SALE');
+    // Vai giu nguyen SALE: mien khong phan doi.
+    await expect(
+      h.service.setAccess(actor, DRIVER.id, { role: 'SALE', grants: [] }),
+    ).resolves.toBeDefined();
+  });
+
+  it('vai KHONG doi van hoi mien: tai khoan van phong con noi ho so (du lieu cu) bi chan', async () => {
+    const h = accountHarness([DIRECTOR, MANAGER], { linkedUserIds: new Set([MANAGER.id]) });
+    expect(
+      await reasonOf(
+        h.service.setAccess(actor, MANAGER.id, {
+          role: 'MANAGER',
+          grants: [grant(KHO_GROUPS.xem)],
+        }),
+      ),
+    ).toBe('ACCOUNT_LINKED_TO_DRIVER');
+    expect(h.telemetry.decision).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'denied', reason: 'ACCOUNT_LINKED_TO_DRIVER' }),
+    );
   });
 
   it('tu doi quyen cua chinh minh → SELF_LOCKOUT; tai khoan khong ton tai → ACCOUNT_NOT_FOUND', async () => {
@@ -255,9 +278,9 @@ describe('Giam doc dang hoat dong cuoi cung', () => {
         h.service.setAccess(someone, DIRECTOR_2.id, { role: 'MANAGER', grants: [], dryRun: true }),
       ),
     ).toBe('LAST_ACTIVE_ADMIN');
-    expect(
-      await reasonOf(h.service.disableUser(someone, DIRECTOR_2.id, { confirmed: true })),
-    ).toBe('LAST_ACTIVE_ADMIN');
+    expect(await reasonOf(h.service.disableUser(someone, DIRECTOR_2.id, { confirmed: true }))).toBe(
+      'LAST_ACTIVE_ADMIN',
+    );
     expect((await h.repository.findById(DIRECTOR_2.id))?.role).toBe('ADMIN');
   });
 
@@ -320,7 +343,9 @@ describe('khoa / mo khoa', () => {
 
     const enabled = await h.service.enableUser(actor, ACCOUNTANT.id, { confirmed: true });
     expect(enabled).toMatchObject({ disabledAt: null, credentialVersion: 2 });
-    expect((await h.repository.findById(ACCOUNTANT.id))?.passwordHash).toBe(ACCOUNTANT.passwordHash);
+    expect((await h.repository.findById(ACCOUNTANT.id))?.passwordHash).toBe(
+      ACCOUNTANT.passwordHash,
+    );
     expect(h.audit.append).toHaveBeenLastCalledWith(
       expect.objectContaining({ action: 'auth.user.enable', after: { disabledAt: null } }),
     );
@@ -331,7 +356,10 @@ describe('khoa / mo khoa', () => {
     const h = accountHarness([DIRECTOR, { ...ACCOUNTANT, disabledAt: new Date('2026-09-02') }]);
     const reset = await h.service.resetPassword(actor, ACCOUNTANT.id, {});
     expect(reset.disabledAt).not.toBeNull();
-    expect(h.telemetry.step).toHaveBeenCalledWith('account.credentials.reset', expect.any(Function));
+    expect(h.telemetry.step).toHaveBeenCalledWith(
+      'account.credentials.reset',
+      expect.any(Function),
+    );
   });
 
   it('than yeu cau sai → 400 ACCOUNT_INPUT_INVALID', async () => {
@@ -351,8 +379,12 @@ describe('danh sach, goi y ten, lich su', () => {
       { ...MANAGER, mustChangePassword: true, temporaryPasswordExpiresAt: new Date('2099-01-01') },
       { ...DRIVER, disabledAt: new Date('2026-09-02') },
     ]);
-    expect((await h.service.listUsers({ status: 'pending' })).map((u) => u.id)).toEqual([MANAGER.id]);
-    expect((await h.service.listUsers({ status: 'disabled' })).map((u) => u.id)).toEqual([DRIVER.id]);
+    expect((await h.service.listUsers({ status: 'pending' })).map((u) => u.id)).toEqual([
+      MANAGER.id,
+    ]);
+    expect((await h.service.listUsers({ status: 'disabled' })).map((u) => u.id)).toEqual([
+      DRIVER.id,
+    ]);
     expect((await h.service.listUsers({ status: 'active' })).map((u) => u.id).sort()).toEqual(
       [ACCOUNTANT.id, DIRECTOR.id].sort(),
     );
@@ -393,7 +425,11 @@ describe('danh sach, goi y ten, lich su', () => {
     expect(history).toEqual([
       expect.objectContaining({ action: 'auth.user.disable', summary: 'Khoá tài khoản' }),
     ]);
-    expect(h.audit.list).toHaveBeenCalledWith({ entityType: 'User', entityId: ACCOUNTANT.id, limit: 20 });
+    expect(h.audit.list).toHaveBeenCalledWith({
+      entityType: 'User',
+      entityId: ACCOUNTANT.id,
+      limit: 20,
+    });
     expect(await reasonOf(h.service.history('khong-co'))).toBe('ACCOUNT_NOT_FOUND');
   });
 

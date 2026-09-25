@@ -46,12 +46,22 @@ describe('InMemoryUserRepository (#395)', () => {
     expect((await repository.findByUsername('moi'))?.permissionGrants).toHaveLength(2);
     expect((await repository.list())[0]?.permissionGrants).toHaveLength(2);
     await expect(
-      repository.create({ username: 'moi', name: 'x', email: null, phone: null, passwordHash: 'h', role: 'SALE' }),
+      repository.create({
+        username: 'moi',
+        name: 'x',
+        email: null,
+        phone: null,
+        passwordHash: 'h',
+        role: 'SALE',
+      }),
     ).rejects.toThrow(DuplicateUserError);
   });
 
   it('doi vai + bo quyen la MOT lan ghi, tra ca truoc va sau', async () => {
-    const repository = new InMemoryUserRepository([ADMIN, { ...MANAGER, permissionGrants: [grant('x.a')] }]);
+    const repository = new InMemoryUserRepository([
+      ADMIN,
+      { ...MANAGER, permissionGrants: [grant('x.a')] },
+    ]);
     const result = await repository.setAccess(MANAGER.id, {
       role: 'ACCOUNTING',
       grants: [grant('x.b', 'DENY')],
@@ -62,7 +72,9 @@ describe('InMemoryUserRepository (#395)', () => {
       before: { role: 'MANAGER', permissionGrants: [grant('x.a')] },
       after: { role: 'ACCOUNTING', permissionGrants: [grant('x.b', 'DENY')] },
     });
-    expect(await repository.setAccess('khong-co', { role: 'SALE', grants: [], grantedBy: 'x' })).toEqual({
+    expect(
+      await repository.setAccess('khong-co', { role: 'SALE', grants: [], grantedBy: 'x' }),
+    ).toEqual({
       status: 'NOT_FOUND',
     });
   });

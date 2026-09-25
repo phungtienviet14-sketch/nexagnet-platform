@@ -123,7 +123,8 @@ const USERNAME_MAX = 64;
 export function usernameBase(name: string, prefix = ''): string {
   const ascii = name
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    // Bo moi dau ghep (thanh dieu, mu) sau khi tach — "ễ" → "e".
+    .replace(/\p{M}/gu, '')
     .replace(/[đĐ]/g, 'd')
     .toLocaleLowerCase('en-US');
   const words = ascii.split(/[^a-z0-9]+/).filter((word) => word.length > 0);

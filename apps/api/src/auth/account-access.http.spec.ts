@@ -155,7 +155,9 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const client = browser();
     clearLoginThrottle();
-    expect((await client.login(created.body.username, created.body.credential.temporaryPassword)).status).toBe(201);
+    expect(
+      (await client.login(created.body.username, created.body.credential.temporaryPassword)).status,
+    ).toBe(201);
     const changed = await client.send('POST', '/auth/credentials/change', {
       currentPassword: created.body.credential.temporaryPassword,
       newPassword: NEXT_PW(),
@@ -230,7 +232,10 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
 
     const client = browser();
     clearLoginThrottle();
-    const login = await client.login(created.body.username, created.body.credential.temporaryPassword);
+    const login = await client.login(
+      created.body.username,
+      created.body.credential.temporaryPassword,
+    );
     expect(login.status).toBe(201);
     expect(login.body.user).toMatchObject({ mustChangePassword: true });
 
@@ -312,14 +317,31 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
     ] as const) {
       expect((await client.send(method, path)).status, path).toBe(403);
     }
-    expect((await client.send('POST', '/settings/users', { username: 'x.y.z', name: 'X', role: 'ADMIN' })).status).toBe(403);
     expect(
-      (await client.send('PUT', `/settings/users/${directorId}/access`, { role: 'MANAGER', grants: [] })).status,
+      (
+        await client.send('POST', '/settings/users', {
+          username: 'x.y.z',
+          name: 'X',
+          role: 'ADMIN',
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await client.send('PUT', `/settings/users/${directorId}/access`, {
+          role: 'MANAGER',
+          grants: [],
+        })
+      ).status,
     ).toBe(403);
     // Noi tai khoan dang nhap vao ho so = cap quyen cho mot con nguoi → chi Giam doc.
-    const link = await client.send('PUT', '/transport/asset-ownership/stakeholders/khong-co/account', {
-      authUserId: null,
-    });
+    const link = await client.send(
+      'PUT',
+      '/transport/asset-ownership/stakeholders/khong-co/account',
+      {
+        authUserId: null,
+      },
+    );
     expect(link.status).toBe(403);
   });
 
@@ -344,16 +366,15 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
       ['SALE', 'DRIVER_PRESET_IS_SELF_SCOPE_ONLY'],
       ['ADMIN', 'ADMIN_PRESET_IS_FULL'],
     ] as const) {
-      const rejected = await director.send<{ reason: string; detail: { violations: { code: string }[] } }>(
-        'PUT',
-        `/settings/users/${manager.account.id}/access`,
-        {
-          role,
-          grants: [{ permission: 'transport.vehicle.read', effect: 'ALLOW' }],
-          confirmEscalation: true,
-          dryRun: true,
-        },
-      );
+      const rejected = await director.send<{
+        reason: string;
+        detail: { violations: { code: string }[] };
+      }>('PUT', `/settings/users/${manager.account.id}/access`, {
+        role,
+        grants: [{ permission: 'transport.vehicle.read', effect: 'ALLOW' }],
+        confirmEscalation: true,
+        dryRun: true,
+      });
       expect(rejected.status).toBe(409);
       expect(rejected.body.reason).toBe('ACCESS_INVALID');
       expect(rejected.body.detail.violations.map((violation) => violation.code)).toContain(code);
@@ -480,5 +501,32 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
     );
     expect(access.status).toBe(200);
     expect(access.body.sentences).toContain('Không duyệt được tiền');
+  });
+
+  it('12. tai khoan Lai xe chua noi ho so: "Người này làm được gì?" noi thang la chua lam duoc gi', async () => {
+    const suggested = await director.send<{ username: string }>(
+      'POST',
+      '/settings/users/suggest-username',
+      { name: 'Trần Văn Đức', prefix: 'lx.' },
+    );
+    expect(suggested.body.username).toBe('lx.tran.van.duc');
+    const created = await director.send<Account>('POST', '/settings/users', {
+      username: suggested.body.username,
+      name: 'Trần Văn Đức',
+      role: 'SALE',
+    });
+    expect(created.status).toBe(201);
+    const access = await director.send<{
+      preset: { label: string };
+      sentences: string[];
+      groups: { id: string; summary: string }[];
+    }>('GET', `/settings/users/${created.body.id}/access`);
+    expect(access.status).toBe(200);
+    expect(access.body.preset.label).toBe('Lái xe');
+    expect(access.body.sentences).toEqual(['Chưa nối hồ sơ lái xe — chưa làm được gì']);
+    expect(access.body.groups.every((group) => group.summary === 'NONE')).toBe(true);
+
+    const listed = await director.send<Json[]>('GET', '/settings/users?status=pending&q=lx.tran');
+    expect(listed.body.map((row) => row.username)).toEqual(['lx.tran.van.duc']);
   });
 });

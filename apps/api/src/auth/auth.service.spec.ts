@@ -129,7 +129,10 @@ describe('AuthService', () => {
         actor: ADMIN.username,
         action: 'auth.user.create',
         after: expect.objectContaining({
-          onboarding: { passwordChangeRequired: true, temporaryCredentialExpiresAt: expect.any(String) },
+          onboarding: {
+            passwordChangeRequired: true,
+            temporaryCredentialExpiresAt: expect.any(String),
+          },
         }),
       }),
     );
@@ -177,7 +180,9 @@ describe('AuthService', () => {
       expect.objectContaining({
         action: 'auth.credentials.reset',
         entityId: SALE.id,
-        before: { onboarding: { passwordChangeRequired: false, temporaryCredentialExpiresAt: null } },
+        before: {
+          onboarding: { passwordChangeRequired: false, temporaryCredentialExpiresAt: null },
+        },
         after: {
           onboarding: {
             passwordChangeRequired: true,
@@ -232,7 +237,9 @@ describe('AuthService', () => {
     expect(audit.append).toHaveBeenLastCalledWith(
       expect.objectContaining({
         action: 'auth.credentials.change',
-        after: { onboarding: { passwordChangeRequired: false, temporaryCredentialExpiresAt: null } },
+        after: {
+          onboarding: { passwordChangeRequired: false, temporaryCredentialExpiresAt: null },
+        },
       }),
     );
   });

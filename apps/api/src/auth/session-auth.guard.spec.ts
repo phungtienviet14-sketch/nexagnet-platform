@@ -94,7 +94,9 @@ describe('session authorization guards', () => {
     });
     expect(request).not.toHaveProperty('authUser');
 
-    reflector.getAllAndOverride = vi.fn((key: string) => key === ALLOW_DURING_PASSWORD_CHANGE_KEY);
+    reflector.getAllAndOverride = vi.fn(
+      (key: unknown) => key === ALLOW_DURING_PASSWORD_CHANGE_KEY,
+    ) as unknown as Reflector['getAllAndOverride'];
     await expect(guard.canActivate(context(request))).resolves.toBe(true);
     expect(request).toHaveProperty('authUser', pending);
   });

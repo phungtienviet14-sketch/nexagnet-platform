@@ -32,10 +32,9 @@ export const ACCOUNT_ERROR_REASONS = [
   ...ACCOUNT_ACCESS_REASONS.filter((reason) => reason !== 'ACCOUNT_CHANGE_ALLOWED'),
   ...NON_DECISION_REASONS,
 ] as const;
-export type AccountErrorReason = Exclude<
-  (typeof ACCOUNT_ACCESS_REASONS)[number],
-  'ACCOUNT_CHANGE_ALLOWED'
-> | (typeof NON_DECISION_REASONS)[number];
+export type AccountErrorReason =
+  | Exclude<(typeof ACCOUNT_ACCESS_REASONS)[number], 'ACCOUNT_CHANGE_ALLOWED'>
+  | (typeof NON_DECISION_REASONS)[number];
 
 export interface AccountErrorBody {
   readonly statusCode: number;

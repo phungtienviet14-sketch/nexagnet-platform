@@ -94,7 +94,10 @@ describe('UsersController — hop dong route (#395)', () => {
     expect(reflector.get(ROLES_KEY, UsersController)).toEqual(['ADMIN']);
     const prototype = UsersController.prototype as unknown as Record<string, object>;
     for (const route of routes) {
-      expect(reflector.get(ROLES_KEY, prototype[route.handler] as never), route.handler).toBeUndefined();
+      expect(
+        reflector.get(ROLES_KEY, prototype[route.handler] as never),
+        route.handler,
+      ).toBeUndefined();
     }
   });
 
@@ -108,11 +111,11 @@ describe('UsersController — hop dong route (#395)', () => {
     const request = { authUser: { id: 'gd-1', username: 'giam.doc' } } as never;
 
     await controller.setAccess(' u-1 ', { role: 'MANAGER', grants: [], dryRun: true }, request);
-    expect(auth.setAccess).toHaveBeenCalledWith(
-      { id: 'gd-1', username: 'giam.doc' },
-      'u-1',
-      { role: 'MANAGER', grants: [], dryRun: true },
-    );
+    expect(auth.setAccess).toHaveBeenCalledWith({ id: 'gd-1', username: 'giam.doc' }, 'u-1', {
+      role: 'MANAGER',
+      grants: [],
+      dryRun: true,
+    });
     await controller.resetPassword('u-1', undefined as never, request);
     expect(auth.resetPassword).toHaveBeenCalledWith(expect.anything(), 'u-1', {});
 

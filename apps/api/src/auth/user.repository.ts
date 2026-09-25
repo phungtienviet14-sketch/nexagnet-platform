@@ -81,9 +81,7 @@ export interface UserChange {
  * hai Giam doc cung luc ha vai nhau va he thong con 0 Giam doc.
  */
 export type GuardedUserChange =
-  | UserChange
-  | { readonly status: 'NOT_FOUND' }
-  | { readonly status: 'LAST_ACTIVE_ADMIN' };
+  UserChange | { readonly status: 'NOT_FOUND' } | { readonly status: 'LAST_ACTIVE_ADMIN' };
 
 export type UserWrite = UserChange | { readonly status: 'NOT_FOUND' };
 
@@ -307,7 +305,11 @@ export class InMemoryUserRepository extends UserRepository {
     });
   }
 
-  updatePassword(id: string, passwordHash: string, temporaryUntil: Date | null): Promise<UserWrite> {
+  updatePassword(
+    id: string,
+    passwordHash: string,
+    temporaryUntil: Date | null,
+  ): Promise<UserWrite> {
     return this.exclusive(async () =>
       this.change(id, (record) => ({
         ...record,

@@ -142,17 +142,26 @@ describe('RBAC coverage (§9)', () => {
  */
 describe('quan tri tai khoan chi Giam doc (#395)', () => {
   const reflector = new Reflector();
-  const prototype = UsersController.prototype as unknown as Record<string, object>;
+  const prototype = UsersController.prototype as unknown as Record<
+    string,
+    (...args: never[]) => unknown
+  >;
   const handlers = Object.getOwnPropertyNames(prototype).filter(
-    (name) => name !== 'constructor' && Reflect.getMetadata(METHOD_METADATA, prototype[name]!) !== undefined,
+    (name) =>
+      name !== 'constructor' &&
+      Reflect.getMetadata(METHOD_METADATA, prototype[name]!) !== undefined,
   );
 
   it('moi route (ke ca GET) chi ADMIN, khong route nao nhuong cho cong mien', () => {
     expect(handlers.length).toBeGreaterThanOrEqual(12);
     for (const name of handlers) {
-      const targets = [prototype[name]!, UsersController] as const;
-      expect(reflector.getAllAndOverride(ROLES_KEY, [...targets]), name).toEqual(['ADMIN']);
-      expect(reflector.getAllAndOverride(DOMAIN_ACTION_GATE_KEY, [...targets]), name).toBeUndefined();
+      const targets = [prototype[name]!, UsersController];
+      expect(reflector.getAllAndOverride<readonly UserRole[]>(ROLES_KEY, targets), name).toEqual([
+        'ADMIN',
+      ]);
+      expect(reflector.getAllAndOverride<unknown>(DOMAIN_ACTION_GATE_KEY, targets), name).toBe(
+        undefined,
+      );
     }
   });
 

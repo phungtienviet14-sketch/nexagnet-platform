@@ -43,10 +43,7 @@ describe('AuthController', () => {
     } as unknown as AuthService;
     const controller = new AuthController(auth);
 
-    const result = await controller.login(
-      { username: USER.username, password: VALID_PW },
-      request,
-    );
+    const result = await controller.login({ username: USER.username, password: VALID_PW }, request);
 
     expect(session.regenerate).toHaveBeenCalledOnce();
     expect(request.session.user).toEqual({ userId: USER.id, credentialVersion: 3 });
@@ -91,7 +88,8 @@ describe('AuthController', () => {
   it('chi ba route mo khi dang dung mat khau tam: me, doi mat khau, dang xuat', () => {
     const prototype = AuthController.prototype as unknown as Record<string, object>;
     const open = Object.getOwnPropertyNames(prototype).filter(
-      (name) => Reflect.getMetadata(ALLOW_DURING_PASSWORD_CHANGE_KEY, prototype[name] as object) === true,
+      (name) =>
+        Reflect.getMetadata(ALLOW_DURING_PASSWORD_CHANGE_KEY, prototype[name] as object) === true,
     );
     expect(open.sort()).toEqual(['changePassword', 'logout', 'me']);
   });

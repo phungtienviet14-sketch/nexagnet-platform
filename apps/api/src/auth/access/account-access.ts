@@ -1,11 +1,11 @@
 import type { UserRole } from '../auth.types.js';
 import type {
-  AccessScopeNote,
   AccessSubject,
   AccessViolation,
   PermissionDomain,
   PermissionGrant,
 } from './permission-domain.js';
+import type { DomainScopes } from './access-breakdown.js';
 import type { PermissionDomainRegistry } from './permission-domain.registry.js';
 import {
   PLATFORM_PERMISSION_PREFIX,
@@ -114,27 +114,37 @@ export function escalatedPermissions(
   );
 }
 
-/** Doi vai co pha mot LIEN KET cua mien nao khong (vd tai khoan dang noi ho so lai xe). */
+/**
+ * Doi vai / quyen co pha mot LIEN KET cua mien nao khong (vd tai khoan dang noi ho so lai xe).
+ *
+ * Hoi mien CA KHI vai khong doi: mien quyet dinh mot trang thai lien ket co hop le voi vai dich hay
+ * khong (vd mot tai khoan van phong con noi ho so lai xe do du lieu cu — sua quyen rieng cua no
+ * khong duoc hop thuc hoa trang thai sai do). Nen tang khong doan thay mien.
+ */
 export async function accessChangeViolations(
   registry: PermissionDomainRegistry,
   input: { readonly userId: string; readonly fromRole: UserRole; readonly toRole: UserRole },
 ): Promise<readonly AccessViolation[]> {
-  if (input.fromRole === input.toRole) return [];
   const results = await Promise.all(
     registry.all().map((domain) => domain.checkAccessChange?.(input) ?? Promise.resolve([])),
   );
   return results.flat();
 }
 
-/** Cac pham vi den tu du lieu (lien ket) cua mot tai khoan tren moi mien co mo ta. */
+/**
+ * Cac pham vi den tu du lieu (lien ket) cua mot tai khoan, THEO MIEN — de mot pham vi chi mo nhom
+ * cua chinh mien mo ta no (`access-breakdown.ts`).
+ */
 export async function describeAccountScopes(
   registry: PermissionDomainRegistry,
   userId: string,
-): Promise<readonly AccessScopeNote[]> {
-  const results = await Promise.all(
-    registry.all().map((domain) => domain.describeScopes?.(userId) ?? Promise.resolve([])),
+): Promise<readonly DomainScopes[]> {
+  return Promise.all(
+    registry.all().map(async (domain) => ({
+      domain: domain.id,
+      notes: (await domain.describeScopes?.(userId)) ?? [],
+    })),
   );
-  return results.flat();
 }
 
 /** Ten dang nhap cac mien danh cho danh tinh he thong cua chung. */

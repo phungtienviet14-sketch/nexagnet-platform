@@ -23,7 +23,11 @@ import {
   statusSnapshot,
   toHistoryEntry,
 } from './account-audit.js';
-import { ACCOUNT_ACCESS_REASONS, ACCOUNT_DECISIONS, type AccountAccessReason } from './account-decisions.js';
+import {
+  ACCOUNT_ACCESS_REASONS,
+  ACCOUNT_DECISIONS,
+  type AccountAccessReason,
+} from './account-decisions.js';
 import { accountError, accountInputInvalid } from './account-errors.js';
 import {
   generateTemporaryPassword,
@@ -70,7 +74,12 @@ import {
   type SuggestUsernameInput,
   type UpdateProfileInput,
 } from './auth.schemas.js';
-import { USER_ROLES, type AuthenticatedUser, type SessionIdentity, type UserRole } from './auth.types.js';
+import {
+  USER_ROLES,
+  type AuthenticatedUser,
+  type SessionIdentity,
+  type UserRole,
+} from './auth.types.js';
 import { PasswordService } from './password.service.js';
 import {
   DuplicateUserError,
@@ -85,19 +94,15 @@ const INVALID_CREDENTIALS = 'Tên đăng nhập hoặc mật khẩu không đún
 const SELF_LOCKOUT_MESSAGE =
   'Không tự khoá, tự đổi quyền hay tự đặt lại mật khẩu của chính mình ở đây — dùng mục Đổi mật khẩu.';
 const USERNAME_SUGGESTION_ATTEMPTS = 50;
+/** Cung gioi han voi `usernameSchema`. */
+const USERNAME_MAX_LENGTH = 64;
 
 type AuthActor = Pick<AuthenticatedUser, 'id' | 'username'>;
 /** Moi ma TU CHOI cua diem `account.access`. */
 type DenialReason = Exclude<AccountAccessReason, 'ACCOUNT_CHANGE_ALLOWED'>;
 /** Ten thao tac tren diem quyet dinh `account.access`; `null` = xem truoc, khong ghi quyet dinh. */
 type AccountOperation =
-  | 'create'
-  | 'profile.update'
-  | 'access.change'
-  | 'disable'
-  | 'enable'
-  | 'credentials.reset'
-  | null;
+  'create' | 'profile.update' | 'access.change' | 'disable' | 'enable' | 'credentials.reset' | null;
 
 interface AccessRequest {
   readonly role: UserRole;
@@ -224,7 +229,8 @@ export class AuthService {
 
   async listUsers(query: ListUsersQuery = {}): Promise<AccountView[]> {
     const parsed = listUsersQuerySchema.safeParse(query);
-    if (!parsed.success) throw accountInputInvalid('Bộ lọc tài khoản không hợp lệ', parsed.error.issues);
+    if (!parsed.success)
+      throw accountInputInvalid('Bộ lọc tài khoản không hợp lệ', parsed.error.issues);
     const users = await this.users.list(parsed.data);
     return users.map(toAccountView);
   }
@@ -241,16 +247,22 @@ export class AuthService {
 
   async history(id: string, query: HistoryQuery = {}): Promise<AccountHistoryEntry[]> {
     const parsed = historyQuerySchema.safeParse(query);
-    if (!parsed.success) throw accountInputInvalid('Tham số lịch sử không hợp lệ', parsed.error.issues);
+    if (!parsed.success)
+      throw accountInputInvalid('Tham số lịch sử không hợp lệ', parsed.error.issues);
     if (!(await this.users.findById(id))) throw accountError('ACCOUNT_NOT_FOUND');
-    const rows = await this.audit.list({ entityType: 'User', entityId: id, limit: parsed.data.limit });
+    const rows = await this.audit.list({
+      entityType: 'User',
+      entityId: id,
+      limit: parsed.data.limit,
+    });
     return rows.map(toHistoryEntry);
   }
 
   /** Goi y ten dang nhap tu ten nguoi: bo dau, noi bang dau cham, them hau to khi trung. */
   async suggestUsername(input: SuggestUsernameInput): Promise<{ username: string }> {
     const parsed = suggestUsernameSchema.safeParse(input);
-    if (!parsed.success) throw accountInputInvalid('Tên để gợi ý không hợp lệ', parsed.error.issues);
+    if (!parsed.success)
+      throw accountInputInvalid('Tên để gợi ý không hợp lệ', parsed.error.issues);
     const base = usernameBase(parsed.data.name, parsed.data.prefix ?? '');
     const reserved = domainReservedUsernames(this.domains);
     for (let attempt = 1; attempt <= USERNAME_SUGGESTION_ATTEMPTS; attempt += 1) {
@@ -258,7 +270,10 @@ export class AuthService {
       if (isReservedUsername(candidate, reserved)) continue;
       if (!(await this.users.findByUsername(candidate))) return { username: candidate };
     }
-    return { username: `${base}.${randomBytes(2).toString('hex')}` };
+    // Het luot thu: hau to ngau nhien 4 ky tu, cat goc de van <= 64 ky tu (`usernameSchema`).
+    return {
+      username: `${base.slice(0, USERNAME_MAX_LENGTH - 5)}.${randomBytes(2).toString('hex')}`,
+    };
   }
 
   /* ------------------------------------------------------------------ *
@@ -374,7 +389,11 @@ export class AuthService {
       return { account: toAccountView(account), access: await this.breakdownOf(account) };
     }
     const target = await this.checkAccessChange(null, actor, id, access);
-    if (access.role !== 'ADMIN' && isActiveAdmin(target) && (await this.users.countActiveAdmins()) <= 1) {
+    if (
+      access.role !== 'ADMIN' &&
+      isActiveAdmin(target) &&
+      (await this.users.countActiveAdmins()) <= 1
+    ) {
       throw accountError('LAST_ACTIVE_ADMIN');
     }
     return this.breakdownOf(target, access.role, access.grants);
@@ -483,7 +502,11 @@ export class AuthService {
    * NOI BO
    * ------------------------------------------------------------------ */
 
-  private applyAccess(actor: AuthActor, id: string, access: AccessRequest): Promise<AuthUserRecord> {
+  private applyAccess(
+    actor: AuthActor,
+    id: string,
+    access: AccessRequest,
+  ): Promise<AuthUserRecord> {
     return this.step('account.access.change', async () => {
       await this.checkAccessChange('access.change', actor, id, access);
       const result = this.requireGuarded(
@@ -529,9 +552,14 @@ export class AuthService {
       toRole: access.role,
     });
     if (links.length > 0) {
-      throw this.deny(operation, linkReason(links), { userId: id, violations: codesOf(links) }, {
-        detail: { violations: links },
-      });
+      throw this.deny(
+        operation,
+        linkReason(links),
+        { userId: id, violations: codesOf(links) },
+        {
+          detail: { violations: links },
+        },
+      );
     }
     return target;
   }
@@ -632,7 +660,10 @@ export class AuthService {
     operation: AccountOperation,
     reason: DenialReason,
     detail: Readonly<Record<string, unknown>>,
-    options: { readonly message?: string; readonly detail?: Readonly<Record<string, unknown>> } = {},
+    options: {
+      readonly message?: string;
+      readonly detail?: Readonly<Record<string, unknown>>;
+    } = {},
   ): Error {
     if (operation) this.decide('denied', reason, { operation, ...detail });
     return accountError(reason, options);
@@ -682,5 +713,8 @@ function linkReason(violations: readonly AccessViolation[]): DenialReason {
 }
 
 function isDenialReason(code: string): code is DenialReason {
-  return code !== 'ACCOUNT_CHANGE_ALLOWED' && (ACCOUNT_ACCESS_REASONS as readonly string[]).includes(code);
+  return (
+    code !== 'ACCOUNT_CHANGE_ALLOWED' &&
+    (ACCOUNT_ACCESS_REASONS as readonly string[]).includes(code)
+  );
 }

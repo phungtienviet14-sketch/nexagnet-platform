@@ -63,6 +63,8 @@ export const KHO_GROUPS = {
   nhay: 'kho.lich_su.read',
   giamDoc: 'kho.ky.reopen',
   rieng: 'kho.self.phieu.read',
+  /** Chi den tu LIEN KET (khong vai nao co san) — nhu "xem xe minh gop von" cua van tai. */
+  gopVon: 'kho.gop_von.read',
 } as const;
 
 const OPERATIONS = [KHO_GROUPS.xem, KHO_GROUPS.sua, KHO_GROUPS.duyet, KHO_GROUPS.nhay];
@@ -82,8 +84,22 @@ const CATALOG: PermissionCatalogView = {
       summary: 'Phiếu nhập, xuất.',
       grantable: true,
       actions: [
-        { code: KHO_GROUPS.xem, label: 'Xem phiếu kho', kind: 'XEM', directorOnly: false, escalation: false, sod: null },
-        { code: KHO_GROUPS.sua, label: 'Sửa phiếu kho', kind: 'THAO_TAC', directorOnly: false, escalation: false, sod: null },
+        {
+          code: KHO_GROUPS.xem,
+          label: 'Xem phiếu kho',
+          kind: 'XEM',
+          directorOnly: false,
+          escalation: false,
+          sod: null,
+        },
+        {
+          code: KHO_GROUPS.sua,
+          label: 'Sửa phiếu kho',
+          kind: 'THAO_TAC',
+          directorOnly: false,
+          escalation: false,
+          sod: null,
+        },
       ],
     },
     {
@@ -92,9 +108,30 @@ const CATALOG: PermissionCatalogView = {
       summary: 'Duyệt tiền và lịch sử.',
       grantable: true,
       actions: [
-        { code: KHO_GROUPS.duyet, label: 'Duyệt tiền kho', kind: 'DUYET', directorOnly: false, escalation: false, sod: 'DECISION' },
-        { code: KHO_GROUPS.nhay, label: 'Xem lịch sử nhạy cảm', kind: 'NHAY_CAM', directorOnly: false, escalation: true, sod: null },
-        { code: KHO_GROUPS.giamDoc, label: 'Mở lại kỳ kho', kind: 'NHAY_CAM', directorOnly: true, escalation: false, sod: null },
+        {
+          code: KHO_GROUPS.duyet,
+          label: 'Duyệt tiền kho',
+          kind: 'DUYET',
+          directorOnly: false,
+          escalation: false,
+          sod: 'DECISION',
+        },
+        {
+          code: KHO_GROUPS.nhay,
+          label: 'Xem lịch sử nhạy cảm',
+          kind: 'NHAY_CAM',
+          directorOnly: false,
+          escalation: true,
+          sod: null,
+        },
+        {
+          code: KHO_GROUPS.giamDoc,
+          label: 'Mở lại kỳ kho',
+          kind: 'NHAY_CAM',
+          directorOnly: true,
+          escalation: false,
+          sod: null,
+        },
       ],
     },
     {
@@ -103,7 +140,30 @@ const CATALOG: PermissionCatalogView = {
       summary: 'Có khi tài khoản được nối với một hồ sơ.',
       grantable: false,
       actions: [
-        { code: KHO_GROUPS.rieng, label: 'Xem phiếu của mình', kind: 'XEM', directorOnly: false, escalation: false, sod: null },
+        {
+          code: KHO_GROUPS.rieng,
+          label: 'Xem phiếu của mình',
+          kind: 'XEM',
+          directorOnly: false,
+          escalation: false,
+          sod: null,
+        },
+      ],
+    },
+    {
+      id: 'kho-gop-von',
+      label: 'Kho mình góp vốn',
+      summary: 'Có khi tài khoản được nối với một hồ sơ góp vốn.',
+      grantable: false,
+      actions: [
+        {
+          code: KHO_GROUPS.gopVon,
+          label: 'Xem kho mình góp vốn',
+          kind: 'XEM',
+          directorOnly: false,
+          escalation: false,
+          sod: null,
+        },
       ],
     },
   ],
@@ -163,28 +223,22 @@ export function fakeKhoDomain(options: FakeDomainOptions = {}): PermissionDomain
     reservedUsernames: () => ['demo-seed'],
   };
   if (options.describesScopes === false) return domain;
+  // Cung quy uoc voi mien van tai: `id` cua pham vi = `id` cua nhom lien ket no mo; chi mo ta lien
+  // ket DANG TON TAI — "chua noi ho so" la cau cua nen tang.
   return {
     ...domain,
     describeScopes: async (userId): Promise<readonly AccessScopeNote[]> =>
       linked.has(userId)
         ? [
             {
-              id: 'kho.ho_so',
-              groupId: 'kho-rieng',
+              id: 'kho-rieng',
               label: 'Hồ sơ thủ kho',
               active: true,
               sentence: 'Nối với hồ sơ thủ kho — làm được việc của chính mình',
+              subject: { id: 'ho-so-1', name: 'Thủ kho A' },
             },
           ]
-        : [
-            {
-              id: 'kho.ho_so',
-              groupId: 'kho-rieng',
-              label: 'Hồ sơ lái xe',
-              active: false,
-              sentence: 'Chưa nối hồ sơ lái xe — chưa làm được gì',
-            },
-          ],
+        : [],
   };
 }
 
@@ -236,7 +290,10 @@ export function accountHarness(
   return { repository, service, audit, passwords, telemetry, registry };
 }
 
-export function grant(permission: string, effect: PermissionGrant['effect'] = 'ALLOW'): PermissionGrant {
+export function grant(
+  permission: string,
+  effect: PermissionGrant['effect'] = 'ALLOW',
+): PermissionGrant {
   return { permission, effect };
 }
 
@@ -256,7 +313,10 @@ export async function errorBodyOf(promise: Promise<unknown>): Promise<Record<str
   try {
     await promise;
   } catch (error) {
-    return ((error as { getResponse: () => unknown }).getResponse() ?? {}) as Record<string, unknown>;
+    return ((error as { getResponse: () => unknown }).getResponse() ?? {}) as Record<
+      string,
+      unknown
+    >;
   }
   throw new Error('Mong doi mot loi, nhung loi goi thanh cong');
 }

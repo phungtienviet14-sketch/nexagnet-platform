@@ -7,7 +7,7 @@ import type {
   AccountView,
   PlatformPermissionBreakdown,
 } from '../account.types.js';
-import type { UserRole } from '../auth.types.js';
+import { USER_ROLES, type UserRole } from '../auth.types.js';
 import type {
   AccessScopeNote,
   PermissionDomain,
@@ -24,6 +24,11 @@ import { platformPermissionCatalog, platformPermissionsFor } from './platform-pe
  * viec, vai khoi diem) va tu cau mo ta pham vi (`AccessScopeNote.sentence`). Nen tang chi noi cac
  * cau DUNG CHO MOI MIEN: "Làm được mọi việc", "Chỉ xem", "Không duyệt được tiền" (loai `DUYET` la
  * khai niem cua nen tang — `PermissionKind`).
+ *
+ * PHAM VI ↔ NHOM: mot pham vi (`AccessScopeNote`) mo NHOM KHONG CAP DUOC (`grantable: false`) CUNG
+ * MIEN co `id` BANG `id` cua pham vi (vd mien van tai: pham vi `lai-xe` mo nhom `lai-xe`). Mien chi
+ * mo ta cac lien ket DANG TON TAI; "chua noi ho so" la cau cua NEN TANG — chi nen tang biet vai
+ * khoi diem cua tai khoan co viec trong nhom do hay khong.
  */
 
 /** Nhan vai khoi diem khi khong mien nao dat ten cho vai do. */
@@ -36,22 +41,39 @@ const PLATFORM_PRESET_LABELS: Readonly<Record<UserRole, string>> = {
 
 const USABLE: ReadonlySet<AccessActionState> = new Set(['PRESET', 'GRANTED', 'SCOPE_ACTIVE']);
 const LISTED_ACTIONS = 3;
+const NOTHING_GRANTED = 'Chưa làm được gì — chưa được cấp nhóm quyền nào';
+
+/** Cac pham vi lien ket cua MOT mien (`describeScopes`). */
+export interface DomainScopes {
+  readonly domain: string;
+  readonly notes: readonly AccessScopeNote[];
+}
 
 interface BreakdownInput {
   readonly account: AccountView;
   readonly domains: readonly PermissionDomain[];
-  readonly scopes: readonly AccessScopeNote[];
+  readonly scopes: readonly DomainScopes[];
   /** Vai va quyen rieng dem ra xem — mac dinh la cua chinh tai khoan (xem truoc dung cai nay). */
   readonly role?: UserRole;
   readonly grants?: readonly PermissionGrant[];
 }
 
+/** Mot nhom lien ket ma vai co viec nhung CHUA co lien ket nao mo — de noi "chua noi ho so". */
+interface UnlinkedScope {
+  readonly group: AccessGroupBreakdown;
+  /** Nhan vai khoi diem trong mien so huu nhom, vd "Lái xe". */
+  readonly presetLabel: string;
+}
+
 export function buildAccessBreakdown(input: BreakdownInput): AccessBreakdown {
   const role = input.role ?? input.account.role;
   const grants = input.grants ?? input.account.permissionGrants;
-  const groups = input.domains.flatMap((domain) =>
-    domainGroups(domain, role, grants, input.scopes),
+  const perDomain = input.domains.map((domain) =>
+    domainGroups(domain, role, grants, scopesOf(input.scopes, domain.id)),
   );
+  const groups = perDomain.flatMap((entry) => entry.groups);
+  const unlinked = perDomain.flatMap((entry) => entry.unlinked);
+  const notes = input.scopes.flatMap((entry) => entry.notes);
   const platform = platformBreakdown(role);
   return {
     account: input.account,
@@ -59,15 +81,23 @@ export function buildAccessBreakdown(input: BreakdownInput): AccessBreakdown {
     grants,
     platform,
     groups,
-    scopes: input.scopes,
-    sentences: accessSentences(groups, platform, input.scopes),
+    scopes: notes,
+    sentences: accessSentences(groups, platform, notes, unlinked),
   };
+}
+
+function scopesOf(scopes: readonly DomainScopes[], domainId: string): readonly AccessScopeNote[] {
+  return scopes.filter((entry) => entry.domain === domainId).flatMap((entry) => entry.notes);
+}
+
+function domainPresetLabel(domain: PermissionDomain, role: UserRole): string | null {
+  return domain.catalog().presets.find((candidate) => candidate.role === role)?.label ?? null;
 }
 
 function presetLabel(domains: readonly PermissionDomain[], role: UserRole): string {
   for (const domain of domains) {
-    const preset = domain.catalog().presets.find((candidate) => candidate.role === role);
-    if (preset) return preset.label;
+    const label = domainPresetLabel(domain, role);
+    if (label) return label;
   }
   return PLATFORM_PRESET_LABELS[role];
 }
@@ -86,20 +116,23 @@ function domainGroups(
   role: UserRole,
   grants: readonly PermissionGrant[],
   scopes: readonly AccessScopeNote[],
-): AccessGroupBreakdown[] {
+): { readonly groups: AccessGroupBreakdown[]; readonly unlinked: UnlinkedScope[] } {
   const preset = new Set(domain.effective({ role }));
   const effective = new Set(domain.effective({ role, permissionGrants: grants }));
-  return domain.catalog().groups.map((group) => {
-    const actions = group.actions.map(
-      (action): AccessActionBreakdown => ({
-        code: action.code,
-        label: action.label,
-        kind: action.kind,
-        state: group.grantable
-          ? grantableState(action.code, action.directorOnly, preset, effective)
-          : scopeState(group, action.code, preset, scopes),
-      }),
-    );
+  // Viec ma KHONG vai nao co san (vd xem xe minh gop von) chi den tu lien ket; viec ma mot vai co
+  // san (viec cua chinh lai xe) can CA vai do LAN lien ket.
+  const inSomePreset = new Set(
+    USER_ROLES.flatMap((candidate) => domain.effective({ role: candidate })),
+  );
+  const groups = domain.catalog().groups.map((group): AccessGroupBreakdown => {
+    const actions = group.actions.map((action): AccessActionBreakdown => ({
+      code: action.code,
+      label: action.label,
+      kind: action.kind,
+      state: group.grantable
+        ? grantableState(action.code, action.directorOnly, preset, effective)
+        : scopeState(group, action.code, { preset, inSomePreset }, scopes),
+    }));
     return {
       domain: domain.id,
       id: group.id,
@@ -109,6 +142,13 @@ function domainGroups(
       summary: summarize(actions),
     };
   });
+  const label = domainPresetLabel(domain, role) ?? PLATFORM_PRESET_LABELS[role];
+  const unlinked = groups
+    .filter((group) => !group.grantable)
+    .filter((group) => !scopes.some((scope) => scope.id === group.id))
+    .filter((group) => group.actions.some((action) => action.state === 'SCOPE_INACTIVE'))
+    .map((group) => ({ group, presetLabel: label }));
+  return { groups, unlinked };
 }
 
 function grantableState(
@@ -125,18 +165,21 @@ function grantableState(
 }
 
 /**
- * Nhom den tu LIEN KET: viec cua nhom chi lam duoc khi pham vi gan voi nhom dang hieu luc. Vai co
- * viec do ma lien ket chua co (lai xe chua noi ho so) → `SCOPE_INACTIVE`, khong phai "lam duoc".
+ * Nhom den tu LIEN KET: viec cua nhom chi lam duoc khi pham vi mo nhom dang hieu luc.
+ *   · viec ma MOT vai co san (viec cua chinh lai xe): can vai do VA lien ket — vai co ma lien ket
+ *     chua co / dang ngung → `SCOPE_INACTIVE`; vai khong co → `NONE` (du lien ket co);
+ *   · viec KHONG vai nao co san (xem xe minh gop von): chi lien ket mo no.
  */
 function scopeState(
   group: PermissionGroupView,
   code: string,
-  preset: ReadonlySet<string>,
+  presets: { readonly preset: ReadonlySet<string>; readonly inSomePreset: ReadonlySet<string> },
   scopes: readonly AccessScopeNote[],
 ): AccessActionState {
-  const scope = scopes.find((note) => note.groupId === group.id);
-  if (scope?.active) return 'SCOPE_ACTIVE';
-  return preset.has(code) ? 'SCOPE_INACTIVE' : 'NONE';
+  const active = scopes.some((note) => note.id === group.id && note.active);
+  if (!presets.inSomePreset.has(code)) return active ? 'SCOPE_ACTIVE' : 'NONE';
+  if (!presets.preset.has(code)) return 'NONE';
+  return active ? 'SCOPE_ACTIVE' : 'SCOPE_INACTIVE';
 }
 
 function summarize(actions: readonly AccessActionBreakdown[]): AccessGroupSummary {
@@ -153,15 +196,21 @@ function accessSentences(
   groups: readonly AccessGroupBreakdown[],
   platform: readonly PlatformPermissionBreakdown[],
   scopes: readonly AccessScopeNote[],
+  unlinked: readonly UnlinkedScope[],
 ): string[] {
   const canDoAnything =
     platform.some((entry) => entry.state === 'PRESET') ||
     groups.some((group) => group.summary !== 'NONE');
   if (!canDoAnything) {
-    // Khong lam duoc gi: cau cua pham vi (vd "Chưa nối hồ sơ lái xe — chưa làm được gì") la
-    // cau tra loi dung nhat; khong co thi noi thang.
-    const scopeLines = scopeSentences(groups, scopes);
-    return scopeLines.length > 0 ? scopeLines : ['Chưa làm được gì — chưa được cấp nhóm quyền nào'];
+    // Khong lam duoc gi: cau cua pham vi (vd "Chưa nối hồ sơ lái xe — chưa làm được gì") la cau
+    // tra loi dung nhat; khong co thi noi thang.
+    const scopeLines = [
+      ...scopes.map((scope) => scope.sentence),
+      ...unlinked.map(
+        ({ presetLabel }) => `Chưa nối hồ sơ ${lower(presetLabel)} — chưa làm được gì`,
+      ),
+    ];
+    return scopeLines.length > 0 ? unique(scopeLines) : [NOTHING_GRANTED];
   }
 
   const sentences: string[] = platform
@@ -187,7 +236,10 @@ function accessSentences(
   );
   if (denied.length > 0) sentences.push(`Đã bỏ bớt: ${listActions(denied)}`);
 
-  sentences.push(...scopeSentences(groups, scopes));
+  sentences.push(...scopes.map((scope) => scope.sentence));
+  for (const { group, presetLabel } of unlinked) {
+    sentences.push(`${group.label}: chưa có hiệu lực — chưa nối hồ sơ ${lower(presetLabel)}`);
+  }
 
   const decisions = grantable.flatMap((group) =>
     group.actions.filter((action) => action.kind === 'DUYET'),
@@ -195,25 +247,7 @@ function accessSentences(
   if (decisions.length > 0 && !decisions.some((action) => USABLE.has(action.state))) {
     sentences.push('Không duyệt được tiền');
   }
-  return sentences;
-}
-
-/**
- * Cau cua pham vi: cau cua mien khi co (`AccessScopeNote.sentence`), va voi nhom lien ket vai co
- * ma KHONG pham vi nao mo ta, mot cau chung lay tu mo ta cua nhom.
- */
-function scopeSentences(
-  groups: readonly AccessGroupBreakdown[],
-  scopes: readonly AccessScopeNote[],
-): string[] {
-  const sentences = scopes.map((scope) => scope.sentence);
-  for (const group of groups) {
-    if (group.grantable) continue;
-    if (scopes.some((scope) => scope.groupId === group.id)) continue;
-    if (!group.actions.some((action) => action.state === 'SCOPE_INACTIVE')) continue;
-    sentences.push(`${group.label} — chưa có hiệu lực: cần liên kết hồ sơ trước`);
-  }
-  return [...new Set(sentences)];
+  return unique(sentences);
 }
 
 function usableActions(group: AccessGroupBreakdown): AccessActionBreakdown[] {
@@ -228,4 +262,13 @@ function listActions(actions: readonly AccessActionBreakdown[]): string {
   const shown = actions.slice(0, LISTED_ACTIONS).map((action) => action.label);
   const rest = actions.length - shown.length;
   return rest > 0 ? `${shown.join(', ')} và ${rest} việc khác` : shown.join(', ');
+}
+
+/** "Lái xe" → "lái xe" (dung giua cau). */
+function lower(label: string): string {
+  return label.toLocaleLowerCase('vi');
+}
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
 }

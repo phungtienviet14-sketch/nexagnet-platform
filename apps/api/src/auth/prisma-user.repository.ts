@@ -164,7 +164,11 @@ export class PrismaUserRepository extends UserRepository {
     });
   }
 
-  updatePassword(id: string, passwordHash: string, temporaryUntil: Date | null): Promise<UserWrite> {
+  updatePassword(
+    id: string,
+    passwordHash: string,
+    temporaryUntil: Date | null,
+  ): Promise<UserWrite> {
     return this.prisma.$transaction(async (tx) => {
       const before = await lockUser(tx, id);
       if (!before) return { status: 'NOT_FOUND' } as const;
