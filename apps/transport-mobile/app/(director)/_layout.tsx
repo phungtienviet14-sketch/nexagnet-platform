@@ -48,6 +48,8 @@ export default function Layout() {
           ),
         }}
       />
+      {/* Chi tiet don — mo tu tab "Đơn hàng", khong co o tren thanh tab. */}
+      <Tabs.Screen name="order/[id]" options={{ href: null, title: 'Chi tiết đơn' }} />
     </Tabs>
   );
 }
