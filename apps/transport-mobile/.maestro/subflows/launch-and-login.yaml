@@ -1,0 +1,45 @@
+# Mo ung dung tu trang thai SACH roi dang nhap bang LOGIN_USERNAME + MAESTRO_PASSWORD.
+#
+# `clearState` = `pm clear`: xoa phien trong SecureStore VA hang doi SQLite. Moi bai bat dau nhu mot
+# may vua cai — khong bai nao song nho phien cua bai truoc.
+#
+# Ban e2e dien san dia chi may chu (EXPO_PUBLIC_DEFAULT_SERVER_URL) nen thuong vao thang man dang
+# nhap; buoc "Doanh nghiep cua ban" chi chay khi no hien, de flow van dung neu bo dien san.
+appId: com.nexagnet247.transport.preview
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- runFlow:
+    when:
+      visible:
+        id: server-address
+    commands:
+      - tapOn:
+          id: server-address
+      - inputText: ${MAESTRO_SERVER_URL}
+      - hideKeyboard
+      - tapOn:
+          id: server-continue
+- extendedWaitUntil:
+    visible:
+      id: login-screen
+    timeout: 45000
+- tapOn:
+    id: login-username
+- inputText: ${LOGIN_USERNAME}
+- tapOn:
+    id: login-password
+- inputText: ${MAESTRO_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: login-submit
+# Hop thoai "luu mat khau" cua dich vu tu dien (neu may ao co) che mat tab bar — bo qua neu co.
+- tapOn:
+    text: 'Not now|Never|Không phải bây giờ|Không bao giờ'
+    optional: true
+- extendedWaitUntil:
+    notVisible:
+      id: login-screen
+    timeout: 45000

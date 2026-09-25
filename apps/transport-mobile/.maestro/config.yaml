@@ -1,0 +1,23 @@
+# SMOKE MAESTRO cua ung dung di dong (#394) — chay tren may ao Android trong job `mobile-android-e2e`
+# (.github/workflows/mobile.yml), noi voi API THAT + Postgres THAT cua runner qua http://10.0.2.2:3001.
+#
+# The gioi (don, vong chay ACTIVE, ba tai khoan) do tools/mobile-smoke/prepare.mjs dung TRUOC; cac
+# bien Maestro truyen bang `-e` (khong bien nao chua mat khau ngoai MAESTRO_PASSWORD, bien do la mat
+# khau ngau nhien sinh trong job va da bi che trong log).
+#
+# Thu tu CO DINH va KHONG dung o bai hong dau tien: 02 dung dung vong chay ma 01 vua dang nhap vao,
+# con 03/04 doc lap — mot bai do van phai de lai anh chup cua cac bai sau cho nguoi doc.
+#
+# `optional` = phu thuoc thu may ao khong dam bao (bo chon anh cua he dieu hanh). Chay rieng o mot
+# buoc `continue-on-error` va ghi ro trong docs/phat-hanh.md — khong duoc tinh la da chung minh.
+flows:
+  - '*'
+excludeTags:
+  - optional
+executionOrder:
+  continueOnFailure: true
+  flowsOrder:
+    - 01-server-and-login-driver
+    - 02-driver-checkpoint-offline
+    - 03-director-login
+    - 04-accounting-login

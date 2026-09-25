@@ -1,0 +1,82 @@
+# LAI XE bam moc KHI MAT SONG, roi viec tu len may chu khi co song — bat bien cot loi cua hang doi
+# ngoai tuyen (`@netviet/driver-outbox`): khong mat mot lan bam nao, va khong xoa khoi may truoc khi
+# may chu xac nhan.
+#
+# The gioi (tools/mobile-smoke/prepare.mjs): vong chay ACTIVE cua lai xe, chang dau dang chay, viec ke
+# tiep = "Đã tới điểm lấy hàng" (PICKUP_ARRIVAL). Vi tri may ao dat DUNG diem lay hang (co hang rao
+# trong ban gieo) truoc khi bam.
+#
+# `setAirplaneMode` chi co tren Android (Maestro >= 1.36), va chi tat duoc mang cua MAY AO — adb/
+# Maestro van noi duoc qua cong emulator, nen flow van dieu khien tiep trong luc "mat song".
+#
+# testID `driver-next-action` / `checkpoint-<TYPE>` la hop dong voi man lai xe
+# (src/features/driver/TEST_IDS.md). Buoc `checkpoint-PICKUP_ARRIVAL` de optional: neu nut chinh
+# ghi moc thang thi khong co man xac nhan nao hien.
+appId: com.nexagnet247.transport.preview
+tags:
+  - driver
+  - offline
+  - smoke
+---
+- setLocation:
+    latitude: ${MAESTRO_PICKUP_LAT}
+    longitude: ${MAESTRO_PICKUP_LNG}
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_DRIVER_USERNAME}
+- setPermissions:
+    permissions:
+      location: allow
+- extendedWaitUntil:
+    visible:
+      id: driver-next-action
+    timeout: 45000
+- takeScreenshot: 02-viec-ke-tiep-co-song
+
+# --- Mat song ---------------------------------------------------------------------------------
+- setAirplaneMode: enabled
+- extendedWaitUntil:
+    visible: 'Đang ngoại tuyến'
+    timeout: 30000
+- assertVisible:
+    id: sync-banner
+- takeScreenshot: 02-ngoai-tuyen
+- tapOn:
+    id: driver-next-action
+- tapOn:
+    id: checkpoint-PICKUP_ARRIVAL
+    optional: true
+# Viec da DONG BANG tren may (capturedAt luc bam), dai trang thai dem 1 viec cho gui.
+- extendedWaitUntil:
+    visible: '.*việc đã lưu trên máy.*'
+    timeout: 30000
+- takeScreenshot: 02-moc-da-luu-tren-may
+
+# --- Trung tam dong bo: thay dung 1 viec dang cho ------------------------------------------------
+- tapOn:
+    id: sync-banner
+- extendedWaitUntil:
+    visible:
+      id: sync-now
+    timeout: 15000
+- assertVisible: 'Đang chờ gửi · 1'
+- takeScreenshot: 02-trung-tam-dong-bo-cho-gui
+
+# --- Co song lai: bam "Gui ngay" toi khi hang doi rong ------------------------------------------
+- setAirplaneMode: disabled
+- repeat:
+    times: 6
+    while:
+      notVisible: 'Mọi việc đã lên hệ thống'
+    commands:
+      - tapOn:
+          id: sync-now
+      - extendedWaitUntil:
+          visible: 'Mọi việc đã lên hệ thống'
+          timeout: 10000
+          optional: true
+- assertVisible: 'Mọi việc đã lên hệ thống'
+- assertVisible: 'Đang chờ gửi · 0'
+- assertVisible: 'Không gửi được · 0'
+- takeScreenshot: 02-da-gui-het

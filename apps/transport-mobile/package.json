@@ -12,7 +12,10 @@
     "export:web": "expo export --platform web --output-dir dist-web && node scripts/pwa-postexport.mjs dist-web",
     "pwa:icons": "node scripts/pwa-icons.mjs",
     "native:prebuild": "expo prebuild --no-install --clean",
-    "doctor": "expo-doctor"
+    "doctor": "expo-doctor",
+    "assets:generate": "node scripts/generate-assets.mjs",
+    "test:native-config": "node --test scripts/native-config.contract.test.mjs",
+    "test:release-tools": "node --test scripts/android-artifact-metadata.test.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/be-vietnam-pro": "0.4.1",

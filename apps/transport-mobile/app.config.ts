@@ -15,6 +15,13 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
  *   APP_BACKGROUND_LOCATION on | off — bam vi tri NEN trong ca chay (mac dinh: on o preview/dev,
  *                           off o production cho toi khi khai bao Google Play duoc duyet — M-01)
  *   EXPO_PUBLIC_DEFAULT_SERVER_URL  dia chi may chu dien san (ban thu cho mot khach)
+ *   APP_E2E_CLEARTEXT       on | off — CHI ban kiem thu e2e tren may ao: cho HTTP tran toi 10.0.2.2/
+ *                           localhost (plugins/with-android-e2e-cleartext.js). Cam voi production.
+ *   APP_GIT_SHA             commit cua ban dung, hien o man "Tôi" (CI dat bang github.sha)
+ *
+ * KY PHAT HANH ANDROID: `ANDROID_UPLOAD_KEYSTORE_PATH/_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS/_PASSWORD`
+ * — LA bi mat, nhung khong bao gio vao tep sinh ra: plugins/with-android-release-signing.js chi viet
+ * `System.getenv(...)`. Thieu ca bon => release ky bang khoa debug (khong len Play duoc).
  */
 
 type Variant = 'development' | 'preview' | 'production';
@@ -42,6 +49,19 @@ const BUILD_NUMBER = ((): number => {
     throw new Error(`APP_BUILD_NUMBER phai la so nguyen duong: ${raw}`);
   }
   return value;
+})();
+
+/**
+ * Ban kiem thu e2e (APK chay tren may ao CI) — KHONG BAO GIO la ban cua hang. Tu choi ngay o day
+ * neu ai do ghep no voi production: loi luc prebuild re hon mot APK noi HTTP tran len Play.
+ */
+const E2E_CLEARTEXT = ((): boolean => {
+  const raw = process.env.APP_E2E_CLEARTEXT ?? 'off';
+  if (raw !== 'on' && raw !== 'off') throw new Error(`APP_E2E_CLEARTEXT phai la on|off: ${raw}`);
+  if (raw === 'on' && VARIANT === 'production') {
+    throw new Error('APP_E2E_CLEARTEXT=on chi danh cho ban kiem thu, khong dung voi production');
+  }
+  return raw === 'on';
 })();
 
 const BACKGROUND_LOCATION = ((): boolean => {
@@ -86,7 +106,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         : {}),
       NSCameraUsageDescription: PERMISSION_TEXT.camera,
       NSPhotoLibraryUsageDescription: PERMISSION_TEXT.photos,
-      ITSAppUsesNonExemptEncryption: false,
+      // `ITSAppUsesNonExemptEncryption` do `config.usesNonExemptEncryption` o tren viet — khai
+      // hai noi thi prebuild bo mot noi va canh bao (chi dung HTTPS cua he dieu hanh => false).
     },
     privacyManifests: {
       NSPrivacyTracking: false,
@@ -149,7 +170,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.WRITE_EXTERNAL_STORAGE',
       'android.permission.READ_MEDIA_AUDIO',
       'android.permission.READ_MEDIA_VIDEO',
-      ...(BACKGROUND_LOCATION ? [] : ['android.permission.ACCESS_BACKGROUND_LOCATION']),
+      // Tat bam nen => chan ca quyen nen LAN quyen dich vu tien canh kieu vi tri, de khong thu vien
+      // nao gop lai chung vao ban cuoi (service di kem do plugins/with-run-tracking-service.js go).
+      ...(BACKGROUND_LOCATION
+        ? []
+        : [
+            'android.permission.ACCESS_BACKGROUND_LOCATION',
+            'android.permission.FOREGROUND_SERVICE_LOCATION',
+          ]),
     ],
     permissions: [
       'android.permission.ACCESS_COARSE_LOCATION',
@@ -172,14 +200,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
-    ['expo-secure-store', { configureAndroidBackup: true }],
+    // Khong dung `requireAuthentication` (xem secure-session-storage.ts) => khong xin Face ID; de
+    // mac dinh thi Info.plist mang mot cau xin quyen tieng Anh cho mot viec ung dung khong lam.
+    ['expo-secure-store', { configureAndroidBackup: true, faceIDPermission: false }],
     'expo-sqlite',
     [
       'expo-location',
       {
         locationWhenInUsePermission: PERMISSION_TEXT.locationWhenInUse,
-        locationAlwaysAndWhenInUsePermission: PERMISSION_TEXT.locationAlways,
-        locationAlwaysPermission: PERMISSION_TEXT.locationAlways,
+        // `false` XOA khoa khoi Info.plist; bo trong thi plugin tu dien cau tieng Anh mac dinh cho
+        // CA quyen "luon luon" lan cam bien chuyen dong — hai viec ban tat nen khong lam.
+        locationAlwaysAndWhenInUsePermission: BACKGROUND_LOCATION
+          ? PERMISSION_TEXT.locationAlways
+          : false,
+        locationAlwaysPermission: BACKGROUND_LOCATION ? PERMISSION_TEXT.locationAlways : false,
+        motionUsagePermission: false,
         isIosBackgroundLocationEnabled: BACKGROUND_LOCATION,
         isAndroidBackgroundLocationEnabled: BACKGROUND_LOCATION,
         isAndroidForegroundServiceEnabled: BACKGROUND_LOCATION,
@@ -191,6 +226,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         cameraPermission: PERMISSION_TEXT.camera,
         microphonePermission: false,
         recordAudioAndroid: false,
+        // Khong quet ma vach: tat de khong keo ML Kit vao APK.
+        barcodeScannerEnabled: false,
       },
     ],
     [
@@ -220,12 +257,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     'expo-font',
+    // Plugin cua repo (plugins/) — CommonJS vi prebuild nap chung bang require().
+    ['./plugins/with-run-tracking-service.js', { enabled: BACKGROUND_LOCATION }],
+    './plugins/with-android-release-signing.js',
+    './plugins/with-android-e2e-cleartext.js',
   ],
   experiments: { typedRoutes: true },
   extra: {
     variant: VARIANT,
     backgroundLocation: BACKGROUND_LOCATION,
     buildNumber: BUILD_NUMBER,
-    gitSha: process.env.APP_GIT_SHA ?? null,
+    // BO khoa khi khong co commit, KHONG ghi `null`: cau hinh cong khai cua Expo (thu duoc nhung
+    // vao ban dung) bien `null` thanh `{}` — mot object truthy lam `gitSha.slice` o man "Tôi" nem.
+    ...(process.env.APP_GIT_SHA?.trim() ? { gitSha: process.env.APP_GIT_SHA.trim() } : {}),
+    // Doc boi src/config/build-info.ts (ALLOW_INSECURE_LOCAL): chi ban e2e moi nhan http:// toi
+    // 10.0.2.2/localhost. Di cung network security config cua plugin cleartext o tren.
+    allowInsecureLocal: E2E_CLEARTEXT,
   },
 });

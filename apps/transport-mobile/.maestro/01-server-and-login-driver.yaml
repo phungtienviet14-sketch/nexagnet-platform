@@ -1,0 +1,32 @@
+# LAI XE dang nhap tren may vua cai va vao dung trai nghiem lai xe (vai SALE -> 4 tab Run-first).
+#
+# Chung minh ca chuoi native that: HTTP tran CHI toi 10.0.2.2 (network security config cua ban e2e),
+# `/auth/native/session` -> Bearer trong Keystore, `/auth/me` hoi lai, roi chon trai nghiem theo vai.
+appId: com.nexagnet247.transport.preview
+tags:
+  - driver
+  - smoke
+---
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_DRIVER_USERNAME}
+- extendedWaitUntil:
+    visible: 'Việc'
+    timeout: 45000
+- assertVisible: 'Việc'
+- assertVisible: 'Bản đồ'
+- assertVisible: 'Nhiên liệu'
+- assertVisible: 'Tiền'
+- assertVisible:
+    id: account-button
+- takeScreenshot: 01-lai-xe-trang-viec
+- tapOn: 'Nhiên liệu'
+- takeScreenshot: 01-lai-xe-nhien-lieu
+- tapOn: 'Tiền'
+- takeScreenshot: 01-lai-xe-tien
+# Ban do CUOI CUNG: MapLibre ve bang OpenGL phan mem (swiftshader) tren may ao — neu no sap thi
+# anh chup ba tab tren van con, va loi chi ra dung man ban do.
+- tapOn: 'Bản đồ'
+- takeScreenshot: 01-lai-xe-ban-do
+- assertVisible: 'Bản đồ'

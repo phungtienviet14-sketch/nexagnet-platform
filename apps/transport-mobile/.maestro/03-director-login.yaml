@@ -1,0 +1,28 @@
+# GIAM DOC (vai ADMIN) dang nhap va vao dung trai nghiem dieu hanh — 4 tab.
+#
+# Khong kiem so lieu tren man: ban gieo doi theo ngay chay (moc = hom nay), va smoke nay chi can
+# chung minh vai -> trai nghiem + cac man mo duoc ma khong sap tren may that.
+appId: com.nexagnet247.transport.preview
+tags:
+  - director
+  - smoke
+---
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_DIRECTOR_USERNAME}
+- extendedWaitUntil:
+    visible: 'Hôm nay'
+    timeout: 45000
+- assertVisible: 'Hôm nay'
+- assertVisible: 'Cần xử lý'
+- assertVisible: 'Đội xe'
+- assertVisible: 'Đơn hàng'
+- assertNotVisible: 'Nhiên liệu'
+- takeScreenshot: 03-giam-doc-hom-nay
+- tapOn: 'Cần xử lý'
+- takeScreenshot: 03-giam-doc-can-xu-ly
+- tapOn: 'Đơn hàng'
+- takeScreenshot: 03-giam-doc-don-hang
+- tapOn: 'Đội xe'
+- takeScreenshot: 03-giam-doc-doi-xe
