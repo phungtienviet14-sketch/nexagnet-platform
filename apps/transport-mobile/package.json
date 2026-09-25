@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "expo export --platform android --platform ios --output-dir dist",
-    "export:web": "expo export --platform web --output-dir dist-web",
+    "export:web": "expo export --platform web --output-dir dist-web && node scripts/pwa-postexport.mjs dist-web",
+    "pwa:icons": "node scripts/pwa-icons.mjs",
     "native:prebuild": "expo prebuild --no-install --clean",
     "doctor": "expo-doctor"
   },

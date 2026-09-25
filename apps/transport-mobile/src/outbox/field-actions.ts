@@ -109,11 +109,14 @@ export interface FieldActionDeps {
   readonly http: HttpClient;
   readonly progress: ProgressStore;
   readonly device: DeviceBinding | null;
-  /** Dung FormData co tep — tren may la `{ uri, name, type }` cua React Native. */
+  /**
+   * Dung FormData co tep — tren may la `{ uri, name, type }` cua React Native (dong bo); tren PWA
+   * doc byte tu IndexedDB (bat dong bo).
+   */
   readonly formWithFile: (
     attachment: OutboxAttachment,
     fields: Readonly<Record<string, string>>,
-  ) => FormData;
+  ) => FormData | Promise<FormData>;
 }
 
 /** Cac `reason` nghia la "viec nay DA co tren he thong" — hien nhe nhang, khong nhu mot loi. */
@@ -237,7 +240,7 @@ async function sendDocument(deps: FieldActionDeps, item: OutboxItem, action: Doc
       throw new ApiError('DOMAIN', 'Chứng từ không kèm tệp', null, 'OUTBOX_ATTACHMENT_MISSING');
     const uploaded = await deps.http.upload<{ id: string }>(
       '/files',
-      deps.formWithFile(attachment, { purpose: 'OPERATIONAL_DOCUMENT' }),
+      await deps.formWithFile(attachment, { purpose: 'OPERATIONAL_DOCUMENT' }),
     );
     fileId = uploaded.id;
     await deps.progress.writeProgress(item.id, 'fileId', fileId);
@@ -285,7 +288,7 @@ async function sendFuelSlip(deps: FieldActionDeps, item: OutboxItem, action: Fue
     const baseline = evidenceCount ?? (await deps.http.get<SlipView>(path)).evidenceCount;
     await deps.progress.writeProgress(item.id, 'evidenceBaseline', String(baseline));
   }
-  await deps.http.upload(`${path}/evidence/upload`, deps.formWithFile(attachment, {}));
+  await deps.http.upload(`${path}/evidence/upload`, await deps.formWithFile(attachment, {}));
   await deps.progress.writeProgress(item.id, 'evidenceDone', '1');
 }
 

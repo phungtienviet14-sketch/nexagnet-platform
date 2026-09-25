@@ -1,9 +1,4 @@
-import {
-  OutboxEngine,
-  type OutboxItem,
-  type OutboxSender,
-  type SendOutcome,
-} from '@netviet/driver-outbox';
+import { OutboxEngine } from '@netviet/driver-outbox';
 import { randomUUID } from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
@@ -13,9 +8,8 @@ import { BUILD_INFO } from '../config/build-info';
 import type { StoredSession } from '../session/session-types';
 import { outboxScope } from '../session/session-types';
 import { formWithFile } from './attachments';
-import { executeFieldAction, type DeviceBinding } from './field-actions';
-import { sendProofBatch } from './proof-sender';
-import { sendObservationBatch } from './observation-sender';
+import type { DeviceBinding } from './field-actions';
+import { createFieldSender } from './field-sender';
 import type { SqlDatabase } from './sql';
 import { SqliteOutboxStore, migrateOutbox } from './sqlite-outbox-store';
 
@@ -81,28 +75,6 @@ export interface OutboxRuntime {
   readonly engine: OutboxEngine;
 }
 
-function sender(
-  http: HttpClient,
-  store: SqliteOutboxStore,
-  device: DeviceBinding | null,
-): OutboxSender {
-  return {
-    async sendBatch(items: readonly OutboxItem[]): Promise<readonly SendOutcome[]> {
-      if (items[0]?.kind === 'OBSERVATION') return sendObservationBatch(items, http, device);
-      // Viec bam: TUAN TU, FIFO theo vong chay/chang, ke ca voi viec truoc dang lui hen.
-      const inBatch = new Set(items.map((item) => item.id));
-      const outside = (await store.listPending()).filter(
-        (item) => item.kind === 'PROOF' && !inBatch.has(item.id),
-      );
-      return sendProofBatch(
-        items,
-        (item) => executeFieldAction(item, { http, progress: store, device, formWithFile }),
-        outside,
-      );
-    },
-  };
-}
-
 export async function createOutboxRuntime(
   session: StoredSession,
   http: HttpClient,
@@ -112,7 +84,7 @@ export async function createOutboxRuntime(
   const device = await deviceBinding(session.user.id);
   const engine = new OutboxEngine({
     store,
-    sender: sender(http, store, device),
+    sender: createFieldSender(http, store, device, formWithFile),
     now: () => new Date(),
     newId: () => randomUUID(),
     // Viec bam: lo nho (gui tung cai) de mot viec cham khong giu ca hang. Ban dinh vi: tran 200.

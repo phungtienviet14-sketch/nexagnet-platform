@@ -1,0 +1,58 @@
+<!doctype html>
+<!--
+  VO HTML CUA PWA. Voi web.output "single" (app.config.ts), expo export lay CHINH tep nay lam khuon:
+  thay tieu de bang ten ung dung, chen the nap ban dung JS vao cuoi than trang. app/+html.tsx chi
+  dung khi xuat tinh ("static"/"server"), nen dau PWA phai nam o day. KHONG them ma JS noi dong:
+  CSP script-src 'self' (deploy/pwa/Caddyfile) se chan no. KHONG viet ten the dong cua head/body
+  trong chu thich nay: Expo tim-thay-the chuoi dau tien khop.
+-->
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>%WEB_TITLE%</title>
+    <meta
+      name="description"
+      content="Việc chạy xe, mốc giao nhận, nhiên liệu và tiền — cho lái xe, giám đốc và kế toán."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#F4F1EA" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0F1113" media="(prefers-color-scheme: dark)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Nexagent" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/svg+xml" href="/icons/mark.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+    <!-- Khung toan man cua react-native-web + nen giay ngay tu byte dau (khong chop trang). -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        background-color: #f4f1ea;
+      }
+      body {
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background-color: #0f1113;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>Cần bật JavaScript để dùng Nexagent Transport.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

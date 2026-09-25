@@ -1,0 +1,21 @@
+# BUILD CONTEXT RIENG cua deploy/pwa/Dockerfile (BuildKit doc tep nay THAY `.dockerignore` o goc).
+# Danh sach CHO PHEP: loai tat ca, roi chi mo dung nhung gi can de dung PWA. Khong goi khach
+# (tenants/), khong ma nguon may chu, khong tai lieu co PII co the lot vao context.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.pnpmfile.cjs
+!packages/driver-outbox
+!apps/transport-mobile
+!deploy/pwa/Caddyfile
+
+# Rac cuc bo trong hai thu muc tren.
+**/node_modules
+**/dist
+apps/transport-mobile/dist-web
+apps/transport-mobile/android
+apps/transport-mobile/ios
+apps/transport-mobile/.expo
+apps/transport-mobile/e2e-web/screenshots
+apps/transport-mobile/e2e-web/.results

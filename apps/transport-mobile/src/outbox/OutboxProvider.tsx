@@ -12,7 +12,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
+import { PwaUpdatePrompt } from '../pwa/PwaUpdatePrompt';
 import { useSession } from '../session/SessionProvider';
 import { sweepAttachments } from './attachments';
 import type { FieldAction } from './field-actions';
@@ -77,25 +78,34 @@ export function OutboxProvider({ children }: { readonly children: ReactNode }) {
   const onlineRef = useRef(true);
 
   useEffect(() => {
-    if (status !== 'signedIn' || !session || !http || Platform.OS === 'web') {
+    if (status !== 'signedIn' || !session || !http) {
       runtimeRef.current = null;
       runnerRef.current = null;
       setSnapshot(EMPTY);
       return;
     }
     let cancelled = false;
-    void createOutboxRuntime(session, http).then((runtime) => {
-      if (cancelled) return;
-      runtimeRef.current = runtime;
-      const runner = new OutboxRunner(runtime.engine, (state) => {
-        setSnapshot({ ...state, online: onlineRef.current, ready: true });
-        setRevision((value) => value + 1);
-        // Viec vua len may chu lam doi du lieu doc (moc moi, phieu moi) — doc lai.
-        if (!state.running) void queryClient.invalidateQueries({ queryKey: ['me'] });
-      });
-      runnerRef.current = runner;
-      void runner.kick();
-    });
+    void createOutboxRuntime(session, http).then(
+      (runtime) => {
+        if (cancelled) return;
+        runtimeRef.current = runtime;
+        const runner = new OutboxRunner(runtime.engine, (state) => {
+          setSnapshot({ ...state, online: onlineRef.current, ready: true });
+          setRevision((value) => value + 1);
+          // Viec vua len may chu lam doi du lieu doc (moc moi, phieu moi) — doc lai.
+          if (!state.running) void queryClient.invalidateQueries({ queryKey: ['me'] });
+        });
+        runnerRef.current = runner;
+        void runner.kick();
+      },
+      // Kho tren may khong mo duoc (trinh duyet chan luu tru o che do rieng tu): giu `ready: false`
+      // — `enqueue` noi thang "chưa sẵn sàng" — va ghi ly do, khong de Promise bi tu choi lang le.
+      (error: unknown) => {
+        if (cancelled) return;
+        const reason = error instanceof Error ? error.message : 'Không mở được bộ nhớ trên máy';
+        setSnapshot({ ...EMPTY, lastError: reason });
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -108,11 +118,13 @@ export function OutboxProvider({ children }: { readonly children: ReactNode }) {
     runner.resume();
     await runner.kick();
     const runtime = runtimeRef.current;
-    if (runtime) sweepAttachments(await referencedAttachmentUris());
+    // Web: Promise (IndexedDB), khong bao gio nem; native: dong bo.
+    if (runtime) void sweepAttachments(await referencedAttachmentUris());
   }, []);
 
+  // Web (PWA): NetInfo doc `navigator.onLine` + su kien online/offline va do `HEAD /` cung origin;
+  // AppState cua react-native-web theo `visibilitychange` — cung mot noi day cho ca ba nen tang.
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = state.isConnected !== false && state.isInternetReachable !== false;
       const cameBack = online && !onlineRef.current;
@@ -171,7 +183,13 @@ export function OutboxProvider({ children }: { readonly children: ReactNode }) {
     [snapshot, revision, enqueue, syncNow],
   );
 
-  return <OutboxContext.Provider value={api}>{children}</OutboxContext.Provider>;
+  return (
+    <OutboxContext.Provider value={api}>
+      {children}
+      {/* PWA: hoi cap nhat, doi hang doi gui xong luot dang chay. Native: khong ve gi. */}
+      <PwaUpdatePrompt busy={snapshot.running} />
+    </OutboxContext.Provider>
+  );
 }
 
 export function useOutbox(): OutboxApi {
