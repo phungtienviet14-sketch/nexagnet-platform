@@ -1,5 +1,5 @@
 import type { OutboxEngine, SyncStatus } from '@netviet/driver-outbox';
-import { PAUSE_UNAUTHENTICATED } from './field-actions';
+import { isPauseReason } from './field-actions';
 
 /**
  * NGUOI CHAY HANG DOI — goi `drain()` khi co ly do (vua xep viec, co mang lai, mo ung dung, dinh ky)
@@ -72,7 +72,7 @@ export class OutboxRunner {
 
   private async pausedByAuth(): Promise<boolean> {
     const status = await this.engine.status();
-    if (status.lastError === PAUSE_UNAUTHENTICATED) this.paused = true;
+    if (isPauseReason(status.lastError ?? undefined)) this.paused = true;
     return this.paused;
   }
 }

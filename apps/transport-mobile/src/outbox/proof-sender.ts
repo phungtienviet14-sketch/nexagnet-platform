@@ -1,5 +1,5 @@
 import type { OutboxItem, SendOutcome } from '@netviet/driver-outbox';
-import { PAUSE_UNAUTHENTICATED, type FieldAction } from './field-actions';
+import { isPauseReason, type FieldAction } from './field-actions';
 
 /**
  * THU TU VIEC BAM — FIFO theo vong chay/chang, xuyen moi loai viec.
@@ -48,12 +48,12 @@ export async function sendProofBatch(
 ): Promise<SendOutcome[]> {
   const held = new Set<string>();
   const outcomes: SendOutcome[] = [];
-  let paused = false;
+  let paused: string | null = null;
 
   for (const item of items) {
     const keys = orderingKeys(item);
     if (paused) {
-      outcomes.push({ kind: 'RETRY', reason: PAUSE_UNAUTHENTICATED });
+      outcomes.push({ kind: 'RETRY', reason: paused });
       continue;
     }
     const blockedByEarlier =
@@ -71,7 +71,7 @@ export async function sendProofBatch(
     }
     const outcome = await execute(item);
     if (outcome.kind === 'RETRY') {
-      if (outcome.reason === PAUSE_UNAUTHENTICATED) paused = true;
+      if (isPauseReason(outcome.reason)) paused = outcome.reason;
       keys.forEach((key) => held.add(key));
     }
     outcomes.push(outcome);

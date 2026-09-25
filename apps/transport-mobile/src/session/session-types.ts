@@ -12,6 +12,11 @@ export interface SessionUser {
   readonly name: string;
   readonly role: PlatformRole;
   readonly credentialVersion: number;
+  /**
+   * #395: tai khoan do Giam doc tao/dat lai phai doi mat khau truoc khi dung. Truong TUY CHON —
+   * may chu chua co #395 khong gui, va app van chay dung.
+   */
+  readonly mustChangePassword?: boolean;
 }
 
 export interface StoredSession {
@@ -71,6 +76,7 @@ export function parseSessionUser(raw: unknown): SessionUser {
     name: typeof value.name === 'string' && value.name.trim() !== '' ? value.name : value.username,
     role: role as PlatformRole,
     credentialVersion: typeof value.credentialVersion === 'number' ? value.credentialVersion : 0,
+    ...(value.mustChangePassword === true ? { mustChangePassword: true } : {}),
   };
 }
 

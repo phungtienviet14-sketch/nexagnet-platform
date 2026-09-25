@@ -5,7 +5,7 @@ import {
   type SendOutcome,
 } from '@netviet/driver-outbox';
 import { describe, expect, it } from 'vitest';
-import { PAUSE_UNAUTHENTICATED } from './field-actions';
+import { PAUSE_PASSWORD_CHANGE, PAUSE_UNAUTHENTICATED } from './field-actions';
 import { OutboxRunner, type RunnerState } from './runner';
 
 function setup(send: (items: readonly OutboxItem[]) => Promise<readonly SendOutcome[]>) {
@@ -90,6 +90,23 @@ describe('OutboxRunner', () => {
 
     runner.resume();
     expect(runner.isPaused).toBe(false);
+  });
+
+  it('403 PASSWORD_CHANGE_REQUIRED cung DUNG ca hang doi — khong viec nao bi chan oan', async () => {
+    let calls = 0;
+    const { runner, enqueue, engine } = setup(async (items) => {
+      calls += 1;
+      return items.map(() => ({ kind: 'RETRY' as const, reason: PAUSE_PASSWORD_CHANGE }));
+    });
+    await enqueue('a');
+    await enqueue('b');
+
+    await runner.kick();
+    await runner.kick();
+
+    expect(runner.isPaused).toBe(true);
+    expect(calls).toBe(1);
+    expect(await engine.status()).toMatchObject({ pending: 2, blocked: 0 });
   });
 
   it('bao trang thai cho giao dien (con bao nhieu viec, co dang chay)', async () => {

@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { userMessage } from '../../src/api/errors';
@@ -22,6 +23,7 @@ import { Text } from '../../src/ui/Text';
  */
 export default function ServerScreen() {
   const { chooseServer } = useSession();
+  const router = useRouter();
   const [address, setAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,6 +47,7 @@ export default function ServerScreen() {
         return;
       }
       await chooseServer(normalized.url);
+      router.replace('/(auth)/login');
     } catch (caught) {
       setError(userMessage(caught));
     } finally {

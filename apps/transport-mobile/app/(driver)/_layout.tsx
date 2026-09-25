@@ -1,4 +1,5 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
+import { useSession } from '../../src/session/SessionProvider';
 import { TabIcon, useTabOptions } from '../../src/ui/tabs';
 
 /**
@@ -13,6 +14,9 @@ const HIDDEN = { href: null } as const;
 
 export default function Layout() {
   const options = useTabOptions();
+  const { status } = useSession();
+  // Het phien (401) hay dang xuat khi dang o tab cua vai -> cua vao chon lai man.
+  if (status !== 'signedIn') return <Redirect href="/" />;
   return (
     <Tabs screenOptions={options} backBehavior="history">
       <Tabs.Screen

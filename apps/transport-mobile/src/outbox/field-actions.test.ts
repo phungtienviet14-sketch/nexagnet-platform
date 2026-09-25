@@ -1,9 +1,12 @@
 import type { OutboxAttachment, OutboxItem } from '@netviet/driver-outbox';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { HttpClient } from '../api/http';
+import { ApiError } from '../api/errors';
 import {
+  PAUSE_PASSWORD_CHANGE,
   PAUSE_UNAUTHENTICATED,
   executeFieldAction,
+  outcomeOf,
   type FieldAction,
   type FieldActionDeps,
   type ProgressStore,
@@ -380,5 +383,17 @@ describe('executeFieldAction — thu lai KHONG sinh ban trung', () => {
       kind: 'REJECTED',
       reason: 'CHECKPOINT_PREDECESSOR_MISSING',
     });
+  });
+});
+
+describe('outcomeOf — 403 nao la phan quyet, 403 nao chi la tam dung', () => {
+  it('PASSWORD_CHANGE_REQUIRED (#395) -> tam dung, KHONG phai tu choi viec da bam', () => {
+    const error = new ApiError('FORBIDDEN', 'Can doi mat khau', 403, 'PASSWORD_CHANGE_REQUIRED');
+    expect(outcomeOf(error)).toEqual({ kind: 'RETRY', reason: PAUSE_PASSWORD_CHANGE });
+  });
+
+  it('403 quyen thuong van la phan quyet cuoi', () => {
+    const error = new ApiError('FORBIDDEN', 'Khong co quyen', 403, 'TRANSPORT_ACTION_DENIED');
+    expect(outcomeOf(error)).toEqual({ kind: 'REJECTED', reason: 'TRANSPORT_ACTION_DENIED' });
   });
 });

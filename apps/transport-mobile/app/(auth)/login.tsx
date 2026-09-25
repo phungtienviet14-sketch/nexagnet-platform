@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, View, type TextInput } from 'react-native';
 import { userMessage } from '../../src/api/errors';
@@ -14,6 +15,7 @@ import { Text } from '../../src/ui/Text';
 /** BUOC 2 — dang nhap bang tai khoan van phong cap. Khong co "dang ky": tai khoan do Giam doc tao. */
 export default function LoginScreen() {
   const { signIn, serverUrl, notice, changeServer, serverFixed } = useSession();
+  const router = useRouter();
   const { productName, descriptor } = useBranding();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -32,6 +34,9 @@ export default function LoginScreen() {
     setError(null);
     try {
       await signIn({ username, password });
+      // Cua vao (`app/index.tsx`) chon trai nghiem theo vai. Man nay khong tu roi di khi phien doi
+      // trang thai — smoke Maestro tren may ao bat dung loi do.
+      router.replace('/');
     } catch (caught) {
       setError(userMessage(caught));
     } finally {
@@ -102,7 +107,7 @@ export default function LoginScreen() {
           kind="ghost"
           size="compact"
           label="Đổi doanh nghiệp / máy chủ"
-          onPress={() => void changeServer()}
+          onPress={() => void changeServer().then(() => router.replace('/(auth)/server'))}
         />
       )}
     </Screen>

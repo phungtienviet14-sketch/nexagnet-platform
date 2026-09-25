@@ -129,11 +129,25 @@ export const ALREADY_DONE_REASONS = new Set([
 /** Phan hoi 401 phai DUNG ca hang doi (xem outbox-runner) — ma nay la tin hieu do. */
 export const PAUSE_UNAUTHENTICATED = 'UNAUTHENTICATED';
 
+/**
+ * 403 `PASSWORD_CHANGE_REQUIRED` (#395): tai khoan do Giam doc tao/dat lai phai doi mat khau truoc;
+ * moi route khac tra 403 voi ma nay. Do KHONG phai phan quyet ve viec da bam — mot moc bi "tu choi"
+ * vi ly do nay se nam BLOCKED oan. Hang doi TAM DUNG nhu 401 va chay lai khi phien dung duoc.
+ */
+export const PAUSE_PASSWORD_CHANGE = 'PASSWORD_CHANGE_REQUIRED';
+
+/** Ly do lam DUNG ca hang doi (khong goi may chu them cho toi khi phien dung duoc). */
+export function isPauseReason(reason: string | undefined): boolean {
+  return reason === PAUSE_UNAUTHENTICATED || reason === PAUSE_PASSWORD_CHANGE;
+}
+
 export function outcomeOf(error: unknown): SendOutcome {
   if (!(error instanceof ApiError)) {
     return { kind: 'RETRY', reason: error instanceof Error ? error.message : 'NETWORK_ERROR' };
   }
   if (error.kind === 'UNAUTHENTICATED') return { kind: 'RETRY', reason: PAUSE_UNAUTHENTICATED };
+  if (error.reason === PAUSE_PASSWORD_CHANGE)
+    return { kind: 'RETRY', reason: PAUSE_PASSWORD_CHANGE };
   if (error.isRetryable) return { kind: 'RETRY', reason: error.message };
   // Tep chua qua buoc quet -> chua dung duoc, KHONG phai bi tu choi.
   if (error.reason === 'DOCUMENT_FILE_NOT_ACTIVE') return { kind: 'RETRY', reason: error.message };

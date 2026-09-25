@@ -50,6 +50,8 @@ const REASON_TEXT: Record<string, string> = {
   OUTBOX_ATTACHMENT_MISSING: 'Tệp đính kèm không còn trên máy.',
   WAITING_FOR_EARLIER_ACTION: 'Đợi việc bấm trước của cùng chuyến gửi xong — giữ đúng thứ tự.',
   UNAUTHENTICATED: 'Phiên đăng nhập hết hạn — đăng nhập lại để gửi tiếp.',
+  PASSWORD_CHANGE_REQUIRED:
+    'Tài khoản cần đổi mật khẩu trước — đổi mật khẩu rồi đăng nhập lại, việc trên máy sẽ tự gửi tiếp.',
 };
 
 export function reasonText(reason: string | null | undefined, fallback?: string | null): string {

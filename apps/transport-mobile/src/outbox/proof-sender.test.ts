@@ -1,6 +1,6 @@
 import type { OutboxItem, SendOutcome } from '@netviet/driver-outbox';
 import { describe, expect, it } from 'vitest';
-import { PAUSE_UNAUTHENTICATED } from './field-actions';
+import { PAUSE_PASSWORD_CHANGE, PAUSE_UNAUTHENTICATED } from './field-actions';
 import { HELD_BEHIND_EARLIER, orderingKeys, sendProofBatch } from './proof-sender';
 
 function item(id: string, payload: Record<string, unknown>, minute = 0): OutboxItem {
@@ -98,6 +98,15 @@ describe('sendProofBatch — FIFO theo vong chay/chang', () => {
 
     expect(calls).toEqual(['a']);
     expect(outcomes[1]).toEqual({ kind: 'RETRY', reason: PAUSE_UNAUTHENTICATED });
+  });
+
+  it('403 PASSWORD_CHANGE_REQUIRED -> dung ca lo, viec con lai mang dung ly do do', async () => {
+    const { calls, execute } = executor({ a: { kind: 'RETRY', reason: PAUSE_PASSWORD_CHANGE } });
+
+    const outcomes = await sendProofBatch([arrival('a'), arrival('b', 'r2', 'l2', 1)], execute);
+
+    expect(calls).toEqual(['a']);
+    expect(outcomes[1]).toEqual({ kind: 'RETRY', reason: PAUSE_PASSWORD_CHANGE });
   });
 
   it('bi tu choi (REJECTED) khong giu viec sau — viec sau tu nhan phan quyet cua no', async () => {
