@@ -1,6 +1,13 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { AuditLogService } from '../../audit/audit-log.service.js';
+import { UserRepository } from '../../auth/user.repository.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
+import {
+  TRANSPORT_ACCOUNT_LINK_DECISIONS,
+  type AccountLinkErrorReason,
+  type AccountLinkReason,
+} from '../fleet/account-link-decisions.js';
+import { accountLinkError } from '../fleet/account-link-errors.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   TRANSPORT_ASSET_OWNERSHIP_DECISIONS,
@@ -60,6 +67,12 @@ export class AssetOwnershipService {
     private readonly vehicles: VehicleOwnershipPort,
     private readonly audit: AuditLogService,
     @Optional() private readonly telemetry?: TelemetryService,
+    /**
+     * `#395` — kiem tai khoan dinh noi CO THAT va DANG HOAT DONG. Cuoi va tuy chon O TANG KIEU de
+     * cac spec dung lop theo vi tri khong phai doi; KHONG `@Optional()` o tang DI: `AuthModule`
+     * (`foundation`, `@Global`) luon co, va thieu no thi boot phai CHET chu khong am tham bo kiem.
+     */
+    private readonly users?: UserRepository,
   ) {}
 
   /* ------------------------------ Ben huu quan ------------------------------ */
@@ -119,29 +132,68 @@ export class AssetOwnershipService {
     authUserId: string | null,
     actor: string,
   ): Promise<AssetStakeholder> {
-    const before = await this.requireStakeholder(id);
-    if (authUserId) {
-      const holder = await this.repository.findStakeholderIdHoldingAccount(authUserId);
-      if (holder && holder !== id) {
-        throw TransportDomainError.conflict(
-          'ASSET_STAKEHOLDER_ACCOUNT_TAKEN',
-          'Tai khoan nay da noi voi mot ho so ben huu quan khac — go cau noi cu truoc',
-        );
+    const run = async (): Promise<AssetStakeholder> => {
+      const before = await this.requireStakeholder(id);
+      if (authUserId) await this.requireLinkableAccount(id, authUserId);
+      const after = await this.repository.setStakeholderAccount(id, authUserId);
+      if (!after) throw this.stakeholderNotFound(id);
+      await this.audit.append({
+        actor,
+        action: authUserId
+          ? 'transport.asset_stakeholder.account_link'
+          : 'transport.asset_stakeholder.account_unlink',
+        entityType: 'TransportAssetStakeholder',
+        entityId: id,
+        before,
+        after,
+      });
+      this.decideLink('allowed', authUserId ? 'ACCOUNT_LINKED' : 'ACCOUNT_UNLINKED', {
+        stakeholderId: id,
+      });
+      return after;
+    };
+    return this.telemetry ? this.telemetry.step('stakeholder.account_link', run) : run();
+  }
+
+  /**
+   * Tai khoan dinh noi: CO THAT o nen tang, DANG HOAT DONG (`#395`), va chua thuoc ho so ben gop
+   * von khac. Khong kiem vai: mot chu xe co the la bat ky ai — ke ca mot Ke toan co gop von.
+   */
+  private async requireLinkableAccount(stakeholderId: string, authUserId: string): Promise<void> {
+    if (this.users) {
+      const user = await this.users.findById(authUserId);
+      if (!user) this.denyLink('ACCOUNT_LINK_USER_NOT_FOUND', { stakeholderId, authUserId });
+      if (user.disabledAt !== null) {
+        this.denyLink('ACCOUNT_LINK_USER_DISABLED', { stakeholderId, authUserId });
       }
     }
-    const after = await this.repository.setStakeholderAccount(id, authUserId);
-    if (!after) throw this.stakeholderNotFound(id);
-    await this.audit.append({
-      actor,
-      action: authUserId
-        ? 'transport.asset_stakeholder.account_link'
-        : 'transport.asset_stakeholder.account_unlink',
-      entityType: 'TransportAssetStakeholder',
-      entityId: id,
-      before,
-      after,
+    const holder = await this.repository.findStakeholderIdHoldingAccount(authUserId);
+    if (holder && holder !== stakeholderId) {
+      this.denyLink('ASSET_STAKEHOLDER_ACCOUNT_TAKEN', {
+        stakeholderId,
+        authUserId,
+        holderStakeholderId: holder,
+      });
+    }
+  }
+
+  private denyLink(reason: AccountLinkErrorReason, detail: Record<string, unknown>): never {
+    this.decideLink('denied', reason, detail);
+    throw accountLinkError(reason);
+  }
+
+  private decideLink(
+    outcome: 'allowed' | 'denied',
+    reason: AccountLinkReason,
+    detail: Record<string, unknown>,
+  ): void {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_ACCOUNT_LINK_DECISIONS,
+      point: 'stakeholder.account_link',
+      outcome,
+      reason,
+      detail,
     });
-    return after;
   }
 
   /* ------------------------------ So dang ky ------------------------------ */

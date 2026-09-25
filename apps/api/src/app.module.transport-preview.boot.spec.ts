@@ -64,6 +64,8 @@ describe('transport-preview process boot contract', () => {
       const { TransportPlaceSearchPort } = await import('./src/transport/places/place-search.port.ts');
       const { TransportPlaceService } = await import('./src/transport/places/place.service.ts');
       const { KnownPlacesFacts } = await import('./src/transport/places/known-places.port.ts');
+      const { DriverAccountLinkService } = await import('./src/transport/fleet/driver-account-link.service.ts');
+      const { PermissionDomainRegistry } = await import('./src/auth/access/permission-domain.registry.ts');
 
       const capabilities = loadTenantConfig().capabilities;
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
@@ -89,6 +91,12 @@ describe('transport-preview process boot contract', () => {
         placeSearchPort: has(TransportPlaceSearchPort),
         knownPlacesFacts: has(KnownPlacesFacts),
         knownPlacesAvailable: knownPlaces.available,
+        // #395 S2: route noi tai khoan lai xe (controller o goc tiem dich vu nay) va mien phan quyen
+        // \`transport\` doc duoc lien ket tai khoan tren CHINH doi hinh se deploy.
+        accountLinkService: has(DriverAccountLinkService),
+        transportDomainReadsLinks:
+          typeof context.get(PermissionDomainRegistry, { strict: false }).get('transport')?.describeScopes ===
+          'function',
       };
       await context.close();
       process.stdout.write('<<PREVIEW_BOOT_PROOF>>' + JSON.stringify(proof));
@@ -123,6 +131,8 @@ describe('transport-preview process boot contract', () => {
       expect(parsed.placeSearchPort).toBe(true);
       expect(parsed.knownPlacesFacts).toBe(true);
       expect(parsed.knownPlacesAvailable).toBe(true);
+      expect(parsed.accountLinkService).toBe(true);
+      expect(parsed.transportDomainReadsLinks).toBe(true);
       // Goi that co 11 capability; con so chi de bai noi ra rang no dang boot MOT DOI HINH DAY DU,
       // khong phai mot goi rong tinh co xanh.
       expect(parsed.capabilityCount).toBeGreaterThanOrEqual(10);

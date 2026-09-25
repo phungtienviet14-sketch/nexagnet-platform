@@ -15,6 +15,10 @@ import { isInternalServiceRequest } from '../auth/internal-service.guard.js';
 import { DOMAIN_ACTION_GATE_KEY } from '../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../auth/session.types.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
+import {
+  ACTION_NOT_PERMITTED_MESSAGE,
+  type TransportAccessErrorReason,
+} from './permissions/transport-access-errors.js';
 import { canPerformTransportAction } from './permissions/transport-permission-rules.js';
 import { isStakeholderScopeAction, type TransportAction } from './transport-actions.js';
 import {
@@ -52,9 +56,7 @@ export class TransportActionGuard implements CanActivate {
     if (isInternalServiceRequest(request)) return true;
 
     const user = request.authUser;
-    if (!user) {
-      throw new ForbiddenException(`Ban khong co quyen thuc hien thao tac nay (${action})`);
-    }
+    if (!user) throw actionNotPermitted(action);
 
     /**
      * PHAM VI BEN HUU QUAN di qua tang vai — va do KHONG phai mot lo hong.
@@ -74,11 +76,53 @@ export class TransportActionGuard implements CanActivate {
      */
     if (isStakeholderScopeAction(action)) return true;
 
-    if (!canPerformTransportAction(user, action)) {
-      throw new ForbiddenException(`Ban khong co quyen thuc hien thao tac nay (${action})`);
-    }
+    // Vai khoi diem + quyen rieng cua CHINH tai khoan nay, doc lai tu DB o moi yeu cau
+    // (`validateSession`) — doi quyen co hieu luc ngay yeu cau ke tiep, khong phai dang nhap lai.
+    if (!canPerformTransportAction(user, action)) throw actionNotPermitted(action);
     return true;
   }
+}
+
+/**
+ * Than `403` cua cong hanh dong — cung hinh voi `transportErrorBody` (`statusCode`, `message`,
+ * `error`, `reason`) cong them `detail.action`.
+ *
+ * `message` la cau cho NGUOI DUNG (co dau, khong ten ma); ma hanh dong nam o `detail.action` cho
+ * man hinh va nguoi truc. Truoc `#395` ma hanh dong nam trong chinh cau chu — man hinh phai in
+ * nguyen van mot chuoi nua Anh nua Viet khong dau.
+ */
+export interface TransportActionDeniedBody {
+  readonly statusCode: 403;
+  readonly message: string;
+  readonly error: 'Forbidden';
+  readonly reason: TransportAccessErrorReason;
+  readonly detail: { readonly action: TransportAction };
+}
+
+export function actionNotPermitted(action: TransportAction): ForbiddenException {
+  const body: TransportActionDeniedBody = {
+    statusCode: 403,
+    message: ACTION_NOT_PERMITTED_MESSAGE,
+    error: 'Forbidden',
+    reason: 'ACTION_NOT_PERMITTED',
+    detail: { action },
+  };
+  return new ForbiddenException(body);
+}
+
+/**
+ * Nguoi dang goi co lam duoc `action` khong — cho cac cho kiem quyen TRONG MA (khong qua guard),
+ * vd che toa do trong mot khung nhin ma route van mo cho nguoi khong co quyen doc duong di.
+ *
+ * Cung dieu kien mo dau voi `TransportActionGuard`: o che do khong-phien thi khong co danh tinh de
+ * hoi va toan bo ung dung von khong xac thuc — lech dieu kien voi cong kia se tao ra mot che do chay
+ * ma mot nua so cong mo mot nua dong. Con o che do phien, cau tra loi la CUNG MOT cau tra loi voi
+ * guard: `canPerformTransportAction` tren vai khoi diem + quyen rieng cua tai khoan (`#395`).
+ */
+export function requestCanPerform(request: AuthenticatedRequest, action: TransportAction): boolean {
+  if (loadFoundationEnv().AUTH_MODE !== 'session') return true;
+  const user = request.authUser;
+  return user !== undefined && canPerformTransportAction(user, action);
 }
 
 /**

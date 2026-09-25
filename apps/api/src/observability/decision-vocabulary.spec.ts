@@ -6,6 +6,7 @@ import { ACCOUNT_DECISIONS } from '../auth/account-decisions.js';
 import { CHANNEL_DECISIONS } from '../channels/channel-decisions.js';
 import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
 import { TRANSPORT_COSTING_DECISIONS } from '../transport/costing/costing-decisions.js';
+import { TRANSPORT_ACCOUNT_LINK_DECISIONS } from '../transport/fleet/account-link-decisions.js';
 import { TRANSPORT_PLACE_ADMIN_DECISIONS } from '../transport/places/place-admin-decisions.js';
 import { TRANSPORT_DECISIONS } from '../transport/transport-decisions.js';
 import { TURN_DECISIONS } from '../turns/turn-decisions.js';
@@ -40,6 +41,7 @@ describe('tu vung quyet dinh: nen tang giu KHUON, capability giu TU NGU', () => 
     expect(TRANSPORT_COSTING_DECISIONS.owner).toBe('transport-costing');
     expect(ACCOUNT_DECISIONS.owner).toBe('platform-accounts');
     expect(TRANSPORT_PLACE_ADMIN_DECISIONS.owner).toBe('transport-places-admin');
+    expect(TRANSPORT_ACCOUNT_LINK_DECISIONS.owner).toBe('transport-core');
   });
 
   /**
@@ -144,6 +146,10 @@ describe('moi diem quyet dinh deu co nguoi phat that', () => {
     ...TRANSPORT_DECISIONS.points.map((point) => [TRANSPORT_DECISIONS.owner, point] as const),
     ...TRANSPORT_COSTING_DECISIONS.points.map(
       (point) => [TRANSPORT_COSTING_DECISIONS.owner, point] as const,
+    ),
+    /* `#395` S2 — noi tai khoan voi ho so lai xe / ben gop von: co diem phat ngay tu lan dau. */
+    ...TRANSPORT_ACCOUNT_LINK_DECISIONS.points.map(
+      (point) => [TRANSPORT_ACCOUNT_LINK_DECISIONS.owner, point] as const,
     ),
     /*
      * `ACCOUNT_DECISIONS` (`account.access`) va `TRANSPORT_PLACE_ADMIN_DECISIONS` (`place.write`)
