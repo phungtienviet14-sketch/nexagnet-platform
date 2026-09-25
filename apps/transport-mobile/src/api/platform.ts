@@ -57,12 +57,18 @@ export interface AccessView {
   readonly actions: readonly string[];
 }
 
-/** `null` = may chu chua co route nay (khong phai "khong co quyen"). */
+/**
+ * `null` = may chu chua co route nay (khong phai "khong co quyen"). Ban API cu tra 404 JSON mac dinh
+ * cua Nest (`Cannot GET /transport/access`, KHONG co `reason`); 404 CO `reason` la phan quyet that.
+ */
 export async function fetchAccess(http: HttpClient): Promise<AccessView | null> {
   try {
     return await http.get<AccessView>('/transport/access');
   } catch (error) {
-    if (error instanceof ApiError && error.kind === 'NOT_MOUNTED') return null;
+    if (!(error instanceof ApiError)) throw error;
+    if (error.kind === 'NOT_MOUNTED' || (error.status === 404 && error.reason === null)) {
+      return null;
+    }
     throw error;
   }
 }
