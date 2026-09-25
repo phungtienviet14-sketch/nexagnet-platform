@@ -51,7 +51,7 @@ export function FuelConsumptionPicker({
   const [to, setTo] = useState(initial.to);
   const [problem, setProblem] = useState<string | null>(null);
 
-  if (!canPerform(navigation.role, 'transport.fuel.entry.read')) return null;
+  if (!canPerform(navigation, 'transport.fuel.entry.read')) return null;
 
   return (
     <CommandPanel

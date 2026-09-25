@@ -64,7 +64,8 @@ test.describe('#379 — be mat tao don', () => {
     await expect(map).not.toHaveClass(/tx-map\b/);
     await expect(page.getByRole('button', { name: 'Bãi xe: Bãi xe Hà Nội' })).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Nhà máy / kho: Nhà máy thép Đình Vũ' }),
+      // `#395` §2.1 — nhan loai cung voi man "Địa điểm vận hành".
+      page.getByRole('button', { name: 'Nhà máy / kho đối tác: Nhà máy thép Đình Vũ' }),
     ).toBeVisible();
 
     await expect(page.getByRole('radio', { name: 'Lấy hàng' })).toBeChecked();
@@ -127,7 +128,7 @@ test.describe('#379 — be mat tao don', () => {
     await expect(ticket).toContainText('Khu công nghiệp Đình Vũ');
     await expect(ticket).toContainText('Kết quả tìm kiếm');
     await expect(ticket).toContainText('Kho Nhựa Tân Phú Hưng');
-    await expect(ticket).toContainText('Nhà máy / kho của Công ty TNHH Nhựa Tân Phú Hưng');
+    await expect(ticket).toContainText('Nhà máy / kho đối tác của Công ty TNHH Nhựa Tân Phú Hưng');
     await expect(ticket).toContainText('Đường chim bay ≈');
     await expect(
       page.getByRole('button', { name: /Điểm lấy hàng: Khu công nghiệp/ }),
@@ -233,6 +234,9 @@ test.describe('#379 — be mat tao don', () => {
     await expectNoRequest(page, isReverseRequest);
     expect(world.reverseBodies).toEqual([]);
     await expect(page.getByLabel('Tên trên đơn (điểm lấy hàng)')).toHaveValue('Bãi xe Hà Nội');
+    // `#395` §2.3 — ten BAI XE khoa: khau lap ke hoach nhan ra bai bang dung ten nay.
+    await expect(page.getByLabel('Tên trên đơn (điểm lấy hàng)')).toHaveAttribute('readonly', '');
+    await expect(page.getByText('Tên bãi xe lấy từ Địa điểm vận hành.')).toBeVisible();
     await expect(page.getByLabel('Tên trên đơn (điểm giao hàng)')).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Giao hàng' })).toBeChecked();
 

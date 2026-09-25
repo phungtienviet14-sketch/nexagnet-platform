@@ -1,8 +1,8 @@
 'use client';
 
+import type { TransportViewerInput } from '../transport-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { AuthRole } from '../../../lib/auth';
 import { ErrorState, LoadingState } from '../components/SectionState';
 import { transportApi } from '../transport-api';
 import { toFuelCostAttributionModel } from '../workspace/fuel-cost-attribution';
@@ -16,10 +16,10 @@ import { toFuelCostAttributionModel } from '../workspace/fuel-cost-attribution';
  */
 export function FuelCostAttributionPanel({
   entryId,
-  role,
+  viewer,
 }: {
   readonly entryId: string;
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -38,7 +38,7 @@ export function FuelCostAttributionPanel({
   const [reason, setReason] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
 
-  const model = view.data === undefined ? null : toFuelCostAttributionModel(view.data, role);
+  const model = view.data === undefined ? null : toFuelCostAttributionModel(view.data, viewer);
 
   const settle = (next: Awaited<ReturnType<typeof transportApi.fuel.costAttribution>>) => {
     queryClient.setQueryData(queryKey, next);

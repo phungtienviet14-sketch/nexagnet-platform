@@ -73,8 +73,8 @@ export function PayrollView() {
   const payslipRows = toPayslipRows(payslips.data ?? [], directory);
   const detailModel = toPayslipDetail(detail.data ?? null, directory);
 
-  const canApprove = canPerform(navigation.role, 'transport.payslip.approve');
-  const canPay = canPerform(navigation.role, 'transport.payslip.pay');
+  const canApprove = canPerform(navigation, 'transport.payslip.approve');
+  const canPay = canPerform(navigation, 'transport.payslip.pay');
 
   const mutation = useMutation({
     mutationFn: (input: { readonly id: string; readonly action: 'approve' | 'pay' }) =>
@@ -111,7 +111,7 @@ export function PayrollView() {
         <h2>Kỳ lương</h2>
         <PayrollPeriodCommands
           periods={periods.data ?? []}
-          role={navigation.role}
+          viewer={navigation}
           onChanged={refreshPayroll}
         />
         {periodRows.length === 0 && !periods.isLoading ? (
@@ -149,7 +149,7 @@ export function PayrollView() {
             periodStatus={
               (periods.data ?? []).find((row) => row.id === periodId)?.status ?? 'CLOSED'
             }
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshPayroll}
           />
           {runs.isLoading ? <LoadingState label="Đang đọc các lần chạy…" /> : null}
@@ -291,7 +291,7 @@ export function PayrollView() {
           <PayslipCorrection
             payslipId={detailModel.row.id}
             canCorrect={detailModel.row.canCorrect}
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshPayroll}
           />
           <div className="tx-cards">

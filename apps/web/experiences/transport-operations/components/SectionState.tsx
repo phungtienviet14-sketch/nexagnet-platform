@@ -92,6 +92,8 @@ export function ConfirmAction({
   onCancel,
   isDestructive = false,
   isBusy = false,
+  confirmDisabled = false,
+  children,
 }: {
   readonly open: boolean;
   readonly title: string;
@@ -105,6 +107,10 @@ export function ConfirmAction({
   readonly onCancel: () => void;
   readonly isDestructive?: boolean;
   readonly isBusy?: boolean;
+  /** `#395` — dieu kien rieng cua nguoi goi (vd da go cau xac nhan) truoc khi cho xac nhan. */
+  readonly confirmDisabled?: boolean;
+  /** `#395` — noi dung them giua cau mo ta va o ly do: canh bao, danh sach viec bi anh huong. */
+  readonly children?: ReactNode;
 }) {
   if (!open) return null;
   const needsReason = reasonLabel !== undefined;
@@ -115,6 +121,7 @@ export function ConfirmAction({
       <div className="tx-confirm__panel">
         <h2 className="tx-confirm__title">{title}</h2>
         {detail == null ? null : <p className="tx-confirm__detail">{detail}</p>}
+        {children}
         {needsReason ? (
           <label className="tx-field">
             <span>{reasonLabel}</span>
@@ -134,7 +141,7 @@ export function ConfirmAction({
             type="button"
             className={isDestructive ? 'tx-btn tx-btn--stop' : 'tx-btn tx-btn--go'}
             onClick={onConfirm}
-            disabled={isBusy || !reasonReady}
+            disabled={isBusy || !reasonReady || confirmDisabled}
           >
             {isBusy ? 'Đang gửi…' : confirmLabel}
           </button>

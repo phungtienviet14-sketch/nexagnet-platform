@@ -1,6 +1,12 @@
 import type { CapabilityId } from '@netviet/tenant';
 import type { AuthRole } from '../../lib/auth';
-import { canPerform, type TransportAction } from './transport-actions';
+import {
+  canPerform,
+  hasPlatformPermission,
+  type PlatformPermission,
+  type TransportAction,
+  type TransportViewer,
+} from './transport-actions';
 
 /**
  * KIEN TRUC THONG TIN cua be mat van hanh van tai — mot HOP DONG kiem tra duoc bang ham thuan.
@@ -54,10 +60,12 @@ export type TransportSectionId =
   | 'routes'
   | 'fleet-dashboard'
   | 'executive'
-  | 'exports';
+  | 'exports'
+  | 'admin-accounts'
+  | 'admin-places';
 
 export type TransportSectionGroupId =
-  'root' | 'dispatch' | 'receivable' | 'payable' | 'driver-money' | 'reports' | 'assets';
+  'root' | 'dispatch' | 'receivable' | 'payable' | 'driver-money' | 'reports' | 'assets' | 'admin';
 
 export interface TransportSectionGroup {
   readonly id: TransportSectionGroupId;
@@ -95,6 +103,11 @@ export const TRANSPORT_SECTION_GROUPS = [
   { id: 'driver-money', label: 'QUỸ & LƯƠNG LÁI XE' },
   { id: 'reports', label: 'TỔNG HỢP & HIỆU QUẢ' },
   { id: 'assets', label: 'TÀI SẢN' },
+  /*
+   * `#395` — QUAN TRI o CUOI CUNG: tai khoan, quyen va dia diem van hanh la viec Giam doc lam it khi,
+   * khong phai viec hang ngay; no khong duoc chen giua cac nhom tien ke toan doc moi sang.
+   */
+  { id: 'admin', label: 'QUẢN TRỊ' },
 ] as const satisfies readonly TransportSectionGroup[];
 
 export interface TransportSection {
@@ -103,7 +116,17 @@ export interface TransportSection {
   readonly group: TransportSectionGroupId;
   readonly summary: string;
   readonly requiredCapabilities: readonly CapabilityId[];
-  readonly requiredAction: TransportAction;
+  /**
+   * TRUC QUYEN — DUNG MOT trong hai (`#395`; bai spec khoa dieu do):
+   *
+   *   · `requiredAction` — mot hanh dong cua mien van tai (`GD-22`);
+   *   · `requiredPlatformPermission` — mot quyen cua NEN TANG (vd quan tri tai khoan), thu khong
+   *     thuoc mien nao nen khong the la mot `TransportAction`.
+   *
+   * Ca hai cung luat voi `canPerform(null)`: chua biet nguoi xem la ai thi HIEN.
+   */
+  readonly requiredAction?: TransportAction;
+  readonly requiredPlatformPermission?: PlatformPermission;
   /**
    * MUC DA CO DUONG THAY THE — truc thu BA, va no KHONG phai mot truc quyen (#339).
    *
@@ -480,6 +503,32 @@ export const TRANSPORT_SECTIONS = [
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.asset_ownership.read',
   },
+  /*
+   * `#395` — QUAN TRI. Hai muc, hai truc quyen KHAC NHAU va do la co y:
+   *
+   *   · `admin-accounts` doi quyen NEN TANG `platform.accounts.manage` — chi Giam doc co, khong cap
+   *     duoc bang quyen rieng (nguoi cap duoc quyen thi tu cap duoc moi quyen cho minh);
+   *   · `admin-places` doi `transport.geofence.manage` — hanh dong SUA hang rao, thu Ke toan KHONG
+   *     co (hang rao cham LUC DOC, sua no doi phan quyet cua chung cu cu). Nen danh muc Ke toan van
+   *     bang dung danh muc Giam doc TRU hai muc quan tri.
+   */
+  {
+    id: 'admin-accounts',
+    label: 'Tài khoản & quyền',
+    group: 'admin',
+    summary: 'Ai đăng nhập được, mỗi người làm được gì, mật khẩu tạm và khoá tài khoản.',
+    requiredCapabilities: ['transport-core'],
+    requiredPlatformPermission: 'platform.accounts.manage',
+  },
+  {
+    id: 'admin-places',
+    label: 'Địa điểm vận hành',
+    group: 'admin',
+    summary:
+      'Bãi xe, kho khách hàng và nhà máy đối tác — một nguồn cho tạo đơn, lập kế hoạch và hiện trường.',
+    requiredCapabilities: ['transport-core', 'transport-proof'],
+    requiredAction: 'transport.geofence.manage',
+  },
 ] as const satisfies readonly TransportSection[];
 
 const DEFAULT_SECTION: TransportSectionId = 'overview';
@@ -591,9 +640,14 @@ const DEFAULT_DRIVER_SCREEN: DriverScreenId = 'home';
  * `role: null` nghia la CHUA BIET vai — `AuthGate` con dang doi `/auth/me`, hoac tenant chay che do
  * khong phien. Xem `transport-actions.canPerform`: khi do khong duoc an bot gi.
  */
-export interface NavigationInput {
+export interface NavigationInput extends TransportViewer {
   readonly capabilities: readonly CapabilityId[];
   readonly role: AuthRole | null;
+  /**
+   * Tap quyen HIEU LUC tu `/auth/me` (`#395`). Co thi MOI cong quyen cua man hinh doc no; thieu
+   * (may chu cu, bai test cu) thi roi ve ban guong theo vai. Xem `transport-actions.TransportViewer`.
+   */
+  readonly permissions?: ReadonlySet<string> | null;
   readonly blockedCapabilityKeys?: readonly string[];
 }
 
@@ -610,7 +664,19 @@ export const isSectionEnabled = (section: TransportSection, input: NavigationInp
   !section.requiredCapabilities.some((capability) =>
     input.blockedCapabilityKeys?.includes(capability),
   ) &&
-  canPerform(input.role, section.requiredAction);
+  sectionPermitted(section, input);
+
+/**
+ * Truc quyen cua mot muc — DUNG MOT trong hai (xem `TransportSection.requiredAction`). Muc khai
+ * thieu ca hai la muc SAI, va o day no bi DONG (fail-closed); bai spec bat no truoc khi toi day.
+ */
+export function sectionPermitted(section: TransportSection, viewer: TransportViewer): boolean {
+  if (section.requiredAction !== undefined) return canPerform(viewer, section.requiredAction);
+  if (section.requiredPlatformPermission !== undefined) {
+    return hasPlatformPermission(viewer, section.requiredPlatformPermission);
+  }
+  return false;
+}
 
 export const findSection = (id: string): TransportSection | undefined =>
   TRANSPORT_SECTIONS.find((section) => section.id === id);
@@ -731,7 +797,7 @@ export const filterNavigationGroups = (
 
 export const isDriverScreenEnabled = (screen: DriverScreen, input: NavigationInput): boolean =>
   capabilitiesSatisfied(screen.requiredCapabilities, input.capabilities) &&
-  canPerform(input.role, screen.requiredAction);
+  canPerform(input, screen.requiredAction);
 
 export const findDriverScreen = (id: string): DriverScreen | undefined =>
   DRIVER_SCREENS.find((screen) => screen.id === id);
@@ -823,13 +889,21 @@ export interface ResolvedNavigation {
   readonly tripFilter: TripFilterQuery;
 }
 
+/**
+ * Muc khong mo duoc roi ve MAC DINH — va neu chinh muc mac dinh cung khong mo duoc (`#395`: mot
+ * `MANAGER` chi duoc cap nhom "Đội xe & lái xe" khong co `Tổng quan`), roi ve muc DAU TIEN nguoi do
+ * mo duoc. Khong lam vay thi dia chi `/` cua ho la mot man hinh ho khong co quyen.
+ */
 export const resolveSection = (
   requested: string | null,
   input: NavigationInput,
-): TransportSectionId =>
-  requested !== null && canNavigateTo(requested, input)
-    ? (requested as TransportSectionId)
-    : DEFAULT_SECTION;
+): TransportSectionId => {
+  if (requested !== null && canNavigateTo(requested, input)) {
+    return requested as TransportSectionId;
+  }
+  if (canNavigateTo(DEFAULT_SECTION, input)) return DEFAULT_SECTION;
+  return visibleSections(input)[0]?.id ?? DEFAULT_SECTION;
+};
 
 export const resolveDriverScreen = (
   requested: string | null,

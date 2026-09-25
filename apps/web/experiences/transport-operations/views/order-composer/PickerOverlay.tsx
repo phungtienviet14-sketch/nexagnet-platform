@@ -197,13 +197,13 @@ export function MapLegend(): React.ReactElement {
         <span className="tx-pin tx-pin--known tx-pin--site" aria-hidden="true">
           <span className="tx-pin__mark" />
         </span>
-        Nhà máy / kho
+        Nhà máy / kho đối tác
       </li>
       <li>
         <span className="tx-pin tx-pin--known tx-pin--customer" aria-hidden="true">
           <span className="tx-pin__mark" />
         </span>
-        Kho khách hàng
+        Địa điểm khách hàng
       </li>
       <li>
         <span className="tx-pin tx-pin--result" aria-hidden="true">

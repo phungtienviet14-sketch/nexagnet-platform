@@ -218,7 +218,7 @@ export function MovementView() {
   }
 
   const visibleOrders = filterOrders(orders.data, filter, customerNameOf);
-  const canCreate = canPerform(navigation.role, 'transport.order.manage');
+  const canCreate = canPerform(navigation, 'transport.order.manage');
   const openState = openOrderFilterState(orders.data, visibleOrders, openOrderId);
   const activePlan = orderPlans.data?.find((plan) => plan.cancelledAt === null) ?? null;
   /* Bo loc giau don dang mo: chi tiet cua no AN theo (co mot cau + nut bo loc), khong lang le o lai. */

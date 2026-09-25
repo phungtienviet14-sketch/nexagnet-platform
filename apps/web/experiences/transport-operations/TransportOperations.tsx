@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { AccountsAdminView } from './admin/AccountsAdminView';
+import { PlacesAdminView } from './admin/PlacesAdminView';
 import { ErrorState } from './components/SectionState';
 import { DriverShell, roleLabelOf, TransportShell } from './components/TransportShell';
 import { DriverSurface } from './driver/DriverSurface';
@@ -201,7 +203,7 @@ export function TransportOperations() {
         activeScreen={state.screen}
         onNavigate={openDriverScreen}
         onLeave={
-          hasOperationsScope(navigation.role)
+          hasOperationsScope(navigation)
             ? () => goTo({ surface: 'operations', section: 'overview' })
             : null
         }
@@ -224,7 +226,7 @@ export function TransportOperations() {
       driverScreens={driverScreens}
       onNavigate={(section) => goTo({ section })}
     >
-      {groups.length === 0 && !hasDriverScope(navigation.role) ? (
+      {groups.length === 0 && !hasDriverScope(navigation) ? (
         /*
          * `TX-08` (#242 E3) — MOT VAI KHONG CO PHAM VI VAN HANH VAN CO THE LA CO DONG.
          *
@@ -239,7 +241,7 @@ export function TransportOperations() {
         <StakeholderVehiclesView />
       ) : groups.length === 0 ? (
         <ErrorState
-          message={operationsEmptyMessage(navigation.role)}
+          message={operationsEmptyMessage(navigation)}
           // Cau chu noi "Hãy dùng đường 'Mở màn hình lái xe'" — nen duong do phai o NGAY DAY.
           // Trong thanh ben thi o 1440px no co that, con o 390px thanh ben da gap lai, va 390px
           // moi la thiet bi cua lai xe.
@@ -344,5 +346,12 @@ function SectionBody({
     // RIENG: xem duoc bang luong khong nhat thiet xem duoc lich su chi tien mat.
     case 'driver-settlement':
       return <DriverSettlementView />;
+    // `#395` — QUAN TRI. Tai khoan nhan `selection` la TEN DANG NHAP (dinh danh nguoi ta doc duoc,
+    // dung quy uoc `SELECTION_QUERY_PARAM`); dia diem giu lua chon trong man (ma dia diem la `id`
+    // ky thuat, khong len dia chi).
+    case 'admin-accounts':
+      return <AccountsAdminView selection={selection} onSelect={onSelect} />;
+    case 'admin-places':
+      return <PlacesAdminView />;
   }
 }
