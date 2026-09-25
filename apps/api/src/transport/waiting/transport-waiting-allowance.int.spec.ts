@@ -16,7 +16,7 @@ import {
 import { WaitingAllowanceService } from './allowance.service.js';
 import { PrismaWaitingAllowanceRepository } from './prisma-allowance.repository.js';
 import { PrismaWaitingSessionRepository } from './prisma-waiting.repository.js';
-import { withProtectedTriggersDisabled } from '../__tests__/protected-trigger-cleanup.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 
 /**
  * PHU CAP CHO tren POSTGRES THAT — `#279` O6/O13.

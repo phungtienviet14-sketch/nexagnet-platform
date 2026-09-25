@@ -13,7 +13,7 @@ import { TransportDomainError } from '../transport.errors.js';
 import { PrismaWaitingSessionRepository } from './prisma-waiting.repository.js';
 import { WAITING_CLIENT_EVENT, WAITING_OPEN_PER_LEG } from './waiting.repository.js';
 import { WaitingSessionService } from './waiting.service.js';
-import { withProtectedTriggersDisabled } from '../__tests__/protected-trigger-cleanup.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 
 /**
  * PHIEN CHO NGUOI NHAN tren POSTGRES THAT — `#279` O5/O13.

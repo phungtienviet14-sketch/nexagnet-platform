@@ -30,7 +30,7 @@ import { WaitingRunClosureBlockerSource } from './waiting-run-closure-blocker.so
 import type { CreateWaitingSessionInput, WaitingSessionRepository } from './waiting.repository.js';
 import { WaitingSessionService } from './waiting.service.js';
 import type { DeliveryWaitingSession } from './waiting.types.js';
-import { withProtectedTriggersDisabled } from '../__tests__/protected-trigger-cleanup.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 
 /**
  * CHANG DA KET THUC KHONG MO PHIEN CHO MOI — `#358`, tren POSTGRES THAT.

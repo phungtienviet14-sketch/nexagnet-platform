@@ -23,7 +23,7 @@ import { PlanningService } from './planning.service.js';
 import type { TransportPlanningPolicy } from './planning.types.js';
 import { PrismaRunPlanRepository } from './prisma-planning.repository.js';
 import { RunClosureService } from './run-closure.service.js';
-import { withProtectedTriggersDisabled } from '../__tests__/protected-trigger-cleanup.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 
 /**
  * DONG VONG CHAY tren POSTGRES THAT — `#293` Lane R.

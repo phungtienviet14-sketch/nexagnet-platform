@@ -26,7 +26,7 @@ import type { CheckpointRepository, CreateCheckpointInput } from './checkpoint.r
 import { CheckpointService } from './checkpoint.service.js';
 import type { RunCheckpoint, RunCheckpointType } from './checkpoint.types.js';
 import { PrismaCheckpointRepository } from './prisma-checkpoint.repository.js';
-import { withProtectedTriggersDisabled } from '../__tests__/protected-trigger-cleanup.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 
 /**
  * CHANG DA KET THUC KHONG NHAN MOC MOI — `#354`, tren POSTGRES THAT.

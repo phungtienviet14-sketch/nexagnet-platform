@@ -6,6 +6,7 @@ import { buildPlatformFileKey } from './file-policy.js';
 import { PLATFORM_FILE_ACTIVE_LINK } from './file-storage-conflict.js';
 import { PrismaFileRepository } from './prisma-file.repository.js';
 import type { CreateFileInput } from './file.repository.js';
+import { withProtectedTriggersDisabled } from '../it-trigger-cleanup.js';
 
 /**
  * NEN TANG TEP tren POSTGRES THAT — `#287` P12 (*"Use real Postgres for DB constraints/concurrency
@@ -82,20 +83,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('nen tang tep tren Postgres th
    * thiet, thi do la dau hieu trigger da bi go.
    */
   const cleanup = async (): Promise<void> => {
-    await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${PLATFORM_FILE_TRIGGER_LOCK})`);
-    for (const [table, trigger] of guarded) {
-      await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-    }
-    try {
-      await prisma.platformFileLink.deleteMany({ where: { businessOwnerType: OWNER_TYPE } });
-      await prisma.platformFileLink.deleteMany({ where: { createdBy: CREATED_BY } });
-      await prisma.platformFile.deleteMany({ where: { createdBy: CREATED_BY } });
-    } finally {
-      for (const [table, trigger] of guarded) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-      }
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${PLATFORM_FILE_TRIGGER_LOCK})`);
-    }
+    await withProtectedTriggersDisabled(
+      prisma,
+      guarded,
+      async (tx) => {
+        await tx.platformFileLink.deleteMany({ where: { businessOwnerType: OWNER_TYPE } });
+        await tx.platformFileLink.deleteMany({ where: { createdBy: CREATED_BY } });
+        await tx.platformFile.deleteMany({ where: { createdBy: CREATED_BY } });
+      },
+      PLATFORM_FILE_TRIGGER_LOCK,
+    );
   };
 
   beforeAll(async () => {

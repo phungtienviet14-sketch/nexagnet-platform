@@ -15,8 +15,10 @@ import type { Prisma, PrismaClient } from '@prisma/client';
  *
  * O day moi lenh di qua CUNG mot giao dich voi khoa MUC GIAO DICH: khoa nha luc commit/rollback,
  * khong con cho nao ro; tep khac khong bao gio thay trigger dang tat vi lan tat va lan bat commit
- * cung nhau. Mau goc: `waiting-delivery-accepted.int.spec.ts` (#363).
+ * cung nhau. Mau goc: `waiting-delivery-accepted.int.spec.ts` (#363). Run 36092510535 do lai dung
+ * kieu ay o `files/platform-file.int.spec.ts` (khoa 287_001), nen helper nhan khoa tuy chon.
  */
+/** Khoa chung cua moi tep IT cham trigger moc/phien cho van tai. */
 export const WAITING_TRIGGER_LOCK = 279_005;
 
 /** Cho lay ket noi + cho khoa cua tep khac; cong lai van duoi tran 60 s cua hook. */
@@ -29,10 +31,11 @@ export async function withProtectedTriggersDisabled(
   prisma: PrismaClient,
   triggers: readonly ProtectedTrigger[],
   work: (tx: Prisma.TransactionClient) => Promise<unknown>,
+  lock: number = WAITING_TRIGGER_LOCK,
 ): Promise<void> {
   await prisma.$transaction(
     async (tx) => {
-      await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${WAITING_TRIGGER_LOCK})`);
+      await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${lock})`);
       for (const [table, trigger] of triggers) {
         await tx.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
       }
