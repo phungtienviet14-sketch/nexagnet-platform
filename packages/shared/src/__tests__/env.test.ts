@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvValidationError, loadEnv } from '../env.js';
+import { EnvValidationError, loadEnv, parseUsernameList } from '../env.js';
 
 /**
  * Tu 18/08/2026 `PARSER_MODE` khong con gia tri gia (`mock`) va mac dinh la `deepseek`, von
@@ -285,6 +285,19 @@ describe('loadEnv', () => {
         PERSISTENCE: 'memory',
       }),
     ).toThrowError(EnvValidationError);
+  });
+
+  /**
+   * `#395`: tai khoan van hanh luc trien khai (`PILOT_OPERATOR_USERNAME`) khong duoc khoa / ha vai
+   * tu man hinh quan tri — neu khong lan deploy sau chet o buoc bootstrap.
+   */
+  it('PROTECTED_ACCOUNT_USERNAMES: mac dinh rong; CSV duoc chuan hoa, bo rong, bo trung', () => {
+    expect(loadEnv({ ...PARSER }).PROTECTED_ACCOUNT_USERNAMES).toEqual([]);
+    expect(
+      loadEnv({ ...PARSER, PROTECTED_ACCOUNT_USERNAMES: ' Operator , ,ops.bot,operator' })
+        .PROTECTED_ACCOUNT_USERNAMES,
+    ).toEqual(['operator', 'ops.bot']);
+    expect(parseUsernameList('')).toEqual([]);
   });
 
   it('customer readiness accepts cookie sessions and still forbids none', () => {
