@@ -17,6 +17,27 @@ mkdir -p "$out_dir"
 
 apk="$(find "$apk_dir" -name '*.apk' | head -n 1)"
 [ -n "$apk" ] || { echo "Khong thay APK trong $apk_dir" >&2; exit 1; }
+
+# MAY AO "BOOT XONG" CHUA PHAI LA ON DINH. Sau `sys.boot_completed=1` he dieu hanh con chay viec sau
+# boot (quet goi, cap nhat dich vu Google) va adbd co the roi ket noi vai giay. Run 36098809312: phien
+# Maestro chet "device offline" 4 giay sau khi mo — TRUOC khi flow nao chay — va keo 4 flow do theo.
+# Doi toi khi thiet bi tra loi ca package manager, nghi mot nhip, roi kiem lai (ket noi co the vua roi).
+wait_device_ready() {
+  adb wait-for-device
+  for _ in $(seq 1 60); do
+    if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] \
+      && adb shell pm path android >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "May ao khong on dinh sau 120 giay" >&2
+  return 1
+}
+wait_device_ready
+sleep 20
+wait_device_ready
+
 adb install -r "$apk"
 
 # logcat ra tep suot buoi chay: loi JS/native khi man hinh trang chi thay duoc o day.
@@ -40,7 +61,26 @@ maestro test "${maestro_env[@]}" \
   --test-output-dir "$out_dir/maestro" \
   "$flows" || status=$?
 
+# Anh chup va logcat nam trong artefact, ma artefact khong phai ai cung tai duoc — in PHAN QUYET
+# DINH ra ngay log cua job: chu dang hien tren man (uiautomator) va loi JS/native (logcat). O mat
+# khau duoc Android che trong cay truy cap; token (neu co) bi xoa bang sed truoc khi in.
+diagnose() {
+  echo "::group::Chan doan — chu tren man hinh luc ket thuc (uiautomator)"
+  if adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
+    adb shell cat /sdcard/ui.xml 2>/dev/null | tr '>' '\n' \
+      | grep -oE '(text|resource-id)="[^"]+"' | grep -v 'resource-id="android:' | head -80 || true
+  fi
+  echo "::endgroup::"
+  echo "::group::Chan doan — loi JS/native (logcat)"
+  grep -E "ReactNativeJS|AndroidRuntime|FATAL EXCEPTION|E/ReactNative|ExpoModulesCore" \
+    "$out_dir/logcat.txt" 2>/dev/null \
+    | sed -E 's/(Bearer |s:)[A-Za-z0-9_.+\/-]{16,}/\1<an>/g' | tail -80 || true
+  echo "::endgroup::"
+}
+if [ "$status" -ne 0 ]; then diagnose; fi
+
 # Flow TUY CHON (bo chon anh he thong) — ket qua ghi lai nhung KHONG quyet dinh mau cua job.
+wait_device_ready
 maestro test "${maestro_env[@]}" \
   --format junit --output "$out_dir/maestro-optional-report.xml" \
   --test-output-dir "$out_dir/maestro-optional" \
