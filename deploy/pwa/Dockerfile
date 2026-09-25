@@ -25,6 +25,8 @@ COPY packages/driver-outbox/package.json packages/driver-outbox/
 COPY apps/transport-mobile/package.json apps/transport-mobile/
 RUN corepack pnpm install --frozen-lockfile --filter "@nexagnet/transport-mobile..."
 
+# `packages/driver-outbox/tsconfig.json` ke thua tsconfig goc — thieu no thi tsc dung o buoc build.
+COPY tsconfig.base.json ./
 COPY packages/driver-outbox packages/driver-outbox
 COPY apps/transport-mobile apps/transport-mobile
 # Builder bo qua Dockerfile.dockerignore thi `.dockerignore` goc da loai ma nguon di dong: do NGAY.
