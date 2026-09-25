@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { PermissionGrant } from './access/permission-domain.js';
 import type { UserRole } from './auth.types.js';
 
 export interface AuthUserRecord {
@@ -15,6 +16,15 @@ export interface AuthUserRecord {
   updatedAt: Date;
   lastLoginAt: Date | null;
   passwordChangedAt: Date | null;
+  /*
+   * `#395` — TUY CHON o tang kieu: cac kho va fixture dung truoc #395 khong dien chung, va thieu
+   * phai nghia la "nhu hom nay" (khong quyen rieng, khong bi ep doi mat khau). Kho doc chung tu
+   * DB se dien day du.
+   */
+  permissionGrants?: readonly PermissionGrant[];
+  mustChangePassword?: boolean;
+  temporaryPasswordExpiresAt?: Date | null;
+  jobTitle?: string | null;
 }
 
 export interface CreateUserRecord {

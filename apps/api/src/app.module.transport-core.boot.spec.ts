@@ -36,6 +36,9 @@ describe('transport-core process boot contract', () => {
       const { TransportPlaceSearchPort } = await import('./src/transport/places/place-search.port.ts');
       const { TransportPlaceService } = await import('./src/transport/places/place.service.ts');
       const { KnownPlacesFacts } = await import('./src/transport/places/known-places.port.ts');
+      const { PermissionDomainRegistry } = await import('./src/auth/access/permission-domain.registry.ts');
+      const { DepotDirectoryHub } = await import('./src/transport/planning/depot-directory.ts');
+      const { CounterpartySitePlaceGuardHub } = await import('./src/transport/counterparty/counterparty-site-place-guard.ts');
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
       const has = (token) => { try { context.get(token, { strict: false }); return true; } catch { return false; } };
       const fleet = context.get(FleetService, { strict: false });
@@ -55,6 +58,13 @@ describe('transport-core process boot contract', () => {
       const placeSearch = await placeService.search('Dinh Vu');
       const knownPlaces = await placeService.known();
 
+      // #395: mien transport tu dang ky vao so phan quyen cua nen tang luc boot; hai cho dang ky
+      // cua core co mat va tra loi bang MAC DINH (khach nay khong bat transport-proof).
+      const permissionDomains = context.get(PermissionDomainRegistry, { strict: false }).all().map((domain) => domain.id);
+      const depots = await context.get(DepotDirectoryHub, { strict: false }).list();
+      const siteGuard = await context.get(CounterpartySitePlaceGuardHub, { strict: false })
+        .checkLegacySiteChange({ siteId: 'boot-site', changesName: true, changesStatus: false });
+
       const proof = {
         fleet: has(FleetService),
         trips: has(TripService),
@@ -71,6 +81,9 @@ describe('transport-core process boot contract', () => {
         placeSearchStatus: placeSearch.status + '/' + placeSearch.reason,
         knownPlacesFacts: has(KnownPlacesFacts),
         knownPlacesAvailable: knownPlaces.available,
+        permissionDomains,
+        depotCount: depots.length,
+        siteGuardAllowed: siteGuard.allowed,
       };
       await context.close();
       // DAU MOC: stdout cua tien trinh nay KHONG chi co ket qua — tang quan sat ghi mot dong log
@@ -139,6 +152,14 @@ describe('transport-core process boot contract', () => {
         placeSearchStatus: 'DISABLED/PROVIDER_UNCONFIGURED',
         knownPlacesFacts: false,
         knownPlacesAvailable: false,
+        /**
+         * `#395`: mien `transport` DA dang ky (dang ky trong ham dung cua mot provider — xay ra ke ca
+         * khi khong ai tiem no). Goi khach nay khong khai bai xe nao, va khong co cong dia diem that
+         * nao dang ky, nen hai cho noi tra loi bang mac dinh: rong, va khong chan.
+         */
+        permissionDomains: ['transport'],
+        depotCount: 0,
+        siteGuardAllowed: true,
       });
     },
     BOOT_TEST_TIMEOUT_MS,

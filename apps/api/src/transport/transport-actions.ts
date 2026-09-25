@@ -543,6 +543,19 @@ export const TRANSPORT_ACTIONS = [
    * Xem `STAKEHOLDER_SCOPE_ACTIONS` ben duoi ve vi sao ma nay khong duoc cap qua VAI.
    */
   'transport.stakeholder.self.vehicle.read',
+  /* --- `#395` NOI TAI KHOAN DANG NHAP voi ho so nghiep vu --- */
+  /**
+   * NOI / GO mot tai khoan dang nhap voi ho so LAI XE hoac ho so BEN HUU QUAN.
+   *
+   * Ma RIENG, tach khoi `transport.driver.manage` va `transport.asset_ownership.manage`: sua ho so
+   * lai xe hay ty le so huu la sua DU LIEU; noi mot tai khoan vao ho so la CAP QUYEN cho mot con
+   * nguoi. Lien ket do mo pham vi `transport.driver.self.*` (lai xe) hoac
+   * `transport.stakeholder.self.vehicle.read` (ben huu quan) ma khong qua bang quyen nao.
+   *
+   * Truoc #395 dieu nay chi song trong `@Roles` cua route noi ben huu quan (chi `ADMIN`), trong khi
+   * bang vai noi Ke toan co `.manage`. Nay no la mot ma trong `DIRECTOR_ONLY_ACTIONS`.
+   */
+  'transport.account_link.manage',
   /* --- `TX-08` mo rong: NAP DU LIEU ETC / PHI DUONG BO (Lane J, Issue #269) --- */
   /**
    * TAI KHOAN GIAO THONG + anh xa xe — doc va quan ly.
@@ -648,7 +661,7 @@ export const TRANSPORT_ACTIONS = [
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
 
-const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
+export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',
   'transport.driver.self.fund.read',
@@ -700,7 +713,7 @@ export const isStakeholderScopeAction = (action: TransportAction): boolean =>
   STAKEHOLDER_SCOPE_ACTIONS.includes(action);
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe va pham vi ben huu quan. */
-const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
+export const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
   (action): action is TransportAction =>
     !SELF_SCOPE_ACTIONS.includes(action) && !STAKEHOLDER_SCOPE_ACTIONS.includes(action),
 );
@@ -734,7 +747,7 @@ const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
  * mot ky doi soat bang ke — do la viec cuoi thang cua ho — nhung MO LAI mot ky da phat ban giao
  * cong no ra ngoai la mot quyet dinh khac han ve muc do (`GD-11`).
  */
-const ACCOUNTING_DENIED: readonly TransportAction[] = [
+export const ACCOUNTING_DENIED: readonly TransportAction[] = [
   'transport.trip.cancel',
   'transport.costing.period.reopen',
   'transport.fuel.reconciliation.reopen',
@@ -777,6 +790,15 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    */
   'transport.operational_document.withdraw',
   /**
+   * GHI BU mot chung tu van hanh (`#279` O1) — `#395` dua vao day tu `@Roles` cua route.
+   *
+   * Truoc #395 bang nay noi Ke toan CO ma nay, nhung route ghi bu chi mo cho `ADMIN`: chinh sach
+   * song o hai noi va hai noi noi hai dieu khac nhau. Ghi bu mot to chung tu la THEM can cu vao
+   * chinh ho so ma Ke toan sap duyet tien — cung phan cong nhiem vu voi `checkpoint.record` va
+   * `operational_document.withdraw`. Nay bang vai la noi DUY NHAT noi dieu do.
+   */
+  'transport.operational_document.record',
+  /**
    * Ke toan DOC duoc chung cu, va do la ca cong viec cua ho. RUT mot chung cu la viec khac.
    *
    * Doi soat la doc mot ho so roi noi no khop hay khong khop. Rut la go bo mot muc khoi chinh ho
@@ -807,9 +829,36 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
   'transport.geofence.manage',
 ];
 
+/**
+ * CHI GIAM DOC — `#395`. Khong cap duoc cho vai nao khac, ke ca bang quyen rieng.
+ *
+ *   · `transport.costing.period.reopen`      — `GD-11`: mo lai mot ky DA BAO CAO ra ngoai;
+ *   · `transport.fuel.reconciliation.reopen` — cung khuon `GD-11` cho ky doi soat bang ke;
+ *   · `transport.driver_settlement.reverse`  — dao mot lan chi DA BAO. Truoc #395 chi song trong
+ *     `@Roles` cua route, nen bang vai noi Ke toan lam duoc con may chu tra 403;
+ *   · `transport.account_link.manage`        — noi tai khoan vao ho so la cap quyen cho mot con nguoi.
+ *
+ * Hai ma dau van nam trong `ACCOUNTING_DENIED`; danh sach nay noi them mot dieu ma danh sach kia
+ * khong noi: KHONG cap lai duoc. `permissions/transport-permission-rules.ts` doc no; ban guong web
+ * chep nguyen no va bai drift o web so tung ma.
+ */
+export const DIRECTOR_ONLY_ACTIONS: readonly TransportAction[] = [
+  'transport.costing.period.reopen',
+  'transport.fuel.reconciliation.reopen',
+  'transport.driver_settlement.reverse',
+  'transport.account_link.manage',
+];
+
+/**
+ * VAI KHOI DIEM (`#395`). Bang nay KHONG con la cau tra loi cuoi cung cho mot tai khoan: quyen rieng
+ * (ALLOW/DENY) cua tung nguoi chong len no trong `permissions/transport-permission-rules.ts`
+ * (`canPerformTransportAction`). `roleCanPerform` duoi day chi con la tra cuu VAI KHOI DIEM.
+ */
 const ROLE_ACTIONS: Readonly<Record<UserRole, readonly TransportAction[]>> = {
   ADMIN: OPERATIONS_ACTIONS,
-  ACCOUNTING: OPERATIONS_ACTIONS.filter((action) => !ACCOUNTING_DENIED.includes(action)),
+  ACCOUNTING: OPERATIONS_ACTIONS.filter(
+    (action) => !ACCOUNTING_DENIED.includes(action) && !DIRECTOR_ONLY_ACTIONS.includes(action),
+  ),
   SALE: SELF_SCOPE_ACTIONS,
   MANAGER: [],
 };

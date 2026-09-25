@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { USER_ROLES } from '../auth/auth.types.js';
 import {
+  ACCOUNTING_DENIED,
+  DIRECTOR_ONLY_ACTIONS,
   STAKEHOLDER_SCOPE_ACTIONS,
   TRANSPORT_ACTIONS,
   actionsForRole,
@@ -174,6 +176,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.asset_ownership.manage',
       // Pham vi CUA CHINH MINH cua ben huu quan — CHI DOC, va KHONG cap qua vai nao.
       'transport.stakeholder.self.vehicle.read',
+      // `#395` — NOI tai khoan dang nhap voi ho so lai xe / ben huu quan. Ma rieng, chi Giam doc:
+      // noi mot tai khoan vao ho so la CAP QUYEN cho mot con nguoi, khong phai sua du lieu.
+      'transport.account_link.manage',
       // `TX-08` mo rong (Lane J, #269) — NAP DU LIEU ETC. Bon ma, va su tach bach giua chung la co
       // that: NAP mot ban sao cua su that nha cung cap KHAC voi QUYET rang ban sao do khop hay
       // khong. Khong ma nao trong so nay noi ve tien da tra.
@@ -353,7 +358,11 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      */
     it('#279: Ke toan doc duoc chung tu nhung KHONG bia mo duoc', () => {
       expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.record')).toBe(true);
+      // `#395`: ghi BU chung tu nay nam trong `ACCOUNTING_DENIED`. Truoc do bang vai noi `true`
+      // nhung route chi mo cho `ADMIN` (`@Roles`) — nay bang vai la noi DUY NHAT noi dieu do, va
+      // `transport-behaviour-preservation.spec.ts` chung minh hanh vi that khong doi.
+      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.record')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.operational_document.record')).toBe(true);
       expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.withdraw')).toBe(false);
       expect(roleCanPerform('ADMIN', 'transport.operational_document.withdraw')).toBe(true);
       expect(roleCanPerform('SALE', 'transport.operational_document.withdraw')).toBe(false);
@@ -427,6 +436,52 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       for (const action of actionsForRole('ACCOUNTING')) {
         expect(roleCanPerform('ADMIN', action), action).toBe(true);
       }
+    });
+  });
+
+  /**
+   * CHI GIAM DOC (`#395`) — bon ma KHONG cap duoc cho vai nao khac.
+   *
+   * Hai ma dau da nam trong `ACCOUNTING_DENIED` tu truoc; hai ma sau truoc day chi song trong
+   * `@Roles(ADMIN)` cua route, nen bang vai noi Ke toan lam duoc con may chu tra 403 — va man hinh
+   * (doc bang vai) hien nut cho Ke toan. Bai nay khoa ca danh sach lan hau qua cua no.
+   */
+  describe('DIRECTOR_ONLY — chi Giam doc (#395)', () => {
+    it('dung bon ma, dung thu tu', () => {
+      expect([...DIRECTOR_ONLY_ACTIONS]).toEqual([
+        'transport.costing.period.reopen',
+        'transport.fuel.reconciliation.reopen',
+        'transport.driver_settlement.reverse',
+        'transport.account_link.manage',
+      ]);
+    });
+
+    it.each(DIRECTOR_ONLY_ACTIONS)(
+      '%s: Giam doc CO, Ke toan / Quan ly / Lai xe KHONG',
+      (action) => {
+        expect(roleCanPerform('ADMIN', action)).toBe(true);
+        expect(roleCanPerform('ACCOUNTING', action)).toBe(false);
+        expect(roleCanPerform('MANAGER', action)).toBe(false);
+        expect(roleCanPerform('SALE', action)).toBe(false);
+      },
+    );
+
+    it('Ke toan = moi viec van hanh TRU hai danh sach cam', () => {
+      const expected = TRANSPORT_ACTIONS.filter(
+        (action) =>
+          !action.startsWith('transport.driver.self.') &&
+          !isStakeholderScopeAction(action) &&
+          !ACCOUNTING_DENIED.includes(action) &&
+          !DIRECTOR_ONLY_ACTIONS.includes(action),
+      );
+      expect([...actionsForRole('ACCOUNTING')]).toEqual(expected);
+    });
+
+    it('noi tai khoan tach khoi quan ly so huu: Ke toan van quan ly so dang ky', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.asset_ownership.manage')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.account_link.manage')).toBe(false);
+      expect(roleCanPerform('ACCOUNTING', 'transport.driver_settlement.cashout')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.driver_settlement.reverse')).toBe(false);
     });
   });
 

@@ -1,4 +1,5 @@
 import {
+  applyDecorators,
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -11,13 +12,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { isInternalServiceRequest } from '../auth/internal-service.guard.js';
+import { DOMAIN_ACTION_GATE_KEY } from '../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../auth/session.types.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
-import {
-  isStakeholderScopeAction,
-  roleCanPerform,
-  type TransportAction,
-} from './transport-actions.js';
+import { canPerformTransportAction } from './permissions/transport-permission-rules.js';
+import { isStakeholderScopeAction, type TransportAction } from './transport-actions.js';
 import {
   TransportDomainError,
   type TransportErrorKind,
@@ -25,20 +24,6 @@ import {
 } from './transport.errors.js';
 
 export const TRANSPORT_ACTION_KEY = 'netviet.transport.action';
-
-/**
- * Khai HANH DONG MIEN ma mot route doi hoi.
- *
- * Dung KEM `@Roles(...)`, khong thay the no. Hai tang tra loi hai cau hoi khac nhau va se tach ra
- * khi `PG-02` dong:
- *
- *   · `@Roles`  — cong AS-BUILT cua nen tang, va la thu ma `roles-coverage.spec.ts` duyet;
- *   · `@RequiresTransportAction` — cong CUA MIEN, viet bang tu vung se con dung sau khi nen tang co
- *     mo hinh permission that. Luc do bang anh xa trong `transport-actions.ts` bi thay bang mot
- *     lan tra permission, va KHONG route nao phai sua.
- */
-export const RequiresTransportAction = (action: TransportAction): MethodDecorator =>
-  SetMetadata(TRANSPORT_ACTION_KEY, action);
 
 /**
  * Cong hanh dong cua mien van tai.
@@ -89,12 +74,39 @@ export class TransportActionGuard implements CanActivate {
      */
     if (isStakeholderScopeAction(action)) return true;
 
-    if (!roleCanPerform(user.role, action)) {
+    if (!canPerformTransportAction(user, action)) {
       throw new ForbiddenException(`Ban khong co quyen thuc hien thao tac nay (${action})`);
     }
     return true;
   }
 }
+
+/**
+ * Khai HANH DONG MIEN ma mot route doi hoi — va giao CONG cua route cho mien.
+ *
+ * Truoc `#395` ham nay chi ghi hanh dong, va route qua HAI cong noi tiep: `@Roles` (vai phang cua
+ * nen tang) roi `TransportActionGuard`. Chu thich cu da hua: *"khi `PG-02` dong, bang anh xa bi thay
+ * bang mot lan tra permission, va KHONG route nao phai sua"*. `#395` giu dung loi hua do:
+ *
+ *   · `TRANSPORT_ACTION_KEY` — hanh dong cua route, nhu cu;
+ *   · `DOMAIN_ACTION_GATE_KEY` — dau cua NEN TANG, gia tri la `TransportActionGuard`. `RolesGuard`
+ *     thay dau VA thay guard nay trong chuoi guard cua route thi nhuong: cong duy nhat con lai la
+ *     `canPerformTransportAction` (vai khoi diem + quyen rieng cua tung tai khoan).
+ *
+ * `@Roles` tren route van o nguyen — `roles-coverage.spec.ts` van duyet no, va no van la cong khi
+ * route vi mot ly do nao do khong co `TransportActionGuard` (fail-closed, xem `RolesGuard`). Bang
+ * vai khoi diem trong `transport-actions.ts` da mang MOI chinh sach truoc day chi song trong `@Roles`
+ * (noi tai khoan, dao quyet toan, ghi bu chung tu), va
+ * `permissions/transport-behaviour-preservation.spec.ts` chung minh tren TUNG route, TUNG vai rang
+ * chuoi cong moi tra loi dung nhu chuoi cu.
+ *
+ * Khai SAU lop guard vi gia tri cua dau la chinh lop do.
+ */
+export const RequiresTransportAction = (action: TransportAction): MethodDecorator =>
+  applyDecorators(
+    SetMetadata(TRANSPORT_ACTION_KEY, action),
+    SetMetadata(DOMAIN_ACTION_GATE_KEY, TransportActionGuard),
+  );
 
 /**
  * Danh tinh nguoi dang goi, dung cho be mat lai xe.

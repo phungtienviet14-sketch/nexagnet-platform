@@ -208,6 +208,8 @@ export const TRANSPORT_ACTIONS = [
   'transport.asset_ownership.read',
   'transport.asset_ownership.manage',
   'transport.stakeholder.self.vehicle.read',
+  /* --- `#395` NOI TAI KHOAN DANG NHAP voi ho so lai xe / ben huu quan — chi Giam doc --- */
+  'transport.account_link.manage',
   /* --- `TX-08` mo rong: NAP DU LIEU ETC / PHI DUONG BO (Lane J, Issue #269) --- */
   'transport.toll.account.read',
   'transport.toll.account.manage',
@@ -322,6 +324,11 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    */
   'transport.operational_document.withdraw',
   /**
+   * GHI BU mot chung tu van hanh (`#279` O1) — `#395` dua vao day tu `@Roles` cua route: ghi bu
+   * la THEM can cu vao ho so ma Ke toan sap duyet tien. Chep nguyen tu API.
+   */
+  'transport.operational_document.record',
+  /**
    * Ke toan DOC duoc chung cu — do la ca cong viec cua ho — nhung RUT mot chung cu la viec khac:
    * go bo mot muc khoi chinh ho so minh dang doi soat.
    */
@@ -340,6 +347,18 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
 ];
 
 /**
+ * CHI GIAM DOC (`#395`) — chep nguyen tu API. Khong cap duoc cho vai nao khac, ke ca bang quyen
+ * rieng. Hai ma sau truoc day chi song trong `@Roles` cua route, nen man hinh (doc bang nay) tung
+ * hien nut dao quyet toan cho Ke toan roi nhan 403. Bai drift so tung ma voi API.
+ */
+export const DIRECTOR_ONLY_ACTIONS: readonly TransportAction[] = [
+  'transport.costing.period.reopen',
+  'transport.fuel.reconciliation.reopen',
+  'transport.driver_settlement.reverse',
+  'transport.account_link.manage',
+];
+
+/**
  * Bon vai as-built cua nen tang → hanh dong. Giam doc → `ADMIN` · Ke toan → `ACCOUNTING` ·
  * Lai xe → `SALE` (CHO GIU TAM: nen tang chua co vai `DRIVER`).
  *
@@ -352,7 +371,9 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
  */
 const ROLE_ACTIONS: Readonly<Record<AuthRole, readonly TransportAction[]>> = {
   ADMIN: OPERATIONS_ACTIONS,
-  ACCOUNTING: OPERATIONS_ACTIONS.filter((action) => !ACCOUNTING_DENIED.includes(action)),
+  ACCOUNTING: OPERATIONS_ACTIONS.filter(
+    (action) => !ACCOUNTING_DENIED.includes(action) && !DIRECTOR_ONLY_ACTIONS.includes(action),
+  ),
   SALE: SELF_SCOPE_ACTIONS,
   MANAGER: [],
 };

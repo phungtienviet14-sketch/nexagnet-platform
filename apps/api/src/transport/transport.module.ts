@@ -14,6 +14,7 @@ import { AssetOwnershipService } from './asset-ownership/asset-ownership.service
 import { FleetVehicleOwnershipAdapter } from './asset-ownership/fleet-vehicle-ownership.adapter.js';
 import { PrismaAssetOwnershipRepository } from './asset-ownership/prisma-asset-ownership.repository.js';
 import { VehicleOwnershipPort } from './asset-ownership/vehicle-ownership.port.js';
+import { CounterpartySitePlaceGuardHub } from './counterparty/counterparty-site-place-guard.js';
 import { CounterpartySubjectPort } from './counterparty/counterparty-subject.port.js';
 import {
   CounterpartyRepository,
@@ -30,6 +31,7 @@ import { MovementRepository, InMemoryMovementRepository } from './movement/movem
 import { MovementService } from './movement/movement.service.js';
 import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
 import { MovementRunWriteGuard, RunWriteGuard } from './movement/run-write-guard.port.js';
+import { DepotDirectoryHub } from './planning/depot-directory.js';
 import {
   TRANSPORT_PLANNING_POLICY,
   tenantTransportPlanningPolicy,
@@ -42,6 +44,7 @@ import { PrismaCounterpartyRepository } from './counterparty/prisma-counterparty
 import { FleetRepository, InMemoryFleetRepository } from './fleet/fleet.repository.js';
 import { FleetService } from './fleet/fleet.service.js';
 import { PrismaFleetRepository } from './fleet/prisma-fleet.repository.js';
+import { TransportPermissionDomainRegistrar } from './permissions/transport-permission-domain.js';
 import { TransportActionGuard } from './transport-action.guard.js';
 import { TRANSPORT_CORE_POLICY, tenantTransportCorePolicy } from './transport-policy.js';
 import { PrismaTripRepository } from './trips/prisma-trip.repository.js';
@@ -197,6 +200,19 @@ import { TripService } from './trips/trip.service.js';
     AssetOwnershipService,
     AssetOwnershipScopeService,
     TransportActionGuard,
+    /*
+     * `#395` — ba cho NOI cua `transport-core`, KHONG doi hanh vi nao o S0:
+     *   · `DepotDirectoryHub`              — danh ba bai xe; mac dinh doc cau hinh goi khach,
+     *                                        `transport-proof` dang ky nguon quan ly;
+     *   · `CounterpartySitePlaceGuardHub`  — cong chan sua dia diem qua duong cu; mac dinh khong
+     *                                        chan, `transport-proof` dang ky cong that;
+     *   · `TransportPermissionDomainRegistrar` — dang ky mien `transport` vao so phan quyen cua
+     *                                        nen tang (`AuthModule`, `@Global`).
+     * Hai cho dang ky nam o CORE de module capability khac tiem duoc, khong nguoc lai.
+     */
+    DepotDirectoryHub,
+    CounterpartySitePlaceGuardHub,
+    TransportPermissionDomainRegistrar,
   ],
   /*
    * `AuditLogService` va `TRANSPORT_CORE_POLICY` duoc export tu T3 tro di cho `transport-costing`.
@@ -242,6 +258,8 @@ import { TripService } from './trips/trip.service.js';
     AuditLogService,
     TRANSPORT_CORE_POLICY,
     TRANSPORT_PLANNING_POLICY,
+    DepotDirectoryHub,
+    CounterpartySitePlaceGuardHub,
   ],
 })
 export class TransportModule {}

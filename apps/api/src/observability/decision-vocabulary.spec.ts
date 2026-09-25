@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ACCOUNT_DECISIONS } from '../auth/account-decisions.js';
 import { CHANNEL_DECISIONS } from '../channels/channel-decisions.js';
 import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
 import { TRANSPORT_COSTING_DECISIONS } from '../transport/costing/costing-decisions.js';
+import { TRANSPORT_PLACE_ADMIN_DECISIONS } from '../transport/places/place-admin-decisions.js';
 import { TRANSPORT_DECISIONS } from '../transport/transport-decisions.js';
 import { TURN_DECISIONS } from '../turns/turn-decisions.js';
 import { decisionReasonLabel, defineDecisionVocabulary } from './decision-vocabulary.js';
@@ -36,6 +38,23 @@ describe('tu vung quyet dinh: nen tang giu KHUON, capability giu TU NGU', () => 
     expect(CHANNEL_DECISIONS.owner).toBe('messaging');
     expect(TRANSPORT_DECISIONS.owner).toBe('transport-core');
     expect(TRANSPORT_COSTING_DECISIONS.owner).toBe('transport-costing');
+    expect(ACCOUNT_DECISIONS.owner).toBe('platform-accounts');
+    expect(TRANSPORT_PLACE_ADMIN_DECISIONS.owner).toBe('transport-places-admin');
+  });
+
+  /**
+   * `#395`: quan tri tai khoan la viec cua NEN TANG, quan tri dia diem la viec cua MIEN van tai —
+   * hai bo rieng, hai chu so huu, va khong ma ly do nao cua bo nay bi bo kia ghi de nhan
+   * (`defineDecisionVocabulary` ghi de im lang).
+   */
+  it('#395: hai bo tu vung moi giu diem va nhan cua chinh no', () => {
+    expect(ACCOUNT_DECISIONS.points).toEqual(['account.access']);
+    expect(TRANSPORT_PLACE_ADMIN_DECISIONS.points).toEqual(['place.write']);
+    for (const vocabulary of [ACCOUNT_DECISIONS, TRANSPORT_PLACE_ADMIN_DECISIONS]) {
+      for (const [reason, label] of Object.entries(vocabulary.labels)) {
+        expect(decisionReasonLabel(reason), reason).toBe(label);
+      }
+    }
   });
 
   /**
@@ -126,6 +145,11 @@ describe('moi diem quyet dinh deu co nguoi phat that', () => {
     ...TRANSPORT_COSTING_DECISIONS.points.map(
       (point) => [TRANSPORT_COSTING_DECISIONS.owner, point] as const,
     ),
+    /*
+     * `ACCOUNT_DECISIONS` (`account.access`) va `TRANSPORT_PLACE_ADMIN_DECISIONS` (`place.write`)
+     * cua `#395` CHUA nam o day: hom nay chung moi la khung tu vung, chua co diem phat. Them
+     * chung vao danh sach nay CUNG LAN voi dong `telemetry.decision()` dau tien — khong truoc.
+     */
   ];
 
   it.each(ALL_POINTS)('%s / %s co it nhat mot diem phat trong source', (_owner, point) => {
