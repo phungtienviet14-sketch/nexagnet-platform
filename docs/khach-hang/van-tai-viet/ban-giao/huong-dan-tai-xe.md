@@ -118,10 +118,10 @@ Vào mục **Nhiên liệu** ở thanh dưới.
 2. **Thanh toán**: chọn đúng ai trả tiền. Dòng chữ bên dưới nói rõ tiền đi đâu.
 3. Bấm **"Gửi phiếu"**.
 
-| Bạn chọn                | Nghĩa là                                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Lái xe trả tiền mặt** | Bạn tự trả. Khi kế toán duyệt, khoản này vào **quỹ của bạn** để công ty hoàn lại. Không ghi nợ cây xăng |
-| **Ghi nợ cây xăng**     | Cây xăng cho công ty nợ. Khoản này vào công nợ cây xăng. **Không đụng tới quỹ của bạn**                 |
+| Bạn chọn                | Nghĩa là                                                                                                                                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lái xe trả tiền mặt** | Bạn tự trả. Khi kế toán duyệt, khoản này vào **quỹ của bạn** để công ty hoàn lại. Không ghi nợ cây xăng                                                                                                                 |
+| **Ghi nợ cây xăng**     | Cây xăng cho công ty nợ. Khoản này **chưa** thành công nợ ngay: kế toán **xác thực** phiếu → **đối soát** với bảng kê của cây xăng → **đóng kỳ**. Đóng kỳ xong mới vào công nợ cây xăng. **Không đụng tới quỹ của bạn** |
 
 ![Phiếu đã gửi](assets/tai-xe/11-phieu-da-gui.jpg)
 
@@ -159,6 +159,8 @@ Có khoản chi dọc đường thì **báo văn phòng** và giữ hoá đơn.
    - còn lại;
    - hoàn ứng công ty còn phải trả bạn.
 2. **Phiếu lương**. Chỉ phiếu kế toán đã công bố mới hiện ở đây.
+
+> **Hạn chế hiện tại.** Phần lương **theo chuyến** và **theo km** hiện **chưa tính** việc văn phòng giao theo vòng xe. Hệ thống chỉ đếm chuyến theo cách cũ: số chuyến và số km trên phiếu (như "4 chuyến · 375 km" trong ảnh) đều là chuyến theo cách cũ. Nếu công ty trả lương theo chuyến hoặc km, kế toán cộng tay phần việc theo vòng xe cho tới khi hệ thống sửa.
 
 Thấy phiếu lương thiếu chuyến hay km, hãy **báo kế toán**.
 

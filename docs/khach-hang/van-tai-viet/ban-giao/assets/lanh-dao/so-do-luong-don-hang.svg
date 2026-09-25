@@ -140,11 +140,11 @@
   <text class="h2" x="278" y="512">Ghi nợ cây xăng</text>
   <text class="b" x="278" y="533">cây xăng cho công ty nợ</text>
   <rect class="box" x="490" y="486" width="210" height="66" rx="8" stroke="#56652a"/>
-  <text class="h2" x="504" y="512">Đối soát bảng kê</text>
-  <text class="b" x="504" y="533">khớp phiếu với cây xăng</text>
+  <text class="h2" x="504" y="512">Xác thực → đối soát</text>
+  <text class="b" x="504" y="533">khớp với bảng kê cây xăng</text>
   <rect class="box" x="730" y="486" width="226" height="66" rx="8" stroke="#56652a"/>
   <text class="h2" x="744" y="512">Phải trả cây xăng</text>
-  <text class="b" x="744" y="533">ghi khi kế toán đóng kỳ</text>
+  <text class="b" x="744" y="533">chỉ ghi khi kế toán đóng kỳ</text>
 
   <path class="ln" d="M230 435H262"/>
   <path class="ln" d="M230 519H262"/>
