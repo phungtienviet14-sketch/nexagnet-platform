@@ -32,6 +32,7 @@ import { MovementService } from './movement/movement.service.js';
 import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
 import { MovementRunWriteGuard, RunWriteGuard } from './movement/run-write-guard.port.js';
 import { DepotDirectoryHub } from './planning/depot-directory.js';
+import { DepotOpenWorkReader, MovementDepotOpenWorkReader } from './planning/depot-open-work.js';
 import {
   TRANSPORT_PLANNING_POLICY,
   tenantTransportPlanningPolicy,
@@ -213,6 +214,8 @@ import { TripService } from './trips/trip.service.js';
     DepotDirectoryHub,
     CounterpartySitePlaceGuardHub,
     TransportPermissionDomainRegistrar,
+    // `#395` S3 — cong DOC "viec dang mo tai mot bai xe" cho man Dia diem van hanh (transport-proof).
+    { provide: DepotOpenWorkReader, useClass: MovementDepotOpenWorkReader },
   ],
   /*
    * `AuditLogService` va `TRANSPORT_CORE_POLICY` duoc export tu T3 tro di cho `transport-costing`.
@@ -260,6 +263,7 @@ import { TripService } from './trips/trip.service.js';
     TRANSPORT_PLANNING_POLICY,
     DepotDirectoryHub,
     CounterpartySitePlaceGuardHub,
+    DepotOpenWorkReader,
   ],
 })
 export class TransportModule {}

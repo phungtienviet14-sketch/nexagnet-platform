@@ -64,6 +64,9 @@ describe('transport-preview process boot contract', () => {
       const { TransportPlaceSearchPort } = await import('./src/transport/places/place-search.port.ts');
       const { TransportPlaceService } = await import('./src/transport/places/place.service.ts');
       const { KnownPlacesFacts } = await import('./src/transport/places/known-places.port.ts');
+      const { GeofenceService } = await import('./src/transport/proof/geofence.service.ts');
+      const { PlaceAdminController } = await import('./src/transport/places/admin/place-admin.controller.ts');
+      const { PlaceAdminService } = await import('./src/transport/places/admin/place-admin.service.ts');
 
       const capabilities = loadTenantConfig().capabilities;
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
@@ -71,6 +74,20 @@ describe('transport-preview process boot contract', () => {
       // Doc dia diem da biet QUA injector that: adapter o goc tiem hai token cua hai module khac
       // (GeofenceRepository, CounterpartySiteService) — dung kieu tiem chi boot that bat duoc.
       const knownPlaces = await context.get(TransportPlaceService, { strict: false }).known();
+
+      // #395: goi xem truoc KHONG con khai bai xe trong cau hinh. Bai xe la hang rao DEPOT: truoc khi
+      // khai, khau lap ke hoach noi NOT_CONFIGURED tu cau hinh; khai mot bai (qua route cu, cung
+      // duong ghi voi man Dia diem van hanh) thi CHINH khau lap ke hoach doc no — nguon MANAGED. Dong
+      // nay chung minh transport-proof da dang ky nguon quan ly vao cho noi cua transport-core qua
+      // injector that (dang ky trong ham dung — khong bai composition nao thay duoc).
+      const planningService = context.get(PlanningService, { strict: false });
+      const depotBefore = (await planningService.describePolicy()).depot;
+      await context.get(GeofenceService, { strict: false }).register({
+        label: 'Boot bai xe', subjectKind: 'DEPOT', subjectId: 'DEPOT-BOOT',
+        latitude: 20.9652, longitude: 105.8468, radiusMetres: 250, note: null, recordedBy: 'boot',
+      });
+      const depotAfter = (await planningService.describePolicy()).depot;
+      const adminPlaces = await context.get(PlaceAdminService, { strict: false }).list();
 
       const proof = {
         capabilityCount: capabilities.length,
@@ -89,6 +106,11 @@ describe('transport-preview process boot contract', () => {
         placeSearchPort: has(TransportPlaceSearchPort),
         knownPlacesFacts: has(KnownPlacesFacts),
         knownPlacesAvailable: knownPlaces.available,
+        depotBefore: depotBefore.kind + '/' + depotBefore.source,
+        depotAfter: depotAfter.kind + '/' + depotAfter.source,
+        depotCodeAfter: depotAfter.kind === 'RESOLVED' ? depotAfter.depot.code : null,
+        placeAdminController: has(PlaceAdminController),
+        adminDepotStatus: adminPlaces.map((place) => place.kindLabel + '/' + (place.depot ? place.depot.plannerStatus : '-')),
       };
       await context.close();
       process.stdout.write('<<PREVIEW_BOOT_PROOF>>' + JSON.stringify(proof));
@@ -123,6 +145,12 @@ describe('transport-preview process boot contract', () => {
       expect(parsed.placeSearchPort).toBe(true);
       expect(parsed.knownPlacesFacts).toBe(true);
       expect(parsed.knownPlacesAvailable).toBe(true);
+      // #395: mot nguon bai xe — man Dia diem van hanh. Xem khoi chu thich trong script.
+      expect(parsed.depotBefore).toBe('NOT_CONFIGURED/TENANT_CONFIG');
+      expect(parsed.depotAfter).toBe('RESOLVED/MANAGED');
+      expect(parsed.depotCodeAfter).toBe('DEPOT-BOOT');
+      expect(parsed.placeAdminController).toBe(true);
+      expect(parsed.adminDepotStatus).toEqual(['Bãi xe/IN_USE']);
       // Goi that co 11 capability; con so chi de bai noi ra rang no dang boot MOT DOI HINH DAY DU,
       // khong phai mot goi rong tinh co xanh.
       expect(parsed.capabilityCount).toBeGreaterThanOrEqual(10);

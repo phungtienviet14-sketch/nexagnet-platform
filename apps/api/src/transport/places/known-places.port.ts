@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { CounterpartySiteService } from '../counterparty/site.service.js';
-import { GeofenceRepository } from '../proof/geofence.repository.js';
+import { FleetRepository } from '../fleet/fleet.repository.js';
+import { GeofenceRepository, type Geofence } from '../proof/geofence.repository.js';
 import { buildKnownPlaces, type KnownSiteName } from './known-places.js';
 import type { KnownPlace } from './place-search.types.js';
 
@@ -19,21 +20,27 @@ export abstract class KnownPlacesFacts {
 }
 
 /**
- * Tiem hai token DUOC EXPORT: `GeofenceRepository` (tu `TransportProofModule`) va
- * `CounterpartySiteService` (tu `TransportModule`). Adapter dang ky o GOC chi thay danh sach
- * export — mot provider noi bo o day se lam tien trinh api chet luc khoi dong (da xay ra that).
+ * Tiem ba token DUOC EXPORT: `GeofenceRepository` (tu `TransportProofModule`),
+ * `CounterpartySiteService` va `FleetRepository` (tu `TransportModule`). Adapter dang ky o GOC chi
+ * thay danh sach export — mot provider noi bo o day se lam tien trinh api chet luc khoi dong (da xay
+ * ra that).
+ *
+ * `#395`: doc hang rao CON HIEU LUC THAT (`listEffectivelyActive()` — cung vi tu voi dieu xe va luat
+ * trung ten), va dat ten chu cho moi loai (khach hang cua hang rao `CUSTOMER` kieu cu doc qua
+ * `FleetRepository`, cuoi va tuy chon cho spec dung adapter theo vi tri).
  */
 @Injectable()
 export class KnownPlacesFactsAdapter extends KnownPlacesFacts {
   constructor(
     private readonly geofences: GeofenceRepository,
     private readonly sites: CounterpartySiteService,
+    @Optional() private readonly customers?: FleetRepository,
   ) {
     super();
   }
 
   async listKnownPlaces(): Promise<readonly KnownPlace[]> {
-    const fences = await this.geofences.listActive();
+    const fences = await this.geofences.listEffectivelyActive();
     const siteIds = fences.flatMap((fence) =>
       fence.subjectKind === 'COUNTERPARTY_SITE' && fence.subjectId !== null
         ? [fence.subjectId]
@@ -47,6 +54,21 @@ export class KnownPlacesFactsAdapter extends KnownPlacesFacts {
         { siteName: view.site.name, counterpartyName: view.counterpartyName },
       ]),
     );
-    return buildKnownPlaces(fences, sitesById);
+    return buildKnownPlaces(fences, sitesById, await this.customerNames(fences));
+  }
+
+  /** Ten khach cua cac hang rao `CUSTOMER` kieu cu — hiem, nen doc tung khach la du. */
+  private async customerNames(fences: readonly Geofence[]): Promise<ReadonlyMap<string, string>> {
+    const customers = this.customers;
+    const ids = [
+      ...new Set(
+        fences.flatMap((fence) =>
+          fence.subjectKind === 'CUSTOMER' && fence.subjectId !== null ? [fence.subjectId] : [],
+        ),
+      ),
+    ];
+    if (ids.length === 0 || customers === undefined) return new Map();
+    const rows = await Promise.all(ids.map((id) => customers.findCustomer(id)));
+    return new Map(rows.flatMap((row) => (row ? [[row.id, row.name] as const] : [])));
   }
 }

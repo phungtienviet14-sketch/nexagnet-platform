@@ -147,9 +147,12 @@ describe('moi diem quyet dinh deu co nguoi phat that', () => {
     ),
     /*
      * `ACCOUNT_DECISIONS` (`account.access`) va `TRANSPORT_PLACE_ADMIN_DECISIONS` (`place.write`)
-     * cua `#395` CHUA nam o day: hom nay chung moi la khung tu vung, chua co diem phat. Them
-     * chung vao danh sach nay CUNG LAN voi dong `telemetry.decision()` dau tien — khong truoc.
+     * cua `#395`: moi bo vao danh sach nay CUNG LAN voi dong `telemetry.decision()` dau tien —
+     * khong truoc. `place.write` co diem phat tu S3 (`PlaceAdminService`).
      */
+    ...TRANSPORT_PLACE_ADMIN_DECISIONS.points.map(
+      (point) => [TRANSPORT_PLACE_ADMIN_DECISIONS.owner, point] as const,
+    ),
   ];
 
   it.each(ALL_POINTS)('%s / %s co it nhat mot diem phat trong source', (_owner, point) => {
