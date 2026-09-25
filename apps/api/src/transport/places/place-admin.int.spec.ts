@@ -3,6 +3,7 @@ import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js'
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaService } from '../../config/prisma.service.js';
 import { CounterpartySitePlaceGuardHub } from '../counterparty/counterparty-site-place-guard.js';
+import type { CounterpartyRepository } from '../counterparty/counterparty.repository.js';
 import { PrismaCounterpartySiteRepository } from '../counterparty/prisma-counterparty-site.repository.js';
 import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterparty.repository.js';
 import { CounterpartySiteService } from '../counterparty/site.service.js';
@@ -64,6 +65,23 @@ const depot = (name: string): CreatePlaceCommand => ({
   radiusMetres: 250,
 });
 
+/**
+ * Diem hen cua hai giao dich: moi ben DUNG o day cho toi khi du `parties` ben toi, hoac het
+ * `timeoutMs` — KHONG bao gio treo: khi khoa con do, ben thu hai con dung o khoa va khong toi duoc.
+ */
+function meetingPoint(parties: number, timeoutMs: number): () => Promise<void> {
+  let arrived = 0;
+  let releaseAll: () => void = () => undefined;
+  const everyone = new Promise<void>((resolve) => {
+    releaseAll = resolve;
+  });
+  return async () => {
+    arrived += 1;
+    if (arrived >= parties) releaseAll();
+    await Promise.race([everyone, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
+  };
+}
+
 const reasonOf = async (run: () => Promise<unknown>): Promise<string> => {
   try {
     await run();
@@ -112,7 +130,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       depots,
     );
     const siteService = new CounterpartySiteService(sites, counterparties, audit, siteGuard);
-    const known = new KnownPlacesFactsAdapter(geofences, siteService, fleet);
+    const known = new KnownPlacesFactsAdapter(geofences, siteService, counterparties, fleet);
 
     let foreignActiveDepots: string[] = [];
     let suffix = 0;
@@ -361,12 +379,66 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(renamed.name).toBe(`${PREFIX} Bãi đổi tên`);
     }, 60_000);
 
-    /** Khoa tu van + READ COMMITTED: lan thu hai doc thay lan thu nhat vua commit. */
+    /**
+     * Khoa tu van + READ COMMITTED: lan thu hai doc thay lan thu nhat vua commit.
+     *
+     * Hai giao dich phai CHONG LEN NHAU THAT, ke ca khi bai chay MOT MINH tren pool lanh (truoc day
+     * bai chi bat duoc mat khoa khi chay ca tep: chay rieng, giao dich thu hai con cho ket noi moi va
+     * bat dau SAU khi giao dich dau da commit). Nen: (1) lam nong pool; (2) moi giao dich dung o LAN
+     * GHI DAU TIEN cua no — sau moi phep doc cua luat trung ten — cho toi khi ben kia cung toi.
+     *   · Co khoa: ben thu hai con dung o `pg_advisory_xact_lock`, ben dau het gio cho, ghi, commit;
+     *     ben thu hai doc thay no -> `PLACE_NAME_TAKEN`.
+     *   · Mat khoa: CA HAI da doc xong truoc khi mot ai ghi -> ca hai deu qua -> bai DO.
+     * Da do (#395 tich hop): go dong khoa trong `place-write.store.ts`, chay rieng bai nay -> DO.
+     */
     it('hai lan tao CUNG ten dong thoi -> dung mot PLACE_NAME_TAKEN', async () => {
       await retireOwnDepots();
+      await Promise.all(Array.from({ length: 4 }, () => prisma.$queryRaw`SELECT 1`));
+      const gate = meetingPoint(2, 3_000);
+      const real = new PrismaPlaceWriteStore(prisma);
+      const overlapping: PlaceWriteStore = {
+        run: (work) =>
+          real.run((tx) => {
+            let waited = false;
+            const firstWrite = async (): Promise<void> => {
+              if (waited) return;
+              waited = true;
+              await gate();
+            };
+            return work({
+              ...tx,
+              geofences: Object.assign(Object.create(tx.geofences) as GeofenceRepository, {
+                register: async (input: Parameters<GeofenceRepository['register']>[0]) => {
+                  await firstWrite();
+                  return tx.geofences.register(input);
+                },
+              }),
+              counterparties: Object.assign(
+                Object.create(tx.counterparties) as CounterpartyRepository,
+                {
+                  create: async (input: Parameters<CounterpartyRepository['create']>[0]) => {
+                    await firstWrite();
+                    return tx.counterparties.create(input);
+                  },
+                },
+              ),
+            });
+          }),
+      };
+      const racing = new PlaceAdminService(
+        overlapping,
+        geofences,
+        sites,
+        counterparties,
+        fleet,
+        depots,
+        new MovementDepotOpenWorkReader(movementRepo, POLICY),
+        DEFAULT_TRANSPORT_PROOF_POLICY,
+        audit,
+      );
       const results = await Promise.allSettled([
-        places.create(depot('Bãi song song'), DIRECTOR),
-        places.create(
+        racing.create(depot('Bãi song song'), DIRECTOR),
+        racing.create(
           {
             kind: 'COUNTERPARTY_SITE',
             name: `${PREFIX} BAI SONG SONG`,
@@ -415,9 +487,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const fence = await prisma.transportGeofence.findUnique({ where: { id: view.id } });
       expect(fence).toMatchObject({ subjectKind: 'COUNTERPARTY_SITE', subjectId: site?.id });
 
+      // Tao don goi DUNG nhan cua man quan tri: kho cua phap nhan noi voi khach hang (§2.1).
       const knownPlace = (await known.listKnownPlaces()).find((place) => place.id === view.id);
       expect(knownPlace).toMatchObject({
+        kind: 'COUNTERPARTY_SITE',
+        kindLabel: 'Địa điểm khách hàng',
         name: `${PREFIX} Kho khách`,
+        address: 'KCN Đình Vũ',
         detail: `${PREFIX} Công ty khách`,
       });
 
@@ -527,7 +603,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         },
         DIRECTOR,
       );
-      expect((await known.listKnownPlaces()).some((place) => place.id === view.id)).toBe(true);
+      expect((await known.listKnownPlaces()).find((place) => place.id === view.id)).toMatchObject({
+        kindLabel: 'Nhà máy / kho đối tác',
+      });
 
       await counterparties.update(view.owner?.counterpartyId ?? '', { status: 'INACTIVE' });
 

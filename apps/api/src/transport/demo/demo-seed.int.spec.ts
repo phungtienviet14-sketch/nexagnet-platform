@@ -602,6 +602,7 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
         new PrismaCounterpartySiteRepository(prisma),
         new PrismaCounterpartyRepository(prisma),
       ),
+      new PrismaCounterpartyRepository(prisma),
     ).listKnownPlaces();
     const ours = known.filter((place) =>
       ['Bãi xe Hà Nội', 'Nhà máy thép Đình Vũ', 'Kho Nhựa Tân Phú Hưng'].includes(place.name),

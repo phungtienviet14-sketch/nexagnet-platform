@@ -14,12 +14,7 @@ import {
 } from 'react';
 import { authApi, type AuthUser } from '../../lib/auth';
 import { ForcedPasswordChange } from './ForcedPasswordChange';
-import {
-  createRefreshGate,
-  permissionsKey,
-  SESSION_ENDED_NOTICE,
-  sessionSignalOf,
-} from './session-signals';
+import { createRefreshGate, permissionsKey, reactToFailure } from './session-signals';
 
 interface AuthState {
   mode: 'api-key' | 'session' | 'none' | 'loading';
@@ -55,8 +50,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [grantKey, setGrantKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /*
+   * DANG XUAT CHU DONG (`#395`). Tu luc bam "Đăng xuất" toi luc mot phien MOI duoc xac nhan, moi
+   * `401` la hau qua cua chinh lan bam do — khong phai "mat khau vua duoc dat lai hoac tai khoan bi
+   * khoa". `signOutEpoch` tang moi lan dang xuat: mot lan doc `/auth/me` BAT DAU truoc do ma ve sau
+   * thi la ket qua cua phien cu, khong duoc go co.
+   */
+  const isSigningOutRef = useRef(false);
+  const signOutEpochRef = useRef(0);
 
   const refresh = useCallback(async (): Promise<void> => {
+    const epoch = signOutEpochRef.current;
     try {
       const config = await authApi.config();
       setMode(config.mode);
@@ -67,6 +71,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
       }
       try {
         const current = await authApi.me();
+        if (epoch !== signOutEpochRef.current) return;
+        isSigningOutRef.current = false;
         setUser(current.user);
         setGrantKey(permissionsKey(current.permissions));
         setNotice(null);
@@ -109,18 +115,27 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const gate = createRefreshGate(REFRESH_MIN_INTERVAL_MS);
-    const onFailure = (error: unknown): void => {
-      if (modeRef.current !== 'session') return;
-      const signal = sessionSignalOf(error);
-      if (signal === null) return;
-      if (signal === 'SESSION_ENDED' && userRef.current !== null) setNotice(SESSION_ENDED_NOTICE);
-      if (signal === 'SESSION_ENDED' || gate()) void refreshRef.current();
+    const onFailure = (error: unknown, meta: unknown): void => {
+      const reaction = reactToFailure(error, {
+        isSession: modeRef.current === 'session',
+        hasUser: userRef.current !== null,
+        isSigningOut: isSigningOutRef.current,
+        meta,
+      });
+      if (reaction.notice !== null) setNotice(reaction.notice);
+      if (reaction.refresh === 'NOW' || (reaction.refresh === 'GATED' && gate())) {
+        void refreshRef.current();
+      }
     };
     const queries = queryClient.getQueryCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error') onFailure(event.action.error);
+      if (event.type === 'updated' && event.action.type === 'error') {
+        onFailure(event.action.error, event.query.meta);
+      }
     });
     const mutations = queryClient.getMutationCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error') onFailure(event.action.error);
+      if (event.type === 'updated' && event.action.type === 'error') {
+        onFailure(event.action.error, event.mutation.meta);
+      }
     });
     const onVisible = (): void => {
       if (document.visibilityState !== 'visible' || modeRef.current !== 'session') return;
@@ -140,7 +155,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async (): Promise<void> => {
-    await authApi.logout();
+    isSigningOutRef.current = true;
+    signOutEpochRef.current += 1;
+    try {
+      await authApi.logout();
+    } catch (error) {
+      // Chua dang xuat duoc: phien van song, nen mot `401` sau day lai la tin hieu THAT.
+      isSigningOutRef.current = false;
+      throw error;
+    }
+    setNotice(null);
     setUser(null);
     setGrantKey(null);
     router.replace('/login');

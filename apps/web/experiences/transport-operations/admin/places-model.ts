@@ -552,8 +552,58 @@ export const isOwnerChoiceAllowed = (
   canManageCounterparties: boolean,
 ): boolean => choice === 'DEPOT' || canManageCounterparties;
 
-/** Tat/bat dia diem cua don vi khac cung doi quyen do; bai xe thi khong. */
-export const needsCounterpartyManage = (place: PlaceAdminView): boolean => place.kind !== 'DEPOT';
+/**
+ * Tat/bat dia diem cua don vi khac cung doi quyen do. CHI `COUNTERPARTY_SITE` (mot mat cua ho so
+ * phap nhan) — bai xe va diem khach hang kieu cu (`CUSTOMER`) chi can quyen quan ly vi tri, dung
+ * nhu `place-admin.service` phia may chu. Chat hon may chu = chan nguoi dung khoi viec ho duoc lam.
+ */
+export const needsCounterpartyManage = (place: Pick<PlaceAdminView, 'kind'>): boolean =>
+  place.kind === 'COUNTERPARTY_SITE';
+
+/** O nao cua trinh sua bi khoa vi thieu quyen quan ly khach hang/doi tac. */
+export interface PlaceFieldLocks {
+  readonly name: boolean;
+  readonly address: boolean;
+}
+
+/**
+ * Ten VA dia chi cua dia diem don vi khac la du lieu cua ho so phap nhan (dia diem cua don vi di
+ * theo) — may chu doi `transport.counterparty.manage` khi mot trong hai doi. Vi tri, ban kinh, ghi
+ * chu van chi can quyen quan ly vi tri. Them moi khong khoa o nao: loai chu da bi chan tu cau hoi
+ * "Địa điểm này của ai?".
+ */
+export function placeFieldLocks(
+  original: Pick<PlaceAdminView, 'kind'> | null,
+  canManageCounterparties: boolean,
+): PlaceFieldLocks {
+  const isLocked =
+    original !== null && needsCounterpartyManage(original) && !canManageCounterparties;
+  return { name: isLocked, address: isLocked };
+}
+
+/** Goi y ngan canh o bi khoa. */
+export const NAME_LOCKED_HINT =
+  'Đổi tên địa điểm của đơn vị khác cần quyền quản lý khách hàng, đối tác.';
+export const ADDRESS_LOCKED_HINT =
+  'Đổi địa chỉ địa điểm của đơn vị khác cần quyền quản lý khách hàng, đối tác.';
+
+/**
+ * Dien ten/dia chi tu ket qua tim (xuoi hoac nguoc) — CHI o dang trong VA khong bi khoa. Mot o bi
+ * khoa ma van duoc dien tu dong se gui mot thay doi may chu tu choi (`403`) khi luu.
+ */
+export function withLookupFill(
+  draft: PlaceDraft,
+  found: { readonly label: string; readonly address: string | null },
+  locks: PlaceFieldLocks,
+): PlaceDraft {
+  const fillName = !locks.name && draft.name.trim().length === 0;
+  const fillAddress = !locks.address && draft.address.trim().length === 0;
+  return {
+    ...draft,
+    name: fillName ? found.label : draft.name,
+    address: fillAddress ? (found.address ?? '') : draft.address,
+  };
+}
 
 const HISTORY_ACTION_LABEL: Readonly<Record<string, string>> = {
   'transport.place.create': 'Thêm địa điểm',

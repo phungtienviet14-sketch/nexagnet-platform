@@ -277,6 +277,38 @@ export function groupCheckState(
   return held === toggleable.length ? 'on' : 'mixed';
 }
 
+export type TriState = 'on' | 'off' | 'mixed';
+
+/** Du / do dang / trong theo so viec DANG CO tren tong so viec. */
+export const triStateOf = (held: number, total: number): TriState =>
+  held === 0 ? 'off' : held >= total ? 'on' : 'mixed';
+
+/**
+ * O NHOM hien tren man hinh. Hai cau hoi TACH nhau: "nhom dang co bao nhieu viec" (`checked`) va
+ * "bam o nhom duoc khong" (`isLocked`). Nhom khoa (vai Giam doc, nhom chi-Giam-doc, nhom lien ket)
+ * van phai noi DUNG trang thai cho mat va trinh doc man hinh — khong the la o trong canh "12/12".
+ */
+export interface GroupCheckboxView {
+  readonly checked: TriState;
+  readonly isLocked: boolean;
+  readonly held: number;
+  readonly total: number;
+}
+
+export function groupCheckbox(group: CatalogGroup, draft: AccessDraft): GroupCheckboxView {
+  const rows = actionRows(group, draft);
+  const held = rows.filter((row) => row.isOn).length;
+  const state = roleAcceptsGrants(draft.role)
+    ? groupCheckState(group, draftEffective(draft))
+    : 'locked';
+  return {
+    checked: state === 'locked' ? triStateOf(held, rows.length) : state,
+    isLocked: state === 'locked',
+    held,
+    total: rows.length,
+  };
+}
+
 /** Bam o nhom: dang du → tat het; con lai (trong hoac do dang) → bat het cac o bat tat duoc. */
 export function toggleGroup(draft: AccessDraft, group: CatalogGroup): AccessDraft {
   const state = groupCheckState(group, draftEffective(draft));
@@ -531,4 +563,24 @@ export function localUsernameSuggestion(name: string, prefix = ''): string {
   const given = words[words.length - 1] as string;
   const rest = words.slice(0, -1);
   return `${prefix}${[given, ...rest].join('.')}`.slice(0, 64);
+}
+
+/**
+ * Ten dang nhap khi DOI the "Người này là ai?". Nguoi dung da tu go → giu nguyen. Chua go:
+ *   · cung tien to (vd Điều hành ↔ Kế toán) → GIU goi y dang co — hieu ung goi y cua trinh tao chi
+ *     chay lai khi ho ten hoac tien to doi, nen xoa o day la de lai mot o trong vinh vien;
+ *   · khac tien to (vd sang Lái xe `lx.`) → goi y TAI CHO ngay, may chu goi y lai ngay sau do.
+ * Chua co ho ten thi de trong — buoc danh tinh se goi y khi co ten.
+ */
+export function usernameAfterPresetChange(
+  identity: IdentityDraft,
+  isUsernameEdited: boolean,
+  from: Pick<PresetChoice, 'usernamePrefix'>,
+  to: Pick<PresetChoice, 'usernamePrefix'>,
+): string {
+  if (isUsernameEdited) return identity.username;
+  const prefix = to.usernamePrefix ?? '';
+  const isSamePrefix = (from.usernamePrefix ?? '') === prefix;
+  if (isSamePrefix && identity.username.trim().length > 0) return identity.username;
+  return identity.name.trim().length === 0 ? '' : localUsernameSuggestion(identity.name, prefix);
 }

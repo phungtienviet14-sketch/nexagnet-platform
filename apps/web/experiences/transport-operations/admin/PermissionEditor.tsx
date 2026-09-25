@@ -8,14 +8,12 @@ import {
   actionRows,
   changeRole,
   DIRECTOR_CONFIRMATION_PHRASE,
-  draftEffective,
   escalatedAllows,
-  groupCheckState,
+  groupCheckbox,
   isDirectorConfirmed,
   permissionLabelLookup,
   presetsOf,
   presetLabelOf,
-  roleAcceptsGrants,
   sameAccess,
   setAction,
   toggleGroup,
@@ -65,18 +63,16 @@ export function GroupEditor({
 }) {
   const summaryId = useId();
   const listId = useId();
-  const effective = draftEffective(draft);
-  const acceptsGrants = roleAcceptsGrants(draft.role);
-  const state = acceptsGrants ? groupCheckState(group, effective) : 'locked';
+  const box = groupCheckbox(group, draft);
   const rows = actionRows(group, draft);
-  const held = rows.filter((row) => row.isOn).length;
   const isDirectorOnly = group.actions.every((action) => action.directorOnly);
 
   return (
-    <li className="tx-admin-group" data-state={state}>
+    <li className="tx-admin-group" data-state={box.isLocked ? 'locked' : box.checked}>
       <div className="tx-admin-group__head">
         <TriStateCheckbox
-          state={state}
+          checked={box.checked}
+          isLocked={box.isLocked}
           label={`Nhóm ${group.label}`}
           describedBy={summaryId}
           onToggle={onToggleGroup}
@@ -88,8 +84,8 @@ export function GroupEditor({
             {group.summary}
           </span>
         </div>
-        <span className="tx-admin-group__count" aria-label={`${held} trên ${rows.length} việc`}>
-          {held}/{rows.length}
+        <span className="tx-admin-group__count" aria-label={`${box.held} trên ${box.total} việc`}>
+          {box.held}/{box.total}
         </span>
         <button
           type="button"

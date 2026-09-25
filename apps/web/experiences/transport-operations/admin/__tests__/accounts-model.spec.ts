@@ -13,6 +13,7 @@ import {
   findPresetChoice,
   formatTemporaryPassword,
   grantDeltaLabel,
+  groupCheckbox,
   groupCheckState,
   identityProblems,
   isDirectorConfirmed,
@@ -22,6 +23,9 @@ import {
   sameAccess,
   setAction,
   toggleGroup,
+  triStateOf,
+  usernameAfterPresetChange,
+  EMPTY_IDENTITY,
   type AccessDraft,
 } from '../accounts-model';
 import type { AccountView, CatalogAction, CatalogGroup, PermissionCatalog } from '../admin-types';
@@ -133,6 +137,33 @@ describe('bo quyen rieng toi gian tu tung lan bam (#395)', () => {
     );
     expect(row).toMatchObject({ isOn: true, origin: 'GRANTED', needsConfirmation: true });
     expect(row?.sodLabel).toContain('Sửa căn cứ');
+  });
+
+  it('o nhom KHOA van noi DUNG trang thai: Giam doc du quyen thi "on", khong phai o trong', () => {
+    const director = changeRole('ADMIN');
+    expect(groupCheckbox(FLEET, director)).toEqual({
+      checked: 'on',
+      isLocked: true,
+      held: 2,
+      total: 2,
+    });
+    expect(groupCheckbox(FIELD, director)).toMatchObject({ checked: 'on', isLocked: true });
+    // MANAGER: nhom chi-Giam-doc khoa VA trong; nhom thuong bam duoc.
+    expect(groupCheckbox(ADMINISTRATION, manager)).toMatchObject({
+      checked: 'off',
+      isLocked: true,
+      held: 0,
+    });
+    expect(groupCheckbox(FLEET, manager)).toMatchObject({ checked: 'off', isLocked: false });
+    const one = setAction(manager, 'transport.vehicle.read', true);
+    expect(groupCheckbox(FLEET, one)).toMatchObject({ checked: 'mixed', isLocked: false, held: 1 });
+  });
+
+  it('du / do dang / trong theo so viec dang co', () => {
+    expect(triStateOf(0, 12)).toBe('off');
+    expect(triStateOf(5, 12)).toBe('mixed');
+    expect(triStateOf(12, 12)).toBe('on');
+    expect(triStateOf(0, 0)).toBe('off');
   });
 
   it('nhom chi-Giam-doc (quan-tri) va nhom lien ket (lai-xe) la KHOA', () => {
@@ -347,5 +378,44 @@ describe('ten dang nhap goi y tai cho', () => {
     expect(localUsernameSuggestion('Trần Văn An', 'lx.')).toBe('lx.an.tran.van');
     expect(localUsernameSuggestion('Đỗ Thị Đào')).toBe('dao.do.thi');
     expect(localUsernameSuggestion('  ', 'lx.')).toBe('lx.');
+  });
+});
+
+describe('doi the vai khong lam mat ten dang nhap goi y (#395)', () => {
+  const operations = findPresetChoice('OPERATIONS');
+  const accounting = findPresetChoice('ACCOUNTING');
+  const driver = findPresetChoice('DRIVER');
+  // Goi y cua MAY CHU (co hau to chong trung) — khong phai thu man hinh tu tinh lai duoc.
+  const suggested = { ...EMPTY_IDENTITY, name: 'Trần Văn An', username: 'an.van.tran2' };
+
+  it('Điều hành ↔ Kế toán (cung tien to): GIU goi y, buoc danh tinh khong bao loi 3–64', () => {
+    const afterAccounting = usernameAfterPresetChange(suggested, false, operations, accounting);
+    expect(afterAccounting).toBe('an.van.tran2');
+    const back = usernameAfterPresetChange(
+      { ...suggested, username: afterAccounting },
+      false,
+      accounting,
+      operations,
+    );
+    expect(back).toBe('an.van.tran2');
+    expect(identityProblems({ ...suggested, username: back })).toEqual([]);
+  });
+
+  it('doi tien to (sang Lái xe va nguoc lai): goi y lai NGAY theo tien to moi', () => {
+    const toDriver = usernameAfterPresetChange(suggested, false, operations, driver);
+    expect(toDriver).toBe('lx.an.tran.van');
+    expect(
+      usernameAfterPresetChange({ ...suggested, username: toDriver }, false, driver, accounting),
+    ).toBe('an.tran.van');
+  });
+
+  it('ten nguoi dung tu go thi khong bao gio bi thay; chua co ho ten thi de trong', () => {
+    const typed = { ...suggested, username: 'an.dieuhanh' };
+    expect(usernameAfterPresetChange(typed, true, operations, driver)).toBe('an.dieuhanh');
+    expect(usernameAfterPresetChange(EMPTY_IDENTITY, false, operations, driver)).toBe('');
+    // O trong (goi y truoc bi hong) + cung tien to: dien goi y tai cho thay vi de trong.
+    expect(
+      usernameAfterPresetChange({ ...suggested, username: '' }, false, operations, accounting),
+    ).toBe('an.tran.van');
   });
 });

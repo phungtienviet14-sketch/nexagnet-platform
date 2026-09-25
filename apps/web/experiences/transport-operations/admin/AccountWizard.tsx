@@ -24,6 +24,7 @@ import {
   stakeholderCandidates,
   toggleGroup,
   transportGroupsOf,
+  usernameAfterPresetChange,
   type AccessDraft,
   type IdentityDraft,
   type PresetChoiceId,
@@ -176,7 +177,10 @@ export function AccountWizard({
     setAccess(changeRole(next.role));
     setLinkTarget('');
     setTypedConfirmation('');
-    if (!isUsernameEdited) setIdentity((current) => ({ ...current, username: '' }));
+    setIdentity((current) => ({
+      ...current,
+      username: usernameAfterPresetChange(current, isUsernameEdited, choice, next),
+    }));
   };
 
   const pickLinkTarget = (id: string) => {

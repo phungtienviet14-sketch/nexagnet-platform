@@ -4,6 +4,7 @@ import { useId, useState, type FormEvent } from 'react';
 import { authApi, type AuthUser } from '../../lib/auth';
 import { useBranding } from '../../lib/branding';
 import {
+  passwordExpiryLabel,
   passwordChangeProblems,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -17,19 +18,6 @@ import {
  * cau noi TRUOC cua dieu do — thuong mo tren dien thoai cua lai xe, nen bo cuc la mot cot, o nhap to,
  * nut rong het be ngang (`auth.css`).
  */
-
-const formatExpiry = (value: string | null | undefined): string | null => {
-  if (value == null) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(date);
-};
 
 export function ForcedPasswordChange({
   user,
@@ -49,7 +37,7 @@ export function ForcedPasswordChange({
   const [isBusy, setIsBusy] = useState(false);
   const [problems, setProblems] = useState<readonly string[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
-  const expiry = formatExpiry(user.temporaryPasswordExpiresAt);
+  const expiry = passwordExpiryLabel(user.temporaryPasswordExpiresAt);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

@@ -93,6 +93,8 @@ describe('tao tai khoan', () => {
       reason: 'ESCALATION_CONFIRMATION_REQUIRED',
       detail: {
         violations: [{ code: 'ESCALATION_CONFIRMATION_REQUIRED', detail: { role: 'ADMIN' } }],
+        // Doi len Giam doc khong ke quyen nao: man hinh doc `actions` va noi cau chung.
+        actions: [],
       },
     });
     expect(await h.repository.findByUsername('gd.moi')).toBeNull();
@@ -158,6 +160,53 @@ describe('tao tai khoan', () => {
         }),
       ),
     ).toBe('ESCALATION_CONFIRMATION_REQUIRED');
+  });
+
+  /**
+   * Man hinh doc `detail.actions` o CAP CAO NHAT cua than loi. Hai hinh cua hop dong
+   * `AccessViolation` deu gop vao do: `permission` (mien gia `kho`) va `detail.actions` (van tai,
+   * `transport-permission-rules.ts`) — khong lap, theo thu tu gap.
+   */
+  it('than loi leo thang mang `detail.actions` = hop cac quyen can xac nhan', async () => {
+    const h = accountHarness([DIRECTOR, MANAGER]);
+    const created = await errorBodyOf(
+      h.service.createUser(actor, {
+        username: 'dh.nhay',
+        name: 'Nhạy',
+        role: 'MANAGER',
+        grants: [grant(KHO_GROUPS.nhay)],
+      }),
+    );
+    expect(created.detail).toMatchObject({
+      violations: [{ code: 'ESCALATION_CONFIRMATION_REQUIRED', permission: KHO_GROUPS.nhay }],
+      actions: [KHO_GROUPS.nhay],
+    });
+
+    const changed = await errorBodyOf(
+      h.service.setAccess(actor, MANAGER.id, {
+        role: 'MANAGER',
+        grants: [grant(KHO_GROUPS.nhay)],
+        dryRun: true,
+      }),
+    );
+    expect(changed).toMatchObject({
+      reason: 'ESCALATION_CONFIRMATION_REQUIRED',
+      detail: { actions: [KHO_GROUPS.nhay] },
+    });
+  });
+
+  it('bo quyen sai (khong chi leo thang) → ACCESS_INVALID, KHONG kem `actions`', async () => {
+    const h = accountHarness([DIRECTOR]);
+    const body = await errorBodyOf(
+      h.service.createUser(actor, {
+        username: 'dh.sai.nhay',
+        name: 'Sai nhạy',
+        role: 'MANAGER',
+        grants: [grant(KHO_GROUPS.nhay), grant('khong-mien.gi')],
+      }),
+    );
+    expect(body.reason).toBe('ACCESS_INVALID');
+    expect(body.detail).not.toHaveProperty('actions');
   });
 });
 

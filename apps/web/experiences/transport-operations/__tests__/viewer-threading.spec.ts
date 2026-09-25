@@ -7,6 +7,7 @@ import {
   hasDriverScope,
   hasOperationsScope,
   hasPlatformPermission,
+  hasStakeholderScope,
   operationsEmptyMessage,
   MANAGER_HAS_NO_TRANSPORT_SCOPE,
 } from '../transport-actions';
@@ -111,6 +112,26 @@ describe('#395 — helper doc tap quyen khi co, roi ve bang theo vai khi khong',
     expect(hasDriverScope({ role: 'SALE', permissions: new Set(['transport.vehicle.read']) })).toBe(
       false,
     );
+  });
+
+  it('pham vi ben gop von CHI den tu cau tra loi cua may chu — khong tu vai, khong tu tap quyen', () => {
+    const action = 'transport.stakeholder.self.vehicle.read';
+    // Chua biet ai: van KHONG — khong vai nao mang pham vi nay, "hien het" o day la hua sai.
+    expect(canPerform(null, action)).toBe(false);
+    expect(canPerform({ role: 'ADMIN' }, action)).toBe(false);
+    // Tap quyen co ghi ma do cung khong du: `/auth/me` khong phai noi tra loi cau nay.
+    expect(canPerform({ role: 'MANAGER', permissions: new Set([action]) }, action)).toBe(false);
+    const linked = {
+      role: 'MANAGER' as const,
+      permissions: new Set<string>(),
+      stakeholderLinked: true,
+    };
+    expect(canPerform(linked, action)).toBe(true);
+    expect(hasStakeholderScope(linked)).toBe(true);
+    expect(hasStakeholderScope('MANAGER')).toBe(false);
+    // Cau tra loi ben gop von khong mo them viec van hanh nao.
+    expect(hasOperationsScope(linked)).toBe(false);
+    expect(canPerform(linked, 'transport.vehicle.read')).toBe(false);
   });
 
   it('quyen nen tang: tap quyen quyet dinh; khong co tap quyen thi chi Giam doc', () => {

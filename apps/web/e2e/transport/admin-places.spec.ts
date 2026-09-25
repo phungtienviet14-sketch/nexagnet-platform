@@ -137,6 +137,61 @@ test.describe('Địa điểm vận hành — bãi xe', () => {
   });
 });
 
+test.describe('Điều hành có quyền vị trí nhưng KHÔNG có quyền khách hàng, đối tác', () => {
+  test('dia diem cua don vi khac: khoa TEN va DIA CHI (nhu may chu), vi tri van sua duoc', async ({
+    page,
+  }) => {
+    const world = await servePlaces(page, {
+      me: {
+        role: 'MANAGER',
+        permissions: ['transport.geofence.read', 'transport.geofence.manage'],
+      },
+    });
+    await openPlaces(page);
+
+    await page
+      .getByRole('button', { name: /Kho Nhựa Tân Phú Hưng/ })
+      .first()
+      .click();
+    const detail = page.getByTestId('place-detail');
+    await detail.getByRole('button', { name: 'Sửa địa điểm' }).click();
+
+    const name = page.getByLabel('Tên địa điểm');
+    const address = page.getByLabel('Địa chỉ', { exact: true });
+    await expect(name).toHaveAttribute('readonly', '');
+    await expect(address).toHaveAttribute('readonly', '');
+    await expect(
+      page.getByText('Đổi tên địa điểm của đơn vị khác cần quyền quản lý'),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Đổi địa chỉ địa điểm của đơn vị khác cần quyền quản lý'),
+    ).toBeVisible();
+
+    // Ban kinh (hang rao) chi can quyen vi tri — luu duoc, va lan luu KHONG mang ten/dia chi.
+    await page.getByLabel('Bán kính (m)').fill('400');
+    await page.getByRole('button', { name: 'Lưu thay đổi' }).click();
+    await expect(page.getByText('Đã lưu Kho Nhựa Tân Phú Hưng.')).toBeVisible();
+    expect(lastRequest(world, 'PATCH', /gf-tan-phu-hung$/)?.body).toEqual({ radiusMetres: 400 });
+  });
+
+  test('bai xe khong doi quyen khach hang: ten va dia chi sua duoc', async ({ page }) => {
+    await servePlaces(page, {
+      me: {
+        role: 'MANAGER',
+        permissions: ['transport.geofence.read', 'transport.geofence.manage'],
+      },
+    });
+    await openPlaces(page);
+    await page
+      .getByRole('button', { name: /Bãi xe Hà Nội/ })
+      .first()
+      .click();
+    await page.getByTestId('place-detail').getByRole('button', { name: 'Sửa địa điểm' }).click();
+    await expect(page.getByLabel('Tên địa điểm')).not.toHaveAttribute('readonly', '');
+    await expect(page.getByLabel('Địa chỉ', { exact: true })).not.toHaveAttribute('readonly', '');
+  });
+});
+
 test.describe('Một nguồn cho Tạo đơn', () => {
   test('dia diem khach hang moi hien o Tao don ngay lan mo ke tiep', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

@@ -73,6 +73,14 @@ export interface PlacesWorld {
   /** Vong xe / don dang dung bai xe dang bat — co thi doi bai phai xac nhan. */
   openWork: { runs: { id: string; code: string }[]; orders: { id: string; code: string }[] } | null;
   knownReads: number;
+  /**
+   * Nguoi dang dang nhap. `permissions: null` = may chu CU (khong tra tap quyen) — man hinh roi ve
+   * ban guong theo vai.
+   */
+  readonly me: {
+    readonly role: 'ADMIN' | 'MANAGER' | 'ACCOUNTING';
+    readonly permissions: readonly string[] | null;
+  };
 }
 
 const NOW = '2026-09-25T02:00:00.000Z';
@@ -395,11 +403,19 @@ async function answer(route: Route, world: PlacesWorld): Promise<void> {
   if (path === '/auth/config') return json(route, { mode: 'session' });
   if (path === '/auth/csrf') return json(route, { csrfToken: 'e2e-csrf' });
   if (path === '/auth/me') {
-    // May chu CU: khong tra `permissions` — man hinh roi ve ban guong theo vai (Giam doc).
+    // Mac dinh may chu CU: khong tra `permissions` — man hinh roi ve ban guong theo vai (Giam doc).
+    const { role, permissions } = world.me;
     return json(route, {
-      user: { id: 'u-giam-doc', username: 'giam-doc', name: 'Giám đốc Hùng', role: 'ADMIN' },
-      roles: ['ADMIN'],
+      user:
+        role === 'ADMIN'
+          ? { id: 'u-giam-doc', username: 'giam-doc', name: 'Giám đốc Hùng', role }
+          : { id: 'u-an', username: 'an', name: 'Trần Văn An', role },
+      roles: [role],
+      ...(permissions === null ? {} : { permissions }),
     });
+  }
+  if (path === '/transport/me/vehicles') {
+    return problem(route, 403, 'ASSET_STAKEHOLDER_NOT_FOUND');
   }
   if (path.startsWith('/transport/places/admin'))
     return answerAdmin(route, world, method, path, body);
@@ -437,7 +453,10 @@ async function answer(route: Route, world: PlacesWorld): Promise<void> {
   return problem(route, 404, 'ROUTE_NOT_MOCKED');
 }
 
-export async function servePlaces(page: Page): Promise<PlacesWorld> {
+export async function servePlaces(
+  page: Page,
+  options: { readonly me?: PlacesWorld['me'] } = {},
+): Promise<PlacesWorld> {
   const world: PlacesWorld = {
     places: seedPlaces(),
     counterparties: [
@@ -452,6 +471,7 @@ export async function servePlaces(page: Page): Promise<PlacesWorld> {
     history: new Map(),
     openWork: null,
     knownReads: 0,
+    me: options.me ?? { role: 'ADMIN', permissions: null },
   };
   await page.route(
     (url) => url.pathname.startsWith('/transport/') || url.pathname.startsWith('/auth/'),

@@ -1,3 +1,4 @@
+import type { CounterpartyLink } from '../../counterparty/counterparty.types.js';
 import type { GeoPoint } from '../../geo/geo-point.js';
 import type { DepotSource } from '../../planning/depot-directory.js';
 import type { GeofenceSubjectKind } from '../../proof/geofence.repository.js';
@@ -41,6 +42,19 @@ export const OTHER_FENCE_KIND_LABEL: Readonly<Record<'FUEL_SUPPLIER' | 'AD_HOC',
   FUEL_SUPPLIER: 'Cây xăng',
   AD_HOC: 'Điểm tạm',
 };
+
+/**
+ * MOT luat cho cau "dia diem phap nhan nay cua KHACH HANG hay cua DOI TAC?" (`#395` §2.1): phap nhan
+ * so huu co lien ket `CUSTOMER` (`TransportCounterpartyLink`) thi la khach hang. Man "Dia diem van
+ * hanh", luat trung ten, chu cua dia diem moi va Tao don (`known-places.ts`) deu hoi hai ham nay —
+ * khong noi nao tu dem lai lien ket theo cach rieng.
+ */
+export const customerLinkOf = <T extends Pick<CounterpartyLink, 'kind'>>(
+  links: readonly T[],
+): T | null => links.find((link) => link.kind === 'CUSTOMER') ?? null;
+
+export const isCustomerLinked = (links: readonly Pick<CounterpartyLink, 'kind'>[]): boolean =>
+  customerLinkOf(links) !== null;
 
 export function displayKindOf(kind: ManagedPlaceKind, customerLinked: boolean): PlaceDisplayKind {
   if (kind === 'DEPOT') return 'DEPOT';

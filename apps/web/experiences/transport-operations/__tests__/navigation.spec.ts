@@ -10,6 +10,7 @@ import {
   parseNavigationFromSearch,
   resolveNavigation,
   resolveSection,
+  shouldProbeStakeholderScope,
   SUPERSEDED_HEADING,
   supersededEntries,
   supersededNote,
@@ -897,6 +898,7 @@ describe('#341 — danh muc ke toan theo cau hoi nghiep vu', () => {
         fleet: 'dispatch',
         maintenance: 'assets',
         'asset-ownership': 'assets',
+        'my-vehicles': 'assets',
         'order-completion': 'receivable',
         settlement: 'receivable',
         'ar-ap': 'payable',
@@ -1145,5 +1147,72 @@ describe('#395 — danh muc theo tap quyen hieu luc cua may chu', () => {
       withPermissions('SALE', ['transport.driver.self.trip.read']),
     ).map((screen) => screen.id);
     expect(selfScope).toEqual(['home', 'trip', 'history']);
+  });
+});
+
+/**
+ * `#395` — BEN GOP VON CO THEM VIEC VAN HANH. Pham vi "Xe tôi có cổ phần" den tu mot hang lien ket
+ * ma chi may chu doc duoc; `/auth/me` khong mang no. Man hinh HOI may chu (`GET /transport/me/vehicles`)
+ * va chi dat muc len thanh ben khi may chu tra du lieu.
+ */
+describe('#395 — "Xe tôi có cổ phần" cho nguoi vua van hanh vua gop von', () => {
+  const FLEET = ['transport.vehicle.read', 'transport.vehicle.manage'];
+  const managerWith = (
+    permissions: readonly string[],
+    stakeholderLinked?: boolean,
+  ): NavigationInput => ({
+    capabilities: FULL,
+    role: 'MANAGER',
+    permissions: new Set(permissions),
+    ...(stakeholderLinked === undefined ? {} : { stakeholderLinked }),
+  });
+
+  it('MANAGER co quyen VA da noi ben gop von: muc nam trong TAI SAN, mo duoc bang dia chi', () => {
+    const input = managerWith(FLEET, true);
+    expect(idsOf(input)).toEqual(['fleet', 'my-vehicles']);
+    const assets = navigationGroups(input).find((entry) => entry.group.id === 'assets');
+    expect(assets?.sections.map((section) => section.label)).toEqual(['Xe tôi có cổ phần']);
+    expect(parseNavigationFromSearch('?section=my-vehicles', input).section).toBe('my-vehicles');
+  });
+
+  it('may chu chua xac nhan (dang hoi, hoac 403) thi KHONG co muc do', () => {
+    expect(idsOf(managerWith(FLEET))).toEqual(['fleet']);
+    expect(idsOf(managerWith(FLEET, false))).toEqual(['fleet']);
+    expect(parseNavigationFromSearch('?section=my-vehicles', managerWith(FLEET)).section).toBe(
+      'fleet',
+    );
+  });
+
+  it('ben gop von THUAN TUY (khong quyen nao): danh muc van rong — giu man hien thang', () => {
+    expect(navigationGroups(managerWith([], true))).toEqual([]);
+    expect(
+      navigationGroups({ capabilities: FULL, role: 'MANAGER', stakeholderLinked: true }),
+    ).toEqual([]);
+  });
+
+  it('chua biet ai (vai null) khong hua muc cua ben gop von — pham vi do khong vai nao mang', () => {
+    expect(idsOf(unknownRole())).not.toContain('my-vehicles');
+    expect(idsOf(director())).not.toContain('my-vehicles');
+    expect(idsOf({ ...director(), stakeholderLinked: true })).toContain('my-vehicles');
+  });
+
+  it('chi HOI may chu khi co tap quyen cua may chu VA co viec van hanh', () => {
+    expect(shouldProbeStakeholderScope(managerWith(FLEET))).toBe(true);
+    expect(
+      shouldProbeStakeholderScope({
+        capabilities: FULL,
+        role: 'ADMIN',
+        permissions: new Set(actionsForRole('ADMIN')),
+      }),
+    ).toBe(true);
+    // Ben gop von thuan tuy da co man hien thang — khong hoi hai lan.
+    expect(shouldProbeStakeholderScope(managerWith([]))).toBe(false);
+    // May chu cu / che do khong phien: khong co tap quyen, khong hoi.
+    expect(shouldProbeStakeholderScope(director())).toBe(false);
+    expect(shouldProbeStakeholderScope(unknownRole())).toBe(false);
+    // Khach khong bat van tai loi: khong hoi.
+    expect(
+      shouldProbeStakeholderScope({ ...managerWith(FLEET), capabilities: ['transport-costing'] }),
+    ).toBe(false);
   });
 });

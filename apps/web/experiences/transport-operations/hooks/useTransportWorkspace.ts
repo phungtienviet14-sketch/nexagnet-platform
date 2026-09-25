@@ -3,9 +3,10 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useAuth } from '../../../components/auth/AuthGate';
+import { FORBIDDEN_IS_ANSWER_META } from '../../../components/auth/session-signals';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import type { FuelDocumentListQuery } from '../fuel-review-types';
-import type { NavigationInput } from '../navigation';
+import { shouldProbeStakeholderScope, type NavigationInput } from '../navigation';
 import type { TollSpendReportQuery } from '../toll-report-types';
 import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
@@ -42,7 +43,7 @@ export function useNavigationInput(): NavigationInput {
   const tenant = useTenantRuntime();
   const { user, permissions } = useAuth();
   const role = user?.role ?? null;
-  return useMemo(
+  const base = useMemo<NavigationInput>(
     () => ({
       capabilities: tenant.capabilities,
       role,
@@ -51,6 +52,37 @@ export function useNavigationInput(): NavigationInput {
     }),
     [tenant.capabilities, tenant.readiness.blockedCapabilities, role, permissions],
   );
+  const stakeholderLinked = useStakeholderScopeProbe(base);
+  return useMemo(
+    () => (stakeholderLinked ? { ...base, stakeholderLinked: true } : base),
+    [base, stakeholderLinked],
+  );
+}
+
+/**
+ * "NGUOI NAY CO PHAI BEN GOP VON KHONG" — hoi CHINH may chu (`#395`).
+ *
+ * `/auth/me` khong mang pham vi nay (no den tu mot hang lien ket, khong tu vai hay quyen rieng), nen
+ * cau tra loi duy nhat la `GET /transport/me/vehicles`: du lieu = co, `403` = khong. CUNG khoa voi
+ * `useMyStakeholderVehicles` — man "Xe tôi có cổ phần" mo ra la co ngay danh sach tu lan hoi nay
+ * (roi tu lam moi theo luat cua chinh man do).
+ *
+ * Mot lan moi phien: `403` la cau tra loi binh thuong cua nguoi khong gop von, nen khong thu lai,
+ * khong hoi lai khi gan man moi hay quay lai tab, va khong lam `AuthGate` doc lai `/auth/me`.
+ */
+function useStakeholderScopeProbe(input: NavigationInput): boolean {
+  const probe = useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.myVehicles,
+    queryFn: () => transportApi.stakeholderSelf.myVehicles(),
+    enabled: shouldProbeStakeholderScope(input),
+    retry: false,
+    retryOnMount: false,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    meta: FORBIDDEN_IS_ANSWER_META,
+  });
+  return probe.isSuccess;
 }
 
 export const TRANSPORT_QUERY_KEYS = {

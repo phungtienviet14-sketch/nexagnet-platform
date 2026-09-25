@@ -2,7 +2,9 @@ import type { CapabilityId } from '@netviet/tenant';
 import type { AuthRole } from '../../lib/auth';
 import {
   canPerform,
+  hasOperationsScope,
   hasPlatformPermission,
+  STAKEHOLDER_SCOPE_ACTIONS,
   type PlatformPermission,
   type TransportAction,
   type TransportViewer,
@@ -52,6 +54,7 @@ export type TransportSectionId =
   | 'payroll'
   | 'driver-settlement'
   | 'asset-ownership'
+  | 'my-vehicles'
   | 'finance'
   | 'margin'
   | 'ar-ap'
@@ -503,6 +506,26 @@ export const TRANSPORT_SECTIONS = [
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.asset_ownership.read',
   },
+  {
+    /**
+     * `#395` — "Xe toi co co phan" cho nguoi VUA co viec van hanh VUA la ben gop von.
+     *
+     * Truoc `#395` ben gop von la tai khoan KHONG co quyen van hanh nao, va man cua ho hien THANG
+     * khi danh muc rong (`TransportOperations`). Gio Giam doc cap duoc quyen rieng cho mot `MANAGER`
+     * da noi ho so ben gop von — danh muc cua nguoi do khong con rong, va khong co muc nay thi ho
+     * mat duong vao xe cua chinh minh.
+     *
+     * Chi hien khi may chu DA xac nhan pham vi (`stakeholderLinked`) VA nguoi do co viec van hanh
+     * (`sectionPermitted`). Ben gop von thuan tuy (khong quyen nao) giu nguyen man hien thang, khong
+     * mot thanh ben chi co mot muc.
+     */
+    id: 'my-vehicles',
+    label: 'Xe tôi có cổ phần',
+    group: 'assets',
+    summary: 'Những xe bạn góp vốn: tỷ lệ của bạn, tình trạng xe và hoạt động gần đây.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.stakeholder.self.vehicle.read',
+  },
   /*
    * `#395` — QUAN TRI. Hai muc, hai truc quyen KHAC NHAU va do la co y:
    *
@@ -671,12 +694,32 @@ export const isSectionEnabled = (section: TransportSection, input: NavigationInp
  * thieu ca hai la muc SAI, va o day no bi DONG (fail-closed); bai spec bat no truoc khi toi day.
  */
 export function sectionPermitted(section: TransportSection, viewer: TransportViewer): boolean {
+  if (section.requiredAction !== undefined && isStakeholderScoped(section.requiredAction)) {
+    // Muc cua ben gop von CHI nam tren thanh ben cua nguoi CO viec van hanh; ben gop von thuan tuy
+    // co man hien thang khi danh muc rong (xem muc `my-vehicles`).
+    return canPerform(viewer, section.requiredAction) && hasOperationsScope(viewer);
+  }
   if (section.requiredAction !== undefined) return canPerform(viewer, section.requiredAction);
   if (section.requiredPlatformPermission !== undefined) {
     return hasPlatformPermission(viewer, section.requiredPlatformPermission);
   }
   return false;
 }
+
+const isStakeholderScoped = (action: TransportAction): boolean =>
+  STAKEHOLDER_SCOPE_ACTIONS.includes(action);
+
+/**
+ * CO NEN HOI may chu "nguoi nay co phai ben gop von khong" (`GET /transport/me/vehicles`) de dat muc
+ * `my-vehicles` len thanh ben. Chi khi: khach bat `transport-core`, may chu DA tra tap quyen (tuc
+ * che do phien, may chu `#395`), va nguoi do co viec van hanh — ben gop von thuan tuy da co man hien
+ * thang, con khi chua biet ai thi chua co gi de hoi.
+ */
+export const shouldProbeStakeholderScope = (input: NavigationInput): boolean =>
+  (input.capabilities as readonly string[]).includes('transport-core') &&
+  input.permissions !== undefined &&
+  input.permissions !== null &&
+  hasOperationsScope(input);
 
 export const findSection = (id: string): TransportSection | undefined =>
   TRANSPORT_SECTIONS.find((section) => section.id === id);

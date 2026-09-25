@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../../app-composition.js';
+import { CounterpartyRepository } from '../counterparty/counterparty.repository.js';
 import { DepotOpenWorkReader } from '../planning/depot-open-work.js';
 import { PlaceWriteStore } from '../proof/place-write.store.js';
 import { TransportProofModule } from '../proof/transport-proof.module.js';
 import { TransportModule } from '../transport.module.js';
 import { PlaceAdminService } from './admin/place-admin.service.js';
 import { TransportPlacesRegistrar } from './admin/place-registrations.js';
+import { KnownPlacesFactsAdapter } from './known-places.port.js';
 import { TRANSPORT_PLACE_ADMIN_DECISIONS } from './place-admin-decisions.js';
 import { TRANSPORT_PLACE_DECISIONS } from './place-decisions.js';
 
@@ -96,6 +98,22 @@ describe('composition cua man dia diem van hanh (#395)', () => {
 
   it('transport-core export cong doc viec dang mo tai bai xe', () => {
     expect(metadata(TransportModule, 'exports')).toContain(DepotOpenWorkReader);
+  });
+
+  /**
+   * Adapter "dia diem da biet" dang ky o GOC: moi thu no tiem PHAI la export cua mot module — ke ca
+   * `CounterpartyRepository` them o `#395` de gan nhan "Địa điểm khách hàng". Thieu export thi tien
+   * trinh api chet luc khoi dong (boot spec transport-preview bat duoc; bai nay chi ro VI SAO).
+   */
+  it('adapter dia diem da biet chi tiem token duoc export', () => {
+    const params = (Reflect.getMetadata('design:paramtypes', KnownPlacesFactsAdapter) ??
+      []) as unknown[];
+    const exported = [
+      ...metadata(TransportModule, 'exports'),
+      ...metadata(TransportProofModule, 'exports'),
+    ];
+    expect(params).toContain(CounterpartyRepository);
+    expect(params.filter((token) => !exported.includes(token))).toEqual([]);
   });
 
   it('tu vung quyet dinh rieng: mot diem `place.write`, chu so huu rieng', () => {

@@ -3,7 +3,11 @@ import type { CounterpartySite } from '../../counterparty/site.types.js';
 import type { PlaceWriteTx } from '../../proof/place-write.store.js';
 import { TransportDomainError } from '../../transport.errors.js';
 import { PlaceAdminError } from './place-admin-error.js';
-import type { CreatePlaceCommand, PlaceOwnerInput } from './place-admin.types.js';
+import {
+  customerLinkOf,
+  type CreatePlaceCommand,
+  type PlaceOwnerInput,
+} from './place-admin.types.js';
 
 /**
  * CHU cua mot dia diem MOI cua don vi khac (`#395`) — "Dia diem nay cua ai?".
@@ -141,7 +145,7 @@ async function attachToExistingSite(
     party,
     partyCreated: false,
     linkCreated: null,
-    customerId: links.find((link) => link.kind === 'CUSTOMER')?.subjectId ?? null,
+    customerId: customerLinkOf(links)?.subjectId ?? null,
     site: updated ?? site,
     siteBefore: site,
   };
@@ -171,7 +175,7 @@ async function planParty(tx: PlaceWriteTx, owner: PlaceOwnerInput): Promise<Part
     return {
       party,
       newParty: null,
-      customerId: links.find((link) => link.kind === 'CUSTOMER')?.subjectId ?? null,
+      customerId: customerLinkOf(links)?.subjectId ?? null,
       linkCustomerId: null,
     };
   }

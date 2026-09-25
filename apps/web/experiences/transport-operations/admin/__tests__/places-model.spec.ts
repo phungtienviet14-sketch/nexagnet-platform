@@ -15,6 +15,7 @@ import {
   isOwnerChoiceAllowed,
   needsCounterpartyManage,
   placeDraftProblems,
+  placeFieldLocks,
   placeHistoryLabel,
   placeKindFilterOf,
   placeKindLabel,
@@ -22,6 +23,7 @@ import {
   placeOwnerLine,
   placeRings,
   savedNotice,
+  withLookupFill,
   withOwnerChoice,
   withPoint,
 } from '../places-model';
@@ -342,6 +344,49 @@ describe('#395 — hop dong may chu moi, va duong lui cho may chu cu', () => {
     expect(isOwnerChoiceAllowed('PARTNER', true)).toBe(true);
     expect(needsCounterpartyManage(DEPOT_HN)).toBe(false);
     expect(needsCounterpartyManage(place({ id: 'x', name: 'Kho X' }))).toBe(true);
+  });
+
+  it('CHI dia diem phap nhan doi quyen doi tac — diem khach hang kieu cu thi khong (nhu may chu)', () => {
+    expect(needsCounterpartyManage(CUSTOMER_SITE)).toBe(true);
+    expect(needsCounterpartyManage(PARTNER_SITE)).toBe(true);
+    expect(needsCounterpartyManage(LEGACY)).toBe(false);
+    expect(needsCounterpartyManage(DEPOT_HP)).toBe(false);
+  });
+
+  it('khoa ten VA dia chi cua dia diem phap nhan khi thieu quyen doi tac; vi tri van sua duoc', () => {
+    expect(placeFieldLocks(PARTNER_SITE, false)).toEqual({ name: true, address: true });
+    expect(placeFieldLocks(CUSTOMER_SITE, false)).toEqual({ name: true, address: true });
+    expect(placeFieldLocks(PARTNER_SITE, true)).toEqual({ name: false, address: false });
+    expect(placeFieldLocks(LEGACY, false)).toEqual({ name: false, address: false });
+    expect(placeFieldLocks(DEPOT_HN, false)).toEqual({ name: false, address: false });
+    // Them moi: loai chu da bi chan tu cau hoi "Dia diem nay cua ai?" — khong khoa o nao.
+    expect(placeFieldLocks(null, false)).toEqual({ name: false, address: false });
+  });
+
+  it('tim nguoc KHONG dien vao o bi khoa — luu se khong gui thay doi ma may chu tu choi', () => {
+    const original = { ...PARTNER_SITE, address: null };
+    const moved = withPoint(
+      editPlaceDraft(original),
+      { latitude: 21.01, longitude: 105.81 },
+      'MAP',
+    );
+    const found = { label: 'Đường Láng', address: '12 Đường Láng, Đống Đa, Hà Nội' };
+
+    const locked = withLookupFill(moved, found, placeFieldLocks(original, false));
+    expect(locked.name).toBe('Nhà máy thép Đình Vũ');
+    expect(locked.address).toBe('');
+    const patch = buildUpdatePlaceInput(locked);
+    expect(patch).not.toHaveProperty('address');
+    expect(patch).not.toHaveProperty('name');
+    expect(patch).toHaveProperty('point');
+
+    const open = withLookupFill(moved, found, placeFieldLocks(original, true));
+    expect(open.address).toBe('12 Đường Láng, Đống Đa, Hà Nội');
+    expect(open.name).toBe('Nhà máy thép Đình Vũ');
+    expect(withLookupFill(newPlaceDraft(), found, placeFieldLocks(null, false))).toMatchObject({
+      name: 'Đường Láng',
+      address: '12 Đường Láng, Đống Đa, Hà Nội',
+    });
   });
 
   it('lich su: cau may chu neu co, khong thi ten viec — khong bao gio lo ma', () => {

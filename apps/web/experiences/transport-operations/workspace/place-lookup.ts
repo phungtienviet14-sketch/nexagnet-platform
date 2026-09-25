@@ -98,15 +98,19 @@ export function searchOutcomeOf(response: PlaceSearchResponse): SearchOutcomeVie
  * ------------------------------------------------------------------ */
 
 /**
- * NHAN LOAI khi may chu KHONG tra `kindLabel` (`#395` §2.1 — cung nhan voi man "Địa điểm vận hành").
- * Kho cua mot khach hang la mot `COUNTERPARTY_SITE` cua phap nhan khach — chi may chu biet dieu do,
- * nen duong lui o day noi "đối tác"; `CUSTOMER` la hang rao kieu cu gan thang vao khach hang.
+ * NHAN LOAI khi may chu KHONG tra `kindLabel` (`#395` §2.1 — cung nhan voi man "Địa điểm vận hành",
+ * `PLACE_KIND_LABEL` phia API). Kho cua mot khach hang la mot `COUNTERPARTY_SITE` cua phap nhan
+ * khach — chi may chu biet dieu do, nen duong lui o day noi "đối tác"; `CUSTOMER` la hang rao KIEU CU
+ * gan thang vao khach hang, va may chu goi no dung ten do.
  */
 export const KNOWN_PLACE_KIND_LABEL: Readonly<Record<KnownPlaceKind, string>> = {
   DEPOT: 'Bãi xe',
   COUNTERPARTY_SITE: 'Nhà máy / kho đối tác',
-  CUSTOMER: 'Địa điểm khách hàng',
+  CUSTOMER: 'Điểm khách hàng (kiểu cũ)',
 };
+
+/** Nhan may chu dat cho kho cua MOT KHACH HANG (phap nhan co mat khach hang). */
+export const CUSTOMER_SITE_KIND_LABEL = 'Địa điểm khách hàng';
 
 /** Nhan loai cua MOT dia diem: nhan may chu tinh, khong co thi suy tu `kind`. */
 export const knownPlaceKindLabel = (place: {
@@ -117,11 +121,15 @@ export const knownPlaceKindLabel = (place: {
     ? place.kindLabel.trim()
     : KNOWN_PLACE_KIND_LABEL[place.kind];
 
-/** Thu tu nhom: bai xe truoc (noi xe xuat phat), roi kho khach hang, roi nha may/kho doi tac. */
+/**
+ * Thu tu nhom: bai xe truoc (noi xe xuat phat), roi kho khach hang, roi nha may/kho doi tac, cuoi
+ * cung diem khach hang kieu cu.
+ */
 const KNOWN_PLACE_ORDER: readonly string[] = [
   KNOWN_PLACE_KIND_LABEL.DEPOT,
-  KNOWN_PLACE_KIND_LABEL.CUSTOMER,
+  CUSTOMER_SITE_KIND_LABEL,
   KNOWN_PLACE_KIND_LABEL.COUNTERPARTY_SITE,
+  KNOWN_PLACE_KIND_LABEL.CUSTOMER,
 ];
 
 export interface KnownPlaceGroup {

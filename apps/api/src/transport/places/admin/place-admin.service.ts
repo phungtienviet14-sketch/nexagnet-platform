@@ -189,8 +189,18 @@ export class PlaceAdminService {
         const before = await this.requireManaged(tx.geofences, id);
         const nameChanged = command.name !== undefined && command.name !== before.label;
         const siteBefore = await this.siteOf(tx, before);
-        if (nameChanged && before.subjectKind === 'COUNTERPARTY_SITE') {
-          this.requireCounterpartyManage(caller, 'update');
+        const address = command.address;
+        const siteAddressChanged =
+          siteBefore !== null && address !== undefined && address !== siteBefore.address;
+        const addressChanged =
+          (address !== undefined && address !== before.address) || siteAddressChanged;
+        // Ten va dia chi cua dia diem don vi khac la cua HO SO PHAP NHAN (`TransportCounterpartySite`)
+        // — sua chung doi CA quyen do. Hinh hoc (toa do, ban kinh) chi la hang rao.
+        if (before.subjectKind === 'COUNTERPARTY_SITE' && (nameChanged || addressChanged)) {
+          this.requireCounterpartyManage(caller, 'update', [
+            ...(nameChanged ? ['name'] : []),
+            ...(addressChanged ? ['address'] : []),
+          ]);
         }
         let openWork: DepotOpenWork | null = null;
         if (nameChanged && command.name !== undefined) {
@@ -213,11 +223,13 @@ export class PlaceAdminService {
           ...(command.note === undefined ? {} : { note: command.note }),
           ...(command.address === undefined ? {} : { address: command.address }),
         });
+        // Chi ghi dia diem phap nhan khi ten / dia chi CUA NO doi: gui lai dung gia tri cu khong
+        // phai mot lan sua (va khong de lai dong kiem toan rong).
         const siteAfter =
-          siteBefore && (nameChanged || command.address !== undefined)
+          siteBefore && (nameChanged || siteAddressChanged)
             ? await tx.sites.update(siteBefore.id, {
                 ...(nameChanged ? { name: command.name } : {}),
-                ...(command.address === undefined ? {} : { address: command.address }),
+                ...(siteAddressChanged ? { address } : {}),
               })
             : siteBefore;
         return { changed: true, fence: fence ?? before, before, siteBefore, siteAfter, openWork };
@@ -419,13 +431,17 @@ export class PlaceAdminService {
     }
   }
 
-  private requireCounterpartyManage(caller: PlaceWriteCaller, operation: Operation): void {
+  private requireCounterpartyManage(
+    caller: PlaceWriteCaller,
+    operation: Operation,
+    fields: readonly string[] = [],
+  ): void {
     if (caller.canManageCounterparties) return;
     throw this.denied(
       'PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE',
       'DENIED',
       'Địa điểm của khách hàng hoặc đơn vị khác cần thêm quyền quản lý khách hàng, đối tác.',
-      { operation },
+      { operation, ...(fields.length > 0 ? { fields } : {}) },
     );
   }
 
@@ -463,16 +479,11 @@ export class PlaceAdminService {
     const work = await this.openWork.openWorkAt(depotLabel);
     if (work.runs.length === 0 && work.orders.length === 0) return null;
     if (acknowledged === true) return work;
-    const closes =
-      work.idleHours === null
-        ? 'sẽ không tự đóng khi xe về bãi nữa'
-        : `sẽ chỉ tự đóng sau ${work.idleHours} giờ không có việc`;
-    throw this.denied(
-      'DEPOT_CHANGE_AFFECTS_OPEN_WORK',
-      'CONFLICT',
-      `Còn ${work.runs.length} vòng xe và ${work.orders.length} đơn đang mở dùng bãi xe này. Các vòng xe đó ${closes}. Xác nhận để tiếp tục.`,
-      { runs: work.runs, orders: work.orders, idleHours: work.idleHours },
-    );
+    throw this.denied('DEPOT_CHANGE_AFFECTS_OPEN_WORK', 'CONFLICT', openWorkMessage(work), {
+      runs: work.runs,
+      orders: work.orders,
+      idleHours: work.idleHours,
+    });
   }
 
   private async requireNoOtherActiveDepot(tx: PlaceWriteTx, depot: GeofenceRecord): Promise<void> {
@@ -757,6 +768,23 @@ export function nextDepotCode(name: string, taken: readonly (string | null)[]): 
   }
 }
 
+/**
+ * Cau hoi xac nhan khi doi / tat bai xe con viec dang mo — CHI ke phan co that: khong "Còn 0 vòng
+ * xe", va cau ve viec tu dong vong chi noi khi CO vong xe.
+ */
+export function openWorkMessage(work: DepotOpenWork): string {
+  const counts = [
+    ...(work.runs.length > 0 ? [`${work.runs.length} vòng xe`] : []),
+    ...(work.orders.length > 0 ? [`${work.orders.length} đơn`] : []),
+  ];
+  const closes =
+    work.idleHours === null
+      ? 'sẽ không tự đóng khi xe về bãi nữa'
+      : `sẽ chỉ tự đóng sau ${work.idleHours} giờ không có việc`;
+  const runsNote = work.runs.length > 0 ? ` Các vòng xe đó ${closes}.` : '';
+  return `Còn ${counts.join(' và ')} đang mở dùng bãi xe này.${runsNote} Xác nhận để tiếp tục.`;
+}
+
 /** Loi da dich tu mot va cham chi muc DB (nguoi ghi ngoai khoa) — de quyet dinh ghi `storage`. */
 const STORAGE_CONFLICTS = new WeakSet<Error>();
 
@@ -806,5 +834,7 @@ function sanitizeDetail(detail: Readonly<Record<string, unknown>>): Record<strin
   if (typeof detail['conflictKindLabel'] === 'string')
     out['conflictKind'] = detail['conflictKindLabel'];
   if (typeof detail['operation'] === 'string') out['operation'] = detail['operation'];
+  // Ten TRUONG (`name` / `address`), khong phai gia tri cua chung.
+  if (Array.isArray(detail['fields'])) out['fields'] = detail['fields'];
   return out;
 }

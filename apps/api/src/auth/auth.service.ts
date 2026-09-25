@@ -589,14 +589,16 @@ export class AuthService {
   ): void {
     const violations = validateAccess(this.domains, { ...access, promotesToAdmin });
     if (violations.length === 0) return;
-    const reason = violations.every((violation) => violation.code === ESCALATION_VIOLATION)
-      ? 'ESCALATION_CONFIRMATION_REQUIRED'
-      : 'ACCESS_INVALID';
+    const escalationOnly = violations.every((violation) => violation.code === ESCALATION_VIOLATION);
     throw this.deny(
       operation,
-      reason,
+      escalationOnly ? 'ESCALATION_CONFIRMATION_REQUIRED' : 'ACCESS_INVALID',
       { ...(userId ? { userId } : {}), role: access.role, violations: codesOf(violations) },
-      { detail: { violations } },
+      {
+        detail: escalationOnly
+          ? { violations, actions: escalationActionsOf(violations) }
+          : { violations },
+      },
     );
   }
 
@@ -699,6 +701,25 @@ function requireUpdated(result: UserWrite): Extract<UserWrite, { status: 'UPDATE
 
 function codesOf(violations: readonly AccessViolation[]): string[] {
   return [...new Set(violations.map((violation) => violation.code))];
+}
+
+/**
+ * Ma quyen can xac nhan leo thang — HOP cua moi vi pham leo thang, dat ngay tren `detail.actions`
+ * cua than loi de man hinh ke ten tung quyen ma khong phai lan vao tung vi pham.
+ *
+ * Mien noi quyen nhay cam theo MOT trong hai hinh cua hop dong `AccessViolation`: `detail.actions`
+ * (danh sach, vd van tai) hoac `permission` (tung dong). Doi len vai Giam doc khong ke quyen nao —
+ * mang RONG, va man hinh noi cau chung.
+ */
+function escalationActionsOf(violations: readonly AccessViolation[]): string[] {
+  const actions = violations.flatMap((violation) => {
+    const listed = violation.detail?.['actions'];
+    const fromDetail = Array.isArray(listed)
+      ? listed.filter((code): code is string => typeof code === 'string')
+      : [];
+    return violation.permission === undefined ? fromDetail : [...fromDetail, violation.permission];
+  });
+  return [...new Set(actions)];
 }
 
 /**

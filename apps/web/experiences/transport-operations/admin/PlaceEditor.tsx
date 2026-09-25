@@ -21,21 +21,25 @@ import { OpenWorkDialog } from './OpenWorkDialog';
 import {
   buildCreatePlaceInput,
   buildUpdatePlaceInput,
+  ADDRESS_LOCKED_HINT,
   COUNTERPARTY_MANAGE_NEEDED,
   GEOMETRY_CHANGE_WARNING,
   geometryChanged,
   isEmptyPatch,
   isOwnerChoiceAllowed,
+  NAME_LOCKED_HINT,
   NEW_COUNTERPARTY,
   nudgePoint,
   OWNER_CHOICES,
   placeDraftProblems,
+  placeFieldLocks,
   placeKindLabel,
   placeOwnerLine,
   RADIUS_MAX_METRES,
   RADIUS_MIN_METRES,
   RADIUS_SLIDER_MAX,
   RADIUS_SLIDER_MIN,
+  withLookupFill,
   withOwnerChoice,
   withPoint,
   type PlaceDraft,
@@ -92,9 +96,11 @@ export function PlaceEditor({
 }) {
   const titleId = useId();
   const nameHintId = useId();
+  const addressHintId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const isCreate = draft.original === null;
-  const isNameLocked = !isCreate && draft.original?.kind !== 'DEPOT' && !canManageCounterparties;
+  /* Ten va dia chi cua dia diem don vi khac = ho so phap nhan: doi them quyen do (nhu may chu). */
+  const locks = placeFieldLocks(draft.original, canManageCounterparties);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<SearchState>({ status: 'IDLE' });
   const [pasted, setPasted] = useState('');
@@ -110,6 +116,8 @@ export function PlaceEditor({
   draftRef.current = draft;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const locksRef = useRef(locks);
+  locksRef.current = locks;
 
   useEffect(() => heading.current?.focus(), []);
 
@@ -130,13 +138,7 @@ export function PlaceEditor({
       .reverse(point)
       .then((response) => {
         if (!isCurrent || response.status !== 'OK' || response.result === null) return;
-        const current = draftRef.current;
-        onChangeRef.current({
-          ...current,
-          name: current.name.trim().length === 0 ? response.result.label : current.name,
-          address:
-            current.address.trim().length === 0 ? (response.result.address ?? '') : current.address,
-        });
+        onChangeRef.current(withLookupFill(draftRef.current, response.result, locksRef.current));
       })
       .catch(() => undefined);
     return () => {
@@ -442,17 +444,13 @@ export function PlaceEditor({
                             className="tx-btn tx-btn--small"
                             aria-label={`Đặt điểm ở đây: ${result.label}`}
                             onClick={() => {
-                              onChange({
-                                ...withPoint(draftRef.current, result.point, 'SEARCH'),
-                                name:
-                                  draftRef.current.name.trim().length === 0
-                                    ? result.label
-                                    : draftRef.current.name,
-                                address:
-                                  draftRef.current.address.trim().length === 0
-                                    ? (result.address ?? '')
-                                    : draftRef.current.address,
-                              });
+                              onChange(
+                                withLookupFill(
+                                  withPoint(draftRef.current, result.point, 'SEARCH'),
+                                  result,
+                                  locks,
+                                ),
+                              );
                             }}
                           >
                             Đặt điểm ở đây
@@ -545,31 +543,45 @@ export function PlaceEditor({
             </div>
 
             <div className="tx-admin-fields">
-              <label className="tx-field">
-                <span>Tên địa điểm</span>
-                <input
-                  value={draft.name}
-                  onChange={(event) => onChange({ ...draft, name: event.target.value })}
-                  maxLength={200}
-                  required
-                  /* Doi ten dia diem cua don vi khac = sua ho so phap nhan: doi them quyen do. */
-                  readOnly={isNameLocked}
-                  aria-describedby={isNameLocked ? nameHintId : undefined}
-                />
-                {isNameLocked ? (
+              {/*
+                Goi y o bi khoa nam NGOAI nhan: nam trong `<label>` thi no thanh mot phan TEN cua o
+                ("Địa chỉ Đổi địa chỉ…"). Trinh doc man hinh doc no qua `aria-describedby`.
+              */}
+              <div className="tx-admin-field">
+                <label className="tx-field">
+                  <span>Tên địa điểm</span>
+                  <input
+                    value={draft.name}
+                    onChange={(event) => onChange({ ...draft, name: event.target.value })}
+                    maxLength={200}
+                    required
+                    readOnly={locks.name}
+                    aria-describedby={locks.name ? nameHintId : undefined}
+                  />
+                </label>
+                {locks.name ? (
                   <small className="tx-admin-hint" id={nameHintId}>
-                    {COUNTERPARTY_MANAGE_NEEDED}
+                    {NAME_LOCKED_HINT}
                   </small>
                 ) : null}
-              </label>
-              <label className="tx-field">
-                <span>Địa chỉ</span>
-                <input
-                  value={draft.address}
-                  onChange={(event) => onChange({ ...draft, address: event.target.value })}
-                  maxLength={300}
-                />
-              </label>
+              </div>
+              <div className="tx-admin-field">
+                <label className="tx-field">
+                  <span>Địa chỉ</span>
+                  <input
+                    value={draft.address}
+                    onChange={(event) => onChange({ ...draft, address: event.target.value })}
+                    maxLength={300}
+                    readOnly={locks.address}
+                    aria-describedby={locks.address ? addressHintId : undefined}
+                  />
+                </label>
+                {locks.address ? (
+                  <small className="tx-admin-hint" id={addressHintId}>
+                    {ADDRESS_LOCKED_HINT}
+                  </small>
+                ) : null}
+              </div>
               <label className="tx-field tx-field--wide">
                 <span>Ghi chú cho lái xe, điều hành (cổng vào, giờ nhận hàng…)</span>
                 <textarea

@@ -54,7 +54,15 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
     await expect(page.getByLabel('Tên đăng nhập', { exact: true })).toHaveValue('an.van.tran');
     await page.getByLabel('Số điện thoại', { exact: true }).fill('0912345678');
     await page.getByLabel('Chức danh', { exact: true }).fill('Điều phối viên');
+    // Quay lai doi Điều hành ↔ Kế toán (cung tien to): goi y ten dang nhap KHONG bi xoa.
+    for (const preset of [/^Kế toán/, /Điều hành \/ Quản lý/]) {
+      await page.getByRole('button', { name: 'Quay lại' }).click();
+      await page.getByRole('radio', { name: preset }).check();
+      await page.getByRole('button', { name: 'Tiếp tục' }).click();
+      await expect(page.getByLabel('Tên đăng nhập', { exact: true })).toHaveValue('an.van.tran');
+    }
     await page.getByRole('button', { name: 'Tiếp tục' }).click();
+    await expect(page.getByText('Tên đăng nhập cần từ 3 đến 64 ký tự.')).toHaveCount(0);
 
     await expect(
       page.getByRole('heading', { name: 'Người này làm những nhóm việc nào?' }),
@@ -202,6 +210,11 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
 
     // Vai Giam doc: phai GO cau xac nhan, mot lan bam la qua re cho toan quyen.
     await detail.getByRole('radio', { name: /^Giám đốc/ }).check();
+    // O nhom KHOA van noi DUNG trang thai: Giam doc du ca nhom — khong phai o trong canh "n/n".
+    const fleetGroup = detail.getByRole('checkbox', { name: 'Nhóm Đội xe & lái xe' });
+    await expect(fleetGroup).toHaveAttribute('aria-disabled', 'true');
+    await expect(fleetGroup).toHaveAttribute('aria-checked', 'true');
+    await expect(fleetGroup).toHaveText('✓');
     const save = detail.getByRole('button', { name: 'Lưu quyền' });
     await expect(save).toBeDisabled();
     await detail.getByLabel(/Gõ đúng câu/).fill('Tôi hiểu Giám đốc có toàn quyền');
@@ -223,6 +236,64 @@ test.describe('Man hinh doc TAP QUYEN cua may chu', () => {
     await expect(page.getByText(MANAGER_HAS_NO_TRANSPORT_SCOPE)).toHaveCount(0);
     await expect(nav(page).getByRole('link', { name: 'Tài khoản & quyền' })).toHaveCount(0);
     await expect(nav(page).getByRole('link', { name: 'Tổng quan' })).toHaveCount(0);
+  });
+
+  test('Dieu hanh co quyen VA da noi ho so ben gop von: van vao duoc "Xe tôi có cổ phần"', async ({
+    page,
+  }) => {
+    const an = makeAccount({ id: 'u-an', username: 'an', name: 'Trần Văn An', role: 'MANAGER' });
+    await serveAccounts(page, {
+      me: an,
+      permissions: groupCodes('doi-xe'),
+      myVehicles: [
+        {
+          vehicleId: 'veh-1',
+          registrationPlate: '29H-123.45',
+          vehicleClass: 'Đầu kéo',
+          status: 'IDLE',
+          operationalControl: 'INTERNAL_OPERATED',
+          currentOdoKm: 120000,
+          myBasisPoints: 3000,
+          myEffectiveFrom: '2026-01-01',
+          myHistory: [
+            { ownershipBasisPoints: 3000, effectiveFrom: '2026-01-01', effectiveTo: null },
+          ],
+          driverName: 'Nguyễn Văn Bình',
+        },
+      ],
+    });
+    await page.goto('/');
+
+    // Danh muc KHONG rong (co nhom Doi xe) — truoc day man ben gop von chi hien khi danh muc rong.
+    await expect(page.getByRole('heading', { level: 1, name: 'Đội xe & lái xe' })).toBeVisible();
+    const mine = nav(page).getByRole('link', { name: 'Xe tôi có cổ phần' });
+    await expect(mine).toBeVisible();
+    await mine.click();
+    await expect(page).toHaveURL(/section=my-vehicles/);
+    await expect(page.getByRole('table', { name: 'Xe tôi có cổ phần', exact: true })).toContainText(
+      '29H-123.45',
+    );
+
+    // Tai lai trang: dia chi `?section=my-vehicles` con song toi luc may chu xac nhan pham vi.
+    await page.reload();
+    await expect(page.getByRole('table', { name: 'Xe tôi có cổ phần', exact: true })).toContainText(
+      '29H-123.45',
+    );
+  });
+
+  test('Dieu hanh KHONG gop von: may chu tra 403 cho lan hoi — khong co muc do', async ({
+    page,
+  }) => {
+    const an = makeAccount({ id: 'u-an', username: 'an', name: 'Trần Văn An', role: 'MANAGER' });
+    const world = await serveAccounts(page, { me: an, permissions: groupCodes('doi-xe') });
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Đội xe & lái xe' })).toBeVisible();
+    // Man hinh DA hoi may chu (khong doan), va may chu noi khong.
+    await expect
+      .poll(() => world.requests.filter((entry) => entry.path === '/transport/me/vehicles').length)
+      .toBeGreaterThan(0);
+    await expect(nav(page).getByRole('link', { name: 'Xe tôi có cổ phần' })).toHaveCount(0);
   });
 
   test('Ke toan bi BOT nhom Nhien lieu: muc do bien khoi danh muc; tra lai thi hien', async ({

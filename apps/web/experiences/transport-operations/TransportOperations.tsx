@@ -81,20 +81,13 @@ export function TransportOperations() {
   // Vai den SAU lan ve dau tien: `AuthGate` con dang doi `/auth/me`. Nen phai giai quyet lai dia
   // chi khi danh tinh doi — khong lam vay thi mot deep link toi muc chi Giam doc thay duoc se roi
   // ve mac dinh vinh vien du nguoi dung dung la Giam doc.
+  //
+  // Giai quyet lai TU DIA CHI, khong tu trang thai da giai quyet: moi lan doi muc/chon/loc deu ghi
+  // dia chi truoc, nen dia chi = trang thai — TRU mot deep link vua bi roi ve mac dinh vi quyen chua
+  // toi. `#395`: pham vi ben gop von den SAU `/auth/me` (mot lan hoi may chu), nen
+  // `?section=my-vehicles` phai con song toi luc cau tra loi ve.
   useEffect(() => {
-    setState((current) =>
-      resolveNavigation(
-        {
-          surface: current.surface === 'driver' ? 'driver' : null,
-          section: current.section,
-          screen: current.screen,
-          selection: current.selection,
-          tripFilter: current.tripFilter,
-        },
-        null,
-        navigation,
-      ),
-    );
+    setState(readNavigation(navigation));
   }, [navigation]);
 
   // Back/forward: doc lai tu chinh dia chi, khong doan tu trang thai truoc do.
@@ -318,6 +311,10 @@ function SectionBody({
     // duoc xem ho so xe khong nhat thiet duoc xem ai la chu chiec xe do.
     case 'asset-ownership':
       return <AssetOwnershipView />;
+    // `#395` — ben gop von CO THEM viec van hanh: CUNG man voi ben gop von thuan tuy (ho thay no
+    // hien thang khi danh muc rong), nay co mot dong tren thanh ben.
+    case 'my-vehicles':
+      return <StakeholderVehiclesView />;
     case 'driver-fund':
       return <DriverFundView />;
     case 'expense-claims':

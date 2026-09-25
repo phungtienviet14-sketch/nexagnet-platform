@@ -96,6 +96,11 @@ export interface AccountsWorld {
   me: { accountId: string; permissions: readonly string[] | null };
   /** Tao lai ma CSRF sau lan doi mat khau — man hinh phai giu ma MOI. */
   csrf: string;
+  /**
+   * Xe cua nguoi dang dang nhap neu ho DA NOI ho so ben gop von (`GET /transport/me/vehicles`);
+   * `null` = khong phai ben gop von — may chu that tra `403 ASSET_STAKEHOLDER_NOT_FOUND`.
+   */
+  readonly myVehicles: readonly Record<string, unknown>[] | null;
 }
 
 const NOW = '2026-09-25T02:00:00.000Z';
@@ -511,15 +516,40 @@ async function answer(route: Route, world: AccountsWorld): Promise<void> {
     driver.authUserId = (body.authUserId as string | null) ?? null;
     return json(route, driver);
   }
+  if (path === '/transport/me/vehicles/activity') {
+    if (world.myVehicles === null) return notAStakeholder(route);
+    return json(route, {
+      range: { from: '2026-08-27', to: '2026-09-25', businessDays: 30 },
+      utilisationFormula: 'ngayCoChangKhongHuy / ngayLichTrongKhoang',
+      vehicles: [],
+      unavailableSources: [],
+    });
+  }
+  if (path === '/transport/me/vehicles') {
+    return world.myVehicles === null ? notAStakeholder(route) : json(route, world.myVehicles);
+  }
   if (path === '/transport/drivers') return json(route, world.drivers);
   if (path === '/transport/asset-ownership/stakeholders') return json(route, []);
   if (path === '/transport/vehicles') return json(route, VEHICLES);
   return problem(route, 404, 'ROUTE_NOT_MOCKED', `khong co mock cho ${method} ${path}`);
 }
 
+/** Cung than `403` voi `AssetOwnershipScopeService` khi tai khoan khong phai ben gop von. */
+const notAStakeholder = (route: Route): Promise<void> =>
+  problem(
+    route,
+    403,
+    'ASSET_STAKEHOLDER_NOT_FOUND',
+    'Tài khoản này không có quyền xem xe đã yêu cầu',
+  );
+
 export async function serveAccounts(
   page: Page,
-  options: { readonly me?: Account; readonly permissions?: readonly string[] | null } = {},
+  options: {
+    readonly me?: Account;
+    readonly permissions?: readonly string[] | null;
+    readonly myVehicles?: readonly Record<string, unknown>[] | null;
+  } = {},
 ): Promise<AccountsWorld> {
   const me = options.me ?? DIRECTOR;
   const accounts = [DIRECTOR, ACCOUNTANT, DRIVER_ACCOUNT, SYSTEM_OPERATOR]
@@ -553,6 +583,7 @@ export async function serveAccounts(
           : options.permissions,
     },
     csrf: 'e2e-csrf',
+    myVehicles: options.myVehicles ?? null,
   };
   await page.route(
     (url) =>

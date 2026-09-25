@@ -275,8 +275,9 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
  * mot hang `TransportAssetStakeholder.authUserId`, khong tu mot chuc danh. Xem khoi
  * `STAKEHOLDER_SCOPE_ACTIONS` trong `apps/api/src/transport/transport-actions.ts`.
  *
- * Hau qua o phia man hinh: `canPerform` tra `false` cho moi vai, nen KHONG duoc dung no lam dieu
- * kien hien be mat ben huu quan. Dieu kien dung la API tra ve du lieu hay `403`.
+ * Hau qua o phia man hinh: `canPerform` KHONG doc vai hay tap quyen cho cac ma nay — no chi tra
+ * `true` khi `TransportViewer.stakeholderLinked` noi may chu da tra du lieu cho
+ * `GET /transport/me/vehicles` (`#395`). Dieu kien dung van la API tra du lieu hay `403`.
  */
 export const STAKEHOLDER_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.stakeholder.self.vehicle.read',
@@ -399,6 +400,14 @@ export const roleCanPerform = (role: AuthRole, action: TransportAction): boolean
 export interface TransportViewer {
   readonly role: AuthRole | null;
   readonly permissions?: ReadonlySet<string> | null;
+  /**
+   * Tai khoan nay DUOC NOI voi mot ho so ben gop von (`TransportAssetStakeholder.authUserId`).
+   *
+   * Pham vi nay KHONG den tu vai hay quyen rieng, nen `/auth/me` khong mang no — CHI may chu biet,
+   * va no noi bang cach TRA DU LIEU (khong phai `403`) cho `GET /transport/me/vehicles`. `true` chi
+   * khi may chu da tra loi nhu vay; thieu/`false` = chua hoi, hoac khong phai ben gop von.
+   */
+  readonly stakeholderLinked?: boolean;
 }
 
 /**
@@ -415,6 +424,14 @@ const permissionsOf = (viewer: TransportViewerInput): ReadonlySet<string> | null
   viewer === null || typeof viewer === 'string' ? null : (viewer.permissions ?? null);
 
 /**
+ * Nguoi dang xem DA duoc may chu xac nhan la ben gop von. Khong co duong lui theo vai va khong co
+ * "chua biet thi hien": pham vi nay khong vai nao mang, nen mot cau tra loi doan truoc o client chi
+ * co the sai.
+ */
+export const hasStakeholderScope = (viewer: TransportViewerInput): boolean =>
+  viewer !== null && typeof viewer !== 'string' && viewer.stakeholderLinked === true;
+
+/**
  * `role === null` (va khong co tap quyen) nghia la KHONG BIET vai, khong phai "khong co quyen".
  *
  * Xay ra o hai luc that: (a) `AuthGate` dang doi `/auth/me`, va (b) tenant chay che do khong phien
@@ -423,6 +440,8 @@ const permissionsOf = (viewer: TransportViewerInput): ReadonlySet<string> | null
  * duoc viec ma API dang cho phep. Nen o day tra `true`, dung khuon `isSectionEnabled` cua b2b.
  */
 export const canPerform = (viewer: TransportViewerInput, action: TransportAction): boolean => {
+  // Pham vi ben gop von: CHI cau tra loi cua may chu (xem `TransportViewer.stakeholderLinked`).
+  if (STAKEHOLDER_SCOPE_ACTIONS.includes(action)) return hasStakeholderScope(viewer);
   const permissions = permissionsOf(viewer);
   if (permissions !== null) return permissions.has(action);
   const role = roleOf(viewer);

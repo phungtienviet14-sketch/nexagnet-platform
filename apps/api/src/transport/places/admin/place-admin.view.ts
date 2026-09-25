@@ -21,6 +21,7 @@ import {
   MANAGED_PLACE_KINDS,
   PLACE_DISPLAY_KINDS,
   PLACE_KIND_LABEL,
+  customerLinkOf,
   displayKindOf,
   isManagedPlaceKind,
   type DepotPlannerStatus,
@@ -155,7 +156,7 @@ export class PlaceAdminViews {
     );
     const customerLinks = new Map(
       linkLists.flatMap((links) => {
-        const link = links.find((entry) => entry.kind === 'CUSTOMER');
+        const link = customerLinkOf(links);
         return link ? [[link.counterpartyId, link] as const] : [];
       }),
     );

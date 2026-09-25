@@ -104,7 +104,9 @@ export class UsersController {
     return this.auth.assignRole(currentUser(request), parseId(rawId), body);
   }
 
+  /** Khoa — `200` nhu `enable`: day la mot lan doi trang thai, khong tao ra tai nguyen moi. */
   @Post(':id/disable')
+  @HttpCode(HttpStatus.OK)
   disable(
     @Param('id') rawId: string,
     @Body() body: DisableUserInput,

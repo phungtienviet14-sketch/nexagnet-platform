@@ -1,5 +1,6 @@
 import { parseGeoPoint } from '../geo/geo-point.js';
 import type { Geofence, GeofenceSubjectKind } from '../proof/geofence.repository.js';
+import { fenceKindLabel } from './admin/place-admin.types.js';
 import type { KnownPlace, KnownPlaceKind } from './place-search.types.js';
 
 /**
@@ -10,7 +11,10 @@ import type { KnownPlace, KnownPlaceKind } from './place-search.types.js';
  * cung doc. Hai so se lech nhau vao lan sua thu hai. Ham nay chi DOC va DAT TEN.
  *
  * `#395`: nguoi goi dua vao hang rao con hieu luc THAT (`listEffectivelyActive()` — dia diem, phap
- * nhan, khach deu con hoat dong), va MOI dia diem mang ten CHU cua no o dong phu.
+ * nhan, khach deu con hoat dong), va MOI dia diem mang ten CHU cua no o dong phu va NHAN LOAI cua
+ * no (`kindLabel`) — CHINH `fenceKindLabel()` ma man "Dia diem van hanh" va luat trung ten dung,
+ * nen Tao don khong the goi mot kho khach hang la "Nhà máy / kho đối tác" trong khi man quan tri
+ * goi no la "Địa điểm khách hàng".
  */
 
 /** Thu tu hien thi: bai xe cua minh truoc, roi dia diem phap nhan, roi hang rao khach hang. */
@@ -27,7 +31,12 @@ const isKnownPlaceKind = (kind: GeofenceSubjectKind): kind is KnownPlaceKind =>
 export interface KnownSiteName {
   readonly siteName: string;
   readonly counterpartyName: string;
+  /** Phap nhan so huu co lien ket khach hang (`isCustomerLinked`) -> "Địa điểm khách hàng". */
+  readonly customerLinked: boolean;
 }
+
+/** Hang rao dua vao: ban ghi day du cua kho (co dia chi), hoac chi hinh hoc + nhan (spec thuan). */
+export type KnownPlaceFence = Geofence & { readonly address?: string | null };
 
 /**
  * Hang rao -> dia diem da biet.
@@ -42,7 +51,7 @@ export interface KnownSiteName {
  * "hop le" ma nguoi dung bam chon lam diem lay hang.
  */
 export function buildKnownPlaces(
-  fences: readonly Geofence[],
+  fences: readonly KnownPlaceFence[],
   sitesById: ReadonlyMap<string, KnownSiteName>,
   customerNames: ReadonlyMap<string, string> = new Map(),
 ): readonly KnownPlace[] {
@@ -55,13 +64,27 @@ export function buildKnownPlaces(
     if (kind === 'COUNTERPARTY_SITE') {
       const site = fence.subjectId === null ? undefined : sitesById.get(fence.subjectId);
       if (site === undefined) return [];
-      return [placeOf(fence, kind, site.siteName, site.counterpartyName, parsed.point)];
+      return [
+        placeOf(fence, kind, {
+          name: site.siteName,
+          detail: site.counterpartyName,
+          customerLinked: site.customerLinked,
+          point: parsed.point,
+        }),
+      ];
     }
     const detail =
       kind === 'CUSTOMER' && fence.subjectId !== null
         ? (customerNames.get(fence.subjectId) ?? null)
         : null;
-    return [placeOf(fence, kind, fence.label, detail, parsed.point)];
+    return [
+      placeOf(fence, kind, {
+        name: fence.label,
+        detail,
+        customerLinked: false,
+        point: parsed.point,
+      }),
+    ];
   });
 
   return [...places].sort(
@@ -72,12 +95,22 @@ export function buildKnownPlaces(
   );
 }
 
-function placeOf(
-  fence: Geofence,
-  kind: KnownPlaceKind,
-  name: string,
-  detail: string | null,
-  point: KnownPlace['point'],
-): KnownPlace {
-  return { id: fence.id, kind, name, detail, point, radiusMetres: fence.radiusMetres };
+interface PlaceFacts {
+  readonly name: string;
+  readonly detail: string | null;
+  readonly customerLinked: boolean;
+  readonly point: KnownPlace['point'];
+}
+
+function placeOf(fence: KnownPlaceFence, kind: KnownPlaceKind, facts: PlaceFacts): KnownPlace {
+  return {
+    id: fence.id,
+    kind,
+    kindLabel: fenceKindLabel(kind, facts.customerLinked),
+    name: facts.name,
+    address: fence.address ?? null,
+    detail: facts.detail,
+    point: facts.point,
+    radiusMetres: fence.radiusMetres,
+  };
 }

@@ -90,6 +90,9 @@ describe('transport-preview process boot contract', () => {
       });
       const depotAfter = (await planningService.describePolicy()).depot;
       const adminPlaces = await context.get(PlaceAdminService, { strict: false }).list();
+      // #395 §2.1: Tao don doc NHAN LOAI tu may chu — adapter o goc tiem them CounterpartyRepository
+      // (export cua TransportModule) de biet dia diem nao la cua khach hang.
+      const knownAfter = (await context.get(TransportPlaceService, { strict: false }).known()).places;
 
       const proof = {
         capabilityCount: capabilities.length,
@@ -119,6 +122,7 @@ describe('transport-preview process boot contract', () => {
         depotCodeAfter: depotAfter.kind === 'RESOLVED' ? depotAfter.depot.code : null,
         placeAdminController: has(PlaceAdminController),
         adminDepotStatus: adminPlaces.map((place) => place.kindLabel + '/' + (place.depot ? place.depot.plannerStatus : '-')),
+        knownPlacesAfter: knownAfter.map((place) => place.kindLabel + '/' + place.name),
       };
       await context.close();
       process.stdout.write('<<PREVIEW_BOOT_PROOF>>' + JSON.stringify(proof));
@@ -161,6 +165,7 @@ describe('transport-preview process boot contract', () => {
       expect(parsed.depotCodeAfter).toBe('DEPOT-BOOT');
       expect(parsed.placeAdminController).toBe(true);
       expect(parsed.adminDepotStatus).toEqual(['Bãi xe/IN_USE']);
+      expect(parsed.knownPlacesAfter).toEqual(['Bãi xe/Boot bai xe']);
       // Goi that co 11 capability; con so chi de bai noi ra rang no dang boot MOT DOI HINH DAY DU,
       // khong phai mot goi rong tinh co xanh.
       expect(parsed.capabilityCount).toBeGreaterThanOrEqual(10);

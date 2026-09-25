@@ -92,6 +92,18 @@
   color: var(--tx-ink-faint);
 }
 
+/* O nhap + goi y NGOAI nhan (goi y khong duoc thanh mot phan ten cua o). */
+.tx-admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.tx-admin-field > .tx-field {
+  flex: none;
+}
+
 /* ---------------------------------------------------------------- *
  * Hai cot: so cai ben trai, chi tiet ben phai
  * ---------------------------------------------------------------- */
@@ -726,9 +738,11 @@
   color: var(--tx-wait);
 }
 
+/* O khoa: vien net dut va con tro "cam" noi "khong bam duoc", nhung dau ✓ / – van ro — o khoa
+   van phai noi dung trang thai that cua nhom. */
 .tx-admin-tri[aria-disabled='true'] {
   border-style: dashed;
-  opacity: 0.5;
+  opacity: 0.72;
   cursor: not-allowed;
 }
 

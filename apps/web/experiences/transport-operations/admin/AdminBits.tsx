@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { GroupCheckState } from './accounts-model';
+import type { TriState } from './accounts-model';
 import { adminErrorMessage, type PermissionLabelOf } from './admin-reasons';
 
 /**
@@ -47,33 +47,38 @@ export function ChipRow({
  * CHECKBOX BA TRANG THAI cua mot nhom quyen. `<input type=checkbox>` chi co `indeterminate` qua JS va
  * trinh doc man hinh doc khong deu; mot `button role="checkbox"` voi `aria-checked="mixed"` la mau
  * WAI-ARIA chuan cho dung truong hop nay.
+ *
+ * `checked` va `isLocked` DOC LAP: o khoa (khong bam duoc) van noi dung trang thai that — du, do dang
+ * hay trong — bang `aria-checked` va bang dau trong o.
  */
 export function TriStateCheckbox({
-  state,
+  checked,
+  isLocked,
   label,
   describedBy,
   onToggle,
 }: {
-  readonly state: GroupCheckState;
+  readonly checked: TriState;
+  readonly isLocked: boolean;
   readonly label: string;
   readonly describedBy?: string;
   readonly onToggle: () => void;
 }) {
-  const checked = state === 'on' ? true : state === 'mixed' ? 'mixed' : false;
+  const ariaChecked = checked === 'on' ? true : checked === 'mixed' ? 'mixed' : false;
   return (
     <button
       type="button"
       role="checkbox"
       className="tx-admin-tri"
-      data-state={state}
-      aria-checked={checked}
+      data-state={checked}
+      aria-checked={ariaChecked}
       aria-label={label}
       aria-describedby={describedBy}
-      aria-disabled={state === 'locked' ? true : undefined}
-      onClick={state === 'locked' ? undefined : onToggle}
+      aria-disabled={isLocked ? true : undefined}
+      onClick={isLocked ? undefined : onToggle}
     >
       <span className="tx-admin-tri__box" aria-hidden="true">
-        {state === 'on' ? '✓' : state === 'mixed' ? '–' : ''}
+        {checked === 'on' ? '✓' : checked === 'mixed' ? '–' : ''}
       </span>
     </button>
   );

@@ -18,12 +18,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *   · doi quyen co hieu luc o YEU CAU KE TIEP cua CUNG cookie, khong can dang nhap lai;
  *   · dat lai mat khau lam cookie cu chet (401);
  *   · cong MAT KHAU TAM chan moi route ngoai `me` / doi mat khau / dang xuat;
- *   · khong quyen rieng nao mo duoc `/settings/users*` hay viec chi-Giam-doc.
+ *   · khong quyen rieng nao mo duoc `/settings/users*` hay viec chi-Giam-doc;
+ *   · noi ho so lai xe (`PUT /transport/drivers/:id/account`, mien `transport` THAT): bang "lam
+ *     duoc gi" doi theo, tai khoan dang noi khong doi vai duoc, mot tai khoan chi noi mot ho so.
  *
  * `PERSISTENCE=memory` O MOI JOB: tep IT DUY NHAT ghi `User` tren Postgres la
  * `account-admin.int.spec.ts` (phep dem "Giam doc dang hoat dong" la toan cuc).
  *
- * Buoc noi ho so lai xe (`PUT /transport/drivers/:id/account`) do lat khac xay; lat tich hop them.
+ * `timeout` cua `describe` ap cho MOI buoc: mot buoc onboarding la bon lan Argon2 + chuc lan goi
+ * HTTP, va mac dinh 5 s cua vitest se lam bai nay do chap chon tren may CI dang tai.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -97,6 +100,7 @@ interface CatalogBody {
       readonly actions: readonly {
         readonly code: string;
         readonly directorOnly: boolean;
+        readonly escalation: boolean;
         readonly sod: string | null;
       }[];
     }[];
@@ -131,7 +135,7 @@ async function bootApi(): Promise<{ readonly app: INestApplication; readonly bas
   return { app, base: (await app.getUrl()).replace('[::1]', '127.0.0.1') };
 }
 
-describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
+describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', { timeout: 60_000 }, () => {
   let api: { readonly app: INestApplication; readonly base: string } | undefined;
   let director: Browser;
   let directorId = '';
@@ -293,14 +297,38 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
     expect((await manager.client.send('GET', '/auth/me')).status).toBe(401);
   });
 
+  /** Dieu hanh mang MOI quyen cap duoc — buoc 13 dung lai de chung minh noi ho so van chi-Giam-doc. */
+  let allGrantsManager: Browser;
+
   it('5. Dieu hanh mang MOI quyen cap duoc van 403 o /settings/users* va viec chi-Giam-doc', async () => {
-    const everything = catalog.domains
+    const grantable = catalog.domains
       .find((domain) => domain.id === 'transport')!
       .groups.filter((group) => group.grantable)
       .flatMap((group) => group.actions)
       // Bo phia sua can cu cua cap tach nhiem — giu ca hai phia la vi pham `SOD_CONFLICT`.
-      .filter((action) => !action.directorOnly && action.sod !== 'EVIDENCE')
-      .map((action) => ({ permission: action.code, effect: 'ALLOW' }));
+      .filter((action) => !action.directorOnly && action.sod !== 'EVIDENCE');
+    const everything = grantable.map((action) => ({ permission: action.code, effect: 'ALLOW' }));
+
+    // Chua xac nhan leo thang: than loi ke TEN tung quyen nhay cam o `detail.actions` (man hinh doc
+    // dung truong nay), khong chi `detail.violations`.
+    const unconfirmed = await director.send<{ reason: string; detail: { actions: string[] } }>(
+      'POST',
+      '/settings/users',
+      {
+        username: 'dieu.hanh.chua.xac.nhan',
+        name: 'Chưa xác nhận',
+        role: 'MANAGER',
+        grants: everything,
+      },
+    );
+    expect(unconfirmed.status).toBe(409);
+    expect(unconfirmed.body.reason).toBe('ESCALATION_CONFIRMATION_REQUIRED');
+    const escalations = grantable
+      .filter((action) => action.escalation)
+      .map((action) => action.code);
+    expect(escalations.length).toBeGreaterThan(0);
+    expect([...unconfirmed.body.detail.actions].sort()).toEqual([...escalations].sort());
+
     const { client } = await onboard({
       username: 'dieu.hanh.toan.quyen',
       name: 'Điều hành toàn quyền',
@@ -343,6 +371,7 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
       },
     );
     expect(link.status).toBe(403);
+    allGrantsManager = client;
   });
 
   it('6. Ke toan bi bo bot (DENY) mot quyen → mat dung route do', async () => {
@@ -436,13 +465,17 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
   });
 
   it('10. ten he thong khi TAO → 409 USERNAME_RESERVED; hang `operator` co san van dang nhap duoc', async () => {
-    const reserved = await director.send('POST', '/settings/users', {
-      username: 'Operator',
-      name: 'Trùng tên hệ thống',
-      role: 'SALE',
-    });
-    expect(reserved.status).toBe(409);
-    expect(reserved.body).toMatchObject({ reason: 'USERNAME_RESERVED' });
+    // `Operator` la ten cua NEN TANG; `demo-seed` la ten mien `transport` THAT dang ky
+    // (`reservedUsernames()`, nguoi ghi du lieu mau) — ca hai di qua CUNG mot cong.
+    for (const username of ['Operator', 'demo-seed', 'Demo-Seed']) {
+      const reserved = await director.send('POST', '/settings/users', {
+        username,
+        name: 'Trùng tên hệ thống',
+        role: 'SALE',
+      });
+      expect(reserved.status, username).toBe(409);
+      expect(reserved.body, username).toMatchObject({ reason: 'USERNAME_RESERVED' });
+    }
 
     const { UserRepository } = await import('./user.repository.js');
     const { PasswordService } = await import('./password.service.js');
@@ -467,7 +500,9 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
       confirmed: true,
       reason: 'Thử khoá',
     });
-    expect(disabled.status).toBe(201);
+    // Khoa / mo khoa la doi TRANG THAI, khong tao tai nguyen: ca hai `200`.
+    expect(disabled.status).toBe(200);
+    expect(disabled.body).toMatchObject({ disabledAt: expect.any(String) });
     expect((await target.client.send('GET', '/auth/me')).status).toBe(401);
     const enabled = await director.send('POST', `/settings/users/${target.account.id}/enable`, {
       confirmed: true,
@@ -503,6 +538,31 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
     expect(access.body.sentences).toContain('Không duyệt được tiền');
   });
 
+  /** Tai khoan Lai xe cua buoc 12 — buoc 13 noi no vao ho so lai xe THAT cua mien van tai. */
+  let driverAccountId = '';
+
+  interface DriverBody {
+    readonly id: string;
+    readonly authUserId: string | null;
+  }
+
+  interface AccessBody {
+    readonly sentences: string[];
+    readonly scopes: { id: string; active: boolean }[];
+    readonly groups: { id: string; summary: string }[];
+  }
+
+  const registerDriver = async (fullName: string, phone: string): Promise<DriverBody> => {
+    const created = await director.send<DriverBody>('POST', '/transport/drivers', {
+      fullName,
+      phone,
+      licenceClass: 'FC',
+      licenceExpiry: '2030-12-31',
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    return created.body;
+  };
+
   it('12. tai khoan Lai xe chua noi ho so: "Người này làm được gì?" noi thang la chua lam duoc gi', async () => {
     const suggested = await director.send<{ username: string }>(
       'POST',
@@ -528,5 +588,102 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', () => {
 
     const listed = await director.send<Json[]>('GET', '/settings/users?status=pending&q=lx.tran');
     expect(listed.body.map((row) => row.username)).toEqual(['lx.tran.van.duc']);
+    driverAccountId = created.body.id;
+  });
+
+  it('13. noi ho so lai xe: "lam duoc gi" doi theo; dang noi thi khong doi vai; mot tai khoan mot ho so', async () => {
+    const driver = await registerDriver('Trần Văn Đức', '0912395013');
+    const vehicle = await director.send<{ id: string }>('POST', '/transport/vehicles', {
+      registrationPlate: '29C-395.13',
+      vehicleClass: 'TRUCK',
+    });
+    expect(vehicle.status, JSON.stringify(vehicle.body)).toBe(201);
+    const assigned = await director.send('POST', `/transport/vehicles/${vehicle.body.id}/driver`, {
+      driverId: driver.id,
+    });
+    expect(assigned.status, JSON.stringify(assigned.body)).toBe(201);
+
+    // Dieu hanh mang MOI quyen cap duoc: noi ho so van la viec chi-Giam-doc.
+    for (const [method, path, payload] of [
+      ['PUT', `/transport/drivers/${driver.id}/account`, { authUserId: driverAccountId }],
+      ['GET', `/transport/account-links/${driverAccountId}`, undefined],
+    ] as const) {
+      expect((await allGrantsManager.send(method, path, payload)).status, path).toBe(403);
+    }
+
+    const linked = await director.send<DriverBody>(
+      'PUT',
+      `/transport/drivers/${driver.id}/account`,
+      { authUserId: driverAccountId },
+    );
+    expect(linked.status, JSON.stringify(linked.body)).toBe(200);
+    expect(linked.body.authUserId).toBe(driverAccountId);
+
+    const links = await director.send('GET', `/transport/account-links/${driverAccountId}`);
+    expect(links).toEqual({
+      status: 200,
+      body: {
+        driver: {
+          id: driver.id,
+          name: 'Trần Văn Đức',
+          phone: '0912395013',
+          status: 'ACTIVE',
+          vehicle: { id: vehicle.body.id, registrationPlate: '29C-395.13' },
+        },
+        stakeholder: null,
+      },
+    });
+
+    const access = await director.send<AccessBody>(
+      'GET',
+      `/settings/users/${driverAccountId}/access`,
+    );
+    expect(access.status).toBe(200);
+    expect(access.body.sentences).not.toContain('Chưa nối hồ sơ lái xe — chưa làm được gì');
+    expect(access.body.sentences).toContain(
+      'Nối với hồ sơ lái xe Trần Văn Đức (0912395013), đang phụ trách xe 29C-395.13 — làm được việc của chính lái xe này.',
+    );
+    expect(access.body.scopes).toEqual([expect.objectContaining({ id: 'lai-xe', active: true })]);
+    expect(access.body.groups.find((group) => group.id === 'lai-xe')?.summary).not.toBe('NONE');
+
+    // Dang noi ho so lai xe → khong doi sang vai van phong (ca duong moi lan duong cu).
+    for (const [method, path, payload] of [
+      ['PUT', `/settings/users/${driverAccountId}/access`, { role: 'MANAGER', grants: [] }],
+      ['PATCH', `/settings/users/${driverAccountId}/role`, { role: 'MANAGER' }],
+    ] as const) {
+      const refused = await director.send(method, path, payload);
+      expect(refused.status, path).toBe(409);
+      expect(refused.body, path).toMatchObject({
+        reason: 'ACCOUNT_LINKED_TO_DRIVER',
+        detail: {
+          violations: [{ code: 'ACCOUNT_LINKED_TO_DRIVER', detail: { driverId: driver.id } }],
+        },
+      });
+    }
+
+    // Mot tai khoan chi noi MOT ho so lai xe.
+    const second = await registerDriver('Trần Văn Đức (hồ sơ trùng)', '0912395014');
+    const taken = await director.send('PUT', `/transport/drivers/${second.id}/account`, {
+      authUserId: driverAccountId,
+    });
+    expect(taken.status).toBe(409);
+    expect(taken.body).toMatchObject({ reason: 'DRIVER_ACCOUNT_TAKEN' });
+
+    // Go noi → doi vai duoc, va bang "lam duoc gi" quay ve "chua noi".
+    const unlinked = await director.send<DriverBody>(
+      'PUT',
+      `/transport/drivers/${driver.id}/account`,
+      { authUserId: null },
+    );
+    expect(unlinked.status).toBe(200);
+    expect(unlinked.body.authUserId).toBeNull();
+    expect(
+      (await director.send('GET', `/transport/account-links/${driverAccountId}`)).body,
+    ).toEqual({ driver: null, stakeholder: null });
+    const moved = await director.send('PUT', `/settings/users/${driverAccountId}/access`, {
+      role: 'MANAGER',
+      grants: [],
+    });
+    expect(moved.status, JSON.stringify(moved.body)).toBe(200);
   });
 });

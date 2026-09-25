@@ -221,8 +221,11 @@ const EVERY_OWNER_ACTIVE: GeofenceOwnerLookup = {
 export abstract class GeofenceRepository {
   /** Chi hang rao con hieu luc. Mot hang rao da nghi khong duoc lang le keo phan quyet ve INSIDE. */
   abstract listActive(): Promise<readonly Geofence[]>;
-  /** Hang rao CON HIEU LUC THAT — xem `isEffectivelyActive()`. */
-  abstract listEffectivelyActive(): Promise<readonly Geofence[]>;
+  /**
+   * Hang rao CON HIEU LUC THAT — xem `isEffectivelyActive()`. Ban ghi DAY DU (kem dia chi): Tao don
+   * hien dia chi cua dia diem da biet ma khong doc lai tung hang rao.
+   */
+  abstract listEffectivelyActive(): Promise<readonly GeofenceRecord[]>;
   abstract register(input: RegisterGeofenceInput): Promise<GeofenceRecord>;
   abstract find(id: string): Promise<GeofenceRecord | null>;
   /** Moi trang thai, loc tuy chon. Sap theo `createdAt` roi `id` — tat dinh. */
@@ -269,7 +272,7 @@ export class InMemoryGeofenceRepository extends GeofenceRepository {
     return this.ordered().filter((fence) => fence.status === 'ACTIVE');
   }
 
-  async listEffectivelyActive(): Promise<readonly Geofence[]> {
+  async listEffectivelyActive(): Promise<readonly GeofenceRecord[]> {
     const active = this.ordered().filter((fence) => fence.status === 'ACTIVE');
     const owners = await this.owners.activeOwners({
       siteIds: subjectIdsOf(active, 'COUNTERPARTY_SITE'),
@@ -373,7 +376,7 @@ export class PrismaGeofenceRepository extends GeofenceRepository {
   }
 
   /** BA truy van cho moi so hang rao: hang rao dang bat, dia diem cua chung, khach cua chung. */
-  async listEffectivelyActive(): Promise<readonly Geofence[]> {
+  async listEffectivelyActive(): Promise<readonly GeofenceRecord[]> {
     const active = (
       await this.prisma.transportGeofence.findMany({
         where: { status: 'ACTIVE' },

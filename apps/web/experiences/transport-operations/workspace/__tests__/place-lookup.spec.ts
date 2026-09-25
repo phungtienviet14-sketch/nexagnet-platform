@@ -128,11 +128,14 @@ describe('dia diem da biet', () => {
         name: 'Kho Nhựa Tân Phú Hưng',
         kindLabel: 'Địa điểm khách hàng',
       }),
+      // Hang rao `CUSTOMER` kieu cu: may chu cu khong tra nhan — duong lui noi DUNG ten may chu moi.
+      place({ id: 'd', kind: 'CUSTOMER', name: 'Kho cũ Hưng Yên' }),
     ]);
     expect(groups.map((group) => [group.title, group.places.map((entry) => entry.id)])).toEqual([
       ['Bãi xe', ['a']],
       ['Địa điểm khách hàng', ['c']],
       ['Nhà máy / kho đối tác', ['b']],
+      ['Điểm khách hàng (kiểu cũ)', ['d']],
     ]);
     expect(groupKnownPlaces([])).toEqual([]);
   });
@@ -142,7 +145,12 @@ describe('dia diem da biet', () => {
       'Nhà máy / kho đối tác của Công ty CP Thép Đông Á',
     );
     expect(knownPlaceSourceLine('COUNTERPARTY_SITE', null)).toBe('Nhà máy / kho đối tác');
-    expect(knownPlaceSourceLine('CUSTOMER', 'Công ty A')).toBe('Địa điểm khách hàng của Công ty A');
+    expect(knownPlaceSourceLine('CUSTOMER', 'Công ty A')).toBe(
+      'Điểm khách hàng (kiểu cũ) của Công ty A',
+    );
+    expect(knownPlaceSourceLine('CUSTOMER', 'Công ty A', 'Điểm khách hàng (kiểu cũ)')).toBe(
+      'Điểm khách hàng (kiểu cũ) của Công ty A',
+    );
     expect(knownPlaceSourceLine('COUNTERPARTY_SITE', 'Công ty A', 'Địa điểm khách hàng')).toBe(
       'Địa điểm khách hàng của Công ty A',
     );

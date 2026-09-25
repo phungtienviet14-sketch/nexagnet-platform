@@ -1,7 +1,7 @@
 import { normalizePlaceLabel } from '../../dispatch/place-resolution.js';
 import type { GeofenceSubjectKind } from '../../proof/geofence.repository.js';
 import type { PlaceWriteTx } from '../../proof/place-write.store.js';
-import { fenceKindLabel } from './place-admin.types.js';
+import { fenceKindLabel, isCustomerLinked } from './place-admin.types.js';
 
 /**
  * LUAT TRUNG TEN cua dia diem van hanh (`#395`).
@@ -113,10 +113,7 @@ export async function describePlaceNameConflict(
     const links = party ? await tx.counterparties.listLinks(party.id) : [];
     return {
       conflictName: conflict.conflictName,
-      conflictKindLabel: fenceKindLabel(
-        entry.subjectKind,
-        links.some((link) => link.kind === 'CUSTOMER'),
-      ),
+      conflictKindLabel: fenceKindLabel(entry.subjectKind, isCustomerLinked(links)),
       ...(party ? { ownerName: party.name } : {}),
     };
   }

@@ -43,6 +43,46 @@ const labelList = (labelOf: PermissionLabelOf, codes: unknown): string =>
     ? codes.map((code) => labelOrCode(labelOf, code)).join(', ')
     : 'các quyền nhạy cảm đã chọn';
 
+const asDetail = (value: unknown): Detail | null =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Detail) : null;
+
+const stringsOf = (value: unknown): readonly string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : [];
+
+/**
+ * Cac dong cua `ESCALATION_CONFIRMATION_REQUIRED`: may chu co the dat `actions` / `role` NGAY tren
+ * `detail` (mot dong vi pham), hoac long trong `detail.violations[].detail` (loi cap cao nhat cua
+ * lan ghi tai khoan). Doc CA HAI — cau khong duoc roi ve cau chung chi vi hinh dang than loi.
+ */
+function escalationFacts(detail: Detail): {
+  readonly actions: readonly string[];
+  readonly promotesToAdmin: boolean;
+} {
+  const nested = Array.isArray(detail.violations)
+    ? detail.violations.flatMap((item) => {
+        const inner = asDetail(asDetail(item)?.detail);
+        return inner === null ? [] : [inner];
+      })
+    : [];
+  const sources = [detail, ...nested];
+  return {
+    actions: [...new Set(sources.flatMap((source) => stringsOf(source.actions)))],
+    promotesToAdmin: sources.some((source) => source.role === 'ADMIN'),
+  };
+}
+
+const escalationMessage = (detail: Detail, labelOf: PermissionLabelOf): string => {
+  const facts = escalationFacts(detail);
+  if (facts.actions.length > 0) {
+    return `Cần xác nhận trước khi cấp quyền nhạy cảm: ${labelList(labelOf, facts.actions)}.`;
+  }
+  return facts.promotesToAdmin
+    ? 'Đưa tài khoản lên vai Giám đốc (toàn quyền) cần xác nhận rõ ràng trước khi lưu.'
+    : 'Cấp vai hoặc quyền nhạy cảm cần xác nhận rõ ràng trước khi lưu.';
+};
+
 /* ------------------------------------------------------------------ *
  * Tai khoan va dang nhap — `apps/api/src/auth/account-decisions.ts` (+ loi dau vao, mat khau tam)
  * ------------------------------------------------------------------ */
@@ -50,26 +90,23 @@ const labelList = (labelOf: PermissionLabelOf, codes: unknown): string =>
 const ACCOUNT_MESSAGES: Readonly<Record<string, Template>> = {
   ACCOUNT_CHANGE_ALLOWED: 'Đã lưu thay đổi tài khoản.',
   SELF_LOCKOUT:
-    'Không tự khoá, tự đổi quyền hay tự đặt lại mật khẩu của chính mình ở đây. Muốn đổi mật khẩu của bạn, dùng menu tài khoản.',
+    'Bạn không thể tự khoá, tự đổi quyền hay tự đặt lại mật khẩu của chính mình ở đây. Muốn đổi mật khẩu, hãy dùng menu tài khoản.',
   LAST_ACTIVE_ADMIN: (detail) => {
-    const who = text(detail.name) ?? text(detail.username);
-    return `${who === null ? 'Đây' : `${who} là`} Giám đốc đang hoạt động cuối cùng — thêm hoặc mở khoá một Giám đốc khác trước khi khoá hay đổi vai tài khoản này.`;
+    const who = text(detail.name) ?? text(detail.username) ?? 'Đây';
+    return `${who} là Giám đốc đang hoạt động cuối cùng — thêm hoặc mở khoá một Giám đốc khác trước khi khoá hay đổi vai tài khoản này.`;
   },
   PROTECTED_SERVICE_ACCOUNT:
     'Tài khoản hệ thống — không sửa được ở đây. Tài khoản này do bộ phận triển khai quản lý.',
   USERNAME_RESERVED: (detail) => {
     const name = text(detail.username);
-    return `Tên đăng nhập ${name === null ? 'này' : quoted(name)} dành cho hệ thống — chọn tên khác.`;
+    return `Tên đăng nhập ${name === null ? 'này' : quoted(name)} dành riêng cho hệ thống — hãy chọn tên khác.`;
   },
   ACCOUNT_LINKED_TO_DRIVER: (detail) => {
     const driver = text(detail.driverName) ?? text(detail.name);
     return `Tài khoản đang nối với hồ sơ lái xe${driver === null ? '' : ` ${driver}`} — gỡ nối ở phần “Hồ sơ đã nối” trước khi đổi vai.`;
   },
   ACCESS_INVALID: 'Bộ quyền chưa hợp lệ — xem các dòng cần sửa bên dưới.',
-  ESCALATION_CONFIRMATION_REQUIRED: (detail, labelOf) =>
-    detail.actions === undefined
-      ? 'Cấp vai hoặc quyền nhạy cảm cần xác nhận rõ ràng trước khi lưu.'
-      : `Cần xác nhận trước khi cấp quyền nhạy cảm: ${labelList(labelOf, detail.actions)}.`,
+  ESCALATION_CONFIRMATION_REQUIRED: escalationMessage,
   ACCOUNT_NOT_FOUND: 'Không tìm thấy tài khoản này nữa — tải lại danh sách.',
   ACCOUNT_IDENTITY_TAKEN: (detail) => {
     const field = text(detail.field);
@@ -101,7 +138,7 @@ const VIOLATION_MESSAGES: Readonly<Record<string, Template>> = {
   UNKNOWN_PERMISSION: (detail, labelOf) =>
     `${labelOrCode(labelOf, detail.permission)} không còn trong danh mục quyền — tải lại trang rồi chọn lại.`,
   SCOPE_ACTION_NOT_GRANTABLE: (detail, labelOf) =>
-    `${labelOrCode(labelOf, detail.permission)} đến từ việc nối hồ sơ (lái xe, bên góp vốn), không cấp bằng ô đánh dấu.`,
+    `${labelOrCode(labelOf, detail.permission)} chỉ có được khi nối hồ sơ (lái xe, bên góp vốn) — không cấp bằng ô đánh dấu.`,
   DIRECTOR_ONLY_ACTION: (detail, labelOf) =>
     `${labelOrCode(labelOf, detail.permission)} chỉ Giám đốc làm được — không cấp cho vai khác.`,
   GRANT_REDUNDANT: (detail, labelOf) =>
@@ -110,9 +147,11 @@ const VIOLATION_MESSAGES: Readonly<Record<string, Template>> = {
       : `${labelOrCode(labelOf, detail.permission)} đã có sẵn theo vai khởi điểm — không cần cấp thêm.`,
   GRANT_DUPLICATED: (detail, labelOf) =>
     `${labelOrCode(labelOf, detail.permission)} bị chọn hai lần.`,
+  PLATFORM_PERMISSION_NOT_GRANTABLE: (detail, labelOf) =>
+    `${labelOrCode(labelOf, detail.permission)} không cấp riêng được — muốn quản trị tài khoản thì đổi vai sang Giám đốc.`,
   SOD_CONFLICT: (detail, labelOf) =>
     `Một người không được vừa ${labelOrCode(labelOf, detail.decision)} vừa ${labelOrCode(labelOf, detail.evidence)} — người duyệt tiền không được sửa căn cứ của chính khoản tiền đó. Bỏ một trong hai.`,
-  ESCALATION_CONFIRMATION_REQUIRED: ACCOUNT_MESSAGES.ESCALATION_CONFIRMATION_REQUIRED as Template,
+  ESCALATION_CONFIRMATION_REQUIRED: escalationMessage,
 };
 
 /* ------------------------------------------------------------------ *
@@ -182,17 +221,39 @@ const PLACE_MESSAGES: Readonly<Record<string, Template>> = {
   },
   DEPOT_CHANGE_AFFECTS_OPEN_WORK: (detail) =>
     `Còn ${openWorkSentence(detail)} đang dùng bãi xe này. Xem danh sách và xác nhận trước khi đổi.`,
-  PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE:
-    'Thêm, đổi tên hay tắt địa điểm của đơn vị khác cần thêm quyền quản lý khách hàng, đối tác. Nhờ Giám đốc cấp quyền.',
+  PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE: (detail) => {
+    // May chu noi o nao doi quyen (`detail.fields`: `name` / `address`) khi lan sua cham toi chung.
+    const fields = stringsOf(detail.fields).flatMap((field) =>
+      field === 'name' ? ['tên'] : field === 'address' ? ['địa chỉ'] : [],
+    );
+    return fields.length === 0
+      ? 'Thêm, đổi tên, đổi địa chỉ hay tắt địa điểm của đơn vị khác cần thêm quyền quản lý khách hàng, đối tác. Nhờ Giám đốc cấp quyền.'
+      : `Đổi ${fields.join(' và ')} của địa điểm thuộc đơn vị khác cần thêm quyền quản lý khách hàng, đối tác. Nhờ Giám đốc cấp quyền.`;
+  },
+  COUNTERPARTY_SITE_NAME_TAKEN: (detail) => {
+    const owner = text(detail.counterpartyName) ?? 'Đơn vị này';
+    const site = text(detail.siteName);
+    return site === null
+      ? `${owner} đã có một địa điểm khác cùng tên — đặt tên khác, hoặc chọn địa điểm có sẵn đó để gắn vị trí.`
+      : `${owner} đã có địa điểm ${quoted(site)} — chọn địa điểm đó để gắn vị trí, hoặc đặt tên khác.`;
+  },
   COUNTERPARTY_SITE_MANAGED_AS_PLACE:
     'Điểm này đang được quản lý ở Địa điểm vận hành — sửa tên hay trạng thái ở đó.',
   PLACE_POINT_INVALID: 'Toạ độ không hợp lệ — chọn lại điểm trên bản đồ.',
+  GEOFENCE_COORDINATE_REJECTED:
+    'Toạ độ này không dùng được (ngoài phạm vi hoặc bằng 0) — chọn lại điểm trên bản đồ.',
+  COUNTERPARTY_NOT_FOUND: 'Không tìm thấy đơn vị đã chọn làm chủ — tải lại danh sách rồi chọn lại.',
+  CUSTOMER_NOT_FOUND: 'Không tìm thấy khách hàng đã chọn — tải lại danh sách rồi chọn lại.',
+  COUNTERPARTY_SITE_NOT_FOUND:
+    'Không tìm thấy địa điểm có sẵn đã chọn — tải lại danh sách rồi chọn lại.',
   PLACE_NOT_FOUND: 'Không tìm thấy địa điểm này nữa — tải lại danh sách.',
   PLACE_OWNER_REQUIRED:
-    'Chọn địa điểm này của ai: một khách hàng, một đơn vị có sẵn, hay đơn vị mới.',
+    'Hãy cho biết địa điểm này của ai: một khách hàng, một đơn vị có sẵn, hay một đơn vị mới.',
   PLACE_OWNER_INVALID: 'Thông tin chủ của địa điểm chưa đúng — chọn lại “Địa điểm này của ai?”.',
-  PLACE_OWNER_INACTIVE:
-    'Khách hàng hoặc đơn vị sở hữu địa điểm đã ngừng hoạt động — mở lại đơn vị đó trước.',
+  PLACE_OWNER_INACTIVE: (detail) => {
+    const owner = text(detail.ownerName) ?? text(detail.counterpartyName) ?? text(detail.name);
+    return `${owner === null ? 'Khách hàng hoặc đơn vị sở hữu địa điểm này' : quoted(owner)} đã ngừng hoạt động — bật lại khách hàng hoặc đơn vị đó trước khi thêm hay bật địa điểm của họ.`;
+  },
   PLACE_SITE_ALREADY_FENCED:
     'Địa điểm có sẵn này đã có vị trí trên bản đồ — sửa ở chính địa điểm đó.',
   PLACE_SITE_OWNER_MISMATCH: 'Địa điểm có sẵn đã chọn không thuộc đơn vị này — chọn lại.',
@@ -252,12 +313,7 @@ interface ApiErrorLike {
 const asError = (error: unknown): ApiErrorLike =>
   typeof error === 'object' && error !== null ? (error as ApiErrorLike) : {};
 
-const detailOf = (error: unknown): Detail | null => {
-  const detail = asError(error).detail;
-  return typeof detail === 'object' && detail !== null && !Array.isArray(detail)
-    ? (detail as Detail)
-    : null;
-};
+const detailOf = (error: unknown): Detail | null => asDetail(asError(error).detail);
 
 export const reasonOf = (error: unknown): string | null => {
   const reason = asError(error).reason;
