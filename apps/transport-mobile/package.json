@@ -10,7 +10,7 @@
     "test": "vitest run",
     "build": "expo export --platform android --platform ios --output-dir dist",
     "export:web": "expo export --platform web --output-dir dist-web",
-    "prebuild": "expo prebuild --no-install --clean",
+    "native:prebuild": "expo prebuild --no-install --clean",
     "doctor": "expo-doctor"
   },
   "dependencies": {
