@@ -39,6 +39,8 @@ describe('transport-core process boot contract', () => {
       const { PermissionDomainRegistry } = await import('./src/auth/access/permission-domain.registry.ts');
       const { DepotDirectoryHub } = await import('./src/transport/planning/depot-directory.ts');
       const { CounterpartySitePlaceGuardHub } = await import('./src/transport/counterparty/counterparty-site-place-guard.ts');
+      const { DriverAccountLinkService } = await import('./src/transport/fleet/driver-account-link.service.ts');
+      const { TransportAccountLinkDirectory } = await import('./src/transport/fleet/account-link-directory.ts');
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
       const has = (token) => { try { context.get(token, { strict: false }); return true; } catch { return false; } };
       const fleet = context.get(FleetService, { strict: false });
@@ -65,6 +67,12 @@ describe('transport-core process boot contract', () => {
       const siteGuard = await context.get(CounterpartySitePlaceGuardHub, { strict: false })
         .checkLegacySiteChange({ siteId: 'boot-site', changesName: true, changesStatus: false });
 
+      // #395 S2: mien transport DOC lien ket tai khoan (danh ba that cua module, khong phai ban
+      // thuan), va hai provider cua route noi tai khoan duoc EXPORT cho controller o goc.
+      const transportDomain = context.get(PermissionDomainRegistry, { strict: false }).get('transport');
+      const scopesOfUnlinked = await transportDomain.describeScopes('boot-nobody');
+      const roleChangeOfUnlinked = await transportDomain.checkAccessChange({ userId: 'boot-nobody', fromRole: 'SALE', toRole: 'ADMIN' });
+
       const proof = {
         fleet: has(FleetService),
         trips: has(TripService),
@@ -84,6 +92,11 @@ describe('transport-core process boot contract', () => {
         permissionDomains,
         depotCount: depots.length,
         siteGuardAllowed: siteGuard.allowed,
+        accountLinkService: has(DriverAccountLinkService),
+        accountLinkDirectory: has(TransportAccountLinkDirectory),
+        transportReservedUsernames: transportDomain.reservedUsernames(),
+        scopesOfUnlinked,
+        roleChangeOfUnlinked,
       };
       await context.close();
       // DAU MOC: stdout cua tien trinh nay KHONG chi co ket qua — tang quan sat ghi mot dong log
@@ -160,6 +173,16 @@ describe('transport-core process boot contract', () => {
         permissionDomains: ['transport'],
         depotCount: 0,
         siteGuardAllowed: true,
+        /**
+         * `#395` S2: `FleetController` (o GOC) tiem hai provider nay — thieu export thi tien trinh
+         * khong boot duoc, va bai nay la cong duy nhat bat duoc. Mien `transport` mang phan doc
+         * lien ket (khong phai ban thuan): tai khoan khong noi gi thi khong pham vi, doi vai tu do.
+         */
+        accountLinkService: true,
+        accountLinkDirectory: true,
+        transportReservedUsernames: ['demo-seed'],
+        scopesOfUnlinked: [],
+        roleChangeOfUnlinked: [],
       });
     },
     BOOT_TEST_TIMEOUT_MS,

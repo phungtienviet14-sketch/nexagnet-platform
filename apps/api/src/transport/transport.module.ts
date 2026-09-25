@@ -41,6 +41,8 @@ import { PlanningService } from './planning/planning.service.js';
 import { PrismaRunPlanRepository } from './planning/prisma-planning.repository.js';
 import { FleetCounterpartySubjectAdapter } from './counterparty/fleet-counterparty-subject.adapter.js';
 import { PrismaCounterpartyRepository } from './counterparty/prisma-counterparty.repository.js';
+import { TransportAccountLinkDirectory } from './fleet/account-link-directory.js';
+import { DriverAccountLinkService } from './fleet/driver-account-link.service.js';
 import { FleetRepository, InMemoryFleetRepository } from './fleet/fleet.repository.js';
 import { FleetService } from './fleet/fleet.service.js';
 import { PrismaFleetRepository } from './fleet/prisma-fleet.repository.js';
@@ -213,6 +215,14 @@ import { TripService } from './trips/trip.service.js';
     DepotDirectoryHub,
     CounterpartySitePlaceGuardHub,
     TransportPermissionDomainRegistrar,
+    /*
+     * `#395` §1.8 — NOI TAI KHOAN. Danh ba lien ket (chi doc) phuc vu CA route quan tri lan mien
+     * phan quyen (`describeScopes`, `checkAccessChange`); dich vu noi la duong ghi duy nhat cua
+     * `TransportDriver.authUserId` tu man hinh. Ca hai tiem `UserRepository` / doc kho cua CHINH
+     * `transport-core` — khong mot canh phu thuoc moi nao sang capability khac.
+     */
+    TransportAccountLinkDirectory,
+    DriverAccountLinkService,
   ],
   /*
    * `AuditLogService` va `TRANSPORT_CORE_POLICY` duoc export tu T3 tro di cho `transport-costing`.
@@ -260,6 +270,13 @@ import { TripService } from './trips/trip.service.js';
     TRANSPORT_PLANNING_POLICY,
     DepotDirectoryHub,
     CounterpartySitePlaceGuardHub,
+    /*
+     * `FleetController` dang ky o GOC nen chi thay provider duoc EXPORT — thieu hai dong nay thi Nest
+     * khong giai duoc controller va tien trinh API chet luc khoi dong (xem
+     * `app.module.transport-core.boot.spec.ts`).
+     */
+    TransportAccountLinkDirectory,
+    DriverAccountLinkService,
   ],
 })
 export class TransportModule {}
