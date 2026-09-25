@@ -84,6 +84,16 @@ describe('bo doc dau ra cong cu Android', () => {
     });
   });
 
+  it('apksigner: nhan ca tien to khac va hex co dau hai cham', () => {
+    const colon = DEBUG_CERT_SHA256.match(/../g).join(':').toUpperCase();
+    const text = [
+      'Verified using v2 scheme (APK Signature Scheme v2): true',
+      `Signer (minSdkVersion=26, maxSdkVersion=2147483647) certificate SHA-256 digest: ${colon}`,
+    ].join('\n');
+    assert.equal(parseApksigner(text).certSha256, DEBUG_CERT_SHA256);
+    assert.equal(parseApksigner('Verifies').certSha256, null);
+  });
+
   it('keytool -printcert: bo dau hai cham, chu thuong', () => {
     assert.deepEqual(parseKeytoolPrintcert(KEYTOOL), {
       certSha256: '0a1b2c3d',

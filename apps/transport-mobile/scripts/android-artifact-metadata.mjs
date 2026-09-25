@@ -68,7 +68,13 @@ export function parsePermissions(text) {
 }
 
 export function parseApksigner(text) {
-  const digest = /Signer #1 certificate SHA-256 digest: ([0-9a-f]+)/i.exec(text)?.[1] ?? null;
+  // "Signer #1 certificate SHA-256 digest: <hex>" o hau het ban build-tools; ban khac ghi tien to
+  // khac ("Signer (minSdkVersion=..)", "V3 Signer #1") hoac hex co dau hai cham. Lay dong dau tien.
+  const raw =
+    /Signer #1 certificate SHA-256 digest:\s*([0-9a-f:]+)/i.exec(text)?.[1] ??
+    /certificate SHA-256 digest:\s*([0-9a-f:]+)/i.exec(text)?.[1] ??
+    null;
+  const digest = raw ? raw.replace(/:/g, '') : null;
   const schemes = [...text.matchAll(/^Verified using (v[\d.]+) scheme[^:]*: true$/gm)].map(
     (m) => m[1],
   );
@@ -143,6 +149,11 @@ function describeApk(file, background) {
   const verify = run(buildTool('apksigner'), ['verify', '--print-certs', '--verbose', file]);
   if (verify.status !== 0) throw new Error(`apksigner verify that bai:\n${verify.output}`);
   const signer = parseApksigner(verify.output);
+  if (!signer.certSha256) {
+    throw new Error(
+      `apksigner khong cho SHA-256 chung chi — dau ra:\n${verify.output.slice(-3000)}`,
+    );
+  }
   return {
     identitySource: 'aapt2 dump badging',
     ...parseBadging(badging.output),
