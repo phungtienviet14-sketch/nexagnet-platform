@@ -71,13 +71,7 @@ export interface PermissionCatalog {
 }
 
 export type ActionState =
-  | 'PRESET'
-  | 'GRANTED'
-  | 'DENIED'
-  | 'NONE'
-  | 'DIRECTOR_ONLY'
-  | 'SCOPE_ACTIVE'
-  | 'SCOPE_INACTIVE';
+  'PRESET' | 'GRANTED' | 'DENIED' | 'NONE' | 'DIRECTOR_ONLY' | 'SCOPE_ACTIVE' | 'SCOPE_INACTIVE';
 
 export interface AccessScopeNote {
   readonly id: string;
@@ -91,7 +85,14 @@ export interface AccessBreakdown {
   readonly account?: AccountView;
   readonly preset: { readonly role: AuthRole; readonly label: string };
   readonly grants: readonly PermissionGrant[];
+  /** Quyen NEN TANG (vd quan tri tai khoan) — chi Giam doc co. */
+  readonly platform?: readonly {
+    readonly code: string;
+    readonly label: string;
+    readonly state: 'PRESET' | 'NONE';
+  }[];
   readonly groups: readonly {
+    readonly domain?: string;
     readonly id: string;
     readonly label: string;
     readonly grantable: boolean;
@@ -134,7 +135,9 @@ export interface AccountLinks {
     readonly id: string;
     readonly name: string;
     readonly phone?: string | null;
-    readonly vehicle?: string | null;
+    readonly status?: string;
+    /** Xe lai xe nay DANG phu trach (ban phan cong con hieu luc), neu co. */
+    readonly vehicle?: { readonly id: string; readonly registrationPlate: string } | null;
   } | null;
   readonly stakeholder: { readonly id: string; readonly name: string } | null;
 }
@@ -153,24 +156,34 @@ export interface ProfilePatch {
 export type PlaceKind = 'DEPOT' | 'COUNTERPARTY_SITE' | 'CUSTOMER';
 
 /** Bo loc loai cua danh sach — CHU cua man hinh, khong phai ten bang trong DB. */
-export type PlaceKindFilter = 'ALL' | 'DEPOT' | 'CUSTOMER_SITE' | 'PARTNER_SITE' | 'LEGACY_CUSTOMER';
+export type PlaceKindFilter =
+  'ALL' | 'DEPOT' | 'CUSTOMER_SITE' | 'PARTNER_SITE' | 'LEGACY_CUSTOMER';
 
 export type PlaceStatusFilter = 'active' | 'inactive' | 'all';
 
 export type DepotPlannerStatus = 'IN_USE' | 'STANDBY' | 'AMBIGUOUS' | 'NOT_IN_USE';
 
+/**
+ * Chu cua mot dia diem. `counterpartyId`/`siteId` la `null` CHI voi hang rao `CUSTOMER` kieu cu ma
+ * khach chua noi vao phap nhan nao — no tro thang vao khach hang, khong vao mot dia diem phap nhan.
+ */
 export interface PlaceOwner {
-  readonly counterpartyId: string;
-  readonly counterpartyName: string;
+  readonly counterpartyId: string | null;
+  readonly counterpartyName: string | null;
   readonly customerId?: string | null;
   readonly customerName?: string | null;
-  readonly siteId: string;
-  readonly siteName: string;
+  readonly siteId: string | null;
+  readonly siteName: string | null;
 }
 
 export interface PlaceAdminView {
   readonly id: string;
   readonly kind: PlaceKind;
+  /**
+   * Loai HIEN THI do may chu suy (phap nhan co mat khach hang hay khong). TUY CHON: thieu thi man
+   * hinh suy tu `kind` + `owner.customerId`.
+   */
+  readonly displayKind?: Exclude<PlaceKindFilter, 'ALL'>;
   readonly kindLabel: string;
   readonly name: string;
   readonly address: string | null;
@@ -218,6 +231,8 @@ export interface PlaceHistoryEntry {
   readonly at: string;
   readonly actor: string;
   readonly action: string;
+  /** `TransportGeofence` (dia diem) hoac `TransportCounterpartySite` (dia diem cua phap nhan). */
+  readonly entityType?: string;
   readonly summary?: string | null;
   readonly before?: unknown;
   readonly after?: unknown;

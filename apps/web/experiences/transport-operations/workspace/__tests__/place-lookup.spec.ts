@@ -143,9 +143,9 @@ describe('dia diem da biet', () => {
     );
     expect(knownPlaceSourceLine('COUNTERPARTY_SITE', null)).toBe('Nhà máy / kho đối tác');
     expect(knownPlaceSourceLine('CUSTOMER', 'Công ty A')).toBe('Địa điểm khách hàng của Công ty A');
-    expect(
-      knownPlaceSourceLine('COUNTERPARTY_SITE', 'Công ty A', 'Địa điểm khách hàng'),
-    ).toBe('Địa điểm khách hàng của Công ty A');
+    expect(knownPlaceSourceLine('COUNTERPARTY_SITE', 'Công ty A', 'Địa điểm khách hàng')).toBe(
+      'Địa điểm khách hàng của Công ty A',
+    );
     expect(knownPlaceSourceLine('DEPOT', 'Vận tải Việt')).toBe('Bãi xe');
   });
 });

@@ -12,7 +12,11 @@ import {
   newPlaceDraft,
   NEW_COUNTERPARTY,
   nudgePoint,
+  isOwnerChoiceAllowed,
+  needsCounterpartyManage,
   placeDraftProblems,
+  placeHistoryLabel,
+  placeKindFilterOf,
   placeKindLabel,
   placeMarkers,
   placeOwnerLine,
@@ -22,7 +26,9 @@ import {
   withPoint,
 } from '../places-model';
 
-const place = (overrides: Partial<PlaceAdminView> & { id: string; name: string }): PlaceAdminView => ({
+const place = (
+  overrides: Partial<PlaceAdminView> & { id: string; name: string },
+): PlaceAdminView => ({
   kind: 'COUNTERPARTY_SITE',
   kindLabel: '',
   address: null,
@@ -100,24 +106,21 @@ describe('loai va chu cua dia diem (#395 §2.1)', () => {
 
 describe('danh sach — loc, dem, thu tu', () => {
   it('mac dinh chi dia diem dang dung, bai xe dau tien', () => {
-    expect(filterPlaces(ALL, { kind: 'ALL', status: 'active', query: '' }).map((entry) => entry.id)).toEqual([
-      'd1',
-      's1',
-      's2',
-      'c1',
-    ]);
-    expect(filterPlaces(ALL, { kind: 'ALL', status: 'inactive', query: '' }).map((entry) => entry.id)).toEqual([
-      'd2',
-    ]);
+    expect(
+      filterPlaces(ALL, { kind: 'ALL', status: 'active', query: '' }).map((entry) => entry.id),
+    ).toEqual(['d1', 's1', 's2', 'c1']);
+    expect(
+      filterPlaces(ALL, { kind: 'ALL', status: 'inactive', query: '' }).map((entry) => entry.id),
+    ).toEqual(['d2']);
   });
 
   it('tim khong dau theo ten, dia chi, chu', () => {
-    expect(filterPlaces(ALL, { kind: 'ALL', status: 'all', query: 'dinh vu' }).map((entry) => entry.id)).toEqual([
-      's2',
-    ]);
-    expect(filterPlaces(ALL, { kind: 'ALL', status: 'all', query: 'tan phu' }).map((entry) => entry.id)).toEqual([
-      's1',
-    ]);
+    expect(
+      filterPlaces(ALL, { kind: 'ALL', status: 'all', query: 'dinh vu' }).map((entry) => entry.id),
+    ).toEqual(['s2']);
+    expect(
+      filterPlaces(ALL, { kind: 'ALL', status: 'all', query: 'tan phu' }).map((entry) => entry.id),
+    ).toEqual(['s1']);
   });
 
   it('dem theo loai khop dung bang dang loc', () => {
@@ -170,7 +173,9 @@ describe('ban do: ghim theo loai, vong ban kinh, ghim dang sua', () => {
     const markers = placeMarkers(ALL, 's2', { latitude: 20.9, longitude: 106.7 }, 's2');
     expect(markers.find((marker) => marker.key === 'place:s2')).toBeUndefined();
     expect(markers.at(-1)).toMatchObject({ kind: 'PLACE', isDraggable: true, badge: 'Đây' });
-    expect(markers.find((marker) => marker.key === 'place:d1')?.label).toBe('Bãi xe: Bãi xe Hà Nội');
+    expect(markers.find((marker) => marker.key === 'place:d1')?.label).toBe(
+      'Bãi xe: Bãi xe Hà Nội',
+    );
   });
 
   it('vong ban kinh: moi dia diem dang dung + vong dang sua', () => {
@@ -180,7 +185,10 @@ describe('ban do: ghim theo loai, vong ban kinh, ghim dang sua', () => {
       placeId: null,
     });
     expect(rings).toHaveLength(5);
-    expect(rings.at(-1)).toEqual({ center: { latitude: 20.9, longitude: 106.7 }, radiusMetres: 450 });
+    expect(rings.at(-1)).toEqual({
+      center: { latitude: 20.9, longitude: 106.7 },
+      radiusMetres: 450,
+    });
   });
 
   it('nudge ~10 m bang ban phim', () => {
@@ -202,7 +210,10 @@ describe('trinh sua: "Địa điểm này của ai?" → than yeu cau', () => {
   });
 
   it('bai xe cua cong ty', () => {
-    const draft = { ...withPoint(withOwnerChoice(newPlaceDraft(), 'DEPOT'), point, 'MAP'), name: ' Bãi xe Bắc Ninh ' };
+    const draft = {
+      ...withPoint(withOwnerChoice(newPlaceDraft(), 'DEPOT'), point, 'MAP'),
+      name: ' Bãi xe Bắc Ninh ',
+    };
     expect(buildCreatePlaceInput(draft)).toEqual({
       kind: 'DEPOT',
       name: 'Bãi xe Bắc Ninh',
@@ -230,7 +241,11 @@ describe('trinh sua: "Địa điểm này của ai?" → than yeu cau', () => {
     };
     expect(placeDraftProblems(base)).toEqual(['Nhập tên đơn vị mới.']);
     expect(
-      buildCreatePlaceInput({ ...base, newCounterpartyName: 'Cảng Hải Phòng', newCounterpartyTaxCode: ' ' }),
+      buildCreatePlaceInput({
+        ...base,
+        newCounterpartyName: 'Cảng Hải Phòng',
+        newCounterpartyTaxCode: ' ',
+      }),
     ).toMatchObject({
       owner: { newCounterparty: { name: 'Cảng Hải Phòng', taxCode: null } },
     });
@@ -255,5 +270,87 @@ describe('trinh sua: "Địa điểm này của ai?" → than yeu cau', () => {
   it('ban kinh ngoai khoang cua may chu la loi', () => {
     const draft = { ...editPlaceDraft(PARTNER_SITE), radiusMetres: 5 };
     expect(placeDraftProblems(draft)).toEqual(['Bán kính phải là số nguyên từ 10 đến 100.000 m.']);
+  });
+});
+
+describe('#395 — hop dong may chu moi, va duong lui cho may chu cu', () => {
+  it('loai hien thi: uu tien `displayKind` cua may chu, thieu thi suy tu chu', () => {
+    const customerSite = place({
+      id: 's1',
+      name: 'Kho A',
+      owner: {
+        counterpartyId: 'cp-1',
+        counterpartyName: 'Công ty A',
+        customerId: 'cus-1',
+        customerName: 'Công ty A',
+        siteId: 'site-1',
+        siteName: 'Kho A',
+      },
+    });
+    expect(placeKindFilterOf(customerSite)).toBe('CUSTOMER_SITE');
+    // May chu biet phap nhan KHONG con mat khach hang du ban ghi con `customerId` cu.
+    expect(placeKindFilterOf({ ...customerSite, displayKind: 'PARTNER_SITE' })).toBe(
+      'PARTNER_SITE',
+    );
+  });
+
+  it('diem khach hang kieu cu khong co phap nhan: dong chu khong vo, khong in `null`', () => {
+    const legacy = place({
+      id: 'l1',
+      name: 'Kho cũ',
+      kind: 'CUSTOMER',
+      owner: {
+        counterpartyId: null,
+        counterpartyName: null,
+        customerId: 'cus-9',
+        customerName: 'Khách Cũ',
+        siteId: null,
+        siteName: null,
+      },
+    });
+    expect(placeOwnerLine(legacy)).toBe('Khách hàng Khách Cũ');
+    expect(placeOwnerLine({ ...legacy, owner: { ...legacy.owner!, customerName: null } })).toBe(
+      'Chưa rõ chủ địa điểm',
+    );
+  });
+
+  it('ma so thue cua don vi moi: 10 so hoac 10-3 so, bo trong duoc', () => {
+    const draft = {
+      ...withPoint(
+        withOwnerChoice(newPlaceDraft(), 'PARTNER'),
+        { latitude: 21, longitude: 105.8 },
+        'MAP',
+      ),
+      name: 'Kho B',
+      counterpartyId: NEW_COUNTERPARTY,
+      newCounterpartyName: 'Công ty B',
+    };
+    const taxProblem = (taxCode: string) =>
+      placeDraftProblems({ ...draft, newCounterpartyTaxCode: taxCode }).some((entry) =>
+        entry.startsWith('Mã số thuế'),
+      );
+    expect(taxProblem('')).toBe(false);
+    expect(taxProblem('0101234567')).toBe(false);
+    expect(taxProblem('0101234567-001')).toBe(false);
+    expect(taxProblem('12345')).toBe(true);
+    expect(taxProblem('0101234567-1')).toBe(true);
+  });
+
+  it('dia diem cua don vi khac doi them quyen quan ly doi tac; bai xe thi khong', () => {
+    expect(isOwnerChoiceAllowed('DEPOT', false)).toBe(true);
+    expect(isOwnerChoiceAllowed('CUSTOMER', false)).toBe(false);
+    expect(isOwnerChoiceAllowed('PARTNER', true)).toBe(true);
+    expect(needsCounterpartyManage(DEPOT_HN)).toBe(false);
+    expect(needsCounterpartyManage(place({ id: 'x', name: 'Kho X' }))).toBe(true);
+  });
+
+  it('lich su: cau may chu neu co, khong thi ten viec — khong bao gio lo ma', () => {
+    expect(placeHistoryLabel({ action: 'transport.place.make_primary_depot' })).toBe(
+      'Đặt làm bãi chính',
+    );
+    expect(
+      placeHistoryLabel({ action: 'transport.place.update', summary: 'Đổi bán kính 250 → 300 m' }),
+    ).toBe('Đổi bán kính 250 → 300 m');
+    expect(placeHistoryLabel({ action: 'transport.something.new' })).toBe('Thay đổi khác');
   });
 });

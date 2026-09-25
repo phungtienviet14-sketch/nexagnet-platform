@@ -979,13 +979,13 @@ describe('#341 — danh muc ke toan theo cau hoi nghiep vu', () => {
         sections
           .filter((section) => OLD_IDS.includes(section.id))
           .map((section) => [
-          section.id,
-          {
-            capabilities: section.requiredCapabilities,
-            action: section.requiredAction,
-            supersededBy: section.supersededBy ?? null,
-          },
-        ]),
+            section.id,
+            {
+              capabilities: section.requiredCapabilities,
+              action: section.requiredAction,
+              supersededBy: section.supersededBy ?? null,
+            },
+          ]),
       );
       expect(now).toEqual(GATES_BEFORE_341);
     });

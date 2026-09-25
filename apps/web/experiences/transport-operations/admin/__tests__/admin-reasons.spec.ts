@@ -77,7 +77,8 @@ describe('bang cau cho moi ly do cua API quan tri', () => {
   });
 
   it('bai doc tu vung khong xanh gia: rut dung ma tu mot mang mau', () => {
-    const sample = "export const X = [\n  /** 'NOT_A_CODE' */\n  'ALPHA_ONE',\n  'BETA',\n] as const;";
+    const sample =
+      "export const X = [\n  /** 'NOT_A_CODE' */\n  'ALPHA_ONE',\n  'BETA',\n] as const;";
     expect(literalsInArray(sample, 'X')).toEqual(['ALPHA_ONE', 'BETA']);
   });
 
@@ -86,7 +87,9 @@ describe('bang cau cho moi ly do cua API quan tri', () => {
       const message = reasonMessage(code, {}) ?? '';
       expect(message.length, code).toBeGreaterThan(10);
       expect(message, code).not.toMatch(/\b[A-Z]+_[A-Z_]+\b/);
-      expect(message, code).toMatch(/[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
+      expect(message, code).toMatch(
+        /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i,
+      );
     }
   });
 });

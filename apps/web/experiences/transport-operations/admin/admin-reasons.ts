@@ -24,7 +24,9 @@ const count = (value: unknown): number =>
   Array.isArray(value)
     ? value.filter(
         (item) =>
-          typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'string',
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as { id?: unknown }).id === 'string',
       ).length
     : 0;
 
@@ -129,7 +131,8 @@ const LINK_MESSAGES: Readonly<Record<string, Template>> = {
     const other = text(detail.driverName) ?? text(detail.name);
     return `Tài khoản này đã nối với ${other === null ? 'một hồ sơ lái xe khác' : `hồ sơ lái xe ${other}`} — gỡ nối cũ trước.`;
   },
-  ACCOUNT_LINK_DRIVER_INACTIVE: 'Hồ sơ lái xe đã ngừng hoạt động — mở lại hồ sơ ở Đội xe & lái xe trước.',
+  ACCOUNT_LINK_DRIVER_INACTIVE:
+    'Hồ sơ lái xe đã ngừng hoạt động — mở lại hồ sơ ở Đội xe & lái xe trước.',
   ASSET_STAKEHOLDER_ACCOUNT_TAKEN: (detail) => {
     const other = text(detail.stakeholderName) ?? text(detail.name);
     return `Tài khoản này đã nối với ${other === null ? 'một hồ sơ bên góp vốn khác' : `hồ sơ bên góp vốn ${other}`} — gỡ nối cũ trước.`;
@@ -157,7 +160,8 @@ const PLACE_MESSAGES: Readonly<Record<string, Template>> = {
     const name = text(detail.conflictName);
     const kind = text(detail.conflictKindLabel);
     const owner = text(detail.ownerName);
-    if (name === null) return 'Tên này đã dùng cho một địa điểm đang hoạt động khác — đặt tên khác.';
+    if (name === null)
+      return 'Tên này đã dùng cho một địa điểm đang hoạt động khác — đặt tên khác.';
     return `Tên này đã dùng cho ${kind === null ? 'địa điểm' : kind.toLowerCase()} ${quoted(name)}${owner === null ? '' : ` của ${owner}`}. Đặt tên khác để lái xe và điều hành không nhầm hai nơi.`;
   },
   DEPOT_ALREADY_ACTIVE:
@@ -184,10 +188,13 @@ const PLACE_MESSAGES: Readonly<Record<string, Template>> = {
     'Điểm này đang được quản lý ở Địa điểm vận hành — sửa tên hay trạng thái ở đó.',
   PLACE_POINT_INVALID: 'Toạ độ không hợp lệ — chọn lại điểm trên bản đồ.',
   PLACE_NOT_FOUND: 'Không tìm thấy địa điểm này nữa — tải lại danh sách.',
-  PLACE_OWNER_REQUIRED: 'Chọn địa điểm này của ai: một khách hàng, một đơn vị có sẵn, hay đơn vị mới.',
+  PLACE_OWNER_REQUIRED:
+    'Chọn địa điểm này của ai: một khách hàng, một đơn vị có sẵn, hay đơn vị mới.',
   PLACE_OWNER_INVALID: 'Thông tin chủ của địa điểm chưa đúng — chọn lại “Địa điểm này của ai?”.',
-  PLACE_OWNER_INACTIVE: 'Khách hàng hoặc đơn vị sở hữu địa điểm đã ngừng hoạt động — mở lại đơn vị đó trước.',
-  PLACE_SITE_ALREADY_FENCED: 'Địa điểm có sẵn này đã có vị trí trên bản đồ — sửa ở chính địa điểm đó.',
+  PLACE_OWNER_INACTIVE:
+    'Khách hàng hoặc đơn vị sở hữu địa điểm đã ngừng hoạt động — mở lại đơn vị đó trước.',
+  PLACE_SITE_ALREADY_FENCED:
+    'Địa điểm có sẵn này đã có vị trí trên bản đồ — sửa ở chính địa điểm đó.',
   PLACE_SITE_OWNER_MISMATCH: 'Địa điểm có sẵn đã chọn không thuộc đơn vị này — chọn lại.',
   PLACE_NOT_A_DEPOT: 'Chỉ bãi xe mới đặt làm bãi chính được.',
 };
@@ -264,7 +271,9 @@ export function violationsOf(error: unknown): readonly AccessViolation[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter(
     (item): item is AccessViolation =>
-      typeof item === 'object' && item !== null && typeof (item as { code?: unknown }).code === 'string',
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as { code?: unknown }).code === 'string',
   );
 }
 
@@ -276,7 +285,9 @@ export function openWorkOf(error: unknown): OpenWorkDetail | null {
     Array.isArray(value)
       ? value.filter(
           (item): item is { id: string; code?: string | null } =>
-            typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'string',
+            typeof item === 'object' &&
+            item !== null &&
+            typeof (item as { id?: unknown }).id === 'string',
         )
       : [];
   return {

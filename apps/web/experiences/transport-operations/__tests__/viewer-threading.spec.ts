@@ -22,7 +22,13 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXPERIENCE = resolve(HERE, '..');
-const HELPERS = ['canPerform', 'hasOperationsScope', 'hasDriverScope', 'operationsEmptyMessage', 'allowed'];
+const HELPERS = [
+  'canPerform',
+  'hasOperationsScope',
+  'hasDriverScope',
+  'operationsEmptyMessage',
+  'allowed',
+];
 
 const sourceFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
@@ -92,9 +98,9 @@ describe('#395 — helper doc tap quyen khi co, roi ve bang theo vai khi khong',
 
   it('tap quyen THANG vai: Ke toan bi bot quyen thi mat quyen do du vai van la Ke toan', () => {
     expect(canPerform('ACCOUNTING', 'transport.vehicle.read')).toBe(true);
-    expect(canPerform({ role: 'ACCOUNTING', permissions: new Set() }, 'transport.vehicle.read')).toBe(
-      false,
-    );
+    expect(
+      canPerform({ role: 'ACCOUNTING', permissions: new Set() }, 'transport.vehicle.read'),
+    ).toBe(false);
   });
 
   it('khong co tap quyen (may chu cu) → dung ban guong theo vai; chua biet ai → hien', () => {

@@ -1,4 +1,4 @@
-import type { AuthRole, CreateUserInput, TemporaryCredential } from '../../../lib/auth';
+import type { AuthRole, CreateUserInput } from '../../../lib/auth';
 import { actionsForRole } from '../transport-actions';
 import type { StatusTone } from '../customer-view';
 import type { AssetStakeholder, Driver } from '../transport-types';
@@ -120,7 +120,11 @@ export const ACCOUNT_STATUS_TONE: Readonly<Record<AccountStatus, StatusTone>> = 
 };
 
 export const accountStatusOf = (account: AccountView): AccountStatus =>
-  account.disabledAt != null ? 'DISABLED' : account.mustChangePassword === true ? 'PENDING' : 'ACTIVE';
+  account.disabledAt != null
+    ? 'DISABLED'
+    : account.mustChangePassword === true
+      ? 'PENDING'
+      : 'ACTIVE';
 
 const STATUS_OF_FILTER: Readonly<Record<AccountStatusFilter, AccountStatus>> = {
   active: 'ACTIVE',
@@ -150,7 +154,10 @@ export function filterAccounts(
 ): readonly AccountView[] {
   const needle = foldText(filter.query);
   return accounts
-    .filter((account) => filter.status === 'all' || accountStatusOf(account) === STATUS_OF_FILTER[filter.status])
+    .filter(
+      (account) =>
+        filter.status === 'all' || accountStatusOf(account) === STATUS_OF_FILTER[filter.status],
+    )
     .filter((account) => filter.role === 'all' || account.role === filter.role)
     .filter((account) => {
       if (needle.length === 0) return true;
@@ -201,37 +208,11 @@ export function grantDeltaLabel(grants: readonly PermissionGrant[] | undefined):
   return parts.length === 0 ? null : parts.join(' / ');
 }
 
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
-
-/** "Lần cuối đăng nhập" dang tuong doi — cau nguoi ta noi, khong phai dau thoi gian. */
-export function relativeLastLogin(iso: string | null | undefined, now: Date): string {
-  if (iso == null) return 'Chưa đăng nhập';
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return 'Chưa đăng nhập';
-  const elapsed = now.getTime() - at.getTime();
-  if (elapsed < MINUTE) return 'Vừa xong';
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} phút trước`;
-  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)} giờ trước`;
-  if (elapsed < 2 * DAY) return 'Hôm qua';
-  if (elapsed < 30 * DAY) return `${Math.floor(elapsed / DAY)} ngày trước`;
-  return formatDateTime(iso);
-}
-
-export function formatDateTime(iso: string | null | undefined): string {
-  if (iso == null) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(date);
-}
+/*
+ * Thoi gian dang nhap va the mat khau tam dung CHUNG voi `/settings` — xem `lib/account-format.ts`.
+ * Xuat lai o day de man quan tri van tai chi import mot mo hinh.
+ */
+export { formatDateTime, relativeLastLogin } from '../../../lib/account-format';
 
 /* ------------------------------------------------------------------ *
  * Bo quyen rieng — tu mot lan bam den mot bo TOI GIAN
@@ -285,7 +266,10 @@ export const isGroupToggleable = (action: CatalogAction): boolean =>
 
 export type GroupCheckState = 'on' | 'off' | 'mixed' | 'locked';
 
-export function groupCheckState(group: CatalogGroup, effective: ReadonlySet<string>): GroupCheckState {
+export function groupCheckState(
+  group: CatalogGroup,
+  effective: ReadonlySet<string>,
+): GroupCheckState {
   const toggleable = group.actions.filter(isGroupToggleable);
   if (!group.grantable || toggleable.length === 0) return 'locked';
   const held = toggleable.filter((action) => effective.has(action.code)).length;
@@ -308,6 +292,7 @@ export type ActionOrigin = 'PRESET' | 'GRANTED' | 'DENIED' | 'NONE';
 export interface ActionRowView {
   readonly code: string;
   readonly label: string;
+  readonly kind: CatalogAction['kind'];
   readonly kindLabel: string;
   readonly isOn: boolean;
   readonly origin: ActionOrigin;
@@ -356,6 +341,7 @@ export function actionRows(group: CatalogGroup, draft: AccessDraft): readonly Ac
     return {
       code: action.code,
       label: action.label,
+      kind: action.kind,
       kindLabel: KIND_LABEL[action.kind],
       isOn: effective.has(action.code),
       origin,
@@ -367,7 +353,9 @@ export function actionRows(group: CatalogGroup, draft: AccessDraft): readonly Ac
 }
 
 /** Nhom van tai co the chinh (co it nhat mot o); nhom lien ket va nhom khoa van hien, chi doc. */
-export const transportGroupsOf = (catalog: PermissionCatalog | undefined): readonly CatalogGroup[] =>
+export const transportGroupsOf = (
+  catalog: PermissionCatalog | undefined,
+): readonly CatalogGroup[] =>
   catalog?.domains.find((domain) => domain.id === 'transport')?.groups ?? [];
 
 export const presetsOf = (catalog: PermissionCatalog | undefined): readonly CatalogPreset[] =>
@@ -524,31 +512,23 @@ export const stakeholderCandidates = (
     .sort((left, right) => left.displayName.localeCompare(right.displayName, 'vi'));
 
 /* ------------------------------------------------------------------ *
- * The mat khau tam
+ * The mat khau tam — cau chu dung chung, xem `lib/account-format.ts`
  * ------------------------------------------------------------------ */
 
-/** `abcdefghjkmnpqrs` → `abcd-efgh-jkmn-pqrs`; chuoi da co gach thi giu nguyen. */
-export function formatTemporaryPassword(value: string): string {
-  if (value.includes('-')) return value;
-  return value.match(/.{1,4}/g)?.join('-') ?? value;
-}
+export { credentialMessage, formatTemporaryPassword } from '../../../lib/account-format';
 
 /**
- * LOI NHAN de Giam doc sao chep gui qua Zalo/SMS: du de nguoi nhan tu dang nhap ma khong phai hoi
- * lai — dia chi, ten dang nhap, mat khau tam, han, va viec se xay ra lan dau.
+ * Ten dang nhap goi y TAI CHO — duong lui khi may chu chua co `suggest-username`. May chu van la noi
+ * kiem trung; day chi la mot cho bat dau hop le: khong dau, `đ`→`d`, noi bang dau cham, toi da 64.
+ * "Trần Văn An" → `an.tv` khong: nguoi Viet goi nhau bang TEN, nen ten dung truoc — `an.tran.van`.
  */
-export function credentialMessage(input: {
-  readonly productName: string;
-  readonly name: string;
-  readonly username: string;
-  readonly credential: TemporaryCredential;
-  readonly loginUrl: string;
-}): string {
-  return [
-    `Chào ${input.name}, đây là tài khoản ${input.productName} của bạn.`,
-    `Địa chỉ đăng nhập: ${input.loginUrl}`,
-    `Tên đăng nhập: ${input.username}`,
-    `Mật khẩu tạm: ${formatTemporaryPassword(input.credential.temporaryPassword)}`,
-    `Mật khẩu tạm hết hạn lúc ${formatDateTime(input.credential.expiresAt)}. Lần đầu đăng nhập, hệ thống sẽ yêu cầu bạn đặt mật khẩu riêng.`,
-  ].join('\n');
+export function localUsernameSuggestion(name: string, prefix = ''): string {
+  const words = foldText(name)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
+  if (words.length === 0) return prefix;
+  const given = words[words.length - 1] as string;
+  const rest = words.slice(0, -1);
+  return `${prefix}${[given, ...rest].join('.')}`.slice(0, 64);
 }

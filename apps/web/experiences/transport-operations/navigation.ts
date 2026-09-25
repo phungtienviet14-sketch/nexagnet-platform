@@ -65,14 +65,7 @@ export type TransportSectionId =
   | 'admin-places';
 
 export type TransportSectionGroupId =
-  | 'root'
-  | 'dispatch'
-  | 'receivable'
-  | 'payable'
-  | 'driver-money'
-  | 'reports'
-  | 'assets'
-  | 'admin';
+  'root' | 'dispatch' | 'receivable' | 'payable' | 'driver-money' | 'reports' | 'assets' | 'admin';
 
 export interface TransportSectionGroup {
   readonly id: TransportSectionGroupId;
@@ -531,7 +524,8 @@ export const TRANSPORT_SECTIONS = [
     id: 'admin-places',
     label: 'Địa điểm vận hành',
     group: 'admin',
-    summary: 'Bãi xe, kho khách hàng và nhà máy đối tác — một nguồn cho tạo đơn, lập kế hoạch và hiện trường.',
+    summary:
+      'Bãi xe, kho khách hàng và nhà máy đối tác — một nguồn cho tạo đơn, lập kế hoạch và hiện trường.',
     requiredCapabilities: ['transport-core', 'transport-proof'],
     requiredAction: 'transport.geofence.manage',
   },

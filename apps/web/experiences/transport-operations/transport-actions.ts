@@ -383,7 +383,6 @@ export const actionsForRole = (role: AuthRole): readonly TransportAction[] => RO
 export const roleCanPerform = (role: AuthRole, action: TransportAction): boolean =>
   ROLE_ACTIONS[role].includes(action);
 
-
 /* ------------------------------------------------------------------ *
  * NGUOI DANG XEM — vai + tap quyen HIEU LUC do may chu tinh (`#395`)
  * ------------------------------------------------------------------ */

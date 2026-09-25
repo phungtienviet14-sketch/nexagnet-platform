@@ -45,7 +45,10 @@ describe('dan toa do (#395)', () => {
 
 describe('dan lien ket ban do', () => {
   it.each([
-    ['ghim dia diem !3d!4d thang tam ban do @', 'https://www.google.com/maps/place/Kho/@21.02,105.85,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d21.0285!4d105.8542'],
+    [
+      'ghim dia diem !3d!4d thang tam ban do @',
+      'https://www.google.com/maps/place/Kho/@21.02,105.85,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d21.0285!4d105.8542',
+    ],
     ['tam ban do @', 'https://www.google.com/maps/@21.0285,105.8542,15z'],
     ['?q=', 'https://maps.google.com/?q=21.0285,105.8542'],
     ['?q=loc:', 'https://maps.google.com/maps?q=loc:21.0285,105.8542'],

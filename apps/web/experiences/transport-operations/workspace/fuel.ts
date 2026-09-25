@@ -610,7 +610,8 @@ export const toReconciliationWorkspace = (
     pendingCountLabel: formatCount(pending),
     isFrozen,
     canRunMatching: canPerform(viewer, 'transport.fuel.reconciliation.match') && !isFrozen,
-    canClose: canPerform(viewer, 'transport.fuel.reconciliation.close') && !isFrozen && pending === 0,
+    canClose:
+      canPerform(viewer, 'transport.fuel.reconciliation.close') && !isFrozen && pending === 0,
     canReopen: canPerform(viewer, 'transport.fuel.reconciliation.reopen') && isFrozen,
     closeBlockedReason:
       pending > 0

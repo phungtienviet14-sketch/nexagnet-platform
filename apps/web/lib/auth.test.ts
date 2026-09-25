@@ -90,7 +90,9 @@ describe('auth client', () => {
   it('uses the rotated token returned after login', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'before-login' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ csrfToken: 'before-login' }), { status: 200 }),
+      )
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -121,7 +123,9 @@ describe('auth client', () => {
   it('keeps the rotated token returned by a password change', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'old-session' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ csrfToken: 'old-session' }), { status: 200 }),
+      )
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -199,7 +203,9 @@ describe('auth client', () => {
     const bodyOf = (nth: number): unknown =>
       JSON.parse(String((fetchMock.mock.calls[nth - 1]?.[1] as RequestInit).body));
     expect(bodyOf(2)).toEqual({ username: 'lx.an', name: 'An', role: 'SALE' });
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/settings/users/u%201/credentials/reset');
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      '/settings/users/u%201/credentials/reset',
+    );
     expect(bodyOf(3)).toEqual({});
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/settings/users/u%201/enable');
     expect(bodyOf(4)).toEqual({ confirmed: true });

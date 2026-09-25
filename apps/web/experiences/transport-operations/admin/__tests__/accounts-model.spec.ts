@@ -16,6 +16,7 @@ import {
   groupCheckState,
   identityProblems,
   isDirectorConfirmed,
+  localUsernameSuggestion,
   permissionLabelLookup,
   relativeLastLogin,
   sameAccess,
@@ -26,7 +27,11 @@ import {
 import type { AccountView, CatalogAction, CatalogGroup, PermissionCatalog } from '../admin-types';
 import type { Driver } from '../../transport-types';
 
-const action = (code: string, label: string, extra: Partial<CatalogAction> = {}): CatalogAction => ({
+const action = (
+  code: string,
+  label: string,
+  extra: Partial<CatalogAction> = {},
+): CatalogAction => ({
   code,
   label,
   kind: code.endsWith('.read') ? 'XEM' : 'THAO_TAC',
@@ -68,7 +73,10 @@ const ADMINISTRATION: CatalogGroup = {
   summary: 'Nối tài khoản',
   grantable: true,
   actions: [
-    action('transport.account_link.manage', 'Nối tài khoản', { kind: 'NHAY_CAM', directorOnly: true }),
+    action('transport.account_link.manage', 'Nối tài khoản', {
+      kind: 'NHAY_CAM',
+      directorOnly: true,
+    }),
   ],
 };
 
@@ -120,7 +128,9 @@ describe('bo quyen rieng toi gian tu tung lan bam (#395)', () => {
     expect(escalatedAllows(escalated, GROUPS).map((entry) => entry.code)).toEqual([
       'transport.checkpoint.record',
     ]);
-    const row = actionRows(FIELD, escalated).find((entry) => entry.code === 'transport.checkpoint.record');
+    const row = actionRows(FIELD, escalated).find(
+      (entry) => entry.code === 'transport.checkpoint.record',
+    );
     expect(row).toMatchObject({ isOn: true, origin: 'GRANTED', needsConfirmation: true });
     expect(row?.sodLabel).toContain('Sửa căn cứ');
   });
@@ -141,7 +151,10 @@ describe('bo quyen rieng toi gian tu tung lan bam (#395)', () => {
     expect(actionRows(FLEET, denied)[0]).toMatchObject({ isOn: false, origin: 'DENIED' });
     expect(setAction(denied, 'transport.vehicle.read', true).grants).toEqual([]);
     // Ghi bu moc: Ke toan KHONG co theo vai → bat la leo thang.
-    expect(actionRows(FIELD, accounting)[1]).toMatchObject({ isOn: false, needsConfirmation: true });
+    expect(actionRows(FIELD, accounting)[1]).toMatchObject({
+      isOn: false,
+      needsConfirmation: true,
+    });
   });
 
   it('Giam doc va Lai xe khong nhan quyen rieng: o bi khoa, doi vai thi bo quyen rieng', () => {
@@ -191,16 +204,21 @@ describe('danh sach tai khoan', () => {
   ];
 
   it('loc khong dau theo ten / ten dang nhap / chuc danh; chờ đổi mật khẩu len dau', () => {
-    expect(filterAccounts(list, { query: 'dao', status: 'all', role: 'all' }).map((a) => a.id)).toEqual(['kt']);
-    expect(filterAccounts(list, { query: 'truong', status: 'all', role: 'all' }).map((a) => a.id)).toEqual(['kt']);
-    expect(filterAccounts(list, { query: '', status: 'all', role: 'all' }).map((a) => a.id)).toEqual([
-      'lx.an',
-      'kt',
-      'gd',
-      'cu',
-    ]);
-    expect(filterAccounts(list, { query: '', status: 'disabled', role: 'all' }).map((a) => a.id)).toEqual(['cu']);
-    expect(filterAccounts(list, { query: '', status: 'all', role: 'SALE' }).map((a) => a.id)).toEqual(['lx.an']);
+    expect(
+      filterAccounts(list, { query: 'dao', status: 'all', role: 'all' }).map((a) => a.id),
+    ).toEqual(['kt']);
+    expect(
+      filterAccounts(list, { query: 'truong', status: 'all', role: 'all' }).map((a) => a.id),
+    ).toEqual(['kt']);
+    expect(
+      filterAccounts(list, { query: '', status: 'all', role: 'all' }).map((a) => a.id),
+    ).toEqual(['lx.an', 'kt', 'gd', 'cu']);
+    expect(
+      filterAccounts(list, { query: '', status: 'disabled', role: 'all' }).map((a) => a.id),
+    ).toEqual(['cu']);
+    expect(
+      filterAccounts(list, { query: '', status: 'all', role: 'SALE' }).map((a) => a.id),
+    ).toEqual(['lx.an']);
   });
 
   it('dem theo trang thai va theo vai', () => {
@@ -248,7 +266,13 @@ describe('tao tai khoan', () => {
   });
 
   it('than yeu cau: KHONG mat khau, quyen rieng chi cho vai chon nhom, o trong thanh null', () => {
-    const identity = { name: ' An ', username: 'dh.an', phone: ' ', email: '', jobTitle: 'Điều phối' };
+    const identity = {
+      name: ' An ',
+      username: 'dh.an',
+      phone: ' ',
+      email: '',
+      jobTitle: 'Điều phối',
+    };
     const access = toggleGroup(changeRole('MANAGER'), FLEET);
     const input = buildCreateInput(findPresetChoice('OPERATIONS'), identity, access, false);
     expect(input).toEqual({
@@ -262,8 +286,12 @@ describe('tao tai khoan', () => {
     });
     expect('password' in input).toBe(false);
     // Chu xe: vai MANAGER nhung KHONG quyen rieng — pham vi den tu lien ket ben gop von.
-    expect(buildCreateInput(findPresetChoice('OWNER'), identity, access, false).grants).toBeUndefined();
-    expect(buildCreateInput(findPresetChoice('DIRECTOR'), identity, changeRole('ADMIN'), true)).toMatchObject({
+    expect(
+      buildCreateInput(findPresetChoice('OWNER'), identity, access, false).grants,
+    ).toBeUndefined();
+    expect(
+      buildCreateInput(findPresetChoice('DIRECTOR'), identity, changeRole('ADMIN'), true),
+    ).toMatchObject({
       role: 'ADMIN',
       confirmEscalation: true,
     });
@@ -311,5 +339,13 @@ describe('tao tai khoan', () => {
     expect(message).toContain('Tên đăng nhập: lx.an');
     expect(message).toContain('Mật khẩu tạm: abcd-efgh-jkmn-pqrs');
     expect(message).toContain('10:00 28/09/2026');
+  });
+});
+
+describe('ten dang nhap goi y tai cho', () => {
+  it('ten goi truoc, khong dau, noi bang dau cham, tien to lai xe', () => {
+    expect(localUsernameSuggestion('Trần Văn An', 'lx.')).toBe('lx.an.tran.van');
+    expect(localUsernameSuggestion('Đỗ Thị Đào')).toBe('dao.do.thi');
+    expect(localUsernameSuggestion('  ', 'lx.')).toBe('lx.');
   });
 });

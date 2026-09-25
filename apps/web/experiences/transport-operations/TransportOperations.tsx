@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { AccountsAdminView } from './admin/AccountsAdminView';
+import { PlacesAdminView } from './admin/PlacesAdminView';
 import { ErrorState } from './components/SectionState';
 import { DriverShell, roleLabelOf, TransportShell } from './components/TransportShell';
 import { DriverSurface } from './driver/DriverSurface';
@@ -344,5 +346,12 @@ function SectionBody({
     // RIENG: xem duoc bang luong khong nhat thiet xem duoc lich su chi tien mat.
     case 'driver-settlement':
       return <DriverSettlementView />;
+    // `#395` — QUAN TRI. Tai khoan nhan `selection` la TEN DANG NHAP (dinh danh nguoi ta doc duoc,
+    // dung quy uoc `SELECTION_QUERY_PARAM`); dia diem giu lua chon trong man (ma dia diem la `id`
+    // ky thuat, khong len dia chi).
+    case 'admin-accounts':
+      return <AccountsAdminView selection={selection} onSelect={onSelect} />;
+    case 'admin-places':
+      return <PlacesAdminView />;
   }
 }

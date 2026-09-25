@@ -2,8 +2,17 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
-import { authApi, type AuthRole, type AuthUser } from '../../lib/auth';
+import { relativeLastLogin } from '../../lib/account-format';
+import {
+  authApi,
+  type AuthRole,
+  type AuthUser,
+  type AuthUserWithCredential,
+  type CreateUserInput,
+  type TemporaryCredential,
+} from '../../lib/auth';
 import { useAuth } from '../auth/AuthGate';
+import { SettingsCredentialCard } from './SettingsCredentialCard';
 import {
   SettingsActionRow,
   SettingsAdvanced,
@@ -28,7 +37,20 @@ type Mode =
   | { kind: 'create' }
   | { kind: 'manage'; userId: string }
   | { kind: 'reset'; userId: string }
-  | { kind: 'disable'; userId: string };
+  | { kind: 'disable'; userId: string }
+  | { kind: 'promote'; userId: string };
+
+/** Mat khau tam vua cap — chi giu trong bo nho cua man hinh cho toi khi dong the. */
+interface IssuedCredential {
+  readonly name: string;
+  readonly username: string;
+  readonly credential: TemporaryCredential;
+}
+
+/** Tao tai khoan vai Quan tri doi mot lan xac nhan rieng (`confirmEscalation`, `#395`). */
+type PendingCreate = { readonly input: CreateUserInput; readonly form: HTMLFormElement };
+
+const PASSWORD_MIN = 12;
 
 /**
  * Quan ly tai khoan — danh sach truoc, mot viec mot luc (#146 §10).
@@ -50,6 +72,8 @@ export function UsersSettings() {
   const [message, setMessage] = useState('');
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string>();
+  const [issued, setIssued] = useState<IssuedCredential | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
 
   const users = useQuery({
     queryKey: ['auth-users'],
@@ -57,12 +81,23 @@ export function UsersSettings() {
     enabled: auth.user?.role === 'ADMIN',
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['auth-users'] });
+  /** Mat khau tam do may chu tao (`credential`) — hien the MOT lan. Than cu khong co thi bo qua. */
+  const rememberCredential = (result: AuthUserWithCredential) => {
+    if (result.credential !== undefined) {
+      setIssued({ name: result.name, username: result.username, credential: result.credential });
+    }
+  };
   const create = useMutation({ mutationFn: authApi.createUser, onSuccess: invalidate });
   const assign = useMutation({
-    mutationFn: ({ id, role }: { id: string; role: AuthRole }) => authApi.assignRole(id, role),
+    mutationFn: ({ id, role, confirm }: { id: string; role: AuthRole; confirm?: boolean }) =>
+      authApi.assignRole(id, role, confirm),
     onSuccess: invalidate,
   });
-  const disable = useMutation({ mutationFn: authApi.disableUser, onSuccess: invalidate });
+  const disable = useMutation({
+    mutationFn: (id: string) => authApi.disableUser(id),
+    onSuccess: invalidate,
+  });
+  const enable = useMutation({ mutationFn: authApi.enableUser, onSuccess: invalidate });
   const reset = useMutation({
     mutationFn: ({ id, password: next }: { id: string; password: string }) =>
       authApi.resetPassword(id, next),
@@ -91,33 +126,48 @@ export function UsersSettings() {
   }
 
   const list = users.data ?? [];
-  const selected =
-    mode.kind === 'manage' || mode.kind === 'reset' || mode.kind === 'disable'
-      ? list.find((user) => user.id === mode.userId)
-      : undefined;
+  const selected = managing(mode) ? list.find((user) => user.id === mode.userId) : undefined;
   const active = list.filter((user) => !user.disabledAt);
-  const error = create.error ?? assign.error ?? disable.error ?? reset.error ?? users.error;
+  const error =
+    create.error ?? assign.error ?? disable.error ?? enable.error ?? reset.error ?? users.error;
 
-  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError(undefined);
-    setMessage('');
-    const form = event.currentTarget;
-    const data = new FormData(form);
+  const submitCreate = async (input: CreateUserInput, form: HTMLFormElement) => {
+    let result: AuthUserWithCredential;
     try {
-      await create.mutateAsync({
-        username: String(data.get('username') ?? ''),
-        name: String(data.get('name') ?? ''),
-        password: String(data.get('password') ?? ''),
-        role: String(data.get('role') ?? 'SALE') as AuthRole,
-      });
+      result = await create.mutateAsync(input);
     } catch {
       // Loi that duoc hien o khoi loi ben duoi; o day chi giu nguoi dung o lai bieu mau.
       return;
     }
     form.reset();
     setMode({ kind: 'list' });
-    setMessage('Đã tạo tài khoản. Hãy chuyển mật khẩu ban đầu qua kênh an toàn.');
+    rememberCredential(result);
+    setMessage(
+      result.credential === undefined
+        ? 'Đã tạo tài khoản. Hãy chuyển mật khẩu ban đầu qua kênh an toàn — lần đầu đăng nhập người dùng phải đổi mật khẩu.'
+        : 'Đã tạo tài khoản. Gửi lời nhắn bên dưới cho người dùng — lần đầu đăng nhập họ phải đổi mật khẩu.',
+    );
+  };
+
+  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(undefined);
+    setMessage('');
+    setIssued(null);
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const input: CreateUserInput = {
+      username: String(data.get('username') ?? ''),
+      name: String(data.get('name') ?? ''),
+      // Rong = may chu tao mat khau tam (`authApi.createUser` khong gui chuoi rong).
+      password: String(data.get('password') ?? ''),
+      role: String(data.get('role') ?? 'SALE') as AuthRole,
+    };
+    if (input.role === 'ADMIN') {
+      setPendingCreate({ input, form });
+      return;
+    }
+    await submitCreate(input, form);
   };
 
   return (
@@ -136,6 +186,10 @@ export function UsersSettings() {
         detail="Chỉ quản trị viên mới cấp được tài khoản và đổi được quyền."
         facts={[
           { label: 'Tổng số', value: `${list.length}` },
+          {
+            label: 'Chờ đổi mật khẩu',
+            value: `${active.filter((user) => user.mustChangePassword === true).length}`,
+          },
           { label: 'Đã vô hiệu hóa', value: `${list.length - active.length}` },
         ]}
       />
@@ -151,11 +205,20 @@ export function UsersSettings() {
         />
       )}
 
-      {mode.kind === 'create' ? (
+      {issued ? (
+        // The mat khau tam LA viec dang lam luc nay (mot khoi viec, mot nut chinh): gui no di roi
+        // moi quay lai danh sach / tai khoan dang quan ly.
+        <SettingsCredentialCard
+          name={issued.name}
+          username={issued.username}
+          credential={issued.credential}
+          onClose={() => setIssued(null)}
+        />
+      ) : mode.kind === 'create' ? (
         <SettingsWorkCard
           eyebrow="Đang làm"
           title="Thêm người dùng mới"
-          problem="Mật khẩu ban đầu do bạn đặt và phải được chuyển cho người dùng qua kênh an toàn."
+          problem="Để trống mật khẩu thì hệ thống tạo mật khẩu tạm và hiện một lần để bạn gửi đi. Lần đầu đăng nhập, người dùng phải đổi mật khẩu."
           headingId="settings-users-work"
           headingRef={workHeading}
         >
@@ -170,14 +233,14 @@ export function UsersSettings() {
                 <input name="username" required minLength={3} maxLength={64} />
               </label>
               <label className="settings-focus-choice">
-                <span>Mật khẩu ban đầu (ít nhất 12 ký tự)</span>
+                <span>Mật khẩu ban đầu (tuỳ chọn, ít nhất 12 ký tự)</span>
                 <input
                   name="password"
                   type="password"
-                  required
-                  minLength={12}
+                  minLength={PASSWORD_MIN}
                   maxLength={128}
                   autoComplete="new-password"
+                  placeholder="Để trống để hệ thống tạo mật khẩu tạm"
                 />
               </label>
               <label className="settings-focus-choice">
@@ -221,7 +284,7 @@ export function UsersSettings() {
         <SettingsWorkCard
           eyebrow="Đang quản lý tài khoản"
           title={selected.name}
-          problem={`@${selected.username}${selected.disabledAt ? ' · tài khoản đã bị vô hiệu hóa' : ''}`}
+          problem={`@${selected.username}${selected.disabledAt ? ' · tài khoản đã bị vô hiệu hóa' : ''} · ${lastLoginPhrase(selected)}`}
           headingId="settings-users-work"
           headingRef={workHeading}
           tone={selected.disabledAt ? 'blocked' : 'attention'}
@@ -237,18 +300,23 @@ export function UsersSettings() {
                 </button>
               }
               secondary={
-                <button
-                  type="button"
-                  ref={resetTrigger}
-                  className="settings-button settings-button--quiet"
-                  onClick={() => {
-                    setPassword('');
-                    setFormError(undefined);
-                    setMode({ kind: 'reset', userId: selected.id });
-                  }}
-                >
-                  Đặt lại mật khẩu
-                </button>
+                // Tu dat lai mat khau cua chinh minh o day se tu khoa minh ra ngoai (`SELF_LOCKOUT`):
+                // doi mat khau cua ban dung duong "doi mat khau" rieng.
+                selected.id === auth.user?.id ? undefined : (
+                  <button
+                    type="button"
+                    ref={resetTrigger}
+                    className="settings-button settings-button--quiet"
+                    onClick={() => {
+                      setPassword('');
+                      setFormError(undefined);
+                      setIssued(null);
+                      setMode({ kind: 'reset', userId: selected.id });
+                    }}
+                  >
+                    Đặt lại mật khẩu
+                  </button>
+                )
               }
               tertiary={
                 selected.id === auth.user?.id || selected.disabledAt ? undefined : (
@@ -271,9 +339,12 @@ export function UsersSettings() {
               aria-label={`Vai trò của ${selected.name}`}
               value={selected.role}
               disabled={selected.id === auth.user?.id || Boolean(selected.disabledAt)}
-              onChange={(event) =>
-                assign.mutate({ id: selected.id, role: event.target.value as AuthRole })
-              }
+              onChange={(event) => {
+                const role = event.target.value as AuthRole;
+                // Len vai Quan tri = toan quyen: hoi truoc, may chu doi `confirmEscalation`.
+                if (role === 'ADMIN') setMode({ kind: 'promote', userId: selected.id });
+                else assign.mutate({ id: selected.id, role });
+              }}
             >
               {Object.entries(ROLE_LABELS).map(([role, label]) => (
                 <option key={role} value={role}>
@@ -284,7 +355,13 @@ export function UsersSettings() {
           </label>
           {selected.id === auth.user?.id && (
             <p className="settings-muted">
-              Đây là tài khoản bạn đang dùng, nên không tự đổi quyền hay tự vô hiệu hóa được.
+              Đây là tài khoản bạn đang dùng, nên không tự đổi quyền, tự đặt lại mật khẩu hay tự vô
+              hiệu hóa được.
+            </p>
+          )}
+          {selected.mustChangePassword === true && (
+            <p className="settings-muted">
+              Đang dùng mật khẩu tạm — người dùng phải đổi mật khẩu ở lần đăng nhập tới.
             </p>
           )}
         </SettingsWorkCard>
@@ -356,9 +433,23 @@ export function UsersSettings() {
                   <div>
                     <strong>{user.name}</strong>
                   </div>
-                  <span className="settings-muted">Đã vô hiệu hóa</span>
+                  <button
+                    type="button"
+                    className="settings-button settings-button--quiet"
+                    disabled={enable.isPending}
+                    onClick={() =>
+                      enable.mutate(user.id, {
+                        onSuccess: () =>
+                          setMessage(
+                            `Đã mở khoá ${user.name}. Mật khẩu không đổi — cần thì đặt lại mật khẩu.`,
+                          ),
+                      })
+                    }
+                  >
+                    Mở khoá
+                  </button>
                   <small>
-                    @{user.username} · {ROLE_LABELS[user.role] ?? user.role}
+                    @{user.username} · {ROLE_LABELS[user.role] ?? user.role} · Đã vô hiệu hóa
                   </small>
                 </li>
               ))}
@@ -369,23 +460,24 @@ export function UsersSettings() {
       {mode.kind === 'reset' && selected && (
         <SettingsFocusModal
           title={`Đặt lại mật khẩu cho ${selected.name}`}
-          description="Mật khẩu tạm phải dài ít nhất 12 ký tự và cần được chuyển cho người dùng qua kênh an toàn."
+          description="Mọi phiên đăng nhập của người này kết thúc ngay. Để trống thì hệ thống tạo mật khẩu tạm (hiệu lực 72 giờ); lần đầu đăng nhập người dùng phải đổi mật khẩu."
           confirmLabel="Đặt lại mật khẩu"
           tone="primary"
           pending={reset.isPending}
-          confirmDisabled={password.length < 12}
+          confirmDisabled={password.length > 0 && password.length < PASSWORD_MIN}
           returnFocus={() => resetTrigger.current}
           onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
           onConfirm={() => {
-            if (password.length < 12) {
-              setFormError('Mật khẩu tạm phải có ít nhất 12 ký tự.');
+            if (password.length > 0 && password.length < PASSWORD_MIN) {
+              setFormError('Mật khẩu tạm phải có ít nhất 12 ký tự, hoặc để trống.');
               return;
             }
             reset.mutate(
               { id: selected.id, password },
               {
-                onSuccess: () => {
+                onSuccess: (result) => {
                   setPassword('');
+                  rememberCredential(result);
                   setMessage(`Đã đặt lại mật khẩu cho ${selected.name}.`);
                   setMode({ kind: 'manage', userId: selected.id });
                 },
@@ -396,11 +488,12 @@ export function UsersSettings() {
           <label
             className={`settings-focus-choice ${formError ? 'settings-focus-choice--invalid' : ''}`}
           >
-            <span>Mật khẩu tạm mới</span>
+            <span>Mật khẩu tạm mới (tuỳ chọn)</span>
             <input
               type="password"
               autoComplete="new-password"
-              minLength={12}
+              minLength={PASSWORD_MIN}
+              placeholder="Để trống để hệ thống tạo mật khẩu tạm"
               value={password}
               onChange={(event) => {
                 setPassword(event.target.value);
@@ -432,9 +525,47 @@ export function UsersSettings() {
         >
           <ul className="settings-confirmation">
             <li>Lịch sử thao tác của tài khoản này vẫn được giữ nguyên.</li>
-            <li>Hoàn tác: cấp lại tài khoản mới; hệ thống không bật lại tài khoản đã vô hiệu hóa.</li>
+            <li>Hoàn tác: mở khoá lại ở mục “Tài khoản đã vô hiệu hóa”; mật khẩu không đổi.</li>
           </ul>
         </SettingsFocusModal>
+      )}
+
+      {mode.kind === 'promote' && selected && (
+        <SettingsFocusModal
+          title={`Cấp vai Quản trị cho ${selected.name}?`}
+          description="Quản trị có toàn quyền, kể cả cấp tài khoản và đổi quyền của người khác. Lần cấp này được ghi vào nhật ký với tên bạn."
+          confirmLabel="Cấp vai Quản trị"
+          tone="danger"
+          pending={assign.isPending}
+          onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
+          onConfirm={() =>
+            assign.mutate(
+              { id: selected.id, role: 'ADMIN', confirm: true },
+              {
+                onSuccess: () => {
+                  setMessage(`Đã cấp vai Quản trị cho ${selected.name}.`);
+                  setMode({ kind: 'manage', userId: selected.id });
+                },
+              },
+            )
+          }
+        />
+      )}
+
+      {pendingCreate && (
+        <SettingsFocusModal
+          title={`Tạo tài khoản Quản trị cho ${pendingCreate.input.name}?`}
+          description="Quản trị có toàn quyền, kể cả cấp tài khoản và đổi quyền của người khác. Lần cấp này được ghi vào nhật ký với tên bạn."
+          confirmLabel="Tạo tài khoản Quản trị"
+          tone="danger"
+          pending={create.isPending}
+          onCancel={() => setPendingCreate(null)}
+          onConfirm={() => {
+            const pending = pendingCreate;
+            setPendingCreate(null);
+            void submitCreate({ ...pending.input, confirmEscalation: true }, pending.form);
+          }}
+        />
       )}
     </div>
   );
@@ -442,7 +573,21 @@ export function UsersSettings() {
 
 /** Dang o tren be mat quan ly mot tai khoan — ke ca khi mot hop xac nhan dang phu len tren no. */
 function managing(mode: Mode): mode is Extract<Mode, { userId: string }> {
-  return mode.kind === 'manage' || mode.kind === 'reset' || mode.kind === 'disable';
+  return (
+    mode.kind === 'manage' ||
+    mode.kind === 'reset' ||
+    mode.kind === 'disable' ||
+    mode.kind === 'promote'
+  );
+}
+
+/** Truong `lastLoginAt` chi co tu `#395`; may chu cu khong tra thi khong noi gi sai. */
+function lastLoginPhrase(user: AuthUser): string {
+  if (user.lastLoginAt === undefined) return 'chưa rõ lần đăng nhập gần nhất';
+  const phrase = relativeLastLogin(user.lastLoginAt, new Date());
+  return phrase === 'Chưa đăng nhập'
+    ? 'chưa đăng nhập lần nào'
+    : `đăng nhập ${phrase.toLowerCase()}`;
 }
 
 function modeKey(mode: Mode): string {
@@ -478,6 +623,8 @@ function UserRow({
       </button>
       <small>
         @{user.username} · {ROLE_LABELS[user.role] ?? user.role}
+        {user.mustChangePassword === true ? ' · chờ đổi mật khẩu' : ''}
+        {user.lastLoginAt === undefined ? '' : ` · ${lastLoginPhrase(user)}`}
       </small>
     </li>
   );

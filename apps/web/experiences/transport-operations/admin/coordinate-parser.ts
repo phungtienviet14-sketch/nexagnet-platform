@@ -81,28 +81,41 @@ function parseDms(text: string): { latitude: number; longitude: number } | null 
   const match = new RegExp(`${part}[\\s,;]+${part}`).exec(text);
   if (match === null) return null;
   const value = (deg?: string, min?: string, sec?: string, hemi?: string): number => {
-    const magnitude = toNumber(deg ?? '0') + toNumber(min ?? '0') / 60 + toNumber(sec ?? '0') / 3600;
+    const magnitude =
+      toNumber(deg ?? '0') + toNumber(min ?? '0') / 60 + toNumber(sec ?? '0') / 3600;
     return /[SWsw]/.test(hemi ?? '') ? -magnitude : magnitude;
   };
-  const first = { value: value(match[1], match[2], match[3], match[4]), hemi: (match[4] ?? '').toUpperCase() };
-  const second = { value: value(match[5], match[6], match[7], match[8]), hemi: (match[8] ?? '').toUpperCase() };
+  const first = {
+    value: value(match[1], match[2], match[3], match[4]),
+    hemi: (match[4] ?? '').toUpperCase(),
+  };
+  const second = {
+    value: value(match[5], match[6], match[7], match[8]),
+    hemi: (match[8] ?? '').toUpperCase(),
+  };
   const isLat = (hemi: string): boolean => hemi === 'N' || hemi === 'S';
-  if (isLat(first.hemi) && !isLat(second.hemi)) return { latitude: first.value, longitude: second.value };
-  if (!isLat(first.hemi) && isLat(second.hemi)) return { latitude: second.value, longitude: first.value };
+  if (isLat(first.hemi) && !isLat(second.hemi))
+    return { latitude: first.value, longitude: second.value };
+  if (!isLat(first.hemi) && isLat(second.hemi))
+    return { latitude: second.value, longitude: first.value };
   return null;
 }
 
 /** "21.0285, 105.8542" · "21.0285 105.8542" · "21.0285° N, 105.8542° E". */
 function parsePair(text: string): { latitude: number; longitude: number } | null {
   const hemi = String.raw`\s*°?\s*([NSEWnsew])?`;
-  const match = new RegExp(`^\\s*(${NUMBER})${hemi}\\s*[,;\\s]\\s*(${NUMBER})${hemi}\\s*$`).exec(text);
+  const match = new RegExp(`^\\s*(${NUMBER})${hemi}\\s*[,;\\s]\\s*(${NUMBER})${hemi}\\s*$`).exec(
+    text,
+  );
   if (match === null) return null;
   const sign = (value: number, direction?: string): number =>
     direction !== undefined && /[SWsw]/.test(direction) ? -Math.abs(value) : value;
   const first = sign(toNumber(match[1] ?? ''), match[2]);
   const second = sign(toNumber(match[3] ?? ''), match[4]);
   const firstIsLongitude = match[2] !== undefined && /[EWew]/.test(match[2]);
-  return firstIsLongitude ? { latitude: second, longitude: first } : { latitude: first, longitude: second };
+  return firstIsLongitude
+    ? { latitude: second, longitude: first }
+    : { latitude: first, longitude: second };
 }
 
 /** Toa do trong mot liet ket ban do — uu tien GHIM cua dia diem (`!3d…!4d…`), roi tam ban do (`@`). */

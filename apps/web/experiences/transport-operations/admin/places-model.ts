@@ -37,6 +37,8 @@ export const PLACE_KIND_FILTER_LABEL: Readonly<Record<PlaceKindFilter, string>> 
 };
 
 export const placeKindFilterOf = (place: PlaceAdminView): Exclude<PlaceKindFilter, 'ALL'> => {
+  // May chu biet phap nhan co mat khach hang hay khong — uu tien cau tra loi cua no.
+  if (place.displayKind !== undefined) return place.displayKind;
   if (place.kind === 'DEPOT') return 'DEPOT';
   if (place.kind === 'CUSTOMER') return 'LEGACY_CUSTOMER';
   return place.owner?.customerId != null ? 'CUSTOMER_SITE' : 'PARTNER_SITE';
@@ -44,19 +46,22 @@ export const placeKindFilterOf = (place: PlaceAdminView): Exclude<PlaceKindFilte
 
 /** Nhan loai: uu tien nhan MAY CHU tinh (no biet phap nhan co mat khach hang khong). */
 export const placeKindLabel = (place: PlaceAdminView): string =>
-  place.kindLabel.trim().length > 0 ? place.kindLabel : PLACE_KIND_FILTER_LABEL[placeKindFilterOf(place)];
+  place.kindLabel.trim().length > 0
+    ? place.kindLabel
+    : PLACE_KIND_FILTER_LABEL[placeKindFilterOf(place)];
 
 /** Chu cua dia diem, mot dong: khach hang (phap nhan) hoac don vi. Bai xe = cong ty minh. */
 export function placeOwnerLine(place: PlaceAdminView): string {
   if (place.kind === 'DEPOT') return 'Bãi xe của công ty';
   const owner = place.owner;
   if (owner === null) return 'Chưa rõ chủ địa điểm';
+  const legal = owner.counterpartyName?.trim() ?? '';
   if (owner.customerName != null && owner.customerName.trim().length > 0) {
-    return owner.customerName === owner.counterpartyName
+    return legal.length === 0 || owner.customerName === legal
       ? `Khách hàng ${owner.customerName}`
-      : `Khách hàng ${owner.customerName} (${owner.counterpartyName})`;
+      : `Khách hàng ${owner.customerName} (${legal})`;
   }
-  return owner.counterpartyName;
+  return legal.length === 0 ? 'Chưa rõ chủ địa điểm' : legal;
 }
 
 export type PlaceEffectiveStatus = PlaceAdminView['effectiveStatus'];
@@ -79,6 +84,14 @@ export const DEPOT_PLANNER_SENTENCE: Readonly<Record<DepotPlannerStatus, string>
   STANDBY: 'Bãi dự phòng',
   AMBIGUOUS: 'Nhiều bãi đang bật — hệ thống không dùng bãi nào',
   NOT_IN_USE: 'Không dùng để lập kế hoạch',
+};
+
+/** Nhan NGAN cho dong danh sach (cau day du nam o the chi tiet va trong `title`). */
+export const DEPOT_PLANNER_SHORT: Readonly<Record<DepotPlannerStatus, string>> = {
+  IN_USE: 'Bãi chính',
+  STANDBY: 'Bãi dự phòng',
+  AMBIGUOUS: 'Nhiều bãi đang bật',
+  NOT_IN_USE: 'Không dùng lập kế hoạch',
 };
 
 export const DEPOT_PLANNER_TONE: Readonly<Record<DepotPlannerStatus, StatusTone>> = {
@@ -165,7 +178,11 @@ export function filterPlaces(
   return places
     .filter((place) => filter.kind === 'ALL' || placeKindFilterOf(place) === filter.kind)
     .filter((place) =>
-      filter.status === 'all' ? true : filter.status === 'active' ? isActive(place) : !isActive(place),
+      filter.status === 'all'
+        ? true
+        : filter.status === 'active'
+          ? isActive(place)
+          : !isActive(place),
     )
     .filter((place) => {
       if (needle.length === 0) return true;
@@ -245,12 +262,17 @@ export interface PlaceRing {
 /** Vong ban kinh: moi dia diem dang dung + vong cua diem dang sua (ban kinh dang keo). */
 export function placeRings(
   places: readonly PlaceAdminView[],
-  editing: { readonly point: GeoPoint | null; readonly radiusMetres: number; readonly placeId: string | null } | null,
+  editing: {
+    readonly point: GeoPoint | null;
+    readonly radiusMetres: number;
+    readonly placeId: string | null;
+  } | null,
 ): readonly PlaceRing[] {
   const rings: PlaceRing[] = places
     .filter((place) => isActive(place) && place.id !== editing?.placeId)
     .map((place) => ({ center: place.point, radiusMetres: place.radiusMetres }));
-  if (editing?.point != null) rings.push({ center: editing.point, radiusMetres: editing.radiusMetres });
+  if (editing?.point != null)
+    rings.push({ center: editing.point, radiusMetres: editing.radiusMetres });
   return rings;
 }
 
@@ -365,7 +387,11 @@ export const withPoint = (draft: PlaceDraft, point: GeoPoint, source: PointSourc
 });
 
 /** Mui ten tren ban phim: xe ghim ~10 m moi lan (Shift: ~100 m) — duong chinh xac khong can chuot. */
-export function nudgePoint(point: GeoPoint, direction: 'N' | 'S' | 'E' | 'W', metres: number): GeoPoint {
+export function nudgePoint(
+  point: GeoPoint,
+  direction: 'N' | 'S' | 'E' | 'W',
+  metres: number,
+): GeoPoint {
   const latStep = metres / 111_320;
   const lngStep = metres / (111_320 * Math.max(Math.cos((point.latitude * Math.PI) / 180), 0.01));
   const round = (value: number) => Math.round(value * 1e7) / 1e7;
@@ -382,19 +408,24 @@ export function nudgePoint(point: GeoPoint, direction: 'N' | 'S' | 'E' | 'W', me
 }
 
 const samePoint = (left: GeoPoint, right: GeoPoint): boolean =>
-  Math.abs(left.latitude - right.latitude) < 1e-7 && Math.abs(left.longitude - right.longitude) < 1e-7;
+  Math.abs(left.latitude - right.latitude) < 1e-7 &&
+  Math.abs(left.longitude - right.longitude) < 1e-7;
 
 /** Da doi VI TRI hoac BAN KINH — tuc doi phan quyet cua chung cu cu tai diem nay. */
 export const geometryChanged = (draft: PlaceDraft): boolean =>
   draft.original !== null &&
   draft.point !== null &&
-  (!samePoint(draft.point, draft.original.point) || draft.radiusMetres !== draft.original.radiusMetres);
+  (!samePoint(draft.point, draft.original.point) ||
+    draft.radiusMetres !== draft.original.radiusMetres);
 
 /** Hang rao duoc cham LUC DOC — doi hinh hoc hay tat dia diem deu cham lai chung cu cu. */
 export const GEOMETRY_CHANGE_WARNING =
   'Các bằng chứng hiện trường tại điểm này sẽ được chấm lại theo vị trí mới.';
 export const DEACTIVATE_WARNING =
   'Tắt địa điểm này thì các bằng chứng hiện trường đã chấm theo nó sẽ được chấm lại, và nó biến mất khỏi danh sách chọn ở Tạo đơn. Lịch sử vẫn được giữ; bật lại được bất cứ lúc nào.';
+
+/** Cung khuon `TransportCounterparty_taxCode_shape` phia may chu. */
+const TAX_CODE = /^[0-9]{10}(-[0-9]{3})?$/;
 
 export function placeDraftProblems(draft: PlaceDraft): readonly string[] {
   const problems: string[] = [];
@@ -405,8 +436,19 @@ export function placeDraftProblems(draft: PlaceDraft): readonly string[] {
   }
   if (isCreate && draft.ownerChoice === 'PARTNER') {
     if (draft.counterpartyId.length === 0) problems.push('Chọn đơn vị, hoặc “Thêm đơn vị mới”.');
-    if (draft.counterpartyId === NEW_COUNTERPARTY && draft.newCounterpartyName.trim().length === 0) {
+    if (
+      draft.counterpartyId === NEW_COUNTERPARTY &&
+      draft.newCounterpartyName.trim().length === 0
+    ) {
       problems.push('Nhập tên đơn vị mới.');
+    }
+    const taxCode = draft.newCounterpartyTaxCode.trim();
+    if (
+      draft.counterpartyId === NEW_COUNTERPARTY &&
+      taxCode.length > 0 &&
+      !TAX_CODE.test(taxCode)
+    ) {
+      problems.push('Mã số thuế gồm 10 số, hoặc 10 số kèm 3 số chi nhánh (ví dụ 0101234567-001).');
     }
   }
   if (draft.point === null) problems.push('Đặt vị trí trên bản đồ.');
@@ -466,7 +508,8 @@ export function buildUpdatePlaceInput(
   acknowledgeOpenWork = false,
 ): UpdatePlaceInput | null {
   const original = draft.original;
-  if (original === null || draft.point === null || placeDraftProblems(draft).length > 0) return null;
+  if (original === null || draft.point === null || placeDraftProblems(draft).length > 0)
+    return null;
   const patch: {
     name?: string;
     address?: string | null;
@@ -476,7 +519,8 @@ export function buildUpdatePlaceInput(
     acknowledgeOpenWork?: boolean;
   } = {};
   if (draft.name.trim() !== original.name) patch.name = draft.name.trim();
-  if (blankToNull(draft.address) !== (original.address ?? null)) patch.address = blankToNull(draft.address);
+  if (blankToNull(draft.address) !== (original.address ?? null))
+    patch.address = blankToNull(draft.address);
   if (!samePoint(draft.point, original.point)) patch.point = draft.point;
   if (draft.radiusMetres !== original.radiusMetres) patch.radiusMetres = draft.radiusMetres;
   if (blankToNull(draft.note) !== (original.note ?? null)) patch.note = blankToNull(draft.note);
@@ -495,6 +539,44 @@ export function savedNotice(saved: PlaceAdminView, isCreate: boolean): string {
   return isCreate ? `Đã thêm ${saved.name}.` : `Đã lưu ${saved.name}.`;
 }
 
+/**
+ * Dia diem cua DON VI KHAC (kho khach hang, nha may doi tac) la mot mat cua ho so phap nhan: tao,
+ * doi ten, tat no doi them quyen quan ly khach hang/doi tac (`PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE`
+ * phia may chu). Man hinh noi truoc thay vi de nguoi dung dien het roi moi bi tu choi.
+ */
+export const COUNTERPARTY_MANAGE_NEEDED =
+  'Cần thêm quyền quản lý khách hàng, đối tác để thêm hay tắt địa điểm của đơn vị khác. Nhờ Giám đốc cấp quyền.';
+
+export const isOwnerChoiceAllowed = (
+  choice: OwnerChoice,
+  canManageCounterparties: boolean,
+): boolean => choice === 'DEPOT' || canManageCounterparties;
+
+/** Tat/bat dia diem cua don vi khac cung doi quyen do; bai xe thi khong. */
+export const needsCounterpartyManage = (place: PlaceAdminView): boolean => place.kind !== 'DEPOT';
+
+const HISTORY_ACTION_LABEL: Readonly<Record<string, string>> = {
+  'transport.place.create': 'Thêm địa điểm',
+  'transport.place.update': 'Sửa địa điểm',
+  'transport.place.deactivate': 'Tắt địa điểm',
+  'transport.place.activate': 'Bật lại địa điểm',
+  'transport.place.make_primary_depot': 'Đặt làm bãi chính',
+  'transport.counterparty_site.create': 'Thêm địa điểm của đơn vị',
+  'transport.counterparty_site.update': 'Sửa địa điểm của đơn vị',
+};
+
+/** Cau cho mot dong lich su: cau may chu viet neu co, khong thi ten viec — khong bao gio ma. */
+export function placeHistoryLabel(entry: {
+  readonly action: string;
+  readonly summary?: string | null;
+}): string {
+  const summary = entry.summary?.trim() ?? '';
+  if (summary.length > 0) return summary;
+  return HISTORY_ACTION_LABEL[entry.action] ?? 'Thay đổi khác';
+}
+
 /** Ma dong viec dang mo — ma nghiep vu neu co, khong thi ma ky thuat rut gon. */
-export const openWorkLabel = (item: { readonly id: string; readonly code?: string | null }): string =>
-  item.code != null && item.code.trim().length > 0 ? item.code : item.id.slice(0, 8);
+export const openWorkLabel = (item: {
+  readonly id: string;
+  readonly code?: string | null;
+}): string => (item.code != null && item.code.trim().length > 0 ? item.code : item.id.slice(0, 8));

@@ -49,11 +49,14 @@ export const accountsApi = {
   catalog: (): Promise<PermissionCatalog> => get('/settings/users/permission-catalog'),
   create: (input: CreateUserInput): Promise<AccountWithCredential> => authApi.createUser(input),
   suggestUsername: (name: string, prefix?: string): Promise<{ username: string }> =>
-    send('POST', '/settings/users/suggest-username', prefix === undefined ? { name } : { name, prefix }),
+    send(
+      'POST',
+      '/settings/users/suggest-username',
+      prefix === undefined ? { name } : { name, prefix },
+    ),
   updateProfile: (userId: string, patch: ProfilePatch): Promise<AccountView> =>
     send('PATCH', `/settings/users/${id(userId)}`, patch),
-  access: (userId: string): Promise<AccessBreakdown> =>
-    get(`/settings/users/${id(userId)}/access`),
+  access: (userId: string): Promise<AccessBreakdown> => get(`/settings/users/${id(userId)}/access`),
   /** Xem truoc — KHONG ghi, KHONG de lai dong nhat ky. Vi pham di ve dang `409 ACCESS_INVALID`. */
   previewAccess: (userId: string, input: AccessChangeInput): Promise<AccessBreakdown> =>
     send('PUT', `/settings/users/${id(userId)}/access`, { ...input, dryRun: true }),

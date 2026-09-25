@@ -83,7 +83,10 @@ export class AuthApiError extends Error {
 
 let csrfToken: string | null | undefined;
 
-export async function authFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+export async function authFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
   const method = (init.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
   const token = MUTATING_METHODS.has(method) ? await currentCsrfToken(input) : null;
   const headers = new Headers(init.headers);
@@ -105,7 +108,10 @@ export const authApi = {
     readJson(await authFetch(`${API_BASE}/auth/config`)),
   me: async (): Promise<AuthMe> =>
     readJson(await authFetch(`${API_BASE}/auth/me`, { cache: 'no-store' })),
-  login: async (username: string, password: string): Promise<{ user: AuthUser; csrfToken: string }> => {
+  login: async (
+    username: string,
+    password: string,
+  ): Promise<{ user: AuthUser; csrfToken: string }> => {
     const result = await readJson<{ user: AuthUser; csrfToken: string }>(
       await authFetch(`${API_BASE}/auth/login`, jsonInit('POST', { username, password })),
     );
