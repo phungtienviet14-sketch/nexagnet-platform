@@ -193,8 +193,9 @@ Bạn chỉ thấy **chuyến của chính bạn**. Không có giá cước, kh�
 Vào **Nhiên liệu**. Chọn cây xăng, nhập số lít, số tiền, số km trên đồng hồ, số hoá đơn nếu có,
 bấm **Gửi phiếu**. Vòng xe và xe lấy theo việc được điều đang mở; gắn chặng là
 không bắt buộc. Chọn **Thanh toán**: _Lái xe trả tiền mặt_ — khi kế toán duyệt, khoản này trừ vào
-quỹ của bạn để công ty hoàn lại, không ghi nợ cây xăng; hoặc _Ghi nợ cây xăng_ — vào công nợ cây
-xăng sau khi đối chiếu bảng kê, không đụng tới quỹ của bạn.
+quỹ của bạn để công ty hoàn lại, không ghi nợ cây xăng; hoặc _Ghi nợ cây xăng_ — không đụng tới
+quỹ của bạn, và **chưa** thành công nợ ngay: kế toán xác thực phiếu → đối soát với bảng kê của cây
+xăng → đóng kỳ; đóng kỳ xong mới vào công nợ cây xăng.
 
 Phiếu vừa gửi hiện ngay bên dưới ở trạng thái **Mới khai**. Bấm **Đính ảnh chứng từ** để chụp
 biên lai — ảnh gắn vào đúng phiếu đó và kế toán xem được khi đối soát.
@@ -213,3 +214,7 @@ khoản chi dọc đường được.
 
 **Quỹ** hiện số dư và toàn bộ bút toán của riêng bạn. **Phiếu lương** chỉ hiện phiếu **đã được
 công bố** — phiếu đang ở bản nháp không hiện, kể cả phiếu mang tên bạn.
+
+> **Hạn chế hiện tại:** phần lương **theo chuyến** và **theo km** hiện **chưa tính** việc theo vòng
+> xe — hệ thống chỉ đếm chuyến theo cách cũ. Nếu công ty trả lương theo chuyến hoặc km, kế toán cộng
+> tay phần việc theo vòng xe.

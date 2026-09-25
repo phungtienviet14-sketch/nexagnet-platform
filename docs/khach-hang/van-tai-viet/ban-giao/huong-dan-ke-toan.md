@@ -116,7 +116,7 @@ Phía trên màn luôn có bốn ô: tổng còn nợ, trong đó quá hạn, ch
 
 Ba dòng phải trả, **giữ riêng**:
 
-1. **Cây xăng**: khoản nợ cây xăng. Nó chỉ phát sinh khi kế toán **đóng kỳ đối soát bảng kê** (mục 5).
+1. **Cây xăng**: khoản nợ cây xăng. Một phiếu **ghi nợ cây xăng** chỉ thành khoản nợ ở đây sau đủ ba bước: **xác thực** phiếu (mục 5a) → **đối soát** với bảng kê (mục 5c) → **đóng kỳ**. Lái xe khai phiếu, hay kế toán xác thực phiếu, đều **chưa** tạo công nợ.
 2. **Nhà xe**: cước thuê xe ngoài.
 3. **Hoa hồng nguồn đơn**: hoa hồng phải trả đối tác giới thiệu đơn.
 
@@ -136,7 +136,7 @@ Mở **Nhiên liệu**. Khối "Phiếu nhiên liệu" lọc được theo mã v
 
 1. Hộp xác nhận nói rõ **tiền đi đâu**, tuỳ cách lái xe đã trả:
    - **Lái xe trả tiền mặt**: số tiền trừ vào **quỹ lái xe**, không vào công nợ cây xăng.
-   - **Ghi nợ cây xăng**: phiếu vào kỳ đối soát bảng kê. Công nợ cây xăng chỉ ghi khi **đóng kỳ**.
+   - **Ghi nợ cây xăng**: xác thực **chưa** tạo công nợ. Phiếu đã xác thực mới được đưa vào so khớp với bảng kê (mục 5c); phiếu chưa xác thực không tham gia so khớp. Công nợ cây xăng chỉ ghi khi **đóng kỳ**.
 2. Bấm **"Xác thực"**.
 
 Ba việc còn lại trên một phiếu:
@@ -203,7 +203,7 @@ Các nút ở góc trên:
 
 Một dòng ghi sai thì bấm **"Đảo"** trên dòng đó. Hệ thống không xoá dòng; nó ghi một dòng đảo ngược.
 
-**Phân biệt với nhiên liệu cây xăng:** phiếu **ghi nợ cây xăng** không bao giờ đụng tới quỹ lái xe. Nó đi qua kỳ đối soát bảng kê (mục 5c).
+**Phân biệt với nhiên liệu cây xăng:** phiếu **ghi nợ cây xăng** không bao giờ đụng tới quỹ lái xe. Nó đi qua xác thực, đối soát bảng kê rồi đóng kỳ (mục 5a và 5c), và chỉ lúc đóng kỳ mới thành công nợ cây xăng.
 
 **Duyệt chi lái xe**: hiện chưa có màn nào gửi đề nghị vào đây, nên danh sách thường trống. Khoản chi lái xe ghi trên điện thoại (chỉ cho chuyến theo cách cũ) vào **thẳng quỹ**, không qua duyệt. Khoản chi dọc đường của việc theo vòng xe **chưa có chỗ ghi** vào chi phí; lái xe báo văn phòng, và kế toán chỉ phản ánh được vào quỹ bằng "Điều chỉnh".
 
