@@ -50,3 +50,16 @@ viec co nhieu muc cung loai (dung `.nth(i)`).
 | `director-orders-filter-<status>` | Đơn hàng | Chip loc; `status` = `ALL`/`OPEN`/`FULFILLED`/`CANCELLED` |
 | `director-order-<code>` | Đơn hàng | The mot don |
 | `director-order-detail` | Chi tiết đơn | Man hinh |
+
+## Ke toan
+
+| testID | Man | Nghia |
+| --- | --- | --- |
+| `accounting-queue` | Cần duyệt | Man hinh |
+| `accounting-queue-filter-<type>` | Cần duyệt | Chip loc; `type` = `ALL`/`CLAIM`/`FUEL`/`ALLOWANCE` |
+| `accounting-card-<id>` | Cần duyệt | The mot muc (id cua de nghi / phieu / phu cap) |
+| `fuel-detail`, `fuel-evidence`, `fuel-verify-consequence` | to phieu dau | Chi tiet, anh chung tu, hau qua xac thuc |
+| `decision-resubmit` | to phieu dau | "Cho nộp lại" (phieu bi tu choi) |
+| `accounting-collections` | Thu tiền | Man hinh (chi doc) |
+| `accounting-drivers` | Lái xe | Man hinh (chi doc) |
+| `accounting-overview` | Tổng quan | Man hinh |
