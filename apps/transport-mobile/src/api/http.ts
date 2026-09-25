@@ -83,7 +83,9 @@ export class HttpClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly config: HttpClientConfig) {
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    // Goi qua ham bao: `this.fetchImpl(...)` voi `fetch` cua trinh duyet gan `this` = HttpClient va
+    // trinh duyet nem "Illegal invocation" — PWA khong goi duoc may chu nao.
+    this.fetchImpl = config.fetchImpl ?? ((input, init) => fetch(input, init));
   }
 
   get baseUrl(): string {

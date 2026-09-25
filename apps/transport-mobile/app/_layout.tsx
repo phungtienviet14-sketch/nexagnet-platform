@@ -7,7 +7,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/be-vietnam-pro';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BrandingProvider, useBranding } from '../src/branding/BrandingProvider';
 import { OutboxProvider } from '../src/outbox/OutboxProvider';
 import { createQueryClient, wireQueryToDevice } from '../src/query';
+import { gateTarget } from '../src/session/route-gate';
 import { SessionProvider, useSession } from '../src/session/SessionProvider';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider';
 import '../src/location/background-task';
@@ -68,9 +69,16 @@ function ThemedApp() {
 function Navigator() {
   const { status } = useSession();
   const { color, scheme } = useTheme();
+  const segments = useSegments();
+  const router = useRouter();
   useEffect(() => {
     if (status !== 'booting') void SplashScreen.hideAsync();
   }, [status]);
+  // Phien doi trang thai tren BAT KY man nao (dang nhap xong, chon may chu, het phien) -> di dung cho.
+  useEffect(() => {
+    const target = gateTarget(status, segments);
+    if (target) router.replace(target);
+  }, [status, segments, router]);
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />

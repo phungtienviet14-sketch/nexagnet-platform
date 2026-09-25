@@ -27,6 +27,26 @@ function client(
 }
 
 describe('HttpClient', () => {
+  it('goi `fetch` toan cuc KHONG gan `this` — trinh duyet nem "Illegal invocation" neu gan', async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = function browserLikeFetch(this: unknown) {
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return Promise.resolve(jsonResponse(200, { ok: true }));
+    } as typeof fetch;
+    try {
+      const http = new HttpClient({
+        baseUrl: 'https://api.example.vn',
+        clientTag: 'transport-mobile/0.1.0 (web)',
+        getToken: () => null,
+      });
+      await expect(http.get('/auth/me')).resolves.toEqual({ ok: true });
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it('gui bearer + tieu de native, KHONG gui cookie ngam', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, { ok: true }));
     const { http } = client(fetchImpl as unknown as typeof fetch);
