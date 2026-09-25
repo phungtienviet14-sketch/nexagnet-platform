@@ -12,6 +12,28 @@ import type { SourceManifest } from './source-manifest.js';
 export const SOURCE_MANIFEST: SourceManifest = {
   "repositoryUrl": "https://github.com/phungtienviet14-sketch/nexagnet-platform",
   "names": {
+    "access.change": {
+      "functionName": "AuthService.applyAccess",
+      "filePath": "apps/api/src/auth/auth.service.ts"
+    },
+    "account.access.change": {
+      "functionName": "AuthService.applyAccess",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 510
+    },
+    "account.create": {
+      "functionName": "AuthService.createUser",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 284
+    },
+    "account.credentials.reset": {
+      "functionName": "AuthService.resetPassword",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 472
+    },
+    "account.status.change": {
+      "filePath": "apps/api/src/auth/auth.service.ts"
+    },
     "agent.run": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
@@ -22,35 +44,10 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/orders/orders.service.ts",
       "line": 577
     },
-    "auth.credentials.change": {
-      "functionName": "AuthService.changePassword",
-      "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 145
-    },
-    "auth.credentials.reset": {
-      "functionName": "AuthService.resetPassword",
-      "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 132
-    },
     "auth.production": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 78
-    },
-    "auth.user.create": {
-      "functionName": "AuthService.createUser",
-      "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 93
-    },
-    "auth.user.disable": {
-      "functionName": "AuthService.disableUser",
-      "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 106
-    },
-    "auth.user.role.assign": {
-      "functionName": "AuthService.assignRole",
-      "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 119
     },
     "campaign.approve": {
       "functionName": "CampaignService.approve",
@@ -95,6 +92,10 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 545
     },
+    "credentials.reset": {
+      "functionName": "AuthService.resetPassword",
+      "filePath": "apps/api/src/auth/auth.service.ts"
+    },
     "dealers.configured": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -106,6 +107,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "document.withdraw": {
       "functionName": "OperationalDocumentService.withdraw",
       "filePath": "apps/api/src/transport/document/document.service.ts"
+    },
+    "driver.account_link": {
+      "functionName": "DriverAccountLinkService.setDriverAccount",
+      "filePath": "apps/api/src/transport/fleet/driver-account-link.service.ts",
+      "line": 60
     },
     "driver_fund.post_entry": {
       "functionName": "CostingService.postEntryDetailed",
@@ -284,6 +290,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/places/place.service.ts",
       "line": 57
     },
+    "place.write": {
+      "functionName": "PlaceAdminService.write",
+      "filePath": "apps/api/src/transport/places/admin/place-admin.service.ts",
+      "line": 574
+    },
     "planning.cancel": {
       "functionName": "PlanningService.cancelPlan",
       "filePath": "apps/api/src/transport/planning/planning.service.ts"
@@ -294,17 +305,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.depot": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 600
+      "line": 637
     },
     "planning.grouping": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 625
+      "line": 667
     },
     "planning.preview": {
       "functionName": "PlanningService.preview",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 162
+      "line": 192
     },
     "planning.run_closure": {
       "functionName": "PlanningService.settleRunClosure",
@@ -313,7 +324,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.run_closure_sweep": {
       "functionName": "RunClosureService.sweep",
       "filePath": "apps/api/src/transport/planning/run-closure.service.ts",
-      "line": 174
+      "line": 201
     },
     "price.current_period": {
       "functionName": "evaluateOperationalReadiness",
@@ -349,6 +360,10 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PricePeriodsService.removeDraftPrice",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
+    },
+    "profile.update": {
+      "functionName": "AuthService.updateProfile",
+      "filePath": "apps/api/src/auth/auth.service.ts"
     },
     "proof.challenge": {
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
@@ -418,6 +433,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "source_truth.price.update": {
       "filePath": "apps/api/src/mcp/server.ts",
       "line": 315
+    },
+    "stakeholder.account_link": {
+      "functionName": "AssetOwnershipService.setStakeholderAccount",
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts",
+      "line": 155
     },
     "telematics.ingress": {
       "functionName": "TelematicsIngressService.ingest",
@@ -584,7 +604,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.dispatch.suggest.read": {
       "functionName": "DispatchController.suggest",
       "filePath": "apps/api/src/transport/dispatch/dispatch.controller.ts",
-      "line": 64
+      "line": 63
     },
     "transport.driver.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
@@ -716,16 +736,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.fuel.station.read": {
       "filePath": "apps/api/src/transport/fuel/fuel-station.controller.ts"
-    },
-    "transport.geofence.manage": {
-      "functionName": "ProofReviewController.register",
-      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 114
-    },
-    "transport.geofence.read": {
-      "functionName": "ProofReviewController.list",
-      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 107
     },
     "transport.maintenance.plan.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts"
@@ -901,6 +911,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     }
   },
   "decisions": {
+    "account.access|*": {
+      "functionName": "AuthService.decide",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 683
+    },
     "advice.auto_reply|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
@@ -1098,6 +1113,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "DispatchService.requireMultiOrderRun",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
       "line": 266
+    },
+    "driver.account_link|*": {
+      "functionName": "DriverAccountLinkService.decide",
+      "filePath": "apps/api/src/transport/fleet/driver-account-link.service.ts",
+      "line": 149
     },
     "driver.self_expense_scope|*": {
       "functionName": "CostingReadService.selfTripExpenseEvidence",
@@ -1833,6 +1853,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/places/place.service.ts",
       "line": 114
     },
+    "place.write|*": {
+      "functionName": "PlaceAdminService.decide",
+      "filePath": "apps/api/src/transport/places/admin/place-admin.service.ts",
+      "line": 617
+    },
     "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
@@ -1921,6 +1946,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceRegistryService.transitionSource",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
       "line": 329
+    },
+    "stakeholder.account_link|*": {
+      "functionName": "AssetOwnershipService.decideLink",
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts",
+      "line": 190
     },
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",
