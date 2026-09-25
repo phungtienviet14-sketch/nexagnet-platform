@@ -300,10 +300,10 @@ Bên dưới là **việc cần xử lý**.
 
 Khi khai phiếu đổ dầu trên vòng xe, lái xe chọn một trong hai cách thanh toán.
 
-| Cách trả                | Tiền đi đâu                                                                                                                                                                                       | Ai làm                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| **Lái xe trả tiền mặt** | Kế toán xác thực phiếu. Khoản này ghi vào **sổ quỹ của lái xe**, làm số dư giảm. Nếu lái xe đã chi quá tạm ứng, công ty còn nợ lái xe và trả lại ở “Quyết toán lái xe”. **Không** ghi nợ cây xăng | Lái xe khai, kế toán xác thực |
-| **Ghi nợ cây xăng**     | Kế toán nhập bảng kê của cây xăng và cho máy so khớp từng phiếu. Khi kế toán **đóng kỳ**, khoản nợ mới vào **phải trả cây xăng**. **Không** đụng tới quỹ của lái xe                               | Lái xe khai, kế toán đối soát |
+| Cách trả                | Tiền đi đâu                                                                                                                                                                                                                                                                     | Ai làm                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **Lái xe trả tiền mặt** | Kế toán xác thực phiếu. Khoản này ghi vào **sổ quỹ của lái xe**, làm số dư giảm. Nếu lái xe đã chi quá tạm ứng, công ty còn nợ lái xe và trả lại ở “Quyết toán lái xe”. **Không** ghi nợ cây xăng                                                                               | Lái xe khai, kế toán xác thực                    |
+| **Ghi nợ cây xăng**     | Ba bước, theo thứ tự: kế toán **xác thực** phiếu → **đối soát** với bảng kê của cây xăng (máy so khớp từng phiếu đã xác thực) → **đóng kỳ**. Chỉ khi đóng kỳ, khoản nợ mới vào **phải trả cây xăng**; khai hay xác thực đều chưa tạo công nợ. **Không** đụng tới quỹ của lái xe | Lái xe khai; kế toán xác thực, đối soát, đóng kỳ |
 
 Khi so khớp, hệ thống bắt các chỗ lệch:
 
@@ -347,11 +347,11 @@ Chỉ ghi những điều có ảnh hưởng tới quyết định.
 
 ### Ảnh hưởng tới tiền
 
-| Hạn chế                                                                                                                          | Ảnh hưởng                                                                  | Làm tạm                                                      |
-| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Lái xe **chưa ghi được chi phí dọc đường** (cầu đường, bốc xếp, bến bãi, sửa dọc đường) cho vòng xe. Hiện chỉ phiếu dầu ghi được | Các khoản này chưa vào chi phí của đơn, nên biên trực tiếp cao hơn thực tế | Theo dõi riêng cho tới khi sửa                               |
-| **Km của chặng theo vòng xe chưa được ghi**                                                                                      | Tổng km và tỷ lệ chạy rỗng chỉ có từ chuyến cũ hoặc để trống               | Đọc km theo chuyến cũ; chờ quyết định lấy km từ đâu (mục 10) |
-| **Lương theo chuyến và theo km chưa tính việc theo vòng xe**                                                                     | Phiếu lương của lái xe chạy theo vòng xe chỉ có lương cơ bản               | Nếu trả theo chuyến hoặc km, kế toán cộng tay phần này       |
+| Hạn chế                                                                                                                          | Ảnh hưởng                                                                                                                     | Làm tạm                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Lái xe **chưa ghi được chi phí dọc đường** (cầu đường, bốc xếp, bến bãi, sửa dọc đường) cho vòng xe. Hiện chỉ phiếu dầu ghi được | Các khoản này chưa vào chi phí của đơn, nên biên trực tiếp cao hơn thực tế                                                    | Theo dõi riêng cho tới khi sửa                               |
+| **Km của chặng theo vòng xe chưa được ghi**                                                                                      | Tổng km và tỷ lệ chạy rỗng chỉ có từ chuyến cũ hoặc để trống                                                                  | Đọc km theo chuyến cũ; chờ quyết định lấy km từ đâu (mục 10) |
+| **Lương theo chuyến và theo km chưa tính việc theo vòng xe**                                                                     | Hệ thống chỉ đếm chuyến theo cách cũ. Việc theo vòng xe không được đếm vào phần khoán theo chuyến và theo km trên phiếu lương | Nếu trả theo chuyến hoặc km, kế toán cộng tay phần này       |
 
 ### Ảnh hưởng tới vận hành
 
