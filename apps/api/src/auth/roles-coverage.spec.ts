@@ -17,6 +17,7 @@ import { DriverFundSelfController } from '../transport/costing/driver-fund-self.
 import { TripExpensesController } from '../transport/costing/trip-expenses.controller.js';
 import { FleetController } from '../transport/fleet/fleet.controller.js';
 import { TransportPlacesController } from '../transport/places/places.controller.js';
+import { PlaceAdminController } from '../transport/places/admin/place-admin.controller.js';
 import { DriverTripsController } from '../transport/trips/driver-trips.controller.js';
 import { TripsController } from '../transport/trips/trips.controller.js';
 import { UsersController } from './users.controller.js';
@@ -54,6 +55,8 @@ const CONTROLLERS = [
   // Van tai #379: hai `POST` chi doc (tim/tim nguoc dia diem) — POST de chuoi tim va toa do khong
   // nam trong URL, nhung moi lan goi co the thanh mot lan hoi ben thu ba, nen van phai co vai.
   TransportPlacesController,
+  // `#395` S3 — man "Dia diem van hanh": moi route ghi mang `@Roles('ADMIN')`.
+  PlaceAdminController,
 ];
 
 /**

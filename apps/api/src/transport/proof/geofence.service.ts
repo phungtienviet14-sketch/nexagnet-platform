@@ -1,11 +1,19 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { AuditLogService } from '../../audit/audit-log.service.js';
 import { parseGeoPoint } from '../geo/geo-point.js';
+import { PlaceAdminError } from '../places/admin/place-admin-error.js';
+import {
+  describePlaceNameConflict,
+  findPlaceNameConflict,
+  loadPlaceNameIndex,
+} from '../places/admin/place-name-rule.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   GeofenceRepository,
   type Geofence,
   type GeofenceSubjectKind,
 } from './geofence.repository.js';
+import { PlaceWriteStore, placeStorageConflict, type PlaceWriteTx } from './place-write.store.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
 
 export interface RegisterGeofenceCommand {
@@ -42,12 +50,28 @@ export interface RegisterGeofenceCommand {
  * sach la LUAT NGHIEP VU, va luat nghiep vu khong thuoc ve mot controller. Dua chung vao mot dich
  * vu trong chinh module so huu chinh sach thi controller chi con tiem nhung thu da duoc export —
  * va cai lop wiring nay het cho de sai lan nua.
+ *
+ * ============================================================================================
+ * `#395`: CUNG DUONG GHI VOI MAN "DIA DIEM VAN HANH"
+ * ============================================================================================
+ *
+ * Moi loai hang rao (ke ca cay xang, hang rao tam) di qua `PlaceWriteStore` — cung giao dich, cung
+ * khoa — va qua CUNG luat trung ten: dieu xe giai nhan tren MOI hang rao con hieu luc, nen mot hang
+ * rao tam trung ten bai xe cung lam bai xe thanh mo ho. Duong nay VAN nhan ma bai tuy y cho hang
+ * rao `DEPOT` (vd `kho-boot` cua bai boot); chi man moi sinh ma `DEPOT-...`. Hai chi muc bai xe cua
+ * DB cung chan duong nay, va va cham cua chung ra ly do co kieu thay vi `500`.
  */
 @Injectable()
 export class GeofenceService {
   constructor(
     private readonly geofences: GeofenceRepository,
     @Inject(TRANSPORT_PROOF_POLICY) private readonly policy: TransportProofPolicy,
+    /*
+     * Cuoi va tuy chon: spec cu dung dich vu theo vi tri voi mot kho tran. Vang mat thi ghi thang
+     * vao kho nhu truoc #395 (khong khoa, khong luat trung ten) — ung dung that luon co kho ghi.
+     */
+    @Optional() private readonly store?: PlaceWriteStore,
+    @Optional() private readonly audit?: AuditLogService,
   ) {}
 
   listActive(): Promise<readonly Geofence[]> {
@@ -85,7 +109,7 @@ export class GeofenceService {
       );
     }
 
-    return this.geofences.register({
+    const input = {
       label: command.label,
       subjectKind: command.subjectKind,
       subjectId: command.subjectId,
@@ -94,6 +118,46 @@ export class GeofenceService {
       radiusMetres: command.radiusMetres,
       note: command.note,
       recordedBy: command.recordedBy,
+    };
+    if (!this.store) return this.geofences.register(input);
+
+    const fence = await this.store
+      .run(async (tx) => {
+        await this.requireNameFree(tx, command);
+        return tx.geofences.register(input);
+      })
+      .catch((error: unknown) => {
+        throw placeStorageConflict(error) ?? error;
+      });
+    await this.audit?.append({
+      actor: command.recordedBy,
+      action: 'transport.geofence.register',
+      entityType: 'TransportGeofence',
+      entityId: fence.id,
+      before: null,
+      after: {
+        label: fence.label,
+        kind: fence.subjectKind,
+        subjectId: fence.subjectId,
+        point: { latitude: fence.latitude, longitude: fence.longitude },
+        radiusMetres: fence.radiusMetres,
+        status: fence.status,
+      },
     });
+    return fence;
+  }
+
+  private async requireNameFree(tx: PlaceWriteTx, command: RegisterGeofenceCommand) {
+    const conflict = findPlaceNameConflict(command.label, await loadPlaceNameIndex(tx), {
+      siteId: command.subjectKind === 'COUNTERPARTY_SITE' ? command.subjectId : null,
+    });
+    if (!conflict) return;
+    const detail = await describePlaceNameConflict(tx, conflict);
+    throw new PlaceAdminError(
+      'CONFLICT',
+      'PLACE_NAME_TAKEN',
+      `Tên này đã dùng cho ${detail.conflictKindLabel.toLowerCase()} "${detail.conflictName}". Đặt một tên khác để không nhầm hai nơi.`,
+      { ...detail },
+    );
   }
 }

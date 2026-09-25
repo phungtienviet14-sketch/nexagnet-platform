@@ -152,12 +152,14 @@ describe('moi diem quyet dinh deu co nguoi phat that', () => {
       (point) => [TRANSPORT_ACCOUNT_LINK_DECISIONS.owner, point] as const,
     ),
     /*
-     * `#395`: `account.access` co diem phat that tu lat quan tri tai khoan (`AuthService`).
-     * `TRANSPORT_PLACE_ADMIN_DECISIONS` (`place.write`) CHUA nam o day: hom nay no moi la khung tu
-     * vung, chua co diem phat. Them no vao danh sach nay CUNG LAN voi dong `telemetry.decision()`
-     * dau tien — khong truoc.
+     * `#395`: `account.access` co diem phat that tu lat quan tri tai khoan (`AuthService`);
+     * `place.write` co diem phat tu man Dia diem van hanh (`PlaceAdminService`). Moi bo vao danh
+     * sach nay CUNG LAN voi dong `telemetry.decision()` dau tien — khong truoc.
      */
     ...ACCOUNT_DECISIONS.points.map((point) => [ACCOUNT_DECISIONS.owner, point] as const),
+    ...TRANSPORT_PLACE_ADMIN_DECISIONS.points.map(
+      (point) => [TRANSPORT_PLACE_ADMIN_DECISIONS.owner, point] as const,
+    ),
   ];
 
   it.each(ALL_POINTS)('%s / %s co it nhat mot diem phat trong source', (_owner, point) => {

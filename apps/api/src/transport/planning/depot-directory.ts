@@ -16,7 +16,10 @@ import type { TransportPlanningPolicy } from './planning.types.js';
  * provider thuoc module cua no. Luat uu tien (co hang rao DEPOT nao thi nguon quan ly la su that)
  * nam trong nguon do, khong o day.
  *
- * S0 chi dung CONG. Khau lap ke hoach / dong vong chay chua doc no — lan noi day la viec cua lat sau.
+ * Nguoi doc: `PlanningService` (de xuat, du phong diem cuoi cua xe, dong vong chay) va
+ * `RunClosureService` (luot quet) — moi thao tac doc danh ba DUNG MOT LAN, truoc moi khoa hang vong
+ * chay, roi truyen danh sach xuong ham thuan `resolveDepotFrom()`. Man "Dia diem van hanh" cung doc
+ * CHINH danh ba nay de noi bai nao dang duoc khau lap ke hoach dung.
  */
 
 export type DepotSource = 'MANAGED' | 'TENANT_CONFIG';
@@ -81,4 +84,24 @@ export class DepotDirectoryHub extends DepotDirectory {
   list(): Promise<readonly DepotEntry[]> {
     return (this.registered ?? this.fallback).list();
   }
+}
+
+/**
+ * NGUON cua mot danh ba da doc: co MOT muc do nguon quan ly tra ve thi ca danh ba la cua nguon do
+ * (luat uu tien nam o nguon quan ly — co hang rao DEPOT nao, ke ca da tat, thi no la su that).
+ * Danh ba rong la cua cau hinh: chua ai khai bai nao o dau ca.
+ */
+export function depotSourceOf(entries: readonly DepotEntry[]): DepotSource {
+  return entries.some((entry) => entry.source === 'MANAGED') ? 'MANAGED' : 'TENANT_CONFIG';
+}
+
+/**
+ * Doc danh ba cho MOT thao tac. Khong co cho dang ky nao duoc tiem (spec dung dich vu truc tiep)
+ * thi doc cau hinh — dung nhu truoc #395.
+ */
+export function readDepots(
+  directory: DepotDirectory | undefined,
+  policy: TransportPlanningPolicy,
+): Promise<readonly DepotEntry[]> {
+  return (directory ?? new ConfigDepotDirectory(policy)).list();
 }

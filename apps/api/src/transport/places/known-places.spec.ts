@@ -3,7 +3,13 @@ import { InMemoryCounterpartyRepository } from '../counterparty/counterparty.rep
 import { InMemoryCounterpartySiteRepository } from '../counterparty/site.repository.js';
 import { CounterpartySiteService } from '../counterparty/site.service.js';
 import type { CounterpartySiteView } from '../counterparty/site.types.js';
-import type { Geofence, GeofenceRepository } from '../proof/geofence.repository.js';
+import { InMemoryFleetRepository } from '../fleet/fleet.repository.js';
+import {
+  InMemoryGeofenceRepository,
+  RepositoryGeofenceOwnerLookup,
+  type Geofence,
+  type GeofenceRepository,
+} from '../proof/geofence.repository.js';
 import { KnownPlacesFactsAdapter } from './known-places.port.js';
 import { buildKnownPlaces, type KnownSiteName } from './known-places.js';
 
@@ -20,6 +26,15 @@ const fence = (overrides: Partial<Geofence> & Pick<Geofence, 'id' | 'subjectKind
 
 const NO_SITES: ReadonlyMap<string, KnownSiteName> = new Map();
 
+/** Dia diem doc duoc cho moi `subject-<id>` — hang rao dia diem khong co ten thi bi bo (#395). */
+const sitesFor = (...ids: string[]): ReadonlyMap<string, KnownSiteName> =>
+  new Map(
+    ids.map((id) => [
+      `subject-${id}`,
+      { siteName: `Hang rao ${id}`, counterpartyName: `Phap nhan ${id}` },
+    ]),
+  );
+
 describe('dia diem da biet tu hang rao', () => {
   /** Cay xang va hang rao tam khong phai diem lay/giao cua mot don. */
   it('chi giu DEPOT, COUNTERPARTY_SITE, CUSTOMER', () => {
@@ -31,7 +46,7 @@ describe('dia diem da biet tu hang rao', () => {
         fence({ id: 'f4', subjectKind: 'CUSTOMER' }),
         fence({ id: 'f5', subjectKind: 'COUNTERPARTY_SITE' }),
       ],
-      NO_SITES,
+      sitesFor('f5'),
     );
 
     expect(places.map((place) => place.id)).toEqual(['f3', 'f5', 'f4']);
@@ -68,27 +83,34 @@ describe('dia diem da biet tu hang rao', () => {
     });
   });
 
-  it('dia diem khong con doc duoc -> lui ve nhan hang rao, khong dong phu', () => {
-    const [place] = buildKnownPlaces(
+  /**
+   * `#395`: dia diem KHONG con doc duoc (da nghi / phap nhan da nghi / vua bi xoa) -> hang rao BI BO.
+   * Truoc #395 no lui ve nhan hang rao va van hien cho nguoi tao don chon mot kho da nghi.
+   */
+  it('dia diem khong con doc duoc -> BO, khong lui ve nhan hang rao', () => {
+    const places = buildKnownPlaces(
       [fence({ id: 'f1', subjectKind: 'COUNTERPARTY_SITE', subjectId: 'gone', label: 'Kho cu' })],
       NO_SITES,
     );
 
-    expect(place).toMatchObject({ name: 'Kho cu', detail: null });
+    expect(places).toEqual([]);
   });
 
-  it('DEPOT/CUSTOMER: ten = nhan hang rao, khong dong phu', () => {
+  it('DEPOT: ten = nhan, khong dong phu; CUSTOMER: dong phu = ten khach (#395)', () => {
     const places = buildKnownPlaces(
       [
         fence({ id: 'd', subjectKind: 'DEPOT', label: 'Bãi xe Hà Nội' }),
-        fence({ id: 'c', subjectKind: 'CUSTOMER', label: 'Kho khách' }),
+        fence({ id: 'c', subjectKind: 'CUSTOMER', subjectId: 'kh-1', label: 'Kho khách' }),
+        fence({ id: 'c2', subjectKind: 'CUSTOMER', subjectId: 'kh-la', label: 'Kho lạ' }),
       ],
       NO_SITES,
+      new Map([['kh-1', 'Công ty CP Thép Đông Á']]),
     );
 
     expect(places.map((place) => [place.name, place.detail])).toEqual([
       ['Bãi xe Hà Nội', null],
-      ['Kho khách', null],
+      ['Kho khách', 'Công ty CP Thép Đông Á'],
+      ['Kho lạ', null],
     ]);
   });
 
@@ -101,7 +123,7 @@ describe('dia diem da biet tu hang rao', () => {
         fence({ id: 'd2', subjectKind: 'DEPOT', label: 'Bãi Đà Nẵng' }),
         fence({ id: 'd1', subjectKind: 'DEPOT', label: 'Bãi Cần Thơ' }),
       ],
-      NO_SITES,
+      sitesFor('s1'),
     );
 
     expect(places.map((place) => place.id)).toEqual(['d1', 'd2', 's1', 'c1', 'c2']);
@@ -125,7 +147,7 @@ describe('dia diem da biet tu hang rao', () => {
 describe('adapter doc so hang rao', () => {
   it('doc theo LO ten dia diem, chi cho hang rao COUNTERPARTY_SITE, khong trung', async () => {
     const geofences = {
-      listActive: vi.fn(async () => [
+      listEffectivelyActive: vi.fn(async () => [
         fence({ id: 'f1', subjectKind: 'COUNTERPARTY_SITE', subjectId: 'site-1' }),
         fence({ id: 'f2', subjectKind: 'COUNTERPARTY_SITE', subjectId: 'site-1' }),
         fence({ id: 'f3', subjectKind: 'DEPOT', subjectId: 'DEPOT-HN', label: 'Bãi xe Hà Nội' }),
@@ -175,7 +197,7 @@ describe('adapter doc so hang rao', () => {
       await siteOf(plastic.id, 'Kho Nhựa Tân Phú Hưng'),
     ];
     const geofences = {
-      listActive: async () =>
+      listEffectivelyActive: async () =>
         sites.map((site, index) =>
           fence({ id: `f${index}`, subjectKind: 'COUNTERPARTY_SITE', subjectId: site.id }),
         ),
@@ -200,7 +222,7 @@ describe('adapter doc so hang rao', () => {
 
   it('khong hang rao dia diem nao -> khong doc bang dia diem', async () => {
     const geofences = {
-      listActive: async () => [fence({ id: 'f3', subjectKind: 'DEPOT' })],
+      listEffectivelyActive: async () => [fence({ id: 'f3', subjectKind: 'DEPOT' })],
     } as unknown as GeofenceRepository;
     const activeViews = vi.fn();
 
@@ -209,5 +231,103 @@ describe('adapter doc so hang rao', () => {
     } as unknown as CounterpartySiteService).listKnownPlaces();
 
     expect(activeViews).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `#395` — "CON HIEU LUC THAT" la MOT vi tu cua kho hang rao; dia diem da biet chi doc no. Kho, phap
+ * nhan hay khach da nghi -> hang rao cua ho bien mat khoi Tao don ma KHONG ai phai tat hang rao.
+ */
+describe('dia diem da biet chi hien hang rao con hieu luc that (#395)', () => {
+  const REGISTER = {
+    latitude: 21.0,
+    longitude: 105.8,
+    radiusMetres: 200,
+    note: null,
+    recordedBy: 'test',
+  } as const;
+
+  const world = async () => {
+    const counterparties = new InMemoryCounterpartyRepository();
+    const siteRepo = new InMemoryCounterpartySiteRepository();
+    const fleet = new InMemoryFleetRepository();
+    const geofences = new InMemoryGeofenceRepository(
+      new RepositoryGeofenceOwnerLookup(siteRepo, counterparties, fleet),
+    );
+    const party = await counterparties.create({ name: 'Công ty CP Thép Đông Á' });
+    const site = await siteRepo.create({
+      counterpartyId: party.id,
+      name: 'Nhà máy thép Đình Vũ',
+      address: null,
+      note: null,
+      status: 'ACTIVE',
+      recordedBy: 'test',
+    });
+    const customer = await fleet.createCustomer({ name: 'Công ty TNHH Nhựa Tân Phú Hưng' });
+    await geofences.register({
+      ...REGISTER,
+      label: 'Bãi xe Hà Nội',
+      subjectKind: 'DEPOT',
+      subjectId: 'DEPOT-HN',
+    });
+    await geofences.register({
+      ...REGISTER,
+      label: 'Nhà máy thép Đình Vũ',
+      subjectKind: 'COUNTERPARTY_SITE',
+      subjectId: site.id,
+    });
+    await geofences.register({
+      ...REGISTER,
+      label: 'Kho Tân Phú Hưng',
+      subjectKind: 'CUSTOMER',
+      subjectId: customer.id,
+    });
+    const adapter = new KnownPlacesFactsAdapter(
+      geofences,
+      new CounterpartySiteService(siteRepo, counterparties),
+      fleet,
+    );
+    return { adapter, counterparties, siteRepo, fleet, party, site, customer };
+  };
+
+  it('moi chu the con hoat dong -> ca ba hien, dong phu = ten chu', async () => {
+    const { adapter } = await world();
+
+    const places = await adapter.listKnownPlaces();
+
+    expect(places.map((place) => [place.kind, place.name, place.detail])).toEqual([
+      ['DEPOT', 'Bãi xe Hà Nội', null],
+      ['COUNTERPARTY_SITE', 'Nhà máy thép Đình Vũ', 'Công ty CP Thép Đông Á'],
+      ['CUSTOMER', 'Kho Tân Phú Hưng', 'Công ty TNHH Nhựa Tân Phú Hưng'],
+    ]);
+  });
+
+  it('phap nhan da nghi -> dia diem cua no bien mat (hang rao van ACTIVE)', async () => {
+    const { adapter, counterparties, party } = await world();
+    await counterparties.update(party.id, { status: 'INACTIVE' });
+
+    const places = await adapter.listKnownPlaces();
+
+    expect(places.map((place) => place.kind)).toEqual(['DEPOT', 'CUSTOMER']);
+  });
+
+  it('dia diem da nghi qua duong cu -> bien mat', async () => {
+    const { adapter, siteRepo, site } = await world();
+    await siteRepo.update(site.id, { status: 'INACTIVE' });
+
+    expect((await adapter.listKnownPlaces()).map((place) => place.kind)).toEqual([
+      'DEPOT',
+      'CUSTOMER',
+    ]);
+  });
+
+  it('khach hang da nghi -> hang rao CUSTOMER kieu cu bien mat', async () => {
+    const { adapter, fleet, customer } = await world();
+    await fleet.updateCustomer(customer.id, { status: 'INACTIVE' });
+
+    expect((await adapter.listKnownPlaces()).map((place) => place.kind)).toEqual([
+      'DEPOT',
+      'COUNTERPARTY_SITE',
+    ]);
   });
 });
