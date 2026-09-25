@@ -13,7 +13,8 @@ import { BUILD_INFO } from '../config/build-info';
 import type { StoredSession } from '../session/session-types';
 import { outboxScope } from '../session/session-types';
 import { formWithFile } from './attachments';
-import { executeFieldAction, PAUSE_UNAUTHENTICATED, type DeviceBinding } from './field-actions';
+import { executeFieldAction, type DeviceBinding } from './field-actions';
+import { sendProofBatch } from './proof-sender';
 import { sendObservationBatch } from './observation-sender';
 import type { SqlDatabase } from './sql';
 import { SqliteOutboxStore, migrateOutbox } from './sqlite-outbox-store';
@@ -88,19 +89,16 @@ function sender(
   return {
     async sendBatch(items: readonly OutboxItem[]): Promise<readonly SendOutcome[]> {
       if (items[0]?.kind === 'OBSERVATION') return sendObservationBatch(items, http, device);
-      // Viec bam gui TUNG CAI, theo thu tu bam: "Đã tới" phai toi truoc "Rời điểm lấy hàng".
-      const outcomes: SendOutcome[] = [];
-      for (const item of items) {
-        const previous = outcomes.at(-1);
-        if (previous?.kind === 'RETRY' && previous.reason === PAUSE_UNAUTHENTICATED) {
-          outcomes.push({ kind: 'RETRY', reason: PAUSE_UNAUTHENTICATED });
-          continue;
-        }
-        outcomes.push(
-          await executeFieldAction(item, { http, progress: store, device, formWithFile }),
-        );
-      }
-      return outcomes;
+      // Viec bam: TUAN TU, FIFO theo vong chay/chang, ke ca voi viec truoc dang lui hen.
+      const inBatch = new Set(items.map((item) => item.id));
+      const outside = (await store.listPending()).filter(
+        (item) => item.kind === 'PROOF' && !inBatch.has(item.id),
+      );
+      return sendProofBatch(
+        items,
+        (item) => executeFieldAction(item, { http, progress: store, device, formWithFile }),
+        outside,
+      );
     },
   };
 }

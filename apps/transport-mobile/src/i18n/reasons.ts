@@ -48,6 +48,8 @@ const REASON_TEXT: Record<string, string> = {
   NOT_MOUNTED: 'Nghiệp vụ này chưa được bật cho doanh nghiệp.',
   OUTBOX_PAYLOAD_INVALID: 'Việc lưu trên máy bị hỏng dạng.',
   OUTBOX_ATTACHMENT_MISSING: 'Tệp đính kèm không còn trên máy.',
+  WAITING_FOR_EARLIER_ACTION: 'Đợi việc bấm trước của cùng chuyến gửi xong — giữ đúng thứ tự.',
+  UNAUTHENTICATED: 'Phiên đăng nhập hết hạn — đăng nhập lại để gửi tiếp.',
 };
 
 export function reasonText(reason: string | null | undefined, fallback?: string | null): string {

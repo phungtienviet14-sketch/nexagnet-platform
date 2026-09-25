@@ -15,6 +15,7 @@ interface ExtraConfig {
   readonly backgroundLocation?: boolean;
   readonly buildNumber?: number;
   readonly gitSha?: string | null;
+  readonly allowInsecureLocal?: boolean;
 }
 
 const extra = (Constants.expoConfig?.extra ?? {}) as ExtraConfig;
@@ -47,5 +48,9 @@ export const CLIENT_TAG = `transport-mobile/${BUILD_INFO.version}+${BUILD_INFO.b
 /** Dia chi may chu dien san cho ban thu cua mot khach — KHONG phai bi mat. */
 export const DEFAULT_SERVER_URL = process.env.EXPO_PUBLIC_DEFAULT_SERVER_URL?.trim() || null;
 
-/** Chi ban phat trien moi duoc noi HTTP tran toi may cuc bo/may ao. */
-export const ALLOW_INSECURE_LOCAL = BUILD_INFO.variant === 'development';
+/**
+ * Chi ban phat trien — hoac ban dung SMOKE tren may ao (`APP_E2E_CLEARTEXT=on`, co y tuong minh
+ * trong app.config.ts) — moi duoc noi HTTP tran, va chi toi may cuc bo/may ao (server-url.ts).
+ */
+export const ALLOW_INSECURE_LOCAL =
+  BUILD_INFO.variant === 'development' || extra.allowInsecureLocal === true;
