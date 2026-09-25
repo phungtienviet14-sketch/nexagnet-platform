@@ -140,19 +140,19 @@ export function DriverFundView() {
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Quỹ lái xe" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
 
-  const offers = fundActionOffers(navigation.role).filter((offer) => offer.id !== 'open-period');
+  const offers = fundActionOffers(navigation).filter((offer) => offer.id !== 'open-period');
   const balance = statement.data === undefined ? null : toFundBalance(statement.data);
-  const ledger = toFundLedgerRows(statement.data?.entries ?? [], navigation.role);
-  const periodRows = toFundPeriodRows(periods.data ?? [], navigation.role);
+  const ledger = toFundLedgerRows(statement.data?.entries ?? [], navigation);
+  const periodRows = toFundPeriodRows(periods.data ?? [], navigation);
   const closingHint = periodRows.find((row) => row.hint !== null)?.hint ?? null;
 
   return (

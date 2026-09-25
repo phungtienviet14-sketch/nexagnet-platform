@@ -110,11 +110,11 @@ export function TripsView({
   const rows = useMemo(() => toTripRows(visible, directory), [visible, directory]);
   const selected = findTripByCode(all, selection);
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Chuyến xe" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -136,7 +136,7 @@ export function TripsView({
           </span>
         }
         actions={
-          canPerform(navigation.role, 'transport.trip.create') ? (
+          canPerform(navigation, 'transport.trip.create') ? (
             <button
               type="button"
               className="tx-btn tx-btn--go"
@@ -359,10 +359,10 @@ function TripDetailView({
   }
 
   const current = activeAssignment(assignments.data ?? []);
-  const offers = tripActionOffers(trip, current, navigation.role);
+  const offers = tripActionOffers(trip, current, navigation);
   const primary = primaryOffer(offers);
   const timeline = toTripTimeline(trip, assignments.data ?? [], directory);
-  const costModel = toTripCost(cost.data ?? null, navigation.role);
+  const costModel = toTripCost(cost.data ?? null, navigation);
   const cancelNote = cancellationNote(trip);
   const row = toTripRows([trip], directory)[0];
 
@@ -437,7 +437,7 @@ function TripDetailView({
             drivers={drivers.data ?? []}
             currentVehicleId={current?.vehicleId ?? null}
             currentDriverId={current?.driverId ?? null}
-            role={navigation.role}
+            viewer={navigation}
             onDone={() => {
               void queryClient.invalidateQueries({ queryKey: ['transport', 'trips'] });
               onChanged();

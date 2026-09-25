@@ -239,7 +239,7 @@ function DriverFuel() {
    * nop — o chon o day chi DE XUAT.
    */
   const fuelRuns = toSectionQuery(
-    useDriverFuelRuns(canPerform(navigation.role, 'transport.driver.self.fuel.submit')),
+    useDriverFuelRuns(canPerform(navigation, 'transport.driver.self.fuel.submit')),
   );
   const [contextKey, setContextKey] = useState<string | null>(null);
   const [legId, setLegId] = useState('');
@@ -970,7 +970,7 @@ function DriverFund() {
   const balance = toFundBalance(fund.data);
   // Lai xe KHONG dao duoc but toan: `SALE` khong co `transport.costing.reversal.post`, nen
   // `canReverse` cua moi dong se la `false` va khong nut nao hien ra.
-  const rows = toFundLedgerRows(fund.data.entries, navigation.role);
+  const rows = toFundLedgerRows(fund.data.entries, navigation);
 
   return (
     <>

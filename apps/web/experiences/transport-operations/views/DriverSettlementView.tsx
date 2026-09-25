@@ -55,11 +55,11 @@ export function DriverSettlementView() {
     void queryClient.invalidateQueries({ queryKey: ['transport', 'costing'] });
   };
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Quyết toán lái xe" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -121,14 +121,14 @@ export function DriverSettlementView() {
           <CashoutForm
             driverId={selectedDriverId}
             months={view.months}
-            canCashout={canPerform(navigation.role, 'transport.driver_settlement.cashout')}
+            canCashout={canPerform(navigation, 'transport.driver_settlement.cashout')}
             reimbursementOutstanding={statement.data?.balance.reimbursementOutstanding ?? 0}
             onDone={refresh}
           />
 
           <CashoutHistory
             rows={view.cashouts}
-            canReverse={canPerform(navigation.role, 'transport.driver_settlement.reverse')}
+            canReverse={canPerform(navigation, 'transport.driver_settlement.reverse')}
             onDone={refresh}
           />
         </>

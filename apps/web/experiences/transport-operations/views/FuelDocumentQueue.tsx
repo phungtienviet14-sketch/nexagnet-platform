@@ -51,7 +51,7 @@ export function FuelDocumentQueue() {
   );
   const reveal = useRevealOnOpen<HTMLDivElement>(openId);
 
-  if (!canPerform(navigation.role, 'transport.fuel.document.read')) return null;
+  if (!canPerform(navigation, 'transport.fuel.document.read')) return null;
 
   const rows = toDocumentQueueRows(documents.data ?? []);
 

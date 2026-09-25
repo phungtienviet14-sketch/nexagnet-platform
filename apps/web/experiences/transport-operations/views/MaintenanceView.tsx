@@ -192,7 +192,7 @@ export function MaintenanceComplianceView() {
         >
           <WorkOrderCommands
             vehicles={vehicles.data ?? []}
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshAssets}
           />
         </CommandPanel>
@@ -206,7 +206,7 @@ export function MaintenanceComplianceView() {
                 (vehicles.data ?? []).find((v) => v.id === row.vehicleId)?.registrationPlate ??
                 'Xe chưa đọc được biển số'
               }
-              role={navigation.role}
+              viewer={navigation}
               onChanged={refreshAssets}
             />
           ))}
@@ -278,7 +278,7 @@ export function MaintenanceComplianceView() {
           <ComplianceDocumentForm
             vehicles={vehicles.data ?? []}
             drivers={drivers.data ?? []}
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshAssets}
           />
         </CommandPanel>

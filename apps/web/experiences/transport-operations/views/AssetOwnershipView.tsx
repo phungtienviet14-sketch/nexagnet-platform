@@ -99,11 +99,11 @@ export function AssetOwnershipView() {
     return vehicleRows.filter((row) => row.control === 'INTERNAL_OPERATED');
   }, [vehicleRows, filter]);
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Sở hữu tài sản" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }

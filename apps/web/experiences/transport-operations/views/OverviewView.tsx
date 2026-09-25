@@ -38,11 +38,11 @@ export function OverviewView() {
   const trips = toSectionQuery(useTrips(navigation));
   const reconciliations = toSectionQuery(useReconciliations(navigation));
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Tổng quan" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }

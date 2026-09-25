@@ -201,7 +201,7 @@ export function TransportOperations() {
         activeScreen={state.screen}
         onNavigate={openDriverScreen}
         onLeave={
-          hasOperationsScope(navigation.role)
+          hasOperationsScope(navigation)
             ? () => goTo({ surface: 'operations', section: 'overview' })
             : null
         }
@@ -224,7 +224,7 @@ export function TransportOperations() {
       driverScreens={driverScreens}
       onNavigate={(section) => goTo({ section })}
     >
-      {groups.length === 0 && !hasDriverScope(navigation.role) ? (
+      {groups.length === 0 && !hasDriverScope(navigation) ? (
         /*
          * `TX-08` (#242 E3) — MOT VAI KHONG CO PHAM VI VAN HANH VAN CO THE LA CO DONG.
          *
@@ -239,7 +239,7 @@ export function TransportOperations() {
         <StakeholderVehiclesView />
       ) : groups.length === 0 ? (
         <ErrorState
-          message={operationsEmptyMessage(navigation.role)}
+          message={operationsEmptyMessage(navigation)}
           // Cau chu noi "Hãy dùng đường 'Mở màn hình lái xe'" — nen duong do phai o NGAY DAY.
           // Trong thanh ben thi o 1440px no co that, con o 390px thanh ben da gap lai, va 390px
           // moi la thiet bi cua lai xe.

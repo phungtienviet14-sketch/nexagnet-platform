@@ -93,16 +93,16 @@ export function TollView() {
   const imports = toSectionQuery(useTollImports(navigation));
   const vehicles = toSectionQuery(useVehicles(navigation));
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Phí đường bộ (ETC)" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
 
-  const capabilities = tollCapabilities(navigation.role);
+  const capabilities = tollCapabilities(navigation);
   const providerRows = providers.data ? toTollProviderRows(providers.data) : [];
   const readyCount = providerRows.filter((row) => row.statementReady).length;
   const visibleTabs = TABS.filter((entry) => tabVisible(entry.id, capabilities));

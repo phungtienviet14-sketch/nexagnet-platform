@@ -30,17 +30,26 @@ import type {
  * o may chu.
  */
 
+/**
+ * Nguoi dang xem = vai + TAP QUYEN HIEU LUC tu `/auth/me` (`#395`). `permissions` di CUNG vai vao
+ * moi cong cua man hinh (`allowed`, `canPerform(navigation, ...)`): mot `MANAGER` duoc cap nhom
+ * "Đội xe & lái xe" phai THAY man do va du lieu cua no, dung nhu may chu dang cho phep.
+ *
+ * `AuthGate` giu tap quyen ON DINH danh tinh khi noi dung khong doi, nen memo o day khong bi pha
+ * moi lan lam tuoi `/auth/me`.
+ */
 export function useNavigationInput(): NavigationInput {
   const tenant = useTenantRuntime();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
   const role = user?.role ?? null;
   return useMemo(
     () => ({
       capabilities: tenant.capabilities,
       role,
+      permissions,
       blockedCapabilityKeys: tenant.readiness.blockedCapabilities.map((entry) => entry.key),
     }),
-    [tenant.capabilities, tenant.readiness.blockedCapabilities, role],
+    [tenant.capabilities, tenant.readiness.blockedCapabilities, role, permissions],
   );
 }
 
@@ -100,7 +109,7 @@ const allowed = (
   if (capability !== null && !(input.capabilities as readonly string[]).includes(capability)) {
     return false;
   }
-  return canPerform(input.role, action);
+  return canPerform(input, action);
 };
 
 export function useTrips(input: NavigationInput) {
@@ -378,8 +387,13 @@ export function useKnownPlaces(input: NavigationInput, isComposerOpen: boolean) 
     queryKey: TRANSPORT_QUERY_KEYS.knownPlaces,
     queryFn: () => transportApi.places.known(),
     enabled: isComposerOpen && allowed(input, 'transport-core', 'transport.order.manage'),
-    /* Hang rao doi theo tuan, khong theo phut: mo lai man tao don khong can doc lai ngay. */
-    staleTime: 5 * 60_000,
+    /*
+     * DOC LAI MOI LAN MO man tao don (`#395`). Truoc day hang rao "doi theo tuan" nen o nho giu 5
+     * phut; tu khi Giam doc them/tat dia diem o "Địa điểm vận hành", mot ke toan vua mo man tao don
+     * se khong thay dia diem moi toi 5 phut. Mot GET re moi lan mo la dung gia.
+     */
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }
 

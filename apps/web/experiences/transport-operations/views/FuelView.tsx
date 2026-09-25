@@ -51,11 +51,11 @@ export function FuelView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [consumptionFocus, setConsumptionFocus] = useState<ConsumptionFocus | null>(null);
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Nhiên liệu" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -100,7 +100,7 @@ export function FuelView() {
 
       <StatementImport
         suppliers={suppliers.data ?? []}
-        role={navigation.role}
+        viewer={navigation}
         onImported={() => void queryClient.invalidateQueries({ queryKey: ['transport', 'fuel'] })}
       />
 
@@ -278,7 +278,7 @@ function ReconciliationWorkspace({
     );
   }
 
-  const model = toReconciliationWorkspace(workspace.data, navigation.role);
+  const model = toReconciliationWorkspace(workspace.data, navigation);
   const needsPair =
     resolving?.options.find((option) => option.resolution === resolution)?.requiresTargets === true;
 
