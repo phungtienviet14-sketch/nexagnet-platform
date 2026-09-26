@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
-import { AuditLogService } from '../../audit/audit-log.service.js';
+import { AuditLogService, type AppendAuditLogCommand } from '../../audit/audit-log.service.js';
+import { PrismaAuditLogRepository } from '../../audit/prisma-audit-log.repository.js';
 import { PrismaService } from '../../config/prisma.service.js';
 import { CounterpartySitePlaceGuardHub } from '../counterparty/counterparty-site-place-guard.js';
 import type { CounterpartyRepository } from '../counterparty/counterparty.repository.js';
@@ -183,6 +184,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       });
       await prisma.transportCounterparty.deleteMany({ where: { id: { in: partyIds } } });
       await prisma.transportCustomer.deleteMany({ where: { name: { startsWith: PREFIX } } });
+      // Chi bai "dau vet cung giao dich" ghi so kiem toan THAT, voi actor rieng cua tep nay.
+      await prisma.auditLog.deleteMany({ where: { actor: ACTOR } });
     }
 
     beforeAll(async () => {
@@ -363,8 +366,24 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         ACTOR,
       );
 
+      // Vong chay chi co chang rong DI TU bai: doi ten khong doi gi cho no (dong vong chay chi nhin
+      // diem den) — khong hoi, khong canh bao sai (`#395` planning-2).
+      const recased = await places.update(main.id, { name: `${PREFIX} Bãi Đổi Tên` }, DIRECTOR);
+      expect(recased.name).toBe(`${PREFIX} Bãi Đổi Tên`);
+
+      // Chang VE bai theo nhan hien tai: doi ten LAM vong nay khong con dong khi xe ve bai.
+      const legs = await movementRepo.listLegs(run.id);
+      await movementRepo.createLeg({
+        runId: run.id,
+        sequence: legs.length + 1,
+        kind: 'EMPTY',
+        orderId: null,
+        originLabel: `${PREFIX} Kho OW2`,
+        destinationLabel: recased.name,
+        businessDate: DAY,
+      });
       const error = await places
-        .update(main.id, { name: `${PREFIX} Bãi đổi tên` }, DIRECTOR)
+        .update(main.id, { name: `${PREFIX} Bãi đổi tên hẳn` }, DIRECTOR)
         .catch((caught: unknown) => caught);
       expect(error).toMatchObject({ reason: 'DEPOT_CHANGE_AFFECTS_OPEN_WORK' });
       expect((error as { detail: { runs: { id: string }[] } }).detail.runs).toEqual([
@@ -373,10 +392,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       const renamed = await places.update(
         main.id,
-        { name: `${PREFIX} Bãi đổi tên`, acknowledgeOpenWork: true },
+        { name: `${PREFIX} Bãi đổi tên hẳn`, acknowledgeOpenWork: true },
         DIRECTOR,
       );
-      expect(renamed.name).toBe(`${PREFIX} Bãi đổi tên`);
+      expect(renamed.name).toBe(`${PREFIX} Bãi đổi tên hẳn`);
     }, 60_000);
 
     /**
@@ -562,6 +581,61 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(
         await prisma.transportCounterpartySite.count({ where: { name: `${PREFIX} Kho cuộn lại` } }),
       ).toBe(0);
+    }, 60_000);
+
+    /**
+     * DAU VET CUNG GIAO DICH (`#395`): so kiem toan hong o lan ghi dau vet -> CHINH lan sua dia diem
+     * lui theo; lan thu lai ghi ca hai. Truoc day dau vet `append` SAU commit: hong o do de lai mot
+     * dia diem da doi ma khong dong nao noi ai doi.
+     */
+    it('so kiem toan hong -> lan sua dia diem lui theo; thu lai thi ca sua lan dau vet cung co', async () => {
+      const view = await places.create(
+        {
+          kind: 'COUNTERPARTY_SITE',
+          name: `${PREFIX} Kho dấu vết`,
+          point: HA_NOI,
+          radiusMetres: 200,
+          owner: { newCounterparty: { name: `${PREFIX} Chủ kho dấu vết` } },
+        },
+        DIRECTOR,
+      );
+      let failNext = true;
+      class FlakyAudit extends AuditLogService {
+        override entryFor(command: AppendAuditLogCommand) {
+          if (failNext && command.action === 'transport.place.update') {
+            failNext = false;
+            throw new Error('so kiem toan tam hong');
+          }
+          return super.entryFor(command);
+        }
+      }
+      const traced = new PlaceAdminService(
+        new PrismaPlaceWriteStore(prisma),
+        geofences,
+        sites,
+        counterparties,
+        fleet,
+        depots,
+        new MovementDepotOpenWorkReader(movementRepo, POLICY),
+        DEFAULT_TRANSPORT_PROOF_POLICY,
+        new FlakyAudit(new PrismaAuditLogRepository(prisma)),
+      );
+      const radius = async () =>
+        (await prisma.transportGeofence.findUnique({ where: { id: view.id } }))?.radiusMetres;
+      const rows = () =>
+        prisma.auditLog.count({
+          where: { entityType: 'TransportGeofence', entityId: view.id, actor: ACTOR },
+        });
+
+      await expect(traced.update(view.id, { radiusMetres: 321 }, DIRECTOR)).rejects.toThrow(
+        'so kiem toan tam hong',
+      );
+      expect(await radius()).toBe(200);
+      expect(await rows()).toBe(0);
+
+      await traced.update(view.id, { radiusMetres: 321 }, DIRECTOR);
+      expect(await radius()).toBe(321);
+      expect(await rows()).toBe(1);
     }, 60_000);
 
     /** Tu choi giua chung KHONG de lai phap nhan / dia diem do dang: tat ca trong MOT giao dich. */

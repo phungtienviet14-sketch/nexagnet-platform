@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { ConfirmAction } from '../components/SectionState';
 import type { OpenWorkDetail } from './admin-types';
 import { openWorkLabel } from './places-model';
@@ -16,12 +17,15 @@ export function OpenWorkDialog({
   detail,
   confirmLabel,
   isBusy,
+  error,
   onConfirm,
   onCancel,
 }: {
   readonly detail: OpenWorkDetail | null;
   readonly confirmLabel: string;
   readonly isBusy: boolean;
+  /** Loi cua lan gui lai kem xac nhan — hien TRONG hop thoai (xem `ConfirmAction.error`). */
+  readonly error?: ReactNode;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }) {
@@ -32,6 +36,7 @@ export function OpenWorkDialog({
       detail="Các vòng xe và đơn dưới đây đang lấy bãi xe này làm điểm đi hoặc điểm về. Sau thay đổi, hệ thống lập chặng rỗng và đóng vòng chạy theo bãi mới; danh sách này được ghi vào lịch sử."
       confirmLabel={confirmLabel}
       isBusy={isBusy}
+      error={error}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >

@@ -501,7 +501,10 @@ hàng) · `Nhà máy / kho đối tác` · `Điểm khách hàng (kiểu cũ)` (
 
 - `POST /transport/geofences` đi qua **cùng** khoá ghi và luật trùng tên với mọi loại hàng rào
   (→ `409 PLACE_NAME_TAKEN`; va chạm chỉ mục bãi xe → `DEPOT_ALREADY_ACTIVE` / `DEPOT_CODE_TAKEN`),
-  vẫn nhận mã bãi tuỳ ý, và nay ghi kiểm toán `transport.geofence.register`.
+  vẫn nhận mã bãi tuỳ ý, và nay ghi kiểm toán `transport.geofence.register`. Hàng rào cho địa điểm
+  của đơn vị khác (`COUNTERPARTY_SITE`, `CUSTOMER`) qua đường này cũng cần thêm
+  `transport.counterparty.manage` như màn quản trị → thiếu thì
+  `403 PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE`.
 - `PATCH /transport/counterparties/:counterpartyId/sites/:siteId` đổi **tên** hoặc **trạng thái** của
   một địa điểm đã có hàng rào (mọi trạng thái) → `409 COUNTERPARTY_SITE_MANAGED_AS_PLACE`; địa chỉ,
   ghi chú vẫn sửa được ở đây.

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { AuditLogService } from '../../../audit/audit-log.service.js';
+import { AuditLogService, type AppendAuditLogCommand } from '../../../audit/audit-log.service.js';
 import { TelemetryService } from '../../../observability/telemetry.service.js';
 import { CounterpartyRepository } from '../../counterparty/counterparty.repository.js';
 import { CounterpartySiteRepository } from '../../counterparty/site.repository.js';
@@ -12,7 +12,12 @@ import {
   type GeoPoint,
 } from '../../geo/geo-point.js';
 import { DepotDirectoryHub, type DepotDirectory } from '../../planning/depot-directory.js';
-import { DepotOpenWorkReader, type DepotOpenWork } from '../../planning/depot-open-work.js';
+import {
+  DepotOpenWorkReader,
+  sameDepotLabel,
+  type DepotChangeKind,
+  type DepotOpenWork,
+} from '../../planning/depot-open-work.js';
 import {
   GeofenceRepository,
   type GeofenceRecord,
@@ -21,6 +26,7 @@ import {
 import {
   PlaceWriteStore,
   placeStorageConflict,
+  runTraced,
   type PlaceWriteTx,
 } from '../../proof/place-write.store.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from '../../proof/tracking-policy.js';
@@ -48,22 +54,16 @@ import {
   loadPlaceNameIndex,
   type PlaceNameSelf,
 } from './place-name-rule.js';
-import { ownerInactive, resolveSiteOwner, type PlaceOwnerOutcome } from './place-owner.js';
+import {
+  changeEntries,
+  createEntries,
+  primarySwitchEntries,
+  type WriteOutcome,
+} from './place-admin.audit.js';
+import { ownerInactive, resolveSiteOwner } from './place-owner.js';
+import { COUNTERPARTY_MANAGE_REQUIRED_MESSAGE } from './place-write-caller.js';
 
 type Operation = 'create' | 'update' | 'deactivate' | 'activate' | 'make_primary_depot';
-
-/** Ket qua cua mot lan ghi trong giao dich — du de ghi dau vet SAU khi commit. */
-interface WriteOutcome {
-  readonly changed: boolean;
-  readonly fence: GeofenceRecord;
-  readonly before: GeofenceRecord | null;
-  readonly siteBefore?: CounterpartySite | null;
-  readonly siteAfter?: CounterpartySite | null;
-  readonly owner?: PlaceOwnerOutcome;
-  readonly openWork?: DepotOpenWork | null;
-  readonly standby?: boolean;
-  readonly otherFences?: readonly GeofenceRecord[];
-}
 
 const DEPOT_CODE_MAX_SLUG = 40;
 
@@ -71,7 +71,8 @@ const DEPOT_CODE_MAX_SLUG = 40;
  * DIA DIEM VAN HANH — luat o DAY (`#395`).
  *
  * Moi lan ghi di qua `PlaceWriteStore` (MOT giao dich, sau MOT khoa) va ghi dau vet
- * `transport.place.*` voi `before`/`after`. Dau vet KHONG mang dia chi tho (khoa `address` bi che o
+ * `transport.place.*` voi `before`/`after` TRONG chinh giao dich do (`runTraced`,
+ * `place-admin.audit.ts`). Dau vet KHONG mang dia chi tho (khoa `address` bi che o
  * `redactAuditValue`); no ghi `addressChanged` de nguoi doc van biet dia chi co doi hay khong.
  *
  * Bai xe (DEPOT) la diem dau chang rong va diem dong vong chay cua khau lap ke hoach — nen doi ten,
@@ -137,7 +138,7 @@ export class PlaceAdminService {
    * ------------------------------------------------------------------ */
 
   create(command: CreatePlaceCommand, caller: PlaceWriteCaller): Promise<PlaceAdminView> {
-    return this.write('create', command.kind, async () => {
+    return this.write('create', command.kind, null, async () => {
       const point = this.requirePoint(command.point);
       this.requireRadius(command.radiusMetres);
       if (
@@ -151,7 +152,8 @@ export class PlaceAdminService {
       }
       if (command.kind === 'COUNTERPARTY_SITE') this.requireCounterpartyManage(caller, 'create');
 
-      const outcome = await this.inStore(async (tx) => {
+      const trail = (written: WriteOutcome) => createEntries(written, caller.actor);
+      const outcome = await this.inStore(trail, async (tx) => {
         await this.requireNameFree(tx, command.name, {});
         if (command.kind === 'DEPOT') return this.createDepot(tx, command, point, caller.actor);
         const owner = await resolveSiteOwner(tx, command, caller.actor);
@@ -168,10 +170,7 @@ export class PlaceAdminService {
         });
         return { changed: true, fence, before: null, owner, siteBefore: owner.siteBefore };
       });
-      await this.auditCreate(outcome, caller.actor);
-      this.decide('allowed', 'PLACE_WRITE_ALLOWED', 'create', outcome.fence.subjectKind, {
-        standby: outcome.standby ?? false,
-      });
+      this.decideWritten('create', outcome);
       return this.requireView(outcome.fence.id);
     });
   }
@@ -181,11 +180,12 @@ export class PlaceAdminService {
     command: UpdatePlaceCommand,
     caller: PlaceWriteCaller,
   ): Promise<PlaceAdminView> {
-    return this.write('update', null, async () => {
+    return this.write('update', null, id, async () => {
       const point = command.point === undefined ? undefined : this.requirePoint(command.point);
       if (command.radiusMetres !== undefined) this.requireRadius(command.radiusMetres);
 
-      const outcome = await this.inStore(async (tx): Promise<WriteOutcome> => {
+      const trail = (written: WriteOutcome) => changeEntries('update', written, caller.actor, {});
+      const outcome = await this.inStore(trail, async (tx): Promise<WriteOutcome> => {
         const before = await this.requireManaged(tx.geofences, id);
         const nameChanged = command.name !== undefined && command.name !== before.label;
         const siteBefore = await this.siteOf(tx, before);
@@ -209,10 +209,17 @@ export class PlaceAdminService {
             siteId: siteBefore?.id ?? null,
           });
           if (siteBefore) await this.requireSiteNameFree(tx, siteBefore, command.name);
-          if (before.subjectKind === 'DEPOT' && before.status === 'ACTIVE') {
+          // Chi doi hoa thuong / khoang trang: CUNG mot bai theo luat cua khau lap ke hoach va dong
+          // vong chay — khong viec nao doi ket cuc, nen khong hoi.
+          if (
+            before.subjectKind === 'DEPOT' &&
+            before.status === 'ACTIVE' &&
+            !sameDepotLabel(before.label, command.name)
+          ) {
             openWork = await this.requireOpenWorkAcknowledged(
               before.label,
               command.acknowledgeOpenWork,
+              'RENAME',
             );
           }
         }
@@ -234,7 +241,6 @@ export class PlaceAdminService {
             : siteBefore;
         return { changed: true, fence: fence ?? before, before, siteBefore, siteAfter, openWork };
       });
-      await this.auditChange('update', outcome, caller.actor, {});
       this.decideWritten('update', outcome);
       return this.requireView(outcome.fence.id);
     });
@@ -245,8 +251,10 @@ export class PlaceAdminService {
     command: DeactivatePlaceCommand,
     caller: PlaceWriteCaller,
   ): Promise<PlaceAdminView> {
-    return this.write('deactivate', null, async () => {
-      const outcome = await this.inStore(async (tx): Promise<WriteOutcome> => {
+    return this.write('deactivate', null, id, async () => {
+      const trail = (written: WriteOutcome) =>
+        changeEntries('deactivate', written, caller.actor, { reason: command.reason });
+      const outcome = await this.inStore(trail, async (tx): Promise<WriteOutcome> => {
         const before = await this.requireManaged(tx.geofences, id);
         if (before.subjectKind === 'COUNTERPARTY_SITE') {
           this.requireCounterpartyManage(caller, 'deactivate');
@@ -258,7 +266,11 @@ export class PlaceAdminService {
 
         const openWork =
           before.subjectKind === 'DEPOT' && before.status === 'ACTIVE'
-            ? await this.requireOpenWorkAcknowledged(before.label, command.acknowledgeOpenWork)
+            ? await this.requireOpenWorkAcknowledged(
+                before.label,
+                command.acknowledgeOpenWork,
+                'RELOCATE',
+              )
             : null;
         // Tat mot dia diem phap nhan = tat dia diem VA MOI hang rao cua no: cong va bai can cua
         // mot kho da nghi khong con la noi xe lay/giao hang.
@@ -286,17 +298,15 @@ export class PlaceAdminService {
           otherFences: siblings.filter((entry) => entry.id !== before.id),
         };
       });
-      if (outcome.changed) {
-        await this.auditChange('deactivate', outcome, caller.actor, { reason: command.reason });
-      }
       this.decideWritten('deactivate', outcome);
       return this.requireView(outcome.fence.id);
     });
   }
 
   activate(id: string, caller: PlaceWriteCaller): Promise<PlaceAdminView> {
-    return this.write('activate', null, async () => {
-      const outcome = await this.inStore(async (tx): Promise<WriteOutcome> => {
+    return this.write('activate', null, id, async () => {
+      const trail = (written: WriteOutcome) => changeEntries('activate', written, caller.actor, {});
+      const outcome = await this.inStore(trail, async (tx): Promise<WriteOutcome> => {
         const before = await this.requireManaged(tx.geofences, id);
         if (before.subjectKind === 'COUNTERPARTY_SITE') {
           this.requireCounterpartyManage(caller, 'activate');
@@ -319,7 +329,6 @@ export class PlaceAdminService {
         const fence = (await tx.geofences.find(before.id)) ?? before;
         return { changed: true, fence, before, siteBefore, siteAfter };
       });
-      if (outcome.changed) await this.auditChange('activate', outcome, caller.actor, {});
       this.decideWritten('activate', outcome);
       return this.requireView(outcome.fence.id);
     });
@@ -335,8 +344,9 @@ export class PlaceAdminService {
     command: MakePrimaryDepotCommand,
     caller: PlaceWriteCaller,
   ): Promise<PlaceAdminView> {
-    return this.write('make_primary_depot', 'DEPOT', async () => {
-      const outcome = await this.inStore(async (tx): Promise<WriteOutcome> => {
+    return this.write('make_primary_depot', 'DEPOT', id, async () => {
+      const trail = (written: WriteOutcome) => primarySwitchEntries(written, caller.actor);
+      const outcome = await this.inStore(trail, async (tx): Promise<WriteOutcome> => {
         const before = await this.requireManaged(tx.geofences, id);
         if (before.subjectKind !== 'DEPOT') {
           throw TransportDomainError.invalid(
@@ -351,7 +361,11 @@ export class PlaceAdminService {
         const openWork =
           current[0] === undefined
             ? null
-            : await this.requireOpenWorkAcknowledged(current[0].label, command.acknowledgeOpenWork);
+            : await this.requireOpenWorkAcknowledged(
+                current[0].label,
+                command.acknowledgeOpenWork,
+                'RELOCATE',
+              );
         await this.requireNameFree(tx, before.label, {
           geofenceIds: [before.id, ...current.map((fence) => fence.id)],
         });
@@ -363,7 +377,6 @@ export class PlaceAdminService {
         const fence = (await tx.geofences.find(before.id)) ?? before;
         return { changed: true, fence, before, openWork, otherFences: current };
       });
-      if (outcome.changed) await this.auditPrimarySwitch(outcome, caller.actor);
       this.decideWritten('make_primary_depot', outcome);
       return this.requireView(outcome.fence.id);
     });
@@ -440,7 +453,7 @@ export class PlaceAdminService {
     throw this.denied(
       'PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE',
       'DENIED',
-      'Địa điểm của khách hàng hoặc đơn vị khác cần thêm quyền quản lý khách hàng, đối tác.',
+      COUNTERPARTY_MANAGE_REQUIRED_MESSAGE,
       { operation, ...(fields.length > 0 ? { fields } : {}) },
     );
   }
@@ -465,9 +478,17 @@ export class PlaceAdminService {
   ): Promise<void> {
     const clash = await tx.sites.findByName(site.counterpartyId, name);
     if (clash && clash.id !== site.id) {
-      throw TransportDomainError.conflict(
+      // Ten phap nhan va ten dia diem trung di vao `detail` de man hinh goi dung ten.
+      const party = await tx.counterparties.find(site.counterpartyId);
+      throw this.denied(
         'COUNTERPARTY_SITE_NAME_TAKEN',
-        `Đơn vị này đã có một địa điểm khác tên "${name}".`,
+        'CONFLICT',
+        `${party ? `"${party.name}"` : 'Đơn vị này'} đã có một địa điểm khác tên "${clash.name}".`,
+        {
+          siteId: clash.id,
+          siteName: clash.name,
+          ...(party ? { counterpartyName: party.name } : {}),
+        },
       );
     }
   }
@@ -475,8 +496,9 @@ export class PlaceAdminService {
   private async requireOpenWorkAcknowledged(
     depotLabel: string,
     acknowledged: boolean | undefined,
+    change: DepotChangeKind,
   ): Promise<DepotOpenWork | null> {
-    const work = await this.openWork.openWorkAt(depotLabel);
+    const work = await this.openWork.openWorkAt(depotLabel, change);
     if (work.runs.length === 0 && work.orders.length === 0) return null;
     if (acknowledged === true) return work;
     throw this.denied('DEPOT_CHANGE_AFFECTS_OPEN_WORK', 'CONFLICT', openWorkMessage(work), {
@@ -541,10 +563,16 @@ export class PlaceAdminService {
    * Giao dich, dau vet, quan sat
    * ------------------------------------------------------------------ */
 
-  /** Chay trong kho ghi; va cham DB cua mot nguoi ghi ngoai khoa thanh ly do co kieu. */
-  private async inStore<T>(work: (tx: PlaceWriteTx) => Promise<T>): Promise<T> {
+  /**
+   * Chay trong kho ghi, dau vet `trail` trong CUNG giao dich (`runTraced`); va cham DB cua mot nguoi
+   * ghi ngoai khoa thanh ly do co kieu.
+   */
+  private async inStore(
+    trail: (outcome: WriteOutcome) => readonly AppendAuditLogCommand[],
+    work: (tx: PlaceWriteTx) => Promise<WriteOutcome>,
+  ): Promise<WriteOutcome> {
     try {
-      return await this.store.run(work);
+      return await runTraced(this.store, this.audit, work, trail);
     } catch (error) {
       const conflict = placeStorageConflict(error);
       if (!conflict) throw error;
@@ -560,9 +588,14 @@ export class PlaceAdminService {
   private write<T>(
     operation: Operation,
     kind: GeofenceSubjectKind | null,
+    placeId: string | null,
     run: () => Promise<T>,
   ): Promise<T> {
-    const attributes = { operation, ...(kind === null ? {} : { kind }) };
+    const attributes = {
+      operation,
+      ...(kind === null ? {} : { kind }),
+      ...(placeId === null ? {} : { placeId }),
+    };
     const reported = async (): Promise<T> => {
       try {
         return await run();
@@ -591,19 +624,45 @@ export class PlaceAdminService {
     return new PlaceAdminError(kind, reason, message, detail);
   }
 
+  /**
+   * Quyet dinh `allowed` + buoc chuyen trang thai cua MOI hang rao vua doi — SAU commit. Trace tra
+   * loi duoc "khau lap ke hoach mat bai nao, luc nao" ma khong phai mo so kiem toan.
+   */
   private decideWritten(operation: Operation, outcome: WriteOutcome): void {
+    const fence = outcome.fence;
     this.decide(
       'allowed',
       outcome.openWork ? 'PLACE_WRITE_OPEN_WORK_ACKNOWLEDGED' : 'PLACE_WRITE_ALLOWED',
       operation,
-      outcome.fence.subjectKind,
+      fence.subjectKind,
       {
         changed: outcome.changed,
+        placeId: fence.id,
+        ...(fence.subjectKind === 'DEPOT' ? { code: fence.subjectId } : {}),
+        ...(outcome.standby === undefined ? {} : { standby: outcome.standby }),
         ...(outcome.openWork
           ? { runCount: outcome.openWork.runs.length, orderCount: outcome.openWork.orders.length }
           : {}),
       },
     );
+    if (!outcome.changed || !this.telemetry) return;
+    // `stateChange` tu bo qua from === to (sua ten, sua ban kinh).
+    const moves = [
+      { id: fence.id, from: outcome.before?.status ?? null, to: fence.status },
+      ...(outcome.otherFences ?? []).map((other) => ({
+        id: other.id,
+        from: other.status,
+        to: 'INACTIVE',
+      })),
+    ];
+    for (const move of moves) {
+      this.telemetry.stateChange({
+        entity: 'TransportGeofence',
+        entityId: move.id,
+        from: move.from,
+        to: move.to,
+      });
+    }
   }
 
   /** Fail-open: telemetry vang mat khong doi ket qua nghiep vu. */
@@ -623,128 +682,6 @@ export class PlaceAdminService {
         ...(operation === null ? {} : { operation }),
         ...(kind === null ? {} : { kind }),
         ...detail,
-      },
-    });
-  }
-
-  private async auditCreate(outcome: WriteOutcome, actor: string): Promise<void> {
-    if (!this.audit) return;
-    const owner = outcome.owner;
-    if (owner?.partyCreated) {
-      await this.audit.append({
-        actor,
-        action: 'transport.counterparty.create',
-        entityType: 'TransportCounterparty',
-        entityId: owner.party.id,
-        before: null,
-        after: owner.party,
-      });
-    }
-    if (owner?.linkCreated) {
-      await this.audit.append({
-        actor,
-        action: 'transport.counterparty.link',
-        entityType: 'TransportCounterpartyLink',
-        entityId: `${owner.linkCreated.kind}:${owner.linkCreated.subjectId}`,
-        before: null,
-        after: { ...owner.linkCreated, counterpartyName: owner.party.name },
-      });
-    }
-    if (owner) {
-      await this.audit.append({
-        actor,
-        action: owner.siteBefore
-          ? 'transport.counterparty_site.update'
-          : 'transport.counterparty_site.create',
-        entityType: 'TransportCounterpartySite',
-        entityId: owner.site.id,
-        before: owner.siteBefore,
-        after: owner.site,
-      });
-    }
-    await this.audit.append({
-      actor,
-      action: 'transport.place.create',
-      entityType: 'TransportGeofence',
-      entityId: outcome.fence.id,
-      before: null,
-      after: {
-        ...placeSnapshot(outcome.fence),
-        addressChanged: outcome.fence.address !== null,
-        ...(owner ? { owner: ownerSnapshot(owner) } : {}),
-        ...(outcome.standby ? { standby: true } : {}),
-      },
-    });
-  }
-
-  private async auditChange(
-    operation: 'update' | 'deactivate' | 'activate',
-    outcome: WriteOutcome,
-    actor: string,
-    extra: Readonly<Record<string, unknown>>,
-  ): Promise<void> {
-    if (!this.audit || outcome.before === null) return;
-    if (outcome.siteBefore && outcome.siteAfter && outcome.siteBefore !== outcome.siteAfter) {
-      await this.audit.append({
-        actor,
-        action: 'transport.counterparty_site.update',
-        entityType: 'TransportCounterpartySite',
-        entityId: outcome.siteBefore.id,
-        before: outcome.siteBefore,
-        after: outcome.siteAfter,
-      });
-    }
-    for (const sibling of outcome.otherFences ?? []) {
-      await this.audit.append({
-        actor,
-        action: `transport.place.${operation}`,
-        entityType: 'TransportGeofence',
-        entityId: sibling.id,
-        before: placeSnapshot(sibling),
-        after: { ...placeSnapshot(sibling), status: 'INACTIVE', viaPlace: outcome.fence.id },
-      });
-    }
-    await this.audit.append({
-      actor,
-      action: `transport.place.${operation}`,
-      entityType: 'TransportGeofence',
-      entityId: outcome.fence.id,
-      before: placeSnapshot(outcome.before),
-      after: {
-        ...placeSnapshot(outcome.fence),
-        addressChanged: outcome.before.address !== outcome.fence.address,
-        ...(outcome.openWork ? { acknowledgedOpenWork: openWorkSnapshot(outcome.openWork) } : {}),
-        ...extra,
-      },
-    });
-  }
-
-  private async auditPrimarySwitch(outcome: WriteOutcome, actor: string): Promise<void> {
-    if (!this.audit || outcome.before === null) return;
-    const replaced = outcome.otherFences ?? [];
-    for (const old of replaced) {
-      await this.audit.append({
-        actor,
-        action: 'transport.place.deactivate',
-        entityType: 'TransportGeofence',
-        entityId: old.id,
-        before: placeSnapshot(old),
-        after: { ...placeSnapshot(old), status: 'INACTIVE', replacedBy: outcome.fence.id },
-      });
-    }
-    await this.audit.append({
-      actor,
-      action: 'transport.place.make_primary_depot',
-      entityType: 'TransportGeofence',
-      entityId: outcome.fence.id,
-      before: {
-        ...placeSnapshot(outcome.before),
-        primaryDepot: replaced[0] ? { id: replaced[0].id, code: replaced[0].subjectId } : null,
-      },
-      after: {
-        ...placeSnapshot(outcome.fence),
-        primaryDepot: { id: outcome.fence.id, code: outcome.fence.subjectId },
-        ...(outcome.openWork ? { acknowledgedOpenWork: openWorkSnapshot(outcome.openWork) } : {}),
       },
     });
   }
@@ -794,37 +731,6 @@ const PLACE_WRITE_REASON_SET: ReadonlySet<string> = new Set(
 
 const isPlaceWriteReason = (reason: string): reason is PlaceWriteReason =>
   PLACE_WRITE_REASON_SET.has(reason);
-
-/**
- * Dau vet cua MOT dia diem — khoa song sot qua `redactAuditValue`. KHONG co khoa `address`: dia
- * chi la du lieu vi tri va bi che; nguoi goi ghi `addressChanged` thay the.
- */
-function placeSnapshot(fence: GeofenceRecord): Record<string, unknown> {
-  return {
-    label: fence.label,
-    kind: fence.subjectKind,
-    ...(fence.subjectKind === 'DEPOT' ? { code: fence.subjectId } : {}),
-    point: { latitude: fence.latitude, longitude: fence.longitude },
-    radiusMetres: fence.radiusMetres,
-    status: fence.status,
-  };
-}
-
-function ownerSnapshot(owner: PlaceOwnerOutcome): Record<string, unknown> {
-  return {
-    counterpartyId: owner.party.id,
-    counterpartyName: owner.party.name,
-    counterpartyCreated: owner.partyCreated,
-    customerId: owner.customerId,
-    customerLinkCreated: owner.linkCreated !== null,
-    siteId: owner.site.id,
-    siteCreated: owner.siteBefore === null,
-  };
-}
-
-function openWorkSnapshot(work: DepotOpenWork): Record<string, unknown> {
-  return { runs: work.runs, orders: work.orders, idleHours: work.idleHours };
-}
 
 /** Telemetry: chi ma va con so — ten dia diem va chu cua no o lai trong than loi. */
 function sanitizeDetail(detail: Readonly<Record<string, unknown>>): Record<string, unknown> {

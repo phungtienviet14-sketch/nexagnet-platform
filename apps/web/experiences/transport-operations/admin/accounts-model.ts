@@ -3,6 +3,7 @@ import { actionsForRole } from '../transport-actions';
 import type { StatusTone } from '../customer-view';
 import type { AssetStakeholder, Driver } from '../transport-types';
 import type {
+  AccountHistoryEntry,
   AccountStatusFilter,
   AccountView,
   CatalogAction,
@@ -213,6 +214,30 @@ export function grantDeltaLabel(grants: readonly PermissionGrant[] | undefined):
  * Xuat lai o day de man quan tri van tai chi import mot mo hinh.
  */
 export { formatDateTime, relativeLastLogin } from '../../../lib/account-format';
+
+/** Ly do khoa tai khoan / tat dia diem — trung `max(500)` cua `disableUserSchema`, `deactivatePlaceSchema`. */
+export const ADMIN_REASON_MAX_LENGTH = 500;
+
+/** `after.reason` cua mot dong nhat ky — chuoi co noi dung, khong thi `null`. */
+export function auditReasonOf(after: unknown): string | null {
+  if (typeof after !== 'object' || after === null) return null;
+  const reason = (after as { reason?: unknown }).reason;
+  return typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : null;
+}
+
+/** Noi LY DO vao cau cua mot dong lich su — mot lan, du may chu da tu noi hay chua. */
+export function withAuditReason(summary: string, after: unknown): string {
+  const reason = auditReasonOf(after);
+  return reason === null || summary.includes(reason) ? summary : `${summary} — ${reason}`;
+}
+
+/**
+ * Cau cho mot dong lich su tai khoan. Hop thoai khoa hoi "Lý do khoá (ghi vào nhật ký)" — ly do do
+ * phai DOC LAI duoc o day, khong chi nam trong bang nhat ky ma Giam doc khong bao gio thay.
+ */
+export const accountHistoryLabel = (
+  entry: Pick<AccountHistoryEntry, 'summary' | 'after'>,
+): string => withAuditReason(entry.summary, entry.after);
 
 /* ------------------------------------------------------------------ *
  * Bo quyen rieng — tu mot lan bam den mot bo TOI GIAN
@@ -549,20 +574,29 @@ export const stakeholderCandidates = (
 
 export { credentialMessage, formatTemporaryPassword } from '../../../lib/account-format';
 
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 64;
+
 /**
- * Ten dang nhap goi y TAI CHO — duong lui khi may chu chua co `suggest-username`. May chu van la noi
- * kiem trung; day chi la mot cho bat dau hop le: khong dau, `đ`→`d`, noi bang dau cham, toi da 64.
- * "Trần Văn An" → `an.tv` khong: nguoi Viet goi nhau bang TEN, nen ten dung truoc — `an.tran.van`.
+ * Ten dang nhap goi y TAI CHO — duong lui khi `suggest-username` hong. CUNG MOT LUAT voi goc ten cua
+ * may chu (`usernameBase` trong `apps/api/src/auth/account-policy.ts`): khong dau, `đ`→`d`, GIU thu
+ * tu tu, noi bang dau cham — "Trần Văn An" + `lx.` → `lx.tran.van.an`. Luat khac nhau thi o ten dang
+ * nhap tu doi duoi con tro khi goi y cua may chu ve 400 ms sau, va tai khoan tao luc may chu hong
+ * mang mot dang ten khac moi tai khoan con lai. Bai `accounts-model.spec.ts` doi chieu voi bang vi du
+ * trong spec cua API.
  */
 export function localUsernameSuggestion(name: string, prefix = ''): string {
-  const words = foldText(name)
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
+  const words = name
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLocaleLowerCase('en-US')
+    .split(/[^a-z0-9]+/)
     .filter((word) => word.length > 0);
-  if (words.length === 0) return prefix;
-  const given = words[words.length - 1] as string;
-  const rest = words.slice(0, -1);
-  return `${prefix}${[given, ...rest].join('.')}`.slice(0, 64);
+  const slug = words.length > 0 ? words.join('.') : 'tai-khoan';
+  // Chua cho hau to chong trung cua may chu (`.2`, `.3`…): cat o 60, bo dau noi thua o cuoi.
+  const base = `${prefix}${slug}`.slice(0, USERNAME_MAX - 4).replace(/[._-]+$/, '');
+  return base.length >= USERNAME_MIN ? base : `tk.${base}`;
 }
 
 /**

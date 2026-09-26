@@ -608,7 +608,13 @@ describe('#395 — quyen tung tai khoan qua HTTP + phien THAT', { timeout: 60_00
       ['PUT', `/transport/drivers/${driver.id}/account`, { authUserId: driverAccountId }],
       ['GET', `/transport/account-links/${driverAccountId}`, undefined],
     ] as const) {
-      expect((await allGrantsManager.send(method, path, payload)).status, path).toBe(403);
+      // Ly do CO KIEU cua cong van tai — khong chi ma 403 (mot 403 cua cong khac cung la 403).
+      const refused = await allGrantsManager.send(method, path, payload);
+      expect(refused.status, path).toBe(403);
+      expect(refused.body, path).toMatchObject({
+        reason: 'ACTION_NOT_PERMITTED',
+        detail: { action: 'transport.account_link.manage' },
+      });
     }
 
     const linked = await director.send<DriverBody>(

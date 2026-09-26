@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Injectable, Optional, UnauthorizedException } from '@nestjs/common';
-import { AuditLogService } from '../audit/audit-log.service.js';
+import { AuditLogService, type AppendAuditLogCommand } from '../audit/audit-log.service.js';
+import { traceWrite, type TransactionTrail } from '../audit/audit-trail.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { buildAccessBreakdown } from './access/access-breakdown.js';
 import {
@@ -19,9 +20,10 @@ import {
   accessSnapshot,
   accountSnapshot,
   onboardingSnapshot,
-  profileSnapshot,
+  profileChangeAudit,
   statusSnapshot,
   toHistoryEntry,
+  userAuditEntry,
 } from './account-audit.js';
 import {
   ACCOUNT_ACCESS_REASONS,
@@ -88,6 +90,7 @@ import {
   type AuthUserRecord,
   type GuardedUserChange,
   type UserWrite,
+  updatedChange,
 } from './user.repository.js';
 
 const INVALID_CREDENTIALS = 'Tên đăng nhập hoặc mật khẩu không đúng';
@@ -150,7 +153,7 @@ export class AuthService {
     }
     const loginAt = new Date();
     // SAU khi mat khau da dung: noi ro mat khau tam het han thay vi "sai mat khau" — nguoi dung
-    // can biet phai nho Giam doc cap lai, khong phai go lai.
+    // can biet phai nho nguoi quan tri cap lai, khong phai go lai.
     if (isTemporaryPasswordExpired(user, loginAt)) throw accountError('TEMPORARY_PASSWORD_EXPIRED');
     await this.users.markLogin(user.id, loginAt);
     const authenticated = toAuthenticatedUser({ ...user, lastLoginAt: loginAt });
@@ -202,15 +205,18 @@ export class AuthService {
       throw accountError('TEMPORARY_PASSWORD_EXPIRED');
     }
     const passwordHash = await this.passwords.hash(parsed.data.newPassword);
-    const change = requireUpdated(await this.users.updatePassword(actor.id, passwordHash, null));
-    await this.audit.append({
-      actor: actor.username,
-      action: 'auth.credentials.change',
-      entityType: 'User',
-      entityId: actor.id,
-      before: onboardingSnapshot(change.before),
-      after: onboardingSnapshot(change.after),
-    });
+    const change = requireUpdated(
+      await this.traced(
+        (trail) => this.users.updatePassword(actor.id, passwordHash, null, trail),
+        updatedChange,
+        ({ before, after }) => [
+          userAuditEntry(actor, 'auth.credentials.change', actor.id, {
+            before: onboardingSnapshot(before),
+            after: onboardingSnapshot(after),
+          }),
+        ],
+      ),
+    );
     return toAuthenticatedUser(change.after);
   }
 
@@ -300,34 +306,40 @@ export class AuthService {
 
       const temporaryPassword = data.password ?? generateTemporaryPassword();
       const expiresAt = temporaryPasswordExpiry(new Date());
+      const passwordHash = await this.passwords.hash(temporaryPassword);
       let record: AuthUserRecord;
       try {
-        record = await this.users.create({
-          username,
-          name: data.name,
-          email: data.email?.toLowerCase() ?? null,
-          phone: data.phone ?? null,
-          jobTitle: data.jobTitle ?? null,
-          passwordHash: await this.passwords.hash(temporaryPassword),
-          role: data.role,
-          temporaryPasswordExpiresAt: expiresAt,
-          grants: data.grants,
-          grantedBy: actor.username,
-        });
+        record = await this.traced<AuthUserRecord, AuthUserRecord>(
+          (trail) =>
+            this.users.create(
+              {
+                username,
+                name: data.name,
+                email: data.email?.toLowerCase() ?? null,
+                phone: data.phone ?? null,
+                jobTitle: data.jobTitle ?? null,
+                passwordHash,
+                role: data.role,
+                temporaryPasswordExpiresAt: expiresAt,
+                grants: data.grants,
+                grantedBy: actor.username,
+              },
+              trail,
+            ),
+          (created) => created,
+          (created) => [
+            userAuditEntry(actor, 'auth.user.create', created.id, {
+              after: accountSnapshot(created),
+            }),
+            ...this.escalationEntries(actor, null, created),
+          ],
+        );
       } catch (error) {
         if (error instanceof DuplicateUserError) {
           throw this.deny('create', 'ACCOUNT_IDENTITY_TAKEN', {});
         }
         throw error;
       }
-      await this.audit.append({
-        actor: actor.username,
-        action: 'auth.user.create',
-        entityType: 'User',
-        entityId: record.id,
-        after: accountSnapshot(record),
-      });
-      await this.auditEscalation(actor, null, record);
       this.allow('create', record.id);
       return {
         ...toAccountView(record),
@@ -348,25 +360,34 @@ export class AuthService {
     const { email, ...rest } = parsed.data;
     let result: UserWrite;
     try {
-      result = await this.users.updateProfile(id, {
-        ...rest,
-        ...(email !== undefined ? { email: email?.toLowerCase() ?? null } : {}),
-      });
+      result = await this.traced(
+        (trail) =>
+          this.users.updateProfile(
+            id,
+            { ...rest, ...(email !== undefined ? { email: email?.toLowerCase() ?? null } : {}) },
+            trail,
+          ),
+        updatedChange,
+        ({ before, after }) => {
+          const change = profileChangeAudit(before, after);
+          return change === null
+            ? []
+            : [userAuditEntry(actor, 'auth.user.profile.update', id, change)];
+        },
+      );
     } catch (error) {
       if (error instanceof DuplicateUserError) {
         throw this.deny('profile.update', 'ACCOUNT_IDENTITY_TAKEN', { userId: id });
       }
       throw error;
     }
-    if (result.status === 'NOT_FOUND') throw this.deny('profile.update', 'ACCOUNT_NOT_FOUND', {});
-    await this.audit.append({
-      actor: actor.username,
-      action: 'auth.user.profile.update',
-      entityType: 'User',
-      entityId: id,
-      before: profileSnapshot(result.before),
-      after: profileSnapshot(result.after),
-    });
+    if (result.status === 'NOT_FOUND') {
+      throw this.deny('profile.update', 'ACCOUNT_NOT_FOUND', { userId: id });
+    }
+    // Khong gi doi: khong ghi dong kiem toan rong, khong ghi quyet dinh (nhu khoa lap lai).
+    if (profileChangeAudit(result.before, result.after) === null) {
+      return toAccountView(result.after);
+    }
     this.allow('profile.update', id);
     return toAccountView(result.after);
   }
@@ -418,18 +439,24 @@ export class AuthService {
     }
     return this.step('account.status.change', async () => {
       await this.assertManageable('disable', actor, id);
-      const result = this.requireGuarded('disable', id, await this.users.disable(id));
+      const written = await this.traced(
+        (trail) => this.users.disable(id, trail),
+        updatedChange,
+        ({ before, after }) =>
+          before.disabledAt !== null
+            ? []
+            : [
+                userAuditEntry(actor, 'auth.user.disable', id, {
+                  before: statusSnapshot(before),
+                  after: { ...statusSnapshot(after), reason: parsed.data.reason ?? null },
+                }),
+              ],
+      );
+      const result = this.requireGuarded('disable', id, written);
       // Da khoa tu truoc: khong co gi de ghi.
       if (result.before.disabledAt !== null) return toAccountView(result.after);
-      await this.audit.append({
-        actor: actor.username,
-        action: 'auth.user.disable',
-        entityType: 'User',
-        entityId: id,
-        before: statusSnapshot(result.before),
-        after: { ...statusSnapshot(result.after), reason: parsed.data.reason ?? null },
-      });
       this.allow('disable', id);
+      this.statusChanged(id, 'ACTIVE', 'DISABLED');
       return toAccountView(result.after);
     });
   }
@@ -444,18 +471,25 @@ export class AuthService {
       throw accountInputInvalid('Phải xác nhận mở khoá tài khoản', parsed.error.issues);
     }
     return this.step('account.status.change', async () => {
-      const result = await this.users.enable(id);
-      if (result.status === 'NOT_FOUND') throw this.deny('enable', 'ACCOUNT_NOT_FOUND', {});
+      const result = await this.traced(
+        (trail) => this.users.enable(id, trail),
+        updatedChange,
+        ({ before, after }) =>
+          before.disabledAt === null
+            ? []
+            : [
+                userAuditEntry(actor, 'auth.user.enable', id, {
+                  before: statusSnapshot(before),
+                  after: statusSnapshot(after),
+                }),
+              ],
+      );
+      if (result.status === 'NOT_FOUND') {
+        throw this.deny('enable', 'ACCOUNT_NOT_FOUND', { userId: id });
+      }
       if (result.before.disabledAt === null) return toAccountView(result.after);
-      await this.audit.append({
-        actor: actor.username,
-        action: 'auth.user.enable',
-        entityType: 'User',
-        entityId: id,
-        before: statusSnapshot(result.before),
-        after: statusSnapshot(result.after),
-      });
       this.allow('enable', id);
+      this.statusChanged(id, 'DISABLED', 'ACTIVE');
       return toAccountView(result.after);
     });
   }
@@ -478,18 +512,19 @@ export class AuthService {
       const temporaryPassword = parsed.data.password ?? generateTemporaryPassword();
       const expiresAt = temporaryPasswordExpiry(new Date());
       const passwordHash = await this.passwords.hash(temporaryPassword);
-      const result = await this.users.updatePassword(id, passwordHash, expiresAt);
+      const result = await this.traced(
+        (trail) => this.users.updatePassword(id, passwordHash, expiresAt, trail),
+        updatedChange,
+        ({ before, after }) => [
+          userAuditEntry(actor, 'auth.credentials.reset', id, {
+            before: onboardingSnapshot(before),
+            after: onboardingSnapshot(after),
+          }),
+        ],
+      );
       if (result.status === 'NOT_FOUND') {
-        throw this.deny('credentials.reset', 'ACCOUNT_NOT_FOUND', {});
+        throw this.deny('credentials.reset', 'ACCOUNT_NOT_FOUND', { userId: id });
       }
-      await this.audit.append({
-        actor: actor.username,
-        action: 'auth.credentials.reset',
-        entityType: 'User',
-        entityId: id,
-        before: onboardingSnapshot(result.before),
-        after: onboardingSnapshot(result.after),
-      });
       this.allow('credentials.reset', id);
       return {
         ...toAccountView(result.after),
@@ -509,20 +544,18 @@ export class AuthService {
   ): Promise<AuthUserRecord> {
     return this.step('account.access.change', async () => {
       await this.checkAccessChange('access.change', actor, id, access);
-      const result = this.requireGuarded(
-        'access.change',
-        id,
-        await this.users.setAccess(id, { ...access, grantedBy: actor.username }),
+      const written = await this.traced(
+        (trail) => this.users.setAccess(id, { ...access, grantedBy: actor.username }, trail),
+        updatedChange,
+        ({ before, after }) => [
+          userAuditEntry(actor, 'auth.user.access.change', id, {
+            before: accessSnapshot(before),
+            after: accessSnapshot(after),
+          }),
+          ...this.escalationEntries(actor, before, after),
+        ],
       );
-      await this.audit.append({
-        actor: actor.username,
-        action: 'auth.user.access.change',
-        entityType: 'User',
-        entityId: id,
-        before: accessSnapshot(result.before),
-        after: accessSnapshot(result.after),
-      });
-      await this.auditEscalation(actor, result.before, result.after);
+      const result = this.requireGuarded('access.change', id, written);
       this.allow('access.change', id);
       return result.after;
     });
@@ -574,7 +607,7 @@ export class AuthService {
       throw this.deny(operation, 'SELF_LOCKOUT', { userId: id }, { message: SELF_LOCKOUT_MESSAGE });
     }
     const target = await this.users.findById(id);
-    if (!target) throw this.deny(operation, 'ACCOUNT_NOT_FOUND', {});
+    if (!target) throw this.deny(operation, 'ACCOUNT_NOT_FOUND', { userId: id });
     if (isProtectedAccount(target.username)) {
       throw this.deny(operation, 'PROTECTED_SERVICE_ACCOUNT', { userId: id });
     }
@@ -607,7 +640,9 @@ export class AuthService {
     id: string,
     result: GuardedUserChange,
   ): Extract<GuardedUserChange, { status: 'UPDATED' }> {
-    if (result.status === 'NOT_FOUND') throw this.deny(operation, 'ACCOUNT_NOT_FOUND', {});
+    if (result.status === 'NOT_FOUND') {
+      throw this.deny(operation, 'ACCOUNT_NOT_FOUND', { userId: id });
+    }
     if (result.status === 'LAST_ACTIVE_ADMIN') {
       throw this.deny(operation, 'LAST_ACTIVE_ADMIN', { userId: id });
     }
@@ -618,11 +653,11 @@ export class AuthService {
    * Dong `auth.user.access.escalate` khi lan ghi DUA len vai Giam doc hoac THEM mot quyen nhay cam
    * chua co truoc do — ten tung ma, de so kiem toan tra loi "ai cap quyen nay, khi nao".
    */
-  private async auditEscalation(
+  private escalationEntries(
     actor: AuthActor,
     before: AuthUserRecord | null,
     after: AuthUserRecord,
-  ): Promise<void> {
+  ): AppendAuditLogCommand[] {
     const promotedToAdmin = after.role === 'ADMIN' && before?.role !== 'ADMIN';
     const previously = new Set(
       before ? escalatedPermissions(this.domains, before.role, before.permissionGrants ?? []) : [],
@@ -632,15 +667,26 @@ export class AuthService {
       after.role,
       after.permissionGrants ?? [],
     ).filter((permission) => !previously.has(permission));
-    if (!promotedToAdmin && escalated.length === 0) return;
-    await this.audit.append({
-      actor: actor.username,
-      action: 'auth.user.access.escalate',
-      entityType: 'User',
-      entityId: after.id,
-      before: before ? accessSnapshot(before) : null,
-      after: { ...accessSnapshot(after), promotedToAdmin, escalatedPermissions: escalated },
-    });
+    if (!promotedToAdmin && escalated.length === 0) return [];
+    return [
+      userAuditEntry(actor, 'auth.user.access.escalate', after.id, {
+        before: before ? accessSnapshot(before) : null,
+        after: { ...accessSnapshot(after), promotedToAdmin, escalatedPermissions: escalated },
+      }),
+    ];
+  }
+
+  /**
+   * GHI + DAU VET (`#395`): kho Prisma dat cac dong dau vet vao CUNG giao dich voi lan ghi
+   * (`audit/audit-trail.ts`) — dau vet hong thi thay doi lui theo, va lan thu lai van thay dung ban
+   * "truoc" (nen dong `auth.user.access.escalate` khong bao gio mat). Kho bo nho: ghi ngay sau.
+   */
+  private traced<R, C>(
+    write: (trail: TransactionTrail<C>) => Promise<R>,
+    changeOf: (result: R) => C | null,
+    entries: (change: C) => readonly AppendAuditLogCommand[],
+  ): Promise<R> {
+    return traceWrite(this.audit, write, changeOf, entries);
   }
 
   private async breakdownOf(
@@ -673,6 +719,11 @@ export class AuthService {
 
   private allow(operation: Exclude<AccountOperation, null>, userId: string): void {
     this.decide('allowed', 'ACCOUNT_CHANGE_ALLOWED', { operation, userId });
+  }
+
+  /** Buoc chuyen trang thai cua tai khoan (khoa / mo khoa) — CHI goi khi da thuc su doi. */
+  private statusChanged(id: string, from: 'ACTIVE' | 'DISABLED', to: 'ACTIVE' | 'DISABLED'): void {
+    this.telemetry?.stateChange({ entity: 'User', entityId: id, from, to });
   }
 
   private decide(

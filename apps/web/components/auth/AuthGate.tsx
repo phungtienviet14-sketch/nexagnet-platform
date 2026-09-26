@@ -14,7 +14,13 @@ import {
 } from 'react';
 import { authApi, type AuthUser } from '../../lib/auth';
 import { ForcedPasswordChange } from './ForcedPasswordChange';
-import { createRefreshGate, permissionsKey, reactToFailure } from './session-signals';
+import {
+  cacheBelongsToAnotherIdentity,
+  createRefreshGate,
+  permissionsKey,
+  reactToFailure,
+  runSignOut,
+} from './session-signals';
 
 interface AuthState {
   mode: 'api-key' | 'session' | 'none' | 'loading';
@@ -58,6 +64,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
    */
   const isSigningOutRef = useRef(false);
   const signOutEpochRef = useRef(0);
+  /*
+   * Ai dang so huu o nho query (`#395`). Phien chet vi `401` (dat lai mat khau, bi khoa) cung phai don
+   * o nho — khong chi khi tu bam "Đăng xuất" — neu khong, nguoi dang nhap KE TIEP tren cung tab nhan
+   * cau tra loi `staleTime: Infinity` cua nguoi truoc (vd "co phai ben gop von khong").
+   */
+  const cacheOwnerRef = useRef<string | null>(null);
+  const handOverCache = useCallback(
+    (next: string | null): void => {
+      if (cacheBelongsToAnotherIdentity(cacheOwnerRef.current, next)) queryClient.clear();
+      cacheOwnerRef.current = next;
+    },
+    [queryClient],
+  );
 
   const refresh = useCallback(async (): Promise<void> => {
     const epoch = signOutEpochRef.current;
@@ -73,11 +92,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
         const current = await authApi.me();
         if (epoch !== signOutEpochRef.current) return;
         isSigningOutRef.current = false;
+        handOverCache(current.user.id);
         setUser(current.user);
         setGrantKey(permissionsKey(current.permissions));
         setNotice(null);
         if (pathname === '/login') router.replace('/');
       } catch {
+        handOverCache(null);
         setUser(null);
         setGrantKey(null);
         if (pathname !== '/login') router.replace('/login');
@@ -88,7 +109,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setUser(null);
       setGrantKey(null);
     }
-  }, [pathname, router]);
+  }, [pathname, router, handOverCache]);
 
   useEffect(() => {
     void refresh();
@@ -154,21 +175,27 @@ export function AuthGate({ children }: { children: ReactNode }) {
     [grantKey],
   );
 
-  const logout = useCallback(async (): Promise<void> => {
-    isSigningOutRef.current = true;
-    signOutEpochRef.current += 1;
-    try {
-      await authApi.logout();
-    } catch (error) {
-      // Chua dang xuat duoc: phien van song, nen mot `401` sau day lai la tin hieu THAT.
-      isSigningOutRef.current = false;
-      throw error;
-    }
-    setNotice(null);
-    setUser(null);
-    setGrantKey(null);
-    router.replace('/login');
-  }, [router]);
+  const logout = useCallback(
+    (): Promise<void> =>
+      runSignOut({
+        begin: () => {
+          isSigningOutRef.current = true;
+          signOutEpochRef.current += 1;
+        },
+        logout: () => authApi.logout(),
+        abort: () => {
+          isSigningOutRef.current = false;
+        },
+        finish: () => {
+          handOverCache(null);
+          setNotice(null);
+          setUser(null);
+          setGrantKey(null);
+          router.replace('/login');
+        },
+      }),
+    [router, handOverCache],
+  );
 
   const value = useMemo<AuthState>(
     () => ({ mode, user, permissions, notice, refresh, logout }),

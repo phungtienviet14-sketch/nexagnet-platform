@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AuditLogService } from '../audit/audit-log.service.js';
+import { AuditLogService, type AppendAuditLogCommand } from '../audit/audit-log.service.js';
 import { PrismaAuditLogRepository } from '../audit/prisma-audit-log.repository.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { transportPermissionDomain } from '../transport/permissions/transport-permission-domain.js';
@@ -32,6 +32,9 @@ const NEW_PW = `it-new-${randomBytes(12).toString('hex')}`;
 
 describe.runIf(process.env.RUN_PRISMA_IT === '1')(
   'quan tri tai khoan tren Postgres THAT (#395)',
+  // Moi bai bam Argon2id nhieu lan va dua khoa `FOR UPDATE`: mac dinh 5 s cua vitest se lam bai do
+  // chap chon khi buoc integration chay song song tren may CI dang tai (cung muc voi hai tep #395).
+  { timeout: 60_000 },
   () => {
     const prisma = new PrismaService();
     const users = new PrismaUserRepository(prisma);
@@ -233,6 +236,55 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(await reasonOf(service.updateProfile(director, two.id, { phone: '0399395001' }))).toBe(
         'ACCOUNT_IDENTITY_TAKEN',
       );
+    });
+
+    /**
+     * DAU VET CUNG GIAO DICH (`#395`): truoc day quyen duoc ghi (mot giao dich) roi dau vet moi
+     * `append` (giao dich khac). So kiem toan hong o giua = quyen nhay cam DA CO hieu luc ma khong
+     * dong nao noi ai cap; va lan thu lai thay "da co" nen dong `escalate` mat vinh vien.
+     */
+    it('dau vet hong thi quyen KHONG doi; thu lai van ghi du dong doi quyen VA dong leo thang', async () => {
+      const target = await fixture('dau.vet', 'MANAGER');
+      let failNext = true;
+      class FlakyAudit extends AuditLogService {
+        override entryFor(command: AppendAuditLogCommand) {
+          if (failNext && command.action === 'auth.user.access.escalate') {
+            failNext = false;
+            throw new Error('so kiem toan tam hong');
+          }
+          return super.entryFor(command);
+        }
+      }
+      const flaky = new AuthService(
+        users,
+        passwords,
+        new FlakyAudit(new PrismaAuditLogRepository(prisma)),
+        registry,
+      );
+      const access = {
+        role: 'MANAGER' as const,
+        grants: [{ permission: 'transport.trip.cancel', effect: 'ALLOW' as const }],
+        confirmEscalation: true,
+      };
+      const actionsOf = async (): Promise<string[]> =>
+        (
+          await prisma.auditLog.findMany({
+            where: { entityType: 'User', entityId: target.id },
+            select: { action: true },
+          })
+        )
+          .map((row) => row.action)
+          .sort();
+
+      await expect(flaky.setAccess(director, target.id, access)).rejects.toThrow(
+        'so kiem toan tam hong',
+      );
+      expect((await users.findById(target.id))?.permissionGrants).toEqual([]);
+      expect(await actionsOf()).toEqual([]);
+
+      await flaky.setAccess(director, target.id, access);
+      expect((await users.findById(target.id))?.permissionGrants).toEqual(access.grants);
+      expect(await actionsOf()).toEqual(['auth.user.access.change', 'auth.user.access.escalate']);
     });
 
     it('hai Giam doc ha vai / khoa NHAU cung luc → luon con dung mot Giam doc dang hoat dong', async () => {

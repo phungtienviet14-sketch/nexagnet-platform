@@ -7,7 +7,9 @@ import type { AccessViolation, OpenWorkDetail } from './admin-types';
  * xung dot (tai khoan, dia diem, don vi, quyen) tu `detail`. Khong mot ma liet ke nao duoc lot ra
  * man hinh: bai `admin-reasons.spec.ts` doc bo tu vung cua API tu dia va do rang MOI ma deu co cau.
  *
- * Ma khong co trong bang (loi cu, loi zod, loi ha tang) thi giu NGUYEN VAN cau cua may chu.
+ * Ma khong co trong bang (loi cu, loi zod, loi ha tang) thi giu cau cua may chu NEU no la tieng
+ * Viet co dau; cau ky thuat tieng Anh (gioi han toc do, zod, mat mang) doi thanh cau theo ma trang
+ * thai — xem `statusMessage`.
  */
 
 type Detail = Readonly<Record<string, unknown>>;
@@ -176,6 +178,9 @@ const LINK_MESSAGES: Readonly<Record<string, Template>> = {
     const other = text(detail.stakeholderName) ?? text(detail.name);
     return `Tài khoản này đã nối với ${other === null ? 'một hồ sơ bên góp vốn khác' : `hồ sơ bên góp vốn ${other}`} — gỡ nối cũ trước.`;
   },
+  // `asset-ownership` — noi mot tai khoan voi ho so ben gop von da bi xoa/khong con.
+  ASSET_STAKEHOLDER_NOT_FOUND:
+    'Không tìm thấy hồ sơ bên góp vốn đã chọn — tải lại danh sách rồi chọn lại.',
   ACTION_NOT_PERMITTED: 'Bạn không có quyền thực hiện thao tác này.',
 };
 
@@ -203,8 +208,15 @@ const PLACE_MESSAGES: Readonly<Record<string, Template>> = {
       return 'Tên này đã dùng cho một địa điểm đang hoạt động khác — đặt tên khác.';
     return `Tên này đã dùng cho ${kind === null ? 'địa điểm' : kind.toLowerCase()} ${quoted(name)}${owner === null ? '' : ` của ${owner}`}. Đặt tên khác để lái xe và điều hành không nhầm hai nơi.`;
   },
-  DEPOT_ALREADY_ACTIVE:
-    'Đã có một bãi xe đang dùng. Bãi mới được lưu ở dạng dự phòng — dùng “Đặt làm bãi chính” khi muốn đổi.',
+  /*
+   * Duong gap THAT la "Bật lại" mot bai du phong khi bai khac dang la bai chinh (`activate`); tao
+   * bai moi khi da co bai chinh thi may chu luu no o dang du phong, khong tu choi. Cau KHONG noi
+   * "bai moi da duoc luu" — lan bat lai khong luu gi.
+   */
+  DEPOT_ALREADY_ACTIVE: (detail) => {
+    const active = text(asDetail(detail.activeDepot)?.name);
+    return `${active === null ? 'Một bãi xe khác' : quoted(active)} đang là bãi chính — mỗi lúc chỉ bật một bãi. Dùng “Đặt làm bãi chính” để chuyển sang bãi này.`;
+  },
   DEPOT_CODE_TAKEN: 'Mã bãi xe sinh từ tên này đã được dùng — đổi tên bãi rồi lưu lại.',
   PLACE_OUTSIDE_SERVICE_AREA:
     'Vị trí này nằm ngoài vùng phục vụ. Kiểm tra lại toạ độ (vĩ độ trước, kinh độ sau).',
@@ -227,7 +239,7 @@ const PLACE_MESSAGES: Readonly<Record<string, Template>> = {
       field === 'name' ? ['tên'] : field === 'address' ? ['địa chỉ'] : [],
     );
     return fields.length === 0
-      ? 'Thêm, đổi tên, đổi địa chỉ hay tắt địa điểm của đơn vị khác cần thêm quyền quản lý khách hàng, đối tác. Nhờ Giám đốc cấp quyền.'
+      ? 'Thêm, đổi tên, đổi địa chỉ, tắt hay bật lại địa điểm của đơn vị khác cần thêm quyền quản lý khách hàng, đối tác. Nhờ Giám đốc cấp quyền.'
       : `Đổi ${fields.join(' và ')} của địa điểm thuộc đơn vị khác cần thêm quyền quản lý khách hàng, đối tác. Nhờ Giám đốc cấp quyền.`;
   },
   COUNTERPARTY_SITE_NAME_TAKEN: (detail) => {
@@ -353,9 +365,60 @@ export function openWorkOf(error: unknown): OpenWorkDetail | null {
   };
 }
 
+/** Cau cua may chu la tieng Viet CO DAU — moi du de dua thang len man hinh cua Giam doc. */
+const VIETNAMESE_LETTER = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+
+const vietnameseMessageOf = (error: unknown): string | null => {
+  const raw = text(asError(error).message);
+  return raw !== null && VIETNAMESE_LETTER.test(raw) ? raw : null;
+};
+
+/**
+ * Ma ma cau cua bang CAN ten tu `detail`. May chu cu (hoac mot duong nem khong kem `detail`) chi goi
+ * ten trong CAU cua no — khi do cau co dau cua may chu noi dung hon cau chung cua bang.
+ */
+const NAMED_BY_DETAIL: Readonly<Record<string, (detail: Detail) => boolean>> = {
+  COUNTERPARTY_SITE_NAME_TAKEN: (detail) =>
+    text(detail.siteName) !== null || text(detail.counterpartyName) !== null,
+  PLACE_OWNER_INACTIVE: (detail) =>
+    text(detail.ownerName) !== null ||
+    text(detail.counterpartyName) !== null ||
+    text(detail.name) !== null,
+};
+
+/*
+ * Loi KHONG co ly do co kieu (gioi han toc do cua Nest, loi zod `400`, mat mang, `5xx`) mang cau
+ * KY THUAT tieng Anh — "ThrottlerException: Too Many Requests", "reason: Too big: …", "Failed to
+ * fetch". Khong mot cau nao nhu vay duoc len man hinh: noi theo MA TRANG THAI.
+ */
+const STATUS_MESSAGES = {
+  THROTTLED: 'Bạn thao tác quá nhanh — chờ khoảng một phút rồi thử lại.',
+  INVALID_INPUT: 'Thông tin gửi lên chưa hợp lệ — kiểm tra lại các ô vừa nhập.',
+  FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
+  SERVER: 'Máy chủ đang gặp sự cố — thử lại sau ít phút.',
+  OFFLINE: 'Không kết nối được máy chủ — kiểm tra mạng rồi thử lại.',
+  GENERIC: 'Không thực hiện được yêu cầu. Hãy thử lại.',
+} as const;
+
+function statusMessage(error: unknown): string {
+  const status = asError(error).status;
+  if (status === 429) return STATUS_MESSAGES.THROTTLED;
+  const vietnamese = vietnameseMessageOf(error);
+  if (vietnamese !== null) return vietnamese;
+  if (typeof status !== 'number') {
+    // Khong co ma trang thai = yeu cau khong toi duoc may chu (`fetch` nem `TypeError`).
+    return error instanceof Error ? STATUS_MESSAGES.OFFLINE : STATUS_MESSAGES.GENERIC;
+  }
+  if (status === 400 || status === 422) return STATUS_MESSAGES.INVALID_INPUT;
+  if (status === 403) return STATUS_MESSAGES.FORBIDDEN;
+  if (status >= 500) return STATUS_MESSAGES.SERVER;
+  return STATUS_MESSAGES.GENERIC;
+}
+
 /**
  * MOT CAU cho mot loi bat ky cua khu quan tri: ly do co kieu → cau cua bang; `ACCESS_INVALID` →
- * cau dau + tung dong vi pham; khong co ly do → cau cua may chu; khong co gi → cau chung.
+ * cau dau + tung dong vi pham; khong co ly do → cau tieng Viet cua may chu, hoac cau theo ma trang
+ * thai — KHONG BAO GIO la cau ky thuat tieng Anh.
  */
 export function adminErrorMessage(error: unknown, labelOf: PermissionLabelOf = noLabels): string {
   const reason = reasonOf(error);
@@ -367,11 +430,14 @@ export function adminErrorMessage(error: unknown, labelOf: PermissionLabelOf = n
         ...violations.map((violation) => `• ${violationMessage(violation, labelOf)}`),
       ].join('\n');
     }
-    const message = reasonMessage(reason, detailOf(error), labelOf);
+    const detail = detailOf(error) ?? {};
+    const isNamed = NAMED_BY_DETAIL[reason];
+    const serverSentence = vietnameseMessageOf(error);
+    if (isNamed !== undefined && !isNamed(detail) && serverSentence !== null) {
+      return serverSentence;
+    }
+    const message = reasonMessage(reason, detail, labelOf);
     if (message !== null) return message;
   }
-  const raw = asError(error).message;
-  return typeof raw === 'string' && raw.trim().length > 0
-    ? raw
-    : 'Không thực hiện được yêu cầu. Hãy thử lại.';
+  return statusMessage(error);
 }

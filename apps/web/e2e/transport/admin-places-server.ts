@@ -55,6 +55,14 @@ export interface Recorded {
   readonly body: Record<string, unknown>;
 }
 
+/** Mot lan tra loi LOI cho yeu cau ke tiep khop — bai kiem dung de dung duong loi THAT. */
+export interface Failure {
+  readonly method: string;
+  readonly path: string;
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+}
+
 export interface PlacesWorld {
   readonly places: Place[];
   readonly counterparties: { id: string; name: string; taxCode: string | null; status: 'ACTIVE' }[];
@@ -73,6 +81,8 @@ export interface PlacesWorld {
   /** Vong xe / don dang dung bai xe dang bat — co thi doi bai phai xac nhan. */
   openWork: { runs: { id: string; code: string }[]; orders: { id: string; code: string }[] } | null;
   knownReads: number;
+  /** Tra loi LOI mot lan cho yeu cau ke tiep khop (vd `429` cua ThrottlerGuard) roi tu go. */
+  failNext: Failure | null;
   /**
    * Nguoi dang dang nhap. `permissions: null` = may chu CU (khong tra tap quyen) — man hinh roi ve
    * ban guong theo vai.
@@ -205,15 +215,22 @@ function replan(world: PlacesWorld): void {
   }
 }
 
-function remember(world: PlacesWorld, place: Place, action: string, before: unknown): void {
+function remember(
+  world: PlacesWorld,
+  place: Place,
+  action: string,
+  before: unknown,
+  extra: Record<string, unknown> = {},
+): void {
   const rows = world.history.get(place.id) ?? [];
+  // Cung hinh dang dong nhat ky cua may chu: `after` mang ly do (`auditChange(..., { reason })`).
   rows.unshift({
     at: NOW,
     actor: 'giam-doc',
     action,
     entityType: 'TransportGeofence',
     before,
-    after: { status: place.status },
+    after: { status: place.status, ...extra },
   });
   world.history.set(place.id, rows);
 }
@@ -364,10 +381,27 @@ async function answerAdmin(
     place.status = 'INACTIVE';
     place.effectiveStatus = 'INACTIVE';
     replan(world);
-    remember(world, place, 'transport.place.deactivate', before);
+    remember(world, place, 'transport.place.deactivate', before, { reason: body.reason });
     return json(route, place);
   }
   if (suffix === '/activate') {
+    // Luat cua may chu (`requireNoOtherActiveDepot`): MOT bai bat — bai du phong khong bat lai duoc.
+    const active = world.places.find(
+      (entry) => entry.kind === 'DEPOT' && entry.id !== place.id && entry.status === 'ACTIVE',
+    );
+    if (place.kind === 'DEPOT' && active !== undefined) {
+      return json(
+        route,
+        {
+          statusCode: 409,
+          error: 'Conflict',
+          message: `"${active.name}" đang là bãi chính. Muốn dùng bãi này, hãy chọn "Đổi thành bãi chính".`,
+          reason: 'DEPOT_ALREADY_ACTIVE',
+          detail: { activeDepot: { id: active.id, code: active.depot?.code, name: active.name } },
+        },
+        409,
+      );
+    }
     place.status = 'ACTIVE';
     place.effectiveStatus = 'ACTIVE';
     replan(world);
@@ -399,6 +433,11 @@ async function answer(route: Route, world: PlacesWorld): Promise<void> {
   const path = new URL(request.url()).pathname;
   const body = (method === 'GET' ? {} : (request.postDataJSON() ?? {})) as Record<string, unknown>;
   world.requests.push({ method, path, body });
+  const failure = world.failNext;
+  if (failure !== null && failure.method === method && failure.path === path) {
+    world.failNext = null;
+    return json(route, failure.body, failure.status);
+  }
 
   if (path === '/auth/config') return json(route, { mode: 'session' });
   if (path === '/auth/csrf') return json(route, { csrfToken: 'e2e-csrf' });
@@ -471,6 +510,7 @@ export async function servePlaces(
     history: new Map(),
     openWork: null,
     knownReads: 0,
+    failNext: null,
     me: options.me ?? { role: 'ADMIN', permissions: null },
   };
   await page.route(

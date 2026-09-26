@@ -145,8 +145,11 @@ bãi đang bật, hay đổi bãi chính đổi câu trả lời cho việc đan
 nhãn cũ không còn đóng được bằng `DEPOT_RETURN` (chỉ còn `IDLE_TIMEOUT`, hoặc nằm `holding` mãi khi
 khách không khai `idleHours`), và một đơn mang nhãn cũ bị coi là một chỗ khác bãi. Cổng đọc
 `DepotOpenWorkReader` (`planning/depot-open-work.ts`, `transport-core`, chỉ một phương thức đọc) đếm
-vòng chạy `PLANNED`/`ACTIVE` có chặng chưa huỷ đi từ / về nhãn bãi (`sameSite()`) và đơn chưa
-`CANCELLED`/`FULFILLED` có điểm lấy / giao mang nhãn đó. Có việc mà chưa xác nhận →
+việc theo **loại thay đổi**: tắt bãi đang bật hay đổi bãi chính (`RELOCATE`) đếm vòng chạy
+`PLANNED`/`ACTIVE` có chặng chưa huỷ đi từ / về nhãn bãi (`sameSite()`); **đổi tên** (`RENAME`) chỉ
+đếm vòng chạy có chặng chưa huỷ **về** bãi — chặng đã rời bãi không bị tên mới ảnh hưởng. Cả hai đều
+đếm đơn chưa `CANCELLED`/`FULFILLED` có điểm lấy / giao mang nhãn đó. Đổi tên chỉ khác chữ hoa/thường
+hay khoảng trắng thì không qua cổng (so nhãn vẫn khớp). Có việc mà chưa xác nhận →
 `409 DEPOT_CHANGE_AFFECTS_OPEN_WORK` `detail: { runs, orders, idleHours }`; gửi lại với
 `acknowledgeOpenWork: true` thì ghi, và danh sách việc đi vào dấu vết kiểm toán. Đổi **vị trí / bán
 kính** của bãi không qua cổng này — hai khâu trên không so toạ độ. Tạo đơn khoá ô tên khi chọn một bãi

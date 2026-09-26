@@ -90,6 +90,53 @@ describe('viec dang mo tai mot bai xe (#395)', () => {
     expect(work.idleHours).toBe(12);
   });
 
+  /**
+   * DOI TEN bai: dong vong chay chi nhin DIEM DEN cua chang cuoi da xong, va khau lap ke hoach khong
+   * tao chang ve bai. Vong chay chi co chang rong DI TU bai khong doi ket cuc — dem no la canh bao
+   * sai (do tren probe: vong chi-di-tu-bai van dong \`DEPOT_RETURN\` sau khi doi ten).
+   */
+  it('doi ten (RENAME): chi vong chay co chang VE bai; don van tinh ca hai dau', async () => {
+    const movement = new InMemoryMovementRepository();
+    const leg = (runId: string, sequence: number, origin: string, destination: string) =>
+      movement.createLeg({
+        runId,
+        sequence,
+        kind: 'EMPTY',
+        orderId: null,
+        originLabel: origin,
+        destinationLabel: destination,
+        businessDate: DAY,
+      });
+    const outbound = await movement.createRun({
+      code: 'VR-DI',
+      vehicleId: 'v1',
+      businessDate: DAY,
+    });
+    await leg(outbound.id, 1, DEPOT, 'Kho A');
+    const returning = await movement.createRun({
+      code: 'VR-VE',
+      vehicleId: 'v2',
+      businessDate: DAY,
+    });
+    await leg(returning.id, 1, 'Kho B', ' bãi xe hà nội');
+    const order = await movement.createOrder({
+      code: 'ORD-DI',
+      businessDate: DAY,
+      originLabel: DEPOT,
+      destinationLabel: 'Kho C',
+    });
+    const reader = new MovementDepotOpenWorkReader(movement, policy(12));
+
+    const renamed = await reader.openWorkAt(DEPOT, 'RENAME');
+    const relocated = await reader.openWorkAt(DEPOT, 'RELOCATE');
+
+    expect(renamed.runs.map((run) => run.code)).toEqual(['VR-VE']);
+    expect(renamed.orders).toEqual([{ id: order.id, code: 'ORD-DI' }]);
+    // Tat bai / doi bai chinh: xe doi can cu THAT — ca hai vong chay deu bi anh huong.
+    expect(relocated.runs.map((run) => run.code).sort()).toEqual(['VR-DI', 'VR-VE']);
+    expect((await reader.openWorkAt(DEPOT)).runs).toHaveLength(2);
+  });
+
   it('chang da huy khong tinh; khach khong khai nguong nghi -> idleHours null', async () => {
     const movement = new InMemoryMovementRepository();
     const run = await movement.createRun({ code: 'VR-1', vehicleId: 'v1', businessDate: DAY });

@@ -19,17 +19,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "account.access.change": {
       "functionName": "AuthService.applyAccess",
       "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 510
+      "line": 545
     },
     "account.create": {
       "functionName": "AuthService.createUser",
       "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 284
+      "line": 290
     },
     "account.credentials.reset": {
       "functionName": "AuthService.resetPassword",
       "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 472
+      "line": 506
     },
     "account.status.change": {
       "filePath": "apps/api/src/auth/auth.service.ts"
@@ -44,10 +44,50 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/orders/orders.service.ts",
       "line": 577
     },
+    "auth.credentials.change": {
+      "functionName": "AuthService.changePassword",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 213
+    },
+    "auth.credentials.reset": {
+      "functionName": "AuthService.resetPassword",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 519
+    },
     "auth.production": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 78
+    },
+    "auth.user.access.change": {
+      "functionName": "AuthService.applyAccess",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 551
+    },
+    "auth.user.access.escalate": {
+      "functionName": "AuthService.escalationEntries",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 672
+    },
+    "auth.user.create": {
+      "functionName": "AuthService.createUser",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 331
+    },
+    "auth.user.disable": {
+      "functionName": "AuthService.disableUser",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 449
+    },
+    "auth.user.enable": {
+      "functionName": "AuthService.enableUser",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 481
+    },
+    "auth.user.profile.update": {
+      "functionName": "AuthService.updateProfile",
+      "filePath": "apps/api/src/auth/auth.service.ts",
+      "line": 375
     },
     "campaign.approve": {
       "functionName": "CampaignService.approve",
@@ -111,7 +151,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.account_link": {
       "functionName": "DriverAccountLinkService.setDriverAccount",
       "filePath": "apps/api/src/transport/fleet/driver-account-link.service.ts",
-      "line": 60
+      "line": 61
     },
     "driver_fund.post_entry": {
       "functionName": "CostingService.postEntryDetailed",
@@ -293,7 +333,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "place.write": {
       "functionName": "PlaceAdminService.write",
       "filePath": "apps/api/src/transport/places/admin/place-admin.service.ts",
-      "line": 574
+      "line": 607
     },
     "planning.cancel": {
       "functionName": "PlanningService.cancelPlan",
@@ -437,7 +477,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "stakeholder.account_link": {
       "functionName": "AssetOwnershipService.setStakeholderAccount",
       "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts",
-      "line": 155
+      "line": 171
     },
     "telematics.ingress": {
       "functionName": "TelematicsIngressService.ingest",
@@ -794,12 +834,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.proof.read": {
       "functionName": "ProofReviewController.forTrip",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 76
+      "line": 81
     },
     "transport.proof.withdraw": {
       "functionName": "ProofReviewController.withdraw",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 84
+      "line": 89
     },
     "transport.receipt_handover.record": {
       "functionName": "DocumentsController.handover",
@@ -914,7 +954,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "account.access|*": {
       "functionName": "AuthService.decide",
       "filePath": "apps/api/src/auth/auth.service.ts",
-      "line": 683
+      "line": 734
     },
     "advice.auto_reply|*": {
       "functionName": "PipelineService.runPipelineTurn",
@@ -1117,7 +1157,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.account_link|*": {
       "functionName": "DriverAccountLinkService.decide",
       "filePath": "apps/api/src/transport/fleet/driver-account-link.service.ts",
-      "line": 149
+      "line": 155
     },
     "driver.self_expense_scope|*": {
       "functionName": "CostingReadService.selfTripExpenseEvidence",
@@ -1856,7 +1896,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "place.write|*": {
       "functionName": "PlaceAdminService.decide",
       "filePath": "apps/api/src/transport/places/admin/place-admin.service.ts",
-      "line": 617
+      "line": 676
     },
     "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
       "functionName": "OperationalProofService.record",
@@ -1950,7 +1990,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "stakeholder.account_link|*": {
       "functionName": "AssetOwnershipService.decideLink",
       "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts",
-      "line": 190
+      "line": 236
     },
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",

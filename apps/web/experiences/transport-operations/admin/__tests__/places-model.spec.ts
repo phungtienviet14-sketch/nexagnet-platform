@@ -8,6 +8,7 @@ import {
   filterPlaces,
   geometryChanged,
   isEmptyPatch,
+  isStandbyDepot,
   kindCounts,
   newPlaceDraft,
   NEW_COUNTERPARTY,
@@ -22,6 +23,7 @@ import {
   placeMarkers,
   placeOwnerLine,
   placeRings,
+  placeStatusLabel,
   savedNotice,
   withLookupFill,
   withOwnerChoice,
@@ -138,6 +140,14 @@ describe('danh sach — loc, dem, thu tu', () => {
 });
 
 describe('the bai xe noi HAU QUA voi khau lap ke hoach', () => {
+  it('bai du phong goi dung ten nghiep vu, khong goi "Đã tắt"', () => {
+    expect(isStandbyDepot(DEPOT_HP)).toBe(true);
+    expect(placeStatusLabel(DEPOT_HP)).toBe('Bãi dự phòng');
+    expect(isStandbyDepot(DEPOT_HN)).toBe(false);
+    expect(placeStatusLabel(DEPOT_HN)).toBe('Đang dùng');
+    expect(placeStatusLabel({ ...DEPOT_HP, depot: null })).toBe('Đã tắt');
+  });
+
   it('mot bai dang dung + bai du phong', () => {
     const summary = depotSummary(ALL);
     expect(summary.tone).toBe('go');
@@ -397,5 +407,29 @@ describe('#395 — hop dong may chu moi, va duong lui cho may chu cu', () => {
       placeHistoryLabel({ action: 'transport.place.update', summary: 'Đổi bán kính 250 → 300 m' }),
     ).toBe('Đổi bán kính 250 → 300 m');
     expect(placeHistoryLabel({ action: 'transport.something.new' })).toBe('Thay đổi khác');
+  });
+
+  it('lich su: dia diem tao qua duong dang ky CU (`POST /transport/geofences`) la "Thêm địa điểm"', () => {
+    expect(placeHistoryLabel({ action: 'transport.geofence.register' })).toBe('Thêm địa điểm');
+  });
+
+  it('lich su: ly do tat (`after.reason`) doc lai duoc — hop thoai hua "ghi vào lịch sử"', () => {
+    expect(
+      placeHistoryLabel({
+        action: 'transport.place.deactivate',
+        after: { status: 'INACTIVE', reason: 'Đối tác chuyển kho' },
+      }),
+    ).toBe('Tắt địa điểm — Đối tác chuyển kho');
+    // May chu da tu noi ly do trong cau thi khong lap lai.
+    expect(
+      placeHistoryLabel({
+        action: 'transport.place.deactivate',
+        summary: 'Tắt địa điểm — Đối tác chuyển kho',
+        after: { reason: 'Đối tác chuyển kho' },
+      }),
+    ).toBe('Tắt địa điểm — Đối tác chuyển kho');
+    expect(placeHistoryLabel({ action: 'transport.place.activate', after: { reason: '  ' } })).toBe(
+      'Bật lại địa điểm',
+    );
   });
 });

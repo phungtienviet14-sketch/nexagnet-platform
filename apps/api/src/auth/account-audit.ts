@@ -1,4 +1,5 @@
 import type { AuditLog } from '@netviet/shared';
+import type { AppendAuditLogCommand } from '../audit/audit-log.service.js';
 import type { AccountHistoryEntry } from './account.types.js';
 import { sortGrants, type AuthUserRecord } from './user.repository.js';
 
@@ -17,6 +18,16 @@ import { sortGrants, type AuthUserRecord } from './user.repository.js';
  *
  * MAT KHAU TAM KHONG BAO GIO o day — no chi co trong MOT phan hoi HTTP.
  */
+
+/** MOT dong kiem toan cua tai khoan `id` — `before`/`after` di qua lop che o `AuditLogService`. */
+export function userAuditEntry(
+  actor: { readonly username: string },
+  action: string,
+  id: string,
+  change: { readonly before?: unknown; readonly after?: unknown },
+): AppendAuditLogCommand {
+  return { actor: actor.username, action, entityType: 'User', entityId: id, ...change };
+}
 
 export interface AccessSnapshot {
   readonly role: string;
@@ -56,6 +67,32 @@ export function profileSnapshot(record: AuthUserRecord): {
       emailOnFile: record.email !== null,
       phoneOnFile: record.phone !== null,
     },
+  };
+}
+
+/**
+ * Dong `auth.user.profile.update` — `null` khi KHONG gi doi (gui lai dung gia tri cu khong phai mot
+ * lan sua, nhu khoa / mo khoa lap lai).
+ *
+ * `emailOnFile`/`phoneOnFile` khong phan biet "doi so nay sang so khac" voi "khong doi", nen `after`
+ * ghi them CO DOI: `emailChanged`, `contactNumberChanged` (khong phai kieu `changedPhone` — ten ket
+ * thuc bang `phone` bi che). Chi co, khong bao gio gia tri.
+ */
+export function profileChangeAudit(
+  before: AuthUserRecord,
+  after: AuthUserRecord,
+): { readonly before: unknown; readonly after: unknown } | null {
+  const emailChanged = before.email !== after.email;
+  const contactNumberChanged = before.phone !== after.phone;
+  const changed =
+    emailChanged ||
+    contactNumberChanged ||
+    before.name !== after.name ||
+    (before.jobTitle ?? null) !== (after.jobTitle ?? null);
+  if (!changed) return null;
+  return {
+    before: profileSnapshot(before),
+    after: { ...profileSnapshot(after), emailChanged, contactNumberChanged },
   };
 }
 

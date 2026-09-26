@@ -41,28 +41,41 @@ function account(id: string, role: UserRole, disabled = false): AuthUserRecord {
 describe('AssetOwnershipService.setStakeholderAccount — kiem tai khoan (#395)', () => {
   let audit: InMemoryAuditLogRepository;
   let decisions: string[];
+  let details: Record<string, unknown>[];
   let service: AssetOwnershipService;
 
-  beforeEach(() => {
-    audit = new InMemoryAuditLogRepository();
-    decisions = [];
+  const build = (repository: InMemoryAssetOwnershipRepository): AssetOwnershipService => {
     const telemetry = {
       step: async <T>(_name: string, run: () => Promise<T>) => run(),
-      decision: (input: { point: string; outcome: string; reason: string }) => {
+      decision: (input: {
+        point: string;
+        outcome: string;
+        reason: string;
+        detail: Record<string, unknown>;
+      }) => {
         decisions.push(`${input.point}:${input.outcome}:${input.reason}`);
+        details.push(input.detail);
       },
     } as unknown as TelemetryService;
-    service = new AssetOwnershipService(
-      new InMemoryAssetOwnershipRepository(),
+    return new AssetOwnershipService(
+      repository,
       new FleetVehicleOwnershipAdapter(new InMemoryFleetRepository()),
       new AuditLogService(audit),
       telemetry,
       new InMemoryUserRepository([
         account('chu-xe', 'MANAGER'),
+        account('chu-xe-moi', 'MANAGER'),
         account('ke-toan-gop-von', 'ACCOUNTING'),
         account('da-khoa', 'MANAGER', true),
       ]),
     );
+  };
+
+  beforeEach(() => {
+    audit = new InMemoryAuditLogRepository();
+    decisions = [];
+    details = [];
+    service = build(new InMemoryAssetOwnershipRepository());
   });
 
   const holder = () => service.createStakeholder({ kind: 'PERSON', displayName: 'Chủ xe' }, ACTOR);
@@ -113,5 +126,80 @@ describe('AssetOwnershipService.setStakeholderAccount — kiem tai khoan (#395)'
     const error = await service.setStakeholderAccount(two.id, 'chu-xe', ACTOR).catch((e) => e);
     expect(error).toMatchObject({ kind: 'CONFLICT', reason: 'ASSET_STAKEHOLDER_ACCOUNT_TAKEN' });
     expect((error as Error).message).toContain('bên góp vốn khác');
+  });
+
+  /**
+   * Doi tai khoan X -> Y: khung nhin chi co `hasAccount` (true -> true). Truoc #395 dong kiem toan
+   * giong het mot lan khong-doi-gi — khong ai tra loi duoc "ai duoc cap, ai bi mat" pham vi xe.
+   */
+  it('doi tai khoan dang noi sang tai khoan khac: dau vet ghi RO ai mat, ai duoc', async () => {
+    const one = await holder();
+    await service.setStakeholderAccount(one.id, 'chu-xe', ACTOR);
+    await service.setStakeholderAccount(one.id, 'chu-xe-moi', ACTOR);
+    await service.setStakeholderAccount(one.id, null, ACTOR);
+
+    const rows = (await audit.list({ entityId: one.id })).filter((row) =>
+      row.action.includes('account_'),
+    );
+    const byTransition = rows.map((row) => [
+      row.action,
+      (row.before as { authUserId?: unknown } | null)?.authUserId,
+      (row.after as { authUserId?: unknown } | null)?.authUserId,
+    ]);
+    expect(byTransition).toEqual(
+      expect.arrayContaining([
+        ['transport.asset_stakeholder.account_link', null, 'chu-xe'],
+        ['transport.asset_stakeholder.account_link', 'chu-xe', 'chu-xe-moi'],
+        ['transport.asset_stakeholder.account_unlink', 'chu-xe-moi', null],
+      ]),
+    );
+    expect(byTransition).toHaveLength(3);
+    expect(details).toContainEqual({
+      stakeholderId: one.id,
+      authUserId: 'chu-xe-moi',
+      previousAuthUserId: 'chu-xe',
+    });
+  });
+
+  it('noi lai dung tai khoan dang noi: `ACCOUNT_LINK_UNCHANGED`, khong dong dau vet', async () => {
+    const one = await holder();
+    await service.setStakeholderAccount(one.id, 'chu-xe', ACTOR);
+    await service.setStakeholderAccount(one.id, 'chu-xe', ACTOR);
+    const linkRows = (await audit.list({ entityId: one.id })).filter((row) =>
+      row.action.includes('account_'),
+    );
+    expect(linkRows).toHaveLength(1);
+    expect(decisions).toEqual([
+      'stakeholder.account_link:allowed:ACCOUNT_LINKED',
+      'stakeholder.account_link:allowed:ACCOUNT_LINK_UNCHANGED',
+    ]);
+  });
+
+  /**
+   * HAI LAN NOI CUNG LUC cung mot tai khoan vao hai ho so: ca hai qua phep kiem (doc NGOAI khoa),
+   * lan sau chet o unique cua DB. Ban gia: phep kiem luon thay tai khoan con trong.
+   */
+  it('va cham unique cua DB (P2002 tren authUserId) doi thanh `ASSET_STAKEHOLDER_ACCOUNT_TAKEN`', async () => {
+    class RacingRepository extends InMemoryAssetOwnershipRepository {
+      override async findStakeholderIdHoldingAccount(): Promise<string | null> {
+        return null;
+      }
+    }
+    const racing = build(new RacingRepository());
+    const one = await racing.createStakeholder({ kind: 'PERSON', displayName: 'Chủ xe A' }, ACTOR);
+    const two = await racing.createStakeholder({ kind: 'PERSON', displayName: 'Chủ xe B' }, ACTOR);
+    await racing.setStakeholderAccount(one.id, 'chu-xe', ACTOR);
+
+    const error = await racing.setStakeholderAccount(two.id, 'chu-xe', ACTOR).catch((e) => e);
+    expect(error).toBeInstanceOf(TransportDomainError);
+    expect(error).toMatchObject({ kind: 'CONFLICT', reason: 'ASSET_STAKEHOLDER_ACCOUNT_TAKEN' });
+    expect(decisions.at(-1)).toBe(
+      'stakeholder.account_link:denied:ASSET_STAKEHOLDER_ACCOUNT_TAKEN',
+    );
+    expect(details.at(-1)).toMatchObject({ stakeholderId: two.id, race: true });
+    expect((await racing.getStakeholder(two.id)).hasAccount).toBe(false);
+    expect(
+      await audit.list({ entityId: two.id, action: 'transport.asset_stakeholder.account_link' }),
+    ).toEqual([]);
   });
 });

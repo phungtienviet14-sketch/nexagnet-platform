@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { AuditLogService } from '../../audit/audit-log.service.js';
+import { traceWrite } from '../../audit/audit-trail.js';
 import { UserRepository } from '../../auth/user.repository.js';
 import type { DecisionOutcome } from '../../observability/decision-vocabulary.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
@@ -66,15 +67,7 @@ export class DriverAccountLinkService {
       this.decide('allowed', 'ACCOUNT_LINK_UNCHANGED', { driverId, linked: false });
       return before;
     }
-    const after = await this.write(driverId, null);
-    await this.audit.append({
-      actor,
-      action: 'transport.driver.account_unlink',
-      entityType: 'TransportDriver',
-      entityId: driverId,
-      before,
-      after,
-    });
+    const after = await this.write(before, null, actor);
     this.decide('allowed', 'ACCOUNT_UNLINKED', { driverId });
     return after;
   }
@@ -99,15 +92,7 @@ export class DriverAccountLinkService {
       return before;
     }
 
-    const after = await this.write(driverId, authUserId);
-    await this.audit.append({
-      actor,
-      action: 'transport.driver.account_link',
-      entityType: 'TransportDriver',
-      entityId: driverId,
-      before,
-      after,
-    });
+    const after = await this.write(before, authUserId, actor);
     this.decide('allowed', 'ACCOUNT_LINKED', {
       driverId,
       authUserId,
@@ -116,10 +101,31 @@ export class DriverAccountLinkService {
     return after;
   }
 
-  /** Ghi qua KHO (kho giu truong nay cho may gieo, fixture va chinh dich vu nay). */
-  private async write(driverId: string, authUserId: string | null): Promise<Driver> {
+  /**
+   * Ghi qua KHO (kho giu truong nay cho may gieo, fixture va chinh dich vu nay), dau vet
+   * `transport.driver.account_link` / `account_unlink` trong CUNG giao dich (`audit-trail.ts`).
+   */
+  private async write(before: Driver, authUserId: string | null, actor: string): Promise<Driver> {
+    const driverId = before.id;
     try {
-      const after = await this.fleet.updateDriver(driverId, { authUserId });
+      const after = await traceWrite(
+        this.audit,
+        (trail) => this.fleet.updateDriver(driverId, { authUserId }, trail),
+        (driver) => driver,
+        (driver) => [
+          {
+            actor,
+            action:
+              authUserId === null
+                ? 'transport.driver.account_unlink'
+                : 'transport.driver.account_link',
+            entityType: 'TransportDriver',
+            entityId: driverId,
+            before,
+            after: driver,
+          },
+        ],
+      );
       if (!after) throw driverNotFound();
       return after;
     } catch (error) {

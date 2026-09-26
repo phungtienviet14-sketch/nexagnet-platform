@@ -110,6 +110,37 @@ export function createRefreshGate(
 }
 
 /**
+ * O NHO QUERY THUOC VE MOT DANH TINH. Ket qua da doc (vd cau tra loi "co phai ben gop von khong", giu
+ * `staleTime: Infinity`) chi dung cho nguoi da doc no: phien het (`401`) hay mot nguoi KHAC dang nhap
+ * tren cung tab thi phai xoa — khong chi khi tu bam "Đăng xuất". `previous === null` = chua ai.
+ */
+export const cacheBelongsToAnotherIdentity = (
+  previous: string | null,
+  next: string | null,
+): boolean => previous !== null && previous !== next;
+
+export interface SignOutSteps {
+  /** Danh dau DANG XUAT CHU DONG — truoc khi goi may chu, de moi `401` sau do la cua chinh lan nay. */
+  readonly begin: () => void;
+  readonly logout: () => Promise<void>;
+  /** Chua dang xuat duoc: phien van song, nen mot `401` sau day lai la tin hieu THAT. */
+  readonly abort: () => void;
+  readonly finish: () => void;
+}
+
+/** Trinh tu dang xuat cua `AuthGate` — tach ra de khoa THU TU bang bai kiem, khong can dung React. */
+export async function runSignOut(steps: SignOutSteps): Promise<void> {
+  steps.begin();
+  try {
+    await steps.logout();
+  } catch (error) {
+    steps.abort();
+    throw error;
+  }
+  steps.finish();
+}
+
+/**
  * Tap quyen tu `/auth/me` → mot khoa on dinh. Hai lan doc cung noi dung phai cho CUNG mot tap (cung
  * danh tinh doi tuong), neu khong moi lan lam tuoi `/auth/me` pha memo cua moi man hinh.
  */
@@ -140,17 +171,34 @@ export interface PasswordChangeDraft {
   readonly confirm: string;
 }
 
-/** Nhung dieu con sai, theo thu tu o nhap tren man hinh. Rong = gui duoc. */
-export function passwordChangeProblems(draft: PasswordChangeDraft): readonly string[] {
-  const problems: string[] = [];
-  if (draft.current.length === 0) problems.push('Nhập mật khẩu tạm đang dùng.');
-  if (draft.next.length < PASSWORD_MIN_LENGTH) {
-    problems.push(`Mật khẩu mới cần ít nhất ${PASSWORD_MIN_LENGTH} ký tự.`);
-  } else if (draft.next.length > PASSWORD_MAX_LENGTH) {
-    problems.push(`Mật khẩu mới dài quá ${PASSWORD_MAX_LENGTH} ký tự.`);
-  } else if (draft.next === draft.current) {
-    problems.push('Mật khẩu mới phải khác mật khẩu tạm.');
-  }
-  if (draft.confirm !== draft.next) problems.push('Hai lần nhập mật khẩu mới chưa khớp nhau.');
-  return problems;
+export interface PasswordChangeProblem {
+  /** O nhap phai danh dau `aria-invalid` — trinh doc man hinh noi o NAO sai, khong chi noi co sai. */
+  readonly field: keyof PasswordChangeDraft;
+  readonly message: string;
 }
+
+/** Nhung dieu con sai KEM o nhap cua no, theo thu tu o nhap tren man hinh. Rong = gui duoc. */
+export function passwordChangeIssues(draft: PasswordChangeDraft): readonly PasswordChangeProblem[] {
+  const issues: PasswordChangeProblem[] = [];
+  if (draft.current.length === 0) {
+    issues.push({ field: 'current', message: 'Nhập mật khẩu tạm đang dùng.' });
+  }
+  if (draft.next.length < PASSWORD_MIN_LENGTH) {
+    issues.push({
+      field: 'next',
+      message: `Mật khẩu mới cần ít nhất ${PASSWORD_MIN_LENGTH} ký tự.`,
+    });
+  } else if (draft.next.length > PASSWORD_MAX_LENGTH) {
+    issues.push({ field: 'next', message: `Mật khẩu mới dài quá ${PASSWORD_MAX_LENGTH} ký tự.` });
+  } else if (draft.next === draft.current) {
+    issues.push({ field: 'next', message: 'Mật khẩu mới phải khác mật khẩu tạm.' });
+  }
+  if (draft.confirm !== draft.next) {
+    issues.push({ field: 'confirm', message: 'Hai lần nhập mật khẩu mới chưa khớp nhau.' });
+  }
+  return issues;
+}
+
+/** Nhung dieu con sai, theo thu tu o nhap tren man hinh. Rong = gui duoc. */
+export const passwordChangeProblems = (draft: PasswordChangeDraft): readonly string[] =>
+  passwordChangeIssues(draft).map((issue) => issue.message);

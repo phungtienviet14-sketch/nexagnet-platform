@@ -399,6 +399,32 @@ describe('khoa / mo khoa', () => {
       expect.objectContaining({ action: 'auth.user.enable', after: { disabledAt: null } }),
     );
     expect(h.telemetry.step).toHaveBeenCalledWith('account.status.change', expect.any(Function));
+    // Buoc chuyen trang thai vao trace — DUNG hai lan (lan khoa lap lai khong doi gi).
+    expect(h.telemetry.stateChange.mock.calls).toEqual([
+      [{ entity: 'User', entityId: ACCOUNTANT.id, from: 'ACTIVE', to: 'DISABLED' }],
+      [{ entity: 'User', entityId: ACCOUNTANT.id, from: 'DISABLED', to: 'ACTIVE' }],
+    ]);
+  });
+
+  it('tai khoan khong ton tai: quyet dinh tu choi ghi DUNG ma tai khoan da tim', async () => {
+    const h = accountHarness([DIRECTOR]);
+    const attempts = [
+      () => h.service.disableUser(actor, 'khong-co', { confirmed: true }),
+      () => h.service.enableUser(actor, 'khong-co', { confirmed: true }),
+      () => h.service.resetPassword(actor, 'khong-co', {}),
+      () => h.service.updateProfile(actor, 'khong-co', { name: 'Ai đó' }),
+    ];
+    for (const attempt of attempts) {
+      expect(await reasonOf(attempt())).toBe('ACCOUNT_NOT_FOUND');
+    }
+    const denials = h.telemetry.decision.mock.calls.map(([call]) => call);
+    expect(denials).toHaveLength(attempts.length);
+    for (const denial of denials) {
+      expect(denial).toMatchObject({
+        reason: 'ACCOUNT_NOT_FOUND',
+        detail: { userId: 'khong-co' },
+      });
+    }
   });
 
   it('dat lai mat khau tai khoan dang khoa KHONG mo khoa (khoi phuc = mo khoa + dat lai)', async () => {
@@ -508,9 +534,43 @@ describe('sua thong tin', () => {
         },
         after: {
           profile: { name: MANAGER.name, jobTitle: null, emailOnFile: false, phoneOnFile: true },
+          emailChanged: false,
+          contactNumberChanged: true,
         },
       }),
     );
     expect(JSON.stringify(h.audit.append.mock.calls)).not.toContain('0900000002');
+  });
+
+  it('doi so nay sang so khac / email khac: kiem toan noi CO DOI; gui lai dung gia tri cu: khong ghi', async () => {
+    const h = accountHarness([
+      DIRECTOR,
+      { ...MANAGER, phone: '0900000003', email: 'dh@example.test' },
+    ]);
+    await h.service.updateProfile(actor, MANAGER.id, {
+      phone: '0900000004',
+      email: 'dh.moi@example.test',
+    });
+    const [[row]] = h.audit.append.mock.calls as [[{ before: unknown; after: unknown }]];
+    // Chi co/khong thi truoc == sau — co doi moi cho nguoi doc biet lien lac da bi thay.
+    expect(row.before).toEqual({
+      profile: { name: MANAGER.name, jobTitle: null, emailOnFile: true, phoneOnFile: true },
+    });
+    expect(row.after).toEqual({
+      profile: { name: MANAGER.name, jobTitle: null, emailOnFile: true, phoneOnFile: true },
+      emailChanged: true,
+      contactNumberChanged: true,
+    });
+    expect(JSON.stringify(row)).not.toMatch(/0900000004|dh\.moi@example\.test/);
+    expect(h.telemetry.decision).toHaveBeenCalledTimes(1);
+
+    // PATCH khong doi gi: khong dong kiem toan rong "Sửa thông tin tài khoản", khong quyet dinh.
+    await h.service.updateProfile(actor, MANAGER.id, {
+      name: MANAGER.name,
+      phone: '0900000004',
+      email: 'DH.MOI@example.test',
+    });
+    expect(h.audit.append).toHaveBeenCalledTimes(1);
+    expect(h.telemetry.decision).toHaveBeenCalledTimes(1);
   });
 });

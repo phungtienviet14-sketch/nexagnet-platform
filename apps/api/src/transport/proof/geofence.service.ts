@@ -13,7 +13,12 @@ import {
   type Geofence,
   type GeofenceSubjectKind,
 } from './geofence.repository.js';
-import { PlaceWriteStore, placeStorageConflict, type PlaceWriteTx } from './place-write.store.js';
+import {
+  PlaceWriteStore,
+  placeStorageConflict,
+  runTraced,
+  type PlaceWriteTx,
+} from './place-write.store.js';
 import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
 
 export interface RegisterGeofenceCommand {
@@ -121,30 +126,34 @@ export class GeofenceService {
     };
     if (!this.store) return this.geofences.register(input);
 
-    const fence = await this.store
-      .run(async (tx) => {
+    // Dau vet trong CUNG giao dich voi lan ghi (`runTraced`, `#395`).
+    return runTraced(
+      this.store,
+      this.audit,
+      async (tx) => {
         await this.requireNameFree(tx, command);
         return tx.geofences.register(input);
-      })
-      .catch((error: unknown) => {
-        throw placeStorageConflict(error) ?? error;
-      });
-    await this.audit?.append({
-      actor: command.recordedBy,
-      action: 'transport.geofence.register',
-      entityType: 'TransportGeofence',
-      entityId: fence.id,
-      before: null,
-      after: {
-        label: fence.label,
-        kind: fence.subjectKind,
-        subjectId: fence.subjectId,
-        point: { latitude: fence.latitude, longitude: fence.longitude },
-        radiusMetres: fence.radiusMetres,
-        status: fence.status,
       },
+      (fence) => [
+        {
+          actor: command.recordedBy,
+          action: 'transport.geofence.register',
+          entityType: 'TransportGeofence',
+          entityId: fence.id,
+          before: null,
+          after: {
+            label: fence.label,
+            kind: fence.subjectKind,
+            subjectId: fence.subjectId,
+            point: { latitude: fence.latitude, longitude: fence.longitude },
+            radiusMetres: fence.radiusMetres,
+            status: fence.status,
+          },
+        },
+      ],
+    ).catch((error: unknown) => {
+      throw placeStorageConflict(error) ?? error;
     });
-    return fence;
   }
 
   private async requireNameFree(tx: PlaceWriteTx, command: RegisterGeofenceCommand) {

@@ -1,14 +1,16 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import type { TemporaryCredential } from '../../../lib/auth';
 import { StatusBadge } from '../components/primitives';
 import { ConfirmAction, LoadingState } from '../components/SectionState';
 import {
   ACCOUNT_STATUS_LABEL,
   ACCOUNT_STATUS_TONE,
+  accountHistoryLabel,
   accountStatusOf,
+  ADMIN_REASON_MAX_LENGTH,
   driverCandidates,
   formatDateTime,
   permissionLabelLookup,
@@ -18,6 +20,7 @@ import {
   stakeholderCandidates,
 } from './accounts-model';
 import { accountLinksApi, accountsApi } from './admin-api';
+import { adminErrorMessage } from './admin-reasons';
 import {
   useAccountAccess,
   useAccountHistory,
@@ -200,12 +203,18 @@ function LinksPanel({
     },
   });
 
+  /* Mo hop go noi: loi cua lan truoc (noi hay go) khong duoc treo lai trong hop moi. */
+  const startUnlink = (kind: 'DRIVER' | 'STAKEHOLDER') => {
+    link.reset();
+    setUnlinking(kind);
+  };
+
   if (links.isPending) return <LoadingState label="Đang đọc hồ sơ đã nối…" />;
   if (links.error !== null) {
     return (
       <p className="tx-note">
-        Chưa đọc được hồ sơ đã nối ({links.error.message}). Liên kết lái xe vẫn xem được ở Đội xe &
-        lái xe.
+        Chưa đọc được hồ sơ đã nối ({adminErrorMessage(links.error)}). Liên kết lái xe vẫn xem được
+        ở Đội xe & lái xe.
       </p>
     );
   }
@@ -233,7 +242,7 @@ function LinksPanel({
             <button
               type="button"
               className="tx-btn tx-btn--ghost tx-btn--small"
-              onClick={() => setUnlinking('DRIVER')}
+              onClick={() => startUnlink('DRIVER')}
             >
               Gỡ nối
             </button>
@@ -248,7 +257,7 @@ function LinksPanel({
             <button
               type="button"
               className="tx-btn tx-btn--ghost tx-btn--small"
-              onClick={() => setUnlinking('STAKEHOLDER')}
+              onClick={() => startUnlink('STAKEHOLDER')}
             >
               Gỡ nối
             </button>
@@ -306,7 +315,7 @@ function LinksPanel({
           </button>
         </div>
       ) : null}
-      <AdminError error={link.error} />
+      {unlinking === null ? <AdminError error={link.error} /> : null}
       <ConfirmAction
         open={unlinking !== null}
         title="Gỡ nối hồ sơ?"
@@ -318,6 +327,7 @@ function LinksPanel({
         confirmLabel="Gỡ nối"
         isDestructive
         isBusy={link.isPending}
+        error={<AdminError error={link.error} />}
         onCancel={() => setUnlinking(null)}
         onConfirm={() => {
           const targetId = unlinking === 'DRIVER' ? driver?.id : stakeholder?.id;
@@ -341,7 +351,7 @@ function HistoryList({ userId }: { readonly userId: string }) {
         <li key={`${entry.at}-${entry.action}`}>
           <time dateTime={entry.at}>{formatDateTime(entry.at)}</time>
           <span className="tx-admin-history__who">{entry.actor}</span>
-          <span>{entry.summary}</span>
+          <span>{accountHistoryLabel(entry)}</span>
         </li>
       ))}
     </ol>
@@ -362,6 +372,7 @@ export function AccountDetail({
   readonly onClose: () => void;
 }) {
   const titleId = useId();
+  const heading = useRef<HTMLHeadingElement>(null);
   const [mode, setMode] = useState<'VIEW' | 'PROFILE' | 'ACCESS'>('VIEW');
   const [dialog, setDialog] = useState<Dialog>(null);
   const [reason, setReason] = useState('');
@@ -375,6 +386,12 @@ export function AccountDetail({
   const isSelf = currentUserId === account.id;
   const isProtected = account.isProtected === true;
   const isEditable = !isSelf && !isProtected;
+
+  /*
+   * Mo chi tiet = tieu diem len TIEU DE chi tiet (nhu trinh tao, trinh sua dia diem). Tren man hep
+   * danh sach bi an khi chi tiet mo, nen nut vua bam bien mat — de nguyen thi tieu diem roi ve `<body>`.
+   */
+  useEffect(() => heading.current?.focus(), []);
 
   const changed = (message: string) => {
     setNotice(message);
@@ -409,12 +426,22 @@ export function AccountDetail({
     },
   });
 
+  /* Mo MOT hop xac nhan: loi cu cua ca ba viec bi xoa, hop moi chi noi ve lan bam nay. */
+  const openDialog = (next: Exclude<Dialog, null>) => {
+    reset.reset();
+    disable.reset();
+    enable.reset();
+    setDialog(next);
+  };
+
   return (
     <article className="tx-admin-sheet" aria-labelledby={titleId} data-testid="account-detail">
       <header className="tx-admin-sheet__head">
         <div>
           <p className="tx-admin-eyebrow">{presetLabelOf(account.role, presetsOf(catalog))}</p>
-          <h2 id={titleId}>{account.name}</h2>
+          <h2 id={titleId} ref={heading} tabIndex={-1}>
+            {account.name}
+          </h2>
           <p className="tx-admin-mono">{account.username}</p>
         </div>
         <div className="tx-admin-sheet__badges">
@@ -546,13 +573,13 @@ export function AccountDetail({
           <div className="tx-admin-actions">
             {account.disabledAt == null ? (
               <>
-                <button type="button" className="tx-btn" onClick={() => setDialog('RESET')}>
+                <button type="button" className="tx-btn" onClick={() => openDialog('RESET')}>
                   Đặt lại mật khẩu
                 </button>
                 <button
                   type="button"
                   className="tx-btn tx-btn--stop"
-                  onClick={() => setDialog('DISABLE')}
+                  onClick={() => openDialog('DISABLE')}
                 >
                   Khoá tài khoản
                 </button>
@@ -561,13 +588,12 @@ export function AccountDetail({
               <button
                 type="button"
                 className="tx-btn tx-btn--go"
-                onClick={() => setDialog('ENABLE')}
+                onClick={() => openDialog('ENABLE')}
               >
                 Mở khoá tài khoản
               </button>
             )}
           </div>
-          <AdminError error={reset.error ?? disable.error ?? enable.error} labelOf={labelOf} />
         </section>
       ) : null}
 
@@ -589,6 +615,7 @@ export function AccountDetail({
         detail="Mọi phiên đăng nhập của người này kết thúc ngay. Hệ thống tạo một mật khẩu tạm dùng trong 72 giờ; lần đầu đăng nhập người này phải đặt mật khẩu riêng."
         confirmLabel="Đặt lại mật khẩu"
         isBusy={reset.isPending}
+        error={<AdminError error={reset.error} labelOf={labelOf} />}
         onCancel={() => setDialog(null)}
         onConfirm={() => reset.mutate()}
       />
@@ -600,8 +627,10 @@ export function AccountDetail({
         reasonLabel="Lý do khoá (ghi vào nhật ký)"
         reason={reason}
         onReasonChange={setReason}
+        reasonMaxLength={ADMIN_REASON_MAX_LENGTH}
         isDestructive
         isBusy={disable.isPending}
+        error={<AdminError error={disable.error} labelOf={labelOf} />}
         onCancel={() => setDialog(null)}
         onConfirm={() => disable.mutate()}
       />
@@ -611,6 +640,7 @@ export function AccountDetail({
         detail="Người này đăng nhập lại được bằng mật khẩu cũ. Nếu họ quên mật khẩu, đặt lại mật khẩu sau khi mở khoá."
         confirmLabel="Mở khoá"
         isBusy={enable.isPending}
+        error={<AdminError error={enable.error} labelOf={labelOf} />}
         onCancel={() => setDialog(null)}
         onConfirm={() => enable.mutate()}
       />

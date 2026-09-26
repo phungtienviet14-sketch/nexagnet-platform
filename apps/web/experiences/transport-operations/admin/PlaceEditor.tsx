@@ -12,7 +12,7 @@ import {
   searchOutcomeOf,
 } from '../workspace/place-lookup';
 import { placesAdminApi } from './admin-api';
-import { openWorkOf } from './admin-reasons';
+import { adminErrorMessage, openWorkOf } from './admin-reasons';
 import { useOwnerCounterparties, useOwnerCustomers } from './admin-hooks';
 import type { OpenWorkDetail, PlaceAdminView } from './admin-types';
 import { AdminError } from './AdminBits';
@@ -185,7 +185,8 @@ export function PlaceEditor({
       setSearch({
         status: 'DONE',
         results: [],
-        message: error instanceof Error ? error.message : 'Không tìm được lúc này.',
+        // Cau ky thuat (gioi han toc do, mat mang) khong len man hinh — cung luat voi moi loi quan tri.
+        message: adminErrorMessage(error),
         isProblem: true,
         attribution: null,
       });

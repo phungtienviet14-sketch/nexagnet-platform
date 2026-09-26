@@ -8,7 +8,7 @@ import {
   STAKEHOLDER_SCOPE_ACTIONS,
   TRANSPORT_ACTIONS,
   actionsForRole,
-  roleCanPerform,
+  presetIncludes,
   type TransportAction,
 } from '../transport-actions.js';
 import {
@@ -80,10 +80,10 @@ describe('quy tac quyen rieng van tai — cac tap co dinh (#395)', () => {
   /** Vai khoi diem Ke toan tu no da SACH tach nhiem: co ba quyet dinh, khong mot thao tac sua. */
   it('vai khoi diem Ke toan co moi quyet dinh tien va khong mot thao tac sua can cu', () => {
     for (const action of FINANCIAL_DECISION_ACTIONS) {
-      expect(roleCanPerform('ACCOUNTING', action), action).toBe(true);
+      expect(presetIncludes('ACCOUNTING', action), action).toBe(true);
     }
     for (const action of EVIDENCE_MUTATION_ACTIONS) {
-      expect(roleCanPerform('ACCOUNTING', action), action).toBe(false);
+      expect(presetIncludes('ACCOUNTING', action), action).toBe(false);
     }
   });
 
@@ -103,7 +103,7 @@ describe('tap quyen hieu luc', () => {
     }
     for (const action of TRANSPORT_ACTIONS) {
       expect(canPerformTransportAction({ role }, action), `${role} ${action}`).toBe(
-        roleCanPerform(role, action),
+        presetIncludes(role, action),
       );
     }
   });

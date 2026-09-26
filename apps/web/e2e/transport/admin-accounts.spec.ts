@@ -51,7 +51,7 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
     await page.getByLabel('Họ tên').fill('Trần Văn An');
     // Ten dang nhap do MAY CHU goi y tu ho ten — sua duoc, nhung khong phai go tay.
     // `exact`: o tim cua danh sach ben trai cung nhac "tên đăng nhập, chức danh, số điện thoại".
-    await expect(page.getByLabel('Tên đăng nhập', { exact: true })).toHaveValue('an.van.tran');
+    await expect(page.getByLabel('Tên đăng nhập', { exact: true })).toHaveValue('tran.van.an');
     await page.getByLabel('Số điện thoại', { exact: true }).fill('0912345678');
     await page.getByLabel('Chức danh', { exact: true }).fill('Điều phối viên');
     // Quay lai doi Điều hành ↔ Kế toán (cung tien to): goi y ten dang nhap KHONG bi xoa.
@@ -59,7 +59,7 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
       await page.getByRole('button', { name: 'Quay lại' }).click();
       await page.getByRole('radio', { name: preset }).check();
       await page.getByRole('button', { name: 'Tiếp tục' }).click();
-      await expect(page.getByLabel('Tên đăng nhập', { exact: true })).toHaveValue('an.van.tran');
+      await expect(page.getByLabel('Tên đăng nhập', { exact: true })).toHaveValue('tran.van.an');
     }
     await page.getByRole('button', { name: 'Tiếp tục' }).click();
     await expect(page.getByText('Tên đăng nhập cần từ 3 đến 64 ký tự.')).toHaveCount(0);
@@ -89,14 +89,14 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
       /^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/,
     );
     await expect(card.getByRole('textbox', { name: 'Lời nhắn để gửi (Zalo, SMS)' })).toHaveValue(
-      /Tên đăng nhập: an\.van\.tran[\s\S]*Mật khẩu tạm: [a-z2-9-]{19}[\s\S]*đặt mật khẩu riêng/,
+      /Tên đăng nhập: tran\.van\.an[\s\S]*Mật khẩu tạm: [a-z2-9-]{19}[\s\S]*đặt mật khẩu riêng/,
     );
 
     const created = lastRequest(world, 'POST', '/settings/users')?.body as Record<string, unknown>;
     // KHONG co mat khau: may chu tao mat khau tam. Bo quyen TOI GIAN — dung cac dong da chon.
     expect(created).not.toHaveProperty('password');
     expect(created).toMatchObject({
-      username: 'an.van.tran',
+      username: 'tran.van.an',
       name: 'Trần Văn An',
       role: 'MANAGER',
     });
@@ -112,7 +112,7 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
 
     await card.getByRole('button', { name: 'Đã gửi xong, đóng thẻ' }).click();
     await expect(page.getByTestId('account-detail')).toBeVisible();
-    await expect(page).toHaveURL(/selected=an\.van\.tran/);
+    await expect(page).toHaveURL(/selected=tran\.van\.an/);
     // "Người này làm được gì?" la cau cua MAY CHU, khong phai man hinh tu doan.
     await expect(page.getByTestId('access-sentences')).toContainText('Đội xe & lái xe:');
     await expect(page.getByTestId('access-sentences')).toContainText('Không duyệt được tiền');
@@ -130,6 +130,20 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
 
     await detail.getByRole('button', { name: 'Đặt lại mật khẩu' }).click();
     const resetDialog = page.getByRole('dialog', { name: 'Đặt lại mật khẩu cho Kế toán Mai?' });
+    // Lan dau may chu tu choi (than THAT cua ThrottlerGuard, gioi han 5 lan/phut): loi hien TRONG hop
+    // thoai dang phu kin trang — bang tieng Viet, khong phai "ThrottlerException".
+    const resetPath = `/settings/users/${ACCOUNTANT.id}/credentials/reset`;
+    world.failNext = {
+      method: 'POST',
+      path: resetPath,
+      status: 429,
+      body: { statusCode: 429, message: 'ThrottlerException: Too Many Requests' },
+    };
+    await resetDialog.getByRole('button', { name: 'Đặt lại mật khẩu' }).click();
+    await expect(resetDialog.getByRole('alert')).toHaveText(
+      'Bạn thao tác quá nhanh — chờ khoảng một phút rồi thử lại.',
+    );
+    await expect(resetDialog).not.toContainText('ThrottlerException');
     await resetDialog.getByRole('button', { name: 'Đặt lại mật khẩu' }).click();
     await expect(page.getByTestId('temporary-password')).toHaveText(
       /^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/,
@@ -145,7 +159,12 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
     const confirmLock = lockDialog.getByRole('button', { name: 'Khoá tài khoản' });
     // Ly do BAT BUOC: chua ghi thi chua xac nhan duoc.
     await expect(confirmLock).toBeDisabled();
-    await lockDialog.getByLabel('Lý do khoá (ghi vào nhật ký)').fill('Nghỉ việc');
+    // Hop moi KHONG mang loi cua hop truoc (lan dat lai bi tu choi o tren).
+    await expect(lockDialog.getByRole('alert')).toHaveCount(0);
+    const lockReason = lockDialog.getByLabel('Lý do khoá (ghi vào nhật ký)');
+    // Trung `max(500)` cua may chu — khong go qua duoc roi moi bi `400`.
+    await expect(lockReason).toHaveAttribute('maxlength', '500');
+    await lockReason.fill('Nghỉ việc');
     await confirmLock.click();
     await expect(detail.getByText('Đã khoá').first()).toBeVisible();
     expect(lastRequest(world, 'POST', `/settings/users/${ACCOUNTANT.id}/disable`)?.body).toEqual({
@@ -163,8 +182,10 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
     await detail.getByRole('button', { name: 'Lịch sử thay đổi' }).click();
     const history = detail.locator('.tx-admin-history');
     await expect(history).toContainText('Mở khoá tài khoản');
+    // Ly do "ghi vào nhật ký" DOC LAI duoc: may chu gia tra CUNG hinh dang may chu that
+    // (`summary` "Khoá tài khoản", ly do o `after.reason`) — man hinh ghep chung.
     await expect(history).toContainText('Khoá tài khoản — Nghỉ việc');
-    await expect(history).toContainText('Đặt lại mật khẩu');
+    await expect(history).toContainText('Cấp mật khẩu tạm mới');
 
     // Lai xe da noi ho so: man hinh noi TEN ho so va xe dang phu trach.
     await page.getByRole('button', { name: /Nguyễn Văn Bình/ }).click();
@@ -369,9 +390,14 @@ test.describe('Mật khẩu tạm — đổi trước khi làm việc', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
     await shoot(page, 'accounts-list-390');
 
-    await page.getByRole('button', { name: /Kế toán Mai/ }).click();
+    const row = page.getByRole('button', { name: /Kế toán Mai/ });
+    // Ban phim: danh sach bi AN khi chi tiet mo — tieu diem phai sang tieu de chi tiet, khong roi
+    // ve `<body>`; "Đóng" tra tieu diem ve DUNG dong da mo.
+    await row.focus();
+    await page.keyboard.press('Enter');
     const detail = page.getByTestId('account-detail');
     await expect(detail).toBeVisible();
+    await expect(detail.getByRole('heading', { name: 'Kế toán Mai' })).toBeFocused();
     // Tren dien thoai chi tiet THAY danh sach; "Đóng" ve danh sach.
     await expect(page.getByRole('button', { name: /Nguyễn Văn Bình/ })).toBeHidden();
     await expect(page.getByTestId('access-sentences')).toBeVisible();
@@ -379,5 +405,6 @@ test.describe('Mật khẩu tạm — đổi trước khi làm việc', () => {
     await shoot(page, 'accounts-detail-390');
     await detail.getByRole('button', { name: /Đóng/ }).click();
     await expect(page.getByRole('button', { name: /Nguyễn Văn Bình/ })).toBeVisible();
+    await expect(row).toBeFocused();
   });
 });

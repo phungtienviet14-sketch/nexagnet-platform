@@ -1,12 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { VIETNAM_DATE_TIME } from '../../lib/account-format';
 import {
+  cacheBelongsToAnotherIdentity,
   createRefreshGate,
   FORBIDDEN_IS_ANSWER_META,
   isForbiddenAnswer,
+  passwordChangeIssues,
   passwordChangeProblems,
   passwordExpiryLabel,
   permissionsKey,
   reactToFailure,
+  runSignOut,
   SESSION_ENDED_NOTICE,
   sessionSignalOf,
   type FailureContext,
@@ -92,6 +96,12 @@ describe('han mat khau tam — gio Viet Nam, cung bo dinh dang voi the mat khau 
     const label = passwordExpiryLabel('2026-09-25T17:30:00.000Z');
     expect(label).toContain('00:30');
     expect(label).toContain('26/09/2026');
+    // Chuoi gio o tren KHONG do duoc gi tren may chay o UTC+7 (bo `timeZone` van ra cung chuoi):
+    // mui gio phai doc tu CHINH bo dinh dang. ICU co the doi ten chuan (`Asia/Saigon`), nen so voi
+    // ten ICU tra cho `Asia/Ho_Chi_Minh` — khac mui gio mac dinh cua may (vd `Asia/Bangkok`, `UTC`).
+    const vietnam = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh' });
+    expect(VIETNAM_DATE_TIME.resolvedOptions().timeZone).toBe(vietnam.resolvedOptions().timeZone);
+    expect(label).toBe(VIETNAM_DATE_TIME.format(new Date('2026-09-25T17:30:00.000Z')));
   });
 
   it('khong co han, hoac han hong: khong hien dong do', () => {
@@ -119,5 +129,88 @@ describe('man doi mat khau bat buoc', () => {
     expect(passwordChangeProblems({ current: same, next: same, confirm: same })).toEqual([
       'Mật khẩu mới phải khác mật khẩu tạm.',
     ]);
+  });
+
+  it('moi dieu sai noi RO o nhap cua no — de danh dau `aria-invalid` dung o', () => {
+    expect(
+      passwordChangeIssues({ current: '', next: 'ngan', confirm: 'khac' }).map(
+        (issue) => issue.field,
+      ),
+    ).toEqual(['current', 'next', 'confirm']);
+    const same = current.repeat(2);
+    expect(passwordChangeIssues({ current: same, next: same, confirm: same })).toEqual([
+      { field: 'next', message: 'Mật khẩu mới phải khác mật khẩu tạm.' },
+    ]);
+  });
+});
+
+describe('o nho query thuoc ve MOT danh tinh (#395)', () => {
+  it('phien het (401) hay nguoi KHAC dang nhap tren cung tab → xoa; cung nguoi → giu', () => {
+    expect(cacheBelongsToAnotherIdentity('u-an', null)).toBe(true);
+    expect(cacheBelongsToAnotherIdentity('u-an', 'u-binh')).toBe(true);
+    expect(cacheBelongsToAnotherIdentity('u-an', 'u-an')).toBe(false);
+    // Chua ai so huu (lan dau tai trang) → khong co gi de xoa.
+    expect(cacheBelongsToAnotherIdentity(null, 'u-an')).toBe(false);
+    expect(cacheBelongsToAnotherIdentity(null, null)).toBe(false);
+  });
+});
+
+describe('trinh tu dang xuat cua AuthGate', () => {
+  const recorder = (logout: () => Promise<void>) => {
+    const calls: string[] = [];
+    let signingOutWhenCalled: boolean | null = null;
+    let signingOut = false;
+    const steps = {
+      begin: () => {
+        calls.push('begin');
+        signingOut = true;
+      },
+      logout: () => {
+        calls.push('logout');
+        signingOutWhenCalled = signingOut;
+        return logout();
+      },
+      abort: () => {
+        calls.push('abort');
+        signingOut = false;
+      },
+      finish: () => calls.push('finish'),
+    };
+    return {
+      steps,
+      calls,
+      signingOut: () => signingOut,
+      signingOutWhenCalled: () => signingOutWhenCalled,
+    };
+  };
+
+  it('danh dau "đang đăng xuất" TRUOC khi goi may chu — moi 401 sau do la cua chinh lan nay', async () => {
+    const run = recorder(() => Promise.resolve());
+    await runSignOut(run.steps);
+    expect(run.signingOutWhenCalled()).toBe(true);
+    expect(run.calls).toEqual(['begin', 'logout', 'finish']);
+  });
+
+  it('may chu tu choi: go dau "đang đăng xuất", KHONG ve dang nhap, va nem loi len nguoi goi', async () => {
+    const failure = new Error('Mất mạng');
+    const run = recorder(() => Promise.reject(failure));
+    await expect(runSignOut(run.steps)).rejects.toBe(failure);
+    expect(run.calls).toEqual(['begin', 'logout', 'abort']);
+    expect(run.signingOut()).toBe(false);
+  });
+
+  it('khong goi `finish` truoc khi may chu tra loi', async () => {
+    let release: () => void = () => undefined;
+    const run = recorder(
+      () =>
+        new Promise<void>((resolveLogout) => {
+          release = resolveLogout;
+        }),
+    );
+    const pending = runSignOut(run.steps);
+    await vi.waitFor(() => expect(run.calls).toEqual(['begin', 'logout']));
+    release();
+    await pending;
+    expect(run.calls).toEqual(['begin', 'logout', 'finish']);
   });
 });

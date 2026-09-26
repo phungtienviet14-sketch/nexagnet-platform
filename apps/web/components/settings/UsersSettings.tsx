@@ -2,7 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
-import { relativeLastLogin } from '../../lib/account-format';
+import {
+  customGrantCount,
+  isNeverLoggedIn,
+  relativeLastLogin,
+  roleChangeNeedsConfirmation,
+} from '../../lib/account-format';
 import {
   authApi,
   type AuthRole,
@@ -12,6 +17,7 @@ import {
   type TemporaryCredential,
 } from '../../lib/auth';
 import { useAuth } from '../auth/AuthGate';
+import { PASSWORD_MIN_LENGTH } from '../auth/session-signals';
 import { SettingsCredentialCard } from './SettingsCredentialCard';
 import {
   SettingsActionRow,
@@ -38,7 +44,8 @@ type Mode =
   | { kind: 'manage'; userId: string }
   | { kind: 'reset'; userId: string }
   | { kind: 'disable'; userId: string }
-  | { kind: 'promote'; userId: string };
+  | { kind: 'promote'; userId: string }
+  | { kind: 'role'; userId: string; role: AuthRole };
 
 /** Mat khau tam vua cap — chi giu trong bo nho cua man hinh cho toi khi dong the. */
 interface IssuedCredential {
@@ -50,7 +57,9 @@ interface IssuedCredential {
 /** Tao tai khoan vai Quan tri doi mot lan xac nhan rieng (`confirmEscalation`, `#395`). */
 type PendingCreate = { readonly input: CreateUserInput; readonly form: HTMLFormElement };
 
-const PASSWORD_MIN = 12;
+/** Cau canh bao: doi vai bang duong nay XOA het quyen rieng cua tai khoan. */
+const grantsDropSentence = (count: number): string =>
+  `Tài khoản này đang có ${count} quyền riêng (cấp thêm hoặc bớt đi so với vai). Đổi vai ở đây sẽ xoá hết các quyền riêng đó — muốn giữ hoặc chỉnh từng quyền, dùng màn “Tài khoản & quyền”.`;
 
 /**
  * Quan ly tai khoan — danh sach truoc, mot viec mot luc (#146 §10).
@@ -233,11 +242,11 @@ export function UsersSettings() {
                 <input name="username" required minLength={3} maxLength={64} />
               </label>
               <label className="settings-focus-choice">
-                <span>Mật khẩu ban đầu (tuỳ chọn, ít nhất 12 ký tự)</span>
+                <span>Mật khẩu ban đầu (tuỳ chọn, ít nhất {PASSWORD_MIN_LENGTH} ký tự)</span>
                 <input
                   name="password"
                   type="password"
-                  minLength={PASSWORD_MIN}
+                  minLength={PASSWORD_MIN_LENGTH}
                   maxLength={128}
                   autoComplete="new-password"
                   placeholder="Để trống để hệ thống tạo mật khẩu tạm"
@@ -342,8 +351,11 @@ export function UsersSettings() {
               onChange={(event) => {
                 const role = event.target.value as AuthRole;
                 // Len vai Quan tri = toan quyen: hoi truoc, may chu doi `confirmEscalation`.
+                // Tai khoan CO quyen rieng: duong doi vai nay xoa chung — cung hoi truoc.
                 if (role === 'ADMIN') setMode({ kind: 'promote', userId: selected.id });
-                else assign.mutate({ id: selected.id, role });
+                else if (roleChangeNeedsConfirmation(selected, role)) {
+                  setMode({ kind: 'role', userId: selected.id, role });
+                } else assign.mutate({ id: selected.id, role });
               }}
             >
               {Object.entries(ROLE_LABELS).map(([role, label]) => (
@@ -464,12 +476,14 @@ export function UsersSettings() {
           confirmLabel="Đặt lại mật khẩu"
           tone="primary"
           pending={reset.isPending}
-          confirmDisabled={password.length > 0 && password.length < PASSWORD_MIN}
+          confirmDisabled={password.length > 0 && password.length < PASSWORD_MIN_LENGTH}
           returnFocus={() => resetTrigger.current}
           onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
           onConfirm={() => {
-            if (password.length > 0 && password.length < PASSWORD_MIN) {
-              setFormError('Mật khẩu tạm phải có ít nhất 12 ký tự, hoặc để trống.');
+            if (password.length > 0 && password.length < PASSWORD_MIN_LENGTH) {
+              setFormError(
+                `Mật khẩu tạm phải có ít nhất ${PASSWORD_MIN_LENGTH} ký tự, hoặc để trống.`,
+              );
               return;
             }
             reset.mutate(
@@ -492,7 +506,7 @@ export function UsersSettings() {
             <input
               type="password"
               autoComplete="new-password"
-              minLength={PASSWORD_MIN}
+              minLength={PASSWORD_MIN_LENGTH}
               placeholder="Để trống để hệ thống tạo mật khẩu tạm"
               value={password}
               onChange={(event) => {
@@ -533,7 +547,12 @@ export function UsersSettings() {
       {mode.kind === 'promote' && selected && (
         <SettingsFocusModal
           title={`Cấp vai Quản trị cho ${selected.name}?`}
-          description="Quản trị có toàn quyền, kể cả cấp tài khoản và đổi quyền của người khác. Lần cấp này được ghi vào nhật ký với tên bạn."
+          description={[
+            'Quản trị có toàn quyền, kể cả cấp tài khoản và đổi quyền của người khác. Lần cấp này được ghi vào nhật ký với tên bạn.',
+            customGrantCount(selected) > 0 ? grantsDropSentence(customGrantCount(selected)) : '',
+          ]
+            .filter((sentence) => sentence.length > 0)
+            .join(' ')}
           confirmLabel="Cấp vai Quản trị"
           tone="danger"
           pending={assign.isPending}
@@ -544,6 +563,28 @@ export function UsersSettings() {
               {
                 onSuccess: () => {
                   setMessage(`Đã cấp vai Quản trị cho ${selected.name}.`);
+                  setMode({ kind: 'manage', userId: selected.id });
+                },
+              },
+            )
+          }
+        />
+      )}
+
+      {mode.kind === 'role' && selected && (
+        <SettingsFocusModal
+          title={`Đổi vai của ${selected.name} thành ${ROLE_LABELS[mode.role]}?`}
+          description={grantsDropSentence(customGrantCount(selected))}
+          confirmLabel={`Đổi vai và xoá ${customGrantCount(selected)} quyền riêng`}
+          tone="danger"
+          pending={assign.isPending}
+          onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
+          onConfirm={() =>
+            assign.mutate(
+              { id: selected.id, role: mode.role },
+              {
+                onSuccess: () => {
+                  setMessage(`Đã đổi vai của ${selected.name} thành ${ROLE_LABELS[mode.role]}.`);
                   setMode({ kind: 'manage', userId: selected.id });
                 },
               },
@@ -577,17 +618,16 @@ function managing(mode: Mode): mode is Extract<Mode, { userId: string }> {
     mode.kind === 'manage' ||
     mode.kind === 'reset' ||
     mode.kind === 'disable' ||
-    mode.kind === 'promote'
+    mode.kind === 'promote' ||
+    mode.kind === 'role'
   );
 }
 
 /** Truong `lastLoginAt` chi co tu `#395`; may chu cu khong tra thi khong noi gi sai. */
 function lastLoginPhrase(user: AuthUser): string {
   if (user.lastLoginAt === undefined) return 'chưa rõ lần đăng nhập gần nhất';
-  const phrase = relativeLastLogin(user.lastLoginAt, new Date());
-  return phrase === 'Chưa đăng nhập'
-    ? 'chưa đăng nhập lần nào'
-    : `đăng nhập ${phrase.toLowerCase()}`;
+  if (isNeverLoggedIn(user.lastLoginAt)) return 'chưa đăng nhập lần nào';
+  return `đăng nhập ${relativeLastLogin(user.lastLoginAt, new Date()).toLowerCase()}`;
 }
 
 function modeKey(mode: Mode): string {

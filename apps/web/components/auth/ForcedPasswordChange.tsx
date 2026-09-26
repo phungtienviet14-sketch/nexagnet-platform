@@ -5,9 +5,10 @@ import { authApi, type AuthUser } from '../../lib/auth';
 import { useBranding } from '../../lib/branding';
 import {
   passwordExpiryLabel,
-  passwordChangeProblems,
+  passwordChangeIssues,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
+  type PasswordChangeProblem,
 } from './session-signals';
 
 /**
@@ -35,14 +36,14 @@ export function ForcedPasswordChange({
   const [confirm, setConfirm] = useState('');
   const [isVisible, setIsVisible] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
-  const [problems, setProblems] = useState<readonly string[]>([]);
+  const [problems, setProblems] = useState<readonly PasswordChangeProblem[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
   const expiry = passwordExpiryLabel(user.temporaryPasswordExpiresAt);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setServerError(null);
-    const found = passwordChangeProblems({ current, next, confirm });
+    const found = passwordChangeIssues({ current, next, confirm });
     setProblems(found);
     if (found.length > 0) return;
     setIsBusy(true);
@@ -59,6 +60,8 @@ export function ForcedPasswordChange({
   };
 
   const inputType = isVisible ? 'text' : 'password';
+  const isInvalid = (field: PasswordChangeProblem['field']): true | undefined =>
+    problems.some((problem) => problem.field === field) ? true : undefined;
 
   return (
     <main className="login-shell login-shell--single">
@@ -68,13 +71,13 @@ export function ForcedPasswordChange({
         <h1 id="forced-change-title">Đặt mật khẩu của riêng bạn</h1>
         <p className="login-card__lead">
           Xin chào {user.name}. Tài khoản <strong>{user.username}</strong> đang dùng mật khẩu tạm do
-          Giám đốc cấp. Đặt mật khẩu riêng để bắt đầu làm việc — từ lần sau chỉ bạn biết mật khẩu
-          này.
+          người quản trị cấp. Đặt mật khẩu riêng để bắt đầu làm việc — từ lần sau chỉ bạn biết mật
+          khẩu này.
         </p>
         {expiry === null ? null : (
           <p className="login-card__expiry">Mật khẩu tạm hết hạn lúc {expiry}.</p>
         )}
-        <form onSubmit={handleSubmit} noValidate aria-describedby={hintId}>
+        <form onSubmit={handleSubmit} noValidate>
           <label htmlFor="forced-current">Mật khẩu tạm đang dùng</label>
           <input
             id="forced-current"
@@ -82,6 +85,7 @@ export function ForcedPasswordChange({
             autoComplete="current-password"
             value={current}
             onChange={(event) => setCurrent(event.target.value)}
+            aria-invalid={isInvalid('current')}
             required
           />
           <label htmlFor="forced-next">Mật khẩu mới</label>
@@ -93,6 +97,9 @@ export function ForcedPasswordChange({
             maxLength={PASSWORD_MAX_LENGTH}
             value={next}
             onChange={(event) => setNext(event.target.value)}
+            // Goi y do dai thuoc ve CHINH o nay — doc len khi o nay nhan tieu diem.
+            aria-describedby={hintId}
+            aria-invalid={isInvalid('next')}
             required
           />
           <label htmlFor="forced-confirm">Nhập lại mật khẩu mới</label>
@@ -102,6 +109,7 @@ export function ForcedPasswordChange({
             autoComplete="new-password"
             value={confirm}
             onChange={(event) => setConfirm(event.target.value)}
+            aria-invalid={isInvalid('confirm')}
             required
           />
           <p className="login-card__hint" id={hintId}>
@@ -122,7 +130,7 @@ export function ForcedPasswordChange({
               {problems.length === 0 ? null : (
                 <ul>
                   {problems.map((problem) => (
-                    <li key={problem}>{problem}</li>
+                    <li key={problem.message}>{problem.message}</li>
                   ))}
                 </ul>
               )}

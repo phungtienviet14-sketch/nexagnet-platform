@@ -74,6 +74,7 @@ export function AccountWizard({
   readonly onCancel: () => void;
 }) {
   const titleId = useId();
+  const driverHintId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const [step, setStep] = useState<Step>('WHO');
   const [choiceId, setChoiceId] = useState<PresetChoiceId>('OPERATIONS');
@@ -287,37 +288,47 @@ export function AccountWizard({
             goFromIdentity();
           }}
         >
+          {/*
+            Goi y "Chưa có hồ sơ?" nam NGOAI nhan (nhu trinh sua dia diem): nam trong `<label>` thi no
+            thanh mot phan TEN cua o chon. Trinh doc man hinh doc no qua `aria-describedby`.
+          */}
           {wantsDriver || wantsStakeholder ? (
-            <label className="tx-field">
-              <span>
-                {wantsDriver
-                  ? 'Hồ sơ lái xe (chưa có tài khoản)'
-                  : 'Hồ sơ bên góp vốn (chưa có tài khoản)'}
-              </span>
-              <select value={linkTarget} onChange={(event) => pickLinkTarget(event.target.value)}>
-                <option value="">— Chọn hồ sơ —</option>
-                {(wantsDriver
-                  ? driverCandidates(drivers.data ?? []).map((entry) => ({
-                      id: entry.id,
-                      label: `${entry.fullName} · ${entry.phone}`,
-                    }))
-                  : stakeholderCandidates(stakeholders.data ?? []).map((entry) => ({
-                      id: entry.id,
-                      label: entry.displayName,
-                    }))
-                ).map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
+            <div className="tx-admin-field">
+              <label className="tx-field">
+                <span>
+                  {wantsDriver
+                    ? 'Hồ sơ lái xe (chưa có tài khoản)'
+                    : 'Hồ sơ bên góp vốn (chưa có tài khoản)'}
+                </span>
+                <select
+                  value={linkTarget}
+                  onChange={(event) => pickLinkTarget(event.target.value)}
+                  aria-describedby={wantsDriver ? driverHintId : undefined}
+                >
+                  <option value="">— Chọn hồ sơ —</option>
+                  {(wantsDriver
+                    ? driverCandidates(drivers.data ?? []).map((entry) => ({
+                        id: entry.id,
+                        label: `${entry.fullName} · ${entry.phone}`,
+                      }))
+                    : stakeholderCandidates(stakeholders.data ?? []).map((entry) => ({
+                        id: entry.id,
+                        label: entry.displayName,
+                      }))
+                  ).map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {wantsDriver ? (
-                <small className="tx-admin-hint">
+                <small className="tx-admin-hint" id={driverHintId}>
                   Chưa có hồ sơ? Thêm ở <a href={buildSectionUrl('fleet')}>Đội xe &amp; lái xe</a>{' '}
                   rồi quay lại.
                 </small>
               ) : null}
-            </label>
+            </div>
           ) : null}
           <div className="tx-admin-fields">
             <label className="tx-field">

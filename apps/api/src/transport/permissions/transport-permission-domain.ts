@@ -6,6 +6,7 @@ import type {
   PermissionDomain,
 } from '../../auth/access/permission-domain.js';
 import { PermissionDomainRegistry } from '../../auth/access/permission-domain.registry.js';
+import { demoReservedUsernames } from '../demo/demo-logins.js';
 import {
   TransportAccountLinkDirectory,
   type DriverAccountLinkView,
@@ -47,6 +48,16 @@ export const TRANSPORT_STAKEHOLDER_SCOPE_ID = 'chu-xe';
  */
 export const TRANSPORT_RESERVED_USERNAMES: readonly string[] = ['demo-seed'];
 
+/**
+ * Moi ten mien giu lai: danh tinh he thong, va — CHI tren goi mau — ten nhan vat mau
+ * (`demoReservedUsernames`, `#395`): may gieo noi tai khoan theo TEN, nen Giam doc khong duoc tao
+ * mot tai khoan nguoi that trung ten mot lai xe mau. Doc qua `demo-logins.ts` (tep NHE: hinh dang
+ * bo du lieu + cong goi mau), khong qua may gieo; goi khach that khong bao gio doc bo du lieu.
+ */
+export function transportReservedUsernames(): readonly string[] {
+  return [...TRANSPORT_RESERVED_USERNAMES, ...demoReservedUsernames()];
+}
+
 /** Vai nen tang cua lai xe (`GD-22`). */
 const DRIVER_ROLE = 'SALE';
 
@@ -75,17 +86,25 @@ export async function checkTransportAccessChange(
   ];
 }
 
+/**
+ * Pham vi lai xe PHAI noi dung dieu may chu dang cuong che: moi duong "viec cua chinh lai xe" (de
+ * nghi thanh toan, chi phi chuyen, phieu dau, moc, tai lieu, bang luong, quy) chi hoi "tai khoan nay
+ * co noi ho so lai xe khong", KHONG hoi ho so con hoat dong khong. Nen ho so ngung hoat dong ma con
+ * noi van la pham vi HIEU LUC — va cau phai canh bao Giam doc dieu do, thay vi noi "khong lam duoc
+ * gi" trong khi tai khoan van gui duoc de nghi tien. (Chan viec ghi cua lai xe da nghi la mot quyet
+ * dinh san pham rieng — vd bang luong cuoi con xem duoc khong — chua lam o day.)
+ */
 function driverScope(driver: DriverAccountLinkView): AccessScopeNote {
   const who = `${driver.name} (${driver.phone})`;
   const vehicle = driver.vehicle ? `, đang phụ trách xe ${driver.vehicle.registrationPlate}` : '';
-  const active = driver.status === 'ACTIVE';
   return {
     id: TRANSPORT_DRIVER_SCOPE_ID,
     label: 'Hồ sơ lái xe',
-    active,
-    sentence: active
-      ? `Nối với hồ sơ lái xe ${who}${vehicle} — làm được việc của chính lái xe này.`
-      : `Nối với hồ sơ lái xe ${who} — hồ sơ này đang ngừng hoạt động.`,
+    active: true,
+    sentence:
+      driver.status === 'ACTIVE'
+        ? `Nối với hồ sơ lái xe ${who}${vehicle} — làm được việc của chính lái xe này.`
+        : `Nối với hồ sơ lái xe ${who} — hồ sơ này đang ngừng hoạt động, nhưng tài khoản vẫn làm được việc của chính lái xe này (gửi đề nghị thanh toán, chi phí, xem lương, quỹ) cho tới khi gỡ nối hồ sơ hoặc khoá tài khoản.`,
     subject: { id: driver.id, name: driver.name },
   };
 }
@@ -132,7 +151,7 @@ export function transportPermissionDomain(links?: TransportAccountLinkDirectory)
     effective: effectiveTransportActionList,
     validate: validateTransportGrants,
     escalated: escalatedActions,
-    reservedUsernames: () => TRANSPORT_RESERVED_USERNAMES,
+    reservedUsernames: transportReservedUsernames,
     ...(links
       ? {
           checkAccessChange: (input: AccessChangeInput) => checkTransportAccessChange(links, input),

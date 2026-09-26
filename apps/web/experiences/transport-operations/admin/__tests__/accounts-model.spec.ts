@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  accountHistoryLabel,
   actionRows,
   buildCreateInput,
   changeRole,
@@ -373,11 +377,65 @@ describe('tao tai khoan', () => {
   });
 });
 
-describe('ten dang nhap goi y tai cho', () => {
-  it('ten goi truoc, khong dau, noi bang dau cham, tien to lai xe', () => {
-    expect(localUsernameSuggestion('Trần Văn An', 'lx.')).toBe('lx.an.tran.van');
-    expect(localUsernameSuggestion('Đỗ Thị Đào')).toBe('dao.do.thi');
-    expect(localUsernameSuggestion('  ', 'lx.')).toBe('lx.');
+/**
+ * Bang vi du cua goc ten dang nhap phia MAY CHU (`account-policy.spec.ts`, `usernameBase`), doc tu
+ * tep nguon — web khong import duoc `apps/api`. Goi y tai cho phai cho DUNG chuoi do: lech thi o ten
+ * dang nhap doi duoi con tro khi goi y cua may chu ve, va tai khoan tao luc may chu hong mang mot
+ * dang ten khac moi tai khoan con lai.
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const API_POLICY_SPEC = resolve(HERE, '../../../../../api/src/auth/account-policy.spec.ts');
+
+function serverUsernameExamples(): readonly (readonly [string, string, string])[] {
+  const source = readFileSync(API_POLICY_SPEC, 'utf8');
+  const start = source.indexOf("describe('goi y ten dang nhap'");
+  if (start < 0) throw new Error('Khong tim thay bang goi y ten dang nhap trong spec cua API');
+  const table = source.slice(start, source.indexOf('])(', start));
+  return [...table.matchAll(/\[\s*'([^']*)',\s*'([^']*)',\s*'([^']*)'\s*\]/g)].map(
+    (match) => [match[1] ?? '', match[2] ?? '', match[3] ?? ''] as const,
+  );
+}
+
+describe('ten dang nhap goi y tai cho — CUNG luat voi may chu (#395)', () => {
+  const examples = serverUsernameExamples();
+
+  it('doc duoc bang vi du cua may chu (khong xanh gia vi bang rong)', () => {
+    expect(examples.length).toBeGreaterThanOrEqual(5);
+    expect(examples).toContainEqual(['Nguyễn Văn Đức', 'lx.', 'lx.nguyen.van.duc']);
+  });
+
+  it('moi vi du cua may chu cho dung chuoi o web', () => {
+    for (const [name, prefix, expected] of examples) {
+      expect(localUsernameSuggestion(name, prefix), `${name} + "${prefix}"`).toBe(expected);
+    }
+  });
+
+  it('giu thu tu tu, khong dau, tien to lai xe', () => {
+    expect(localUsernameSuggestion('Trần Văn An', 'lx.')).toBe('lx.tran.van.an');
+    expect(localUsernameSuggestion('Đỗ Thị Đào')).toBe('do.thi.dao');
+  });
+});
+
+describe('lich su tai khoan: ly do khoa doc lai duoc (#395)', () => {
+  it('noi `after.reason` vao cau cua may chu, mot lan', () => {
+    expect(
+      accountHistoryLabel({
+        summary: 'Khoá tài khoản',
+        after: { disabledAt: '2026-09-25T02:00:00.000Z', reason: 'Nghỉ việc' },
+      }),
+    ).toBe('Khoá tài khoản — Nghỉ việc');
+    expect(
+      accountHistoryLabel({
+        summary: 'Khoá tài khoản — Nghỉ việc',
+        after: { reason: 'Nghỉ việc' },
+      }),
+    ).toBe('Khoá tài khoản — Nghỉ việc');
+    expect(accountHistoryLabel({ summary: 'Khoá tài khoản', after: { reason: null } })).toBe(
+      'Khoá tài khoản',
+    );
+    expect(accountHistoryLabel({ summary: 'Cấp mật khẩu tạm mới', after: undefined })).toBe(
+      'Cấp mật khẩu tạm mới',
+    );
   });
 });
 
@@ -386,27 +444,27 @@ describe('doi the vai khong lam mat ten dang nhap goi y (#395)', () => {
   const accounting = findPresetChoice('ACCOUNTING');
   const driver = findPresetChoice('DRIVER');
   // Goi y cua MAY CHU (co hau to chong trung) — khong phai thu man hinh tu tinh lai duoc.
-  const suggested = { ...EMPTY_IDENTITY, name: 'Trần Văn An', username: 'an.van.tran2' };
+  const suggested = { ...EMPTY_IDENTITY, name: 'Trần Văn An', username: 'tran.van.an.2' };
 
   it('Điều hành ↔ Kế toán (cung tien to): GIU goi y, buoc danh tinh khong bao loi 3–64', () => {
     const afterAccounting = usernameAfterPresetChange(suggested, false, operations, accounting);
-    expect(afterAccounting).toBe('an.van.tran2');
+    expect(afterAccounting).toBe('tran.van.an.2');
     const back = usernameAfterPresetChange(
       { ...suggested, username: afterAccounting },
       false,
       accounting,
       operations,
     );
-    expect(back).toBe('an.van.tran2');
+    expect(back).toBe('tran.van.an.2');
     expect(identityProblems({ ...suggested, username: back })).toEqual([]);
   });
 
   it('doi tien to (sang Lái xe va nguoc lai): goi y lai NGAY theo tien to moi', () => {
     const toDriver = usernameAfterPresetChange(suggested, false, operations, driver);
-    expect(toDriver).toBe('lx.an.tran.van');
+    expect(toDriver).toBe('lx.tran.van.an');
     expect(
       usernameAfterPresetChange({ ...suggested, username: toDriver }, false, driver, accounting),
-    ).toBe('an.tran.van');
+    ).toBe('tran.van.an');
   });
 
   it('ten nguoi dung tu go thi khong bao gio bi thay; chua co ho ten thi de trong', () => {
@@ -416,6 +474,6 @@ describe('doi the vai khong lam mat ten dang nhap goi y (#395)', () => {
     // O trong (goi y truoc bi hong) + cung tien to: dien goi y tai cho thay vi de trong.
     expect(
       usernameAfterPresetChange({ ...suggested, username: '' }, false, operations, accounting),
-    ).toBe('an.tran.van');
+    ).toBe('tran.van.an');
   });
 });

@@ -22,6 +22,12 @@
 --
 -- 4. Chi lui toan bo khi lui CA ban ung dung: ban tu `#395` doc cot `address` o moi lan liet ke
 --    hang rao.
+--
+-- 5. Di tru HONG o buoc kiem truoc (hai bai xe dang bat, hoac ma bai xe trung) KHONG can tep nay:
+--    Postgres da lui tron. Sua du lieu nhu cau bao loi noi, roi danh dau lan hong la da lui TRUOC
+--    khi deploy lai — neu khong, `prisma migrate deploy` tu choi voi P3009:
+--
+--      prisma migrate resolve --rolled-back 20260925100100_transport_place_admin
 -- ===========================================================================
 
 BEGIN;

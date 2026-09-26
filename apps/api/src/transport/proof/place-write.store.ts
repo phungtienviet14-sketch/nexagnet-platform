@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import type { AppendAuditLogCommand, AuditLogService } from '../../audit/audit-log.service.js';
+import { traceWrite } from '../../audit/audit-trail.js';
 import type { PrismaService } from '../../config/prisma.service.js';
 import { isUniqueViolationOn, type UniqueIndexRef } from '../../config/storage-conflict.js';
 import type { CounterpartyRepository } from '../counterparty/counterparty.repository.js';
@@ -41,6 +43,11 @@ export interface PlaceWriteTx {
   readonly sites: CounterpartySiteRepository;
   readonly counterparties: CounterpartyRepository;
   readonly customers: Pick<FleetRepository, 'findCustomer'>;
+  /**
+   * Client GIAO DICH Prisma (`#395`) — chi de dau vet cua lan ghi nam trong cung don vi cong viec
+   * (`runTraced`). Ban bo nho khong co: khong co giao dich de nhap vao.
+   */
+  readonly client?: unknown;
 }
 
 export abstract class PlaceWriteStore {
@@ -77,6 +84,7 @@ export class PrismaPlaceWriteStore extends PlaceWriteStore {
         sites: new PrismaCounterpartySiteRepository(client),
         counterparties: new PrismaCounterpartyRepository(client),
         customers: new PrismaFleetRepository(client),
+        client: transaction,
       });
     }, TRANSACTION_OPTIONS);
   }
@@ -98,6 +106,31 @@ export class InMemoryPlaceWriteStore extends PlaceWriteStore {
     this.tail = result.catch(() => undefined);
     return result;
   }
+}
+
+/**
+ * GHI DIA DIEM + DAU VET cua lan ghi do (`#395`, `audit/audit-trail.ts`). Kho Prisma: dau vet nam
+ * TRONG giao dich — so kiem toan hong thi lan ghi lui theo, khong con mot bai xe bi tat ma khong ai
+ * biet ai tat. Kho bo nho: dau vet ghi ngay sau commit.
+ */
+export function runTraced<T>(
+  store: PlaceWriteStore,
+  audit: AuditLogService | undefined,
+  work: (tx: PlaceWriteTx) => Promise<T>,
+  trace: (result: T) => readonly AppendAuditLogCommand[],
+): Promise<T> {
+  if (!audit) return store.run(work);
+  return traceWrite(
+    audit,
+    (trail) =>
+      store.run(async (tx) => {
+        const value = await work(tx);
+        if (tx.client !== undefined) await trail(value, tx.client);
+        return value;
+      }),
+    (value) => value,
+    trace,
+  );
 }
 
 const COUNTERPARTY_TAX_CODE_INDEX: UniqueIndexRef = {

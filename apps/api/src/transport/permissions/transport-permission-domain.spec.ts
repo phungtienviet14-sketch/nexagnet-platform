@@ -1,6 +1,9 @@
+import { resetTenantCache } from '@netviet/tenant';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PermissionDomainRegistry } from '../../auth/access/permission-domain.registry.js';
 import { InMemoryAssetOwnershipRepository } from '../asset-ownership/asset-ownership.repository.js';
+import { loadDemoMonthDataset } from '../demo/demo-dataset.js';
+import { DEMO_STAFF_PERSONAS } from '../demo/demo-logins.js';
 import { DEMO_SEED_ACTOR } from '../demo/demo-seed.js';
 import { TransportAccountLinkDirectory } from '../fleet/account-link-directory.js';
 import { InMemoryFleetRepository } from '../fleet/fleet.repository.js';
@@ -13,6 +16,23 @@ import {
   TransportPermissionDomainRegistrar,
   transportPermissionDomain,
 } from './transport-permission-domain.js';
+
+/** Chay `run` duoi mot goi khach, roi tra lai dung moi truong cu (tep khac cung tien trinh can no). */
+function withTenant<T>(slug: string, run: () => T): T {
+  const previous = { tenant: process.env.TENANT, dir: process.env.TENANT_DIR };
+  process.env.TENANT = slug;
+  delete process.env.TENANT_DIR;
+  resetTenantCache();
+  try {
+    return run();
+  } finally {
+    if (previous.tenant === undefined) delete process.env.TENANT;
+    else process.env.TENANT = previous.tenant;
+    if (previous.dir === undefined) delete process.env.TENANT_DIR;
+    else process.env.TENANT_DIR = previous.dir;
+    resetTenantCache();
+  }
+}
 
 describe('mien phan quyen `transport` (#395)', () => {
   it('tu dang ky vao so cua nen tang trong ham dung', () => {
@@ -43,9 +63,35 @@ describe('mien phan quyen `transport` (#395)', () => {
   });
 
   it('danh tinh he thong cua mien: `demo-seed` — dung ten ma may gieo ghi vao nhat ky', () => {
-    const domain = transportPermissionDomain();
-    expect(domain.reservedUsernames?.()).toEqual(['demo-seed']);
+    withTenant('ultty', () => {
+      const domain = transportPermissionDomain();
+      expect(domain.reservedUsernames?.()).toEqual(['demo-seed']);
+    });
     expect(TRANSPORT_RESERVED_USERNAMES).toContain(DEMO_SEED_ACTOR);
+  });
+
+  /**
+   * May gieo noi tai khoan lai xe mau THEO TEN o moi lan khoi dong, va lenh xoa-gieo-lai xoa tai
+   * khoan THEO TEN. Giam doc tao `lx.binh` cho mot nguoi that tren goi mau thi nguoi do se lang le
+   * nhan pham vi cua lai xe mau Binh (`#395`). Nen tren goi mau moi ten nhan vat mau bi giu lai.
+   */
+  it('goi mau: moi ten nhan vat mau (lai xe + van phong) bi giu lai; goi that: khong', () => {
+    const reserved = withTenant('transport-preview', () => {
+      const logins = loadDemoMonthDataset().drivers.map((driver) => driver.login);
+      const names = transportPermissionDomain().reservedUsernames?.() ?? [];
+      return { logins, names };
+    });
+    expect(reserved.logins.length).toBeGreaterThan(0);
+    expect(reserved.names).toEqual(
+      expect.arrayContaining([
+        'demo-seed',
+        ...reserved.logins,
+        ...DEMO_STAFF_PERSONAS.map((persona) => persona.login),
+      ]),
+    );
+    expect(withTenant('ultty', () => transportPermissionDomain().reservedUsernames?.())).toEqual([
+      'demo-seed',
+    ]);
   });
 
   it('khong co danh ba lien ket thi chi co phan thuan', () => {
@@ -144,11 +190,18 @@ describe('mien `transport` doc lien ket tai khoan (#395 S2)', () => {
     ]);
   });
 
-  it('ho so lai xe da ngung: pham vi khong con hieu luc, cau noi ro', async () => {
+  /**
+   * May chu KHONG hoi trang thai ho so tren duong "viec cua chinh lai xe" — chi hoi co noi hay
+   * khong. Bang "lam duoc gi" noi "khong lam duoc gi" o day la noi doi Giam doc: tai khoan van gui
+   * duoc de nghi thanh toan. Pham vi van hieu luc, va cau canh bao cach dong no.
+   */
+  it('ho so lai xe da ngung ma con noi: pham vi VAN hieu luc (dung nhu may chu), cau canh bao', async () => {
     await linkedDriver('user-nghi', 'INACTIVE');
     const [scope] = (await domain().describeScopes?.('user-nghi')) ?? [];
-    expect(scope?.active).toBe(false);
+    expect(scope?.active).toBe(true);
     expect(scope?.sentence).toContain('đang ngừng hoạt động');
+    expect(scope?.sentence).toContain('vẫn làm được việc của chính lái xe này');
+    expect(scope?.sentence).toContain('gỡ nối hồ sơ hoặc khoá tài khoản');
   });
 
   it('mo ta pham vi ben gop von; khong lien ket nao thi mang rong', async () => {

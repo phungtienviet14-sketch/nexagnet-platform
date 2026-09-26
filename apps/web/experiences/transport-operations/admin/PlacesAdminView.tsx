@@ -10,7 +10,7 @@ import { canPerform } from '../transport-actions';
 import type { GeoPoint } from '../transport-types';
 import type { PickerFocus } from '../visual/LocationPickerMap';
 import { boundsOfPoints, formatCoordinates, type PickerMarker } from '../workspace/place-lookup';
-import { formatDateTime } from './accounts-model';
+import { ADMIN_REASON_MAX_LENGTH, formatDateTime } from './accounts-model';
 import { placesAdminApi } from './admin-api';
 import { adminErrorMessage, openWorkOf } from './admin-reasons';
 import { useAdminPlaces, useInvalidatePlaces, usePlaceHistory } from './admin-hooks';
@@ -20,7 +20,7 @@ import type {
   PlaceKindFilter,
   PlaceStatusFilter,
 } from './admin-types';
-import { AdminError, AdminNotice, ChipRow, FilterChip } from './AdminBits';
+import { AdminError, AdminNotice, ChipRow, FilterChip, focusOpener } from './AdminBits';
 import { OpenWorkDialog } from './OpenWorkDialog';
 import { PlaceEditor } from './PlaceEditor';
 import {
@@ -35,6 +35,7 @@ import {
   EDITING_MARKER_KEY,
   filterPlaces,
   initialPlaceBounds,
+  isStandbyDepot,
   kindCounts,
   needsCounterpartyManage,
   newPlaceDraft,
@@ -46,6 +47,7 @@ import {
   placeMarkers,
   placeOwnerLine,
   placeRings,
+  placeStatusLabel,
   savedNotice,
   withPoint,
   type PlaceDraft,
@@ -107,6 +109,7 @@ function PlaceRow({
         className="tx-admin-person tx-admin-place"
         aria-current={isSelected ? 'true' : undefined}
         data-kind={place.kind}
+        data-opens={place.id}
         onClick={onOpen}
       >
         <span className="tx-admin-person__name">{place.name}</span>
@@ -115,10 +118,12 @@ function PlaceRow({
           <span>{placeOwnerLine(place)}</span>
         </span>
         <span className="tx-admin-person__side">
-          <StatusBadge
-            label={PLACE_STATUS_LABEL[place.effectiveStatus]}
-            tone={PLACE_STATUS_TONE[place.effectiveStatus]}
-          />
+          {isStandbyDepot(place) ? null : (
+            <StatusBadge
+              label={PLACE_STATUS_LABEL[place.effectiveStatus]}
+              tone={PLACE_STATUS_TONE[place.effectiveStatus]}
+            />
+          )}
           {place.depot === null ? null : (
             <StatusBadge
               label={DEPOT_PLANNER_SHORT[place.depot.plannerStatus]}
@@ -167,6 +172,7 @@ function PlaceDetail({
   readonly onChanged: (saved: PlaceAdminView, message: string) => void;
 }) {
   const titleId = useId();
+  const heading = useRef<HTMLHeadingElement>(null);
   const [dialog, setDialog] = useState<'DEACTIVATE' | 'MAKE_PRIMARY' | null>(null);
   const [reason, setReason] = useState('');
   const [openWork, setOpenWork] = useState<{
@@ -180,6 +186,19 @@ function PlaceDetail({
   const primary = places.find(
     (entry) => entry.kind === 'DEPOT' && entry.depot?.plannerStatus === 'IN_USE',
   );
+  /*
+   * Bai du phong KHONG "Bật lại" duoc khi bai khac dang bat: may chu chi cho MOT bai bat mot luc
+   * (`409 DEPOT_ALREADY_ACTIVE`). Duong dung la "Đặt làm bãi chính" — nut bat lai khong duoc hien de
+   * that bai moi lan bam.
+   */
+  const isStandbyDepot =
+    isDepot &&
+    places.some(
+      (entry) => entry.kind === 'DEPOT' && entry.id !== place.id && entry.status === 'ACTIVE',
+    );
+
+  /* Mo chi tiet = tieu diem len tieu de (danh sach vua bi thay bang chi tiet, nut da bam khong con). */
+  useEffect(() => heading.current?.focus(), []);
 
   const run = useMutation({
     mutationFn: async (input: { operation: PendingOperation; acknowledgeOpenWork: boolean }) => {
@@ -222,19 +241,26 @@ function PlaceDetail({
     onSuccess: (saved) => onChanged(saved, `Đã bật lại ${saved.name}.`),
   });
 
-  const error = run.error !== null && openWorkOf(run.error) === null ? run.error : activate.error;
+  /* Loi cua hop thoai nam TRONG hop (hop phu kin trang); `409` viec dang mo la hop rieng, khong phai loi. */
+  const runError = run.error !== null && openWorkOf(run.error) === null ? run.error : null;
+  const openDialog = (next: 'DEACTIVATE' | 'MAKE_PRIMARY') => {
+    run.reset();
+    setDialog(next);
+  };
 
   return (
     <article className="tx-admin-sheet" aria-labelledby={titleId} data-testid="place-detail">
       <header className="tx-admin-sheet__head">
         <div>
           <p className="tx-admin-eyebrow">{placeKindLabel(place)}</p>
-          <h2 id={titleId}>{place.name}</h2>
+          <h2 id={titleId} ref={heading} tabIndex={-1}>
+            {place.name}
+          </h2>
           <p className="tx-admin-sheet__sub">{placeOwnerLine(place)}</p>
         </div>
         <div className="tx-admin-sheet__badges">
           <StatusBadge
-            label={PLACE_STATUS_LABEL[place.effectiveStatus]}
+            label={placeStatusLabel(place)}
             tone={PLACE_STATUS_TONE[place.effectiveStatus]}
           />
         </div>
@@ -305,7 +331,7 @@ function PlaceDetail({
           <button
             type="button"
             className="tx-btn tx-btn--go"
-            onClick={() => setDialog('MAKE_PRIMARY')}
+            onClick={() => openDialog('MAKE_PRIMARY')}
           >
             Đặt làm bãi chính
           </button>
@@ -315,11 +341,11 @@ function PlaceDetail({
             type="button"
             className="tx-btn tx-btn--stop"
             disabled={lacksCounterpartyManage}
-            onClick={() => setDialog('DEACTIVATE')}
+            onClick={() => openDialog('DEACTIVATE')}
           >
             Tắt địa điểm
           </button>
-        ) : (
+        ) : isStandbyDepot ? null : (
           <button
             type="button"
             className="tx-btn"
@@ -331,7 +357,7 @@ function PlaceDetail({
         )}
       </div>
       {lacksCounterpartyManage ? <p className="tx-note">{COUNTERPARTY_MANAGE_NEEDED}</p> : null}
-      <AdminError error={error} />
+      <AdminError error={activate.error} />
 
       <section className="tx-admin-block" aria-label="Lịch sử">
         <button
@@ -353,8 +379,10 @@ function PlaceDetail({
         reasonLabel="Lý do tắt (ghi vào lịch sử)"
         reason={reason}
         onReasonChange={setReason}
+        reasonMaxLength={ADMIN_REASON_MAX_LENGTH}
         isDestructive
         isBusy={run.isPending}
+        error={<AdminError error={runError} />}
         onCancel={() => setDialog(null)}
         onConfirm={() =>
           run.mutate({
@@ -388,6 +416,7 @@ function PlaceDetail({
         }
         confirmLabel="Đặt làm bãi chính"
         isBusy={run.isPending}
+        error={<AdminError error={runError} />}
         onCancel={() => setDialog(null)}
         onConfirm={() =>
           run.mutate({ operation: { kind: 'MAKE_PRIMARY' }, acknowledgeOpenWork: false })
@@ -399,6 +428,7 @@ function PlaceDetail({
           openWork?.operation.kind === 'DEACTIVATE' ? 'Tôi đã xem, vẫn tắt' : 'Tôi đã xem, vẫn đổi'
         }
         isBusy={run.isPending}
+        error={<AdminError error={runError} />}
         onCancel={() => setOpenWork(null)}
         onConfirm={() => {
           if (openWork !== null)
@@ -406,6 +436,32 @@ function PlaceDetail({
         }}
       />
     </article>
+  );
+}
+
+/**
+ * Chu giai ghim — CUNG ky hieu voi ghim tren ban do (cung lop `tx-pin--*`). Hinh ghim theo LOAI HANG
+ * RAO: kho khach hang va nha may doi tac cung la dia diem cua mot phap nhan (`COUNTERPARTY_SITE`,
+ * `#395` §2.1) nen cung mot hinh; danh sach ben canh moi tach hai loai do.
+ */
+const LEGEND_ENTRIES = [
+  { pin: 'tx-pin--depot', label: PLACE_KIND_FILTER_LABEL.DEPOT },
+  { pin: 'tx-pin--site', label: 'Kho, nhà máy của khách hàng hoặc đối tác' },
+  { pin: 'tx-pin--customer', label: PLACE_KIND_FILTER_LABEL.LEGACY_CUSTOMER },
+] as const;
+
+function PlacesMapLegend() {
+  return (
+    <ul className="tx-admin-maplegend" aria-label="Chú giải bản đồ">
+      {LEGEND_ENTRIES.map((entry) => (
+        <li key={entry.pin}>
+          <span className={`tx-pin tx-pin--known ${entry.pin}`} aria-hidden="true">
+            <span className="tx-pin__mark" />
+          </span>
+          {entry.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -435,6 +491,7 @@ function DepotCard({
               <button
                 type="button"
                 className="tx-btn tx-btn--ghost tx-btn--small"
+                data-opens={place.id}
                 onClick={() => onOpen(place)}
               >
                 {place.name}
@@ -463,6 +520,8 @@ export function PlacesAdminView() {
   const [focus, setFocus] = useState<PickerFocus | null>(null);
   const [basemapNotice, setBasemapNotice] = useState<string | null>(null);
   const focusCount = useRef(0);
+  const sideRef = useRef<HTMLDivElement>(null);
+  const returnFocusTo = useRef<string | null>(null);
 
   const all = useMemo(() => places.data ?? [], [places.data]);
   const visible = filterPlaces(all, filter);
@@ -533,6 +592,16 @@ export function PlacesAdminView() {
     invalidate();
   };
 
+  /* Dong chi tiet → tieu diem ve nut da mo no (dong danh sach, the bai xe) khi danh sach hien lai. */
+  const isListShown = draft === null && selected === null;
+  useEffect(() => {
+    if (!isListShown || returnFocusTo.current === null) return;
+    if (!focusOpener(sideRef.current, returnFocusTo.current)) {
+      sideRef.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
+    }
+    returnFocusTo.current = null;
+  }, [isListShown]);
+
   const onMarkerActivate = (marker: PickerMarker) => {
     if (draft !== null || !marker.key.startsWith('place:')) return;
     const place = all.find((entry) => `place:${entry.id}` === marker.key);
@@ -566,6 +635,12 @@ export function PlacesAdminView() {
             <span>
               <strong>{counts.PARTNER_SITE}</strong> nhà máy / kho đối tác
             </span>
+            {/* Diem khach hang kieu cu cung dang dung — thieu no thi cac con so khong cong ra tong. */}
+            {counts.LEGACY_CUSTOMER === 0 ? null : (
+              <span>
+                <strong>{counts.LEGACY_CUSTOMER}</strong> điểm khách hàng (kiểu cũ)
+              </span>
+            )}
           </p>
         }
         actions={
@@ -579,7 +654,7 @@ export function PlacesAdminView() {
       <AdminNotice message={notice} />
 
       <div className="tx-admin-mapsplit">
-        <div className="tx-admin-mapsplit__side">
+        <div className="tx-admin-mapsplit__side" ref={sideRef}>
           {isEditing ? (
             <PlaceEditor
               key={draft.placeId ?? 'new'}
@@ -605,7 +680,10 @@ export function PlacesAdminView() {
                 setNotice(null);
                 setDraft(editPlaceDraft(selected));
               }}
-              onClose={() => setSelectedId(null)}
+              onClose={() => {
+                returnFocusTo.current = selected.id;
+                setSelectedId(null);
+              }}
               onChanged={afterWrite}
             />
           ) : (
@@ -725,6 +803,7 @@ export function PlacesAdminView() {
               }
             />
           )}
+          <PlacesMapLegend />
           {isEditing ? (
             <p className="tx-note tx-admin-maphint">
               Bấm vào bản đồ để đặt điểm. Kéo ghim “Đây” để chỉnh; vòng tròn là bán kính “đã đến

@@ -13,13 +13,9 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { z } from 'zod';
-import { isInternalServiceRequest } from '../../../auth/internal-service.guard.js';
 import { Roles } from '../../../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../../../auth/session.types.js';
-import { loadFoundationEnv } from '../../../config/foundation-env.js';
-import { canPerformTransportAction } from '../../permissions/transport-permission-rules.js';
 import { RequiresTransportAction, TransportActionGuard } from '../../transport-action.guard.js';
-import { transportActorOf } from '../../transport-actor.js';
 import { firstIssue } from '../../transport.schemas.js';
 import { placeAdminErrorToHttp } from './place-admin-error.js';
 import {
@@ -32,6 +28,7 @@ import {
 } from './place-admin.schemas.js';
 import { PlaceAdminService } from './place-admin.service.js';
 import type { PlaceAdminView, PlaceHistoryEntry, PlaceWriteCaller } from './place-admin.types.js';
+import { placeWriteCallerOf } from './place-write-caller.js';
 
 /**
  * DIA DIEM VAN HANH qua HTTP (`#395`) — bai xe, kho khach hang, nha may doi tac: MOT so, la so hang
@@ -183,22 +180,9 @@ export class PlaceAdminController {
 
   /* --------------------------- Noi bo --------------------------- */
 
-  /**
-   * Cung dieu kien mo dau voi `TransportActionGuard`: o che do khong-phien (`AUTH_MODE` khac
-   * `session`) khong co danh tinh nao de hoi va toan bo ung dung von khong xac thuc; tien trinh noi
-   * bo da qua `InternalServiceGuard`. Con lai: hoi CHINH luat quyen van tai tren nguoi dang goi.
-   */
+  /** Quyen THU HAI hoi tren CHINH nguoi dang goi — xem `placeWriteCallerOf`. */
   private callerOf(request: AuthenticatedRequest): PlaceWriteCaller {
-    const actor = transportActorOf(request);
-    if (loadFoundationEnv().AUTH_MODE !== 'session' || isInternalServiceRequest(request)) {
-      return { actor, canManageCounterparties: true };
-    }
-    const user = request.authUser;
-    return {
-      actor,
-      canManageCounterparties:
-        user !== undefined && canPerformTransportAction(user, 'transport.counterparty.manage'),
-    };
+    return placeWriteCallerOf(request);
   }
 
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {

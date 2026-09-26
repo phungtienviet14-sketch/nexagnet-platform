@@ -385,7 +385,11 @@ CREATE UNIQUE INDEX "TransportGeofence_depot_code_key" ON "TransportGeofence" ("
 ```
 
 Di trú kiểm dữ liệu trước và dừng bằng một câu nói rõ cách sửa nếu đã có hơn một bãi đang bật hoặc
-mã bãi trùng. `P2002` của hai chỉ mục được dịch thành `DEPOT_ALREADY_ACTIVE` / `DEPOT_CODE_TAKEN`. Bãi
+mã bãi trùng. Lần deploy hỏng đó để lại một dòng di trú hỏng trong `_prisma_migrations`: sửa dữ liệu
+xong, **trước khi** deploy lại phải chạy
+`prisma migrate resolve --rolled-back 20260925100100_transport_place_admin` — thiếu bước này
+`migrate deploy` từ chối với `P3009` (câu báo lỗi của di trú và `README-rollback.sql` đều nói bước
+này). `P2002` của hai chỉ mục được dịch thành `DEPOT_ALREADY_ACTIVE` / `DEPOT_CODE_TAKEN`. Bãi
 mới tạo khi đã có bãi đang bật thì được tạo **tắt** (bãi dự phòng); đổi bãi chính
 (`make-primary-depot`) là **một** giao dịch — tắt bãi cũ rồi bật bãi mới, không có khoảnh khắc nào
 không bãi hay hai bãi. Bãi xe này là bãi của khâu lập kế hoạch

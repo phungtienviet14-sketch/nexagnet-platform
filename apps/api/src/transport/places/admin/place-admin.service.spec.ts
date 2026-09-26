@@ -60,13 +60,22 @@ function world() {
   const auditRows = new InMemoryAuditLogRepository();
   const decisions: { reason: string; outcome: string; detail: Record<string, unknown> }[] = [];
   const steps: string[] = [];
+  const stepAttributes: Record<string, unknown>[] = [];
+  const stateChanges: { entityId: string; from: string | null; to: string }[] = [];
   const telemetry = {
-    step: async (name: string, run: () => Promise<unknown>) => {
+    step: async (name: string, run: () => Promise<unknown>, attributes = {}) => {
       steps.push(name);
+      stepAttributes.push(attributes);
       return run();
     },
     decision: (input: { reason: string; outcome: string; detail: Record<string, unknown> }) =>
       decisions.push(input),
+    // Nhu `TelemetryService.stateChange`: chuyen sang chinh no khong phai mot su kien.
+    stateChange: (input: { entityId: string; from: string | null; to: string }) => {
+      if (input.from !== input.to) {
+        stateChanges.push({ entityId: input.entityId, from: input.from, to: input.to });
+      }
+    },
   } as unknown as TelemetryService;
   const service = new PlaceAdminService(
     store,
@@ -93,6 +102,8 @@ function world() {
     audit,
     decisions,
     steps,
+    stepAttributes,
+    stateChanges,
   };
 }
 
@@ -459,11 +470,13 @@ describe('chu cua dia diem: khach hang, don vi co san, don vi moi, dia diem co s
   it('khach da ngung hoat dong -> PLACE_OWNER_INACTIVE', async () => {
     const customer = await w.fleet.createCustomer({ name: 'Khách nghỉ', status: 'INACTIVE' });
 
-    expect(
-      await reasonOf(() =>
-        w.service.create(site('Kho X', { owner: { customerId: customer.id } }), DIRECTOR),
-      ),
-    ).toBe('PLACE_OWNER_INACTIVE');
+    const error = await errorOf(() =>
+      w.service.create(site('Kho X', { owner: { customerId: customer.id } }), DIRECTOR),
+    );
+    expect(error).toMatchObject({ reason: 'PLACE_OWNER_INACTIVE' });
+    // Ten chu cho man hinh; quyet dinh telemetry KHONG mang ten.
+    expect(error.detail).toEqual({ ownerName: 'Khách nghỉ' });
+    expect(JSON.stringify(w.decisions)).not.toContain('Khách nghỉ');
   });
 
   it('don vi moi: nha may / kho doi tac; ma so thue da co -> noi ro don vi nao', async () => {
@@ -561,7 +574,8 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     );
     expect(error).toMatchObject({ kind: 'CONFLICT', reason: 'DEPOT_CHANGE_AFFECTS_OPEN_WORK' });
     expect(error.detail).toEqual({ runs: openWork.runs, orders: openWork.orders, idleHours: 12 });
-    expect(w.openWork.openWorkAt).toHaveBeenCalledWith('Bãi xe Hà Nội');
+    // Doi ten: chi vong chay co chang VE bai la bi anh huong (`depot-open-work.spec.ts`).
+    expect(w.openWork.openWorkAt).toHaveBeenCalledWith('Bãi xe Hà Nội', 'RENAME');
 
     const renamed = await w.service.update(
       view.id,
@@ -587,6 +601,31 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     expect(w.openWork.openWorkAt).not.toHaveBeenCalled();
   });
 
+  /**
+   * Doi hoa thuong / khoang trang: `sameSite()` coi la CUNG mot bai — khau lap ke hoach va dong vong
+   * chay khong doi gi. Hoi xac nhan o day la mot canh bao sai luon bat.
+   */
+  it('doi ten bai dang dung chi khac hoa thuong / khoang trang: khong hoi viec dang mo', async () => {
+    const view = await w.service.create(depot('Bãi xe Hà Nội'), DIRECTOR);
+    w.openWork.openWorkAt.mockResolvedValue(openWork);
+
+    const recased = await w.service.update(view.id, { name: 'bãi xe  hà nội ' }, DIRECTOR);
+
+    expect(recased.name).toBe('bãi xe  hà nội ');
+    expect(w.openWork.openWorkAt).not.toHaveBeenCalled();
+    expect(w.decisions.at(-1)?.reason).toBe('PLACE_WRITE_ALLOWED');
+  });
+
+  it('chi sua ghi chu: dau vet noi CO DOI ghi chu (khong chep chu tu do)', async () => {
+    const view = await w.service.create(depot('Bãi xe Hà Nội', { note: 'Cổng sau' }), DIRECTOR);
+
+    await w.service.update(view.id, { note: 'Gọi bảo vệ 0912000111 trước khi vào' }, DIRECTOR);
+
+    const [row] = await w.audit('transport.place.update');
+    expect(row?.after).toMatchObject({ noteChanged: true, addressChanged: false });
+    expect(JSON.stringify(row)).not.toContain('0912000111');
+  });
+
   it('doi ten dia diem doi tac: ten dia diem di theo; thieu quyen phap nhan -> 403', async () => {
     const view = await w.service.create(
       site('Kho A', { owner: { newCounterparty: { name: 'Công ty A' } } }),
@@ -608,6 +647,32 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     expect(rows).toHaveLength(2);
     expect(row?.after).toMatchObject({ label: 'Kho A2', addressChanged: true });
     expect(JSON.stringify(row?.after)).not.toContain('Số 1');
+  });
+
+  it('doi ten trung dia diem khac CUNG don vi -> COUNTERPARTY_SITE_NAME_TAKEN kem ten cho man hinh', async () => {
+    const party = await w.counterparties.create({ name: 'Công ty A' });
+    const view = await w.service.create(
+      site('Kho A', { owner: { counterpartyId: party.id } }),
+      DIRECTOR,
+    );
+    const other = await w.sites.create({
+      counterpartyId: party.id,
+      name: 'Kho B',
+      address: null,
+      note: null,
+      status: 'ACTIVE',
+      recordedBy: 'ke-toan',
+    });
+
+    const error = await errorOf(() => w.service.update(view.id, { name: 'Kho B' }, DIRECTOR));
+
+    expect(error).toMatchObject({ reason: 'COUNTERPARTY_SITE_NAME_TAKEN' });
+    expect(error.detail).toEqual({
+      siteId: other.id,
+      siteName: 'Kho B',
+      counterpartyName: 'Công ty A',
+    });
+    expect(JSON.stringify(w.decisions)).not.toContain('Công ty A');
   });
 
   it('tat dia diem doi tac: dia diem VA moi hang rao cua no tat; tat lan hai khong ghi gi', async () => {
@@ -706,6 +771,18 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     expect(await w.audit('transport.place.deactivate')).toEqual([
       expect.objectContaining({ entityId: main.id }),
     ]);
+    // Trace noi bai NAO duoc bat, bai NAO bi tat — khong phai mo so kiem toan.
+    expect(w.decisions.at(-1)).toMatchObject({
+      reason: 'PLACE_WRITE_ALLOWED',
+      detail: { operation: 'make_primary_depot', placeId: standby.id, code: standby.depot?.code },
+    });
+    expect(w.stepAttributes.at(-1)).toMatchObject({ placeId: standby.id });
+    expect(w.stateChanges.slice(-2)).toEqual(
+      expect.arrayContaining([
+        { entityId: standby.id, from: 'INACTIVE', to: 'ACTIVE' },
+        { entityId: main.id, from: 'ACTIVE', to: 'INACTIVE' },
+      ]),
+    );
   });
 
   it('doi bai chinh khi bai cu con viec mo -> can xac nhan; khong phai bai xe -> PLACE_NOT_A_DEPOT', async () => {
@@ -716,7 +793,7 @@ describe('sua, tat, bat, doi bai chinh (#395)', () => {
     expect(await reasonOf(() => w.service.makePrimaryDepot(standby.id, {}, DIRECTOR))).toBe(
       'DEPOT_CHANGE_AFFECTS_OPEN_WORK',
     );
-    expect(w.openWork.openWorkAt).toHaveBeenCalledWith('Bãi xe Hà Nội');
+    expect(w.openWork.openWorkAt).toHaveBeenCalledWith('Bãi xe Hà Nội', 'RELOCATE');
     await w.service.makePrimaryDepot(standby.id, { acknowledgeOpenWork: true }, DIRECTOR);
 
     const place = await w.service.create(

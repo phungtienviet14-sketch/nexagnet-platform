@@ -13,6 +13,8 @@ import {
   type ListUsersFilter,
   type SetAccessRecord,
   type UpdateProfileRecord,
+  type UserChangeTrail,
+  type UserCreateTrail,
   type UserWrite,
 } from './user.repository.js';
 
@@ -56,35 +58,48 @@ export class PrismaUserRepository extends UserRepository {
     return this.prisma.user.count({ where: { role: 'ADMIN', disabledAt: null } });
   }
 
-  async create(input: CreateUserRecord): Promise<AuthUserRecord> {
+  async create(input: CreateUserRecord, trail?: UserCreateTrail): Promise<AuthUserRecord> {
     const grants = input.grants ?? [];
     const temporaryUntil = input.temporaryPasswordExpiresAt ?? null;
     try {
-      const row = await this.prisma.user.create({
-        data: {
-          username: input.username,
-          name: input.name,
-          email: input.email,
-          phone: input.phone,
-          passwordHash: input.passwordHash,
-          role: input.role,
-          jobTitle: input.jobTitle ?? null,
-          passwordChangedAt: new Date(),
-          mustChangePassword: temporaryUntil !== null,
-          temporaryPasswordExpiresAt: temporaryUntil,
-          ...(grants.length > 0
-            ? { permissionGrants: { create: grantRows(grants, requireGrantedBy(input.grantedBy)) } }
-            : {}),
-        },
-        include: WITH_GRANTS,
+      return await this.prisma.$transaction(async (tx) => {
+        const row = await tx.user.create({
+          data: {
+            username: input.username,
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            passwordHash: input.passwordHash,
+            role: input.role,
+            jobTitle: input.jobTitle ?? null,
+            passwordChangedAt: new Date(),
+            mustChangePassword: temporaryUntil !== null,
+            temporaryPasswordExpiresAt: temporaryUntil,
+            ...(grants.length > 0
+              ? {
+                  permissionGrants: {
+                    create: grantRows(grants, requireGrantedBy(input.grantedBy)),
+                  },
+                }
+              : {}),
+          },
+          include: WITH_GRANTS,
+        });
+        const created = toRecord(row);
+        // Dau vet trong CUNG giao dich — hong thi tai khoan khong duoc tao.
+        await trail?.(created, tx);
+        return created;
       });
-      return toRecord(row);
     } catch (error) {
       throw mapDuplicate(error);
     }
   }
 
-  async updateProfile(id: string, patch: UpdateProfileRecord): Promise<UserWrite> {
+  async updateProfile(
+    id: string,
+    patch: UpdateProfileRecord,
+    trail?: UserChangeTrail,
+  ): Promise<UserWrite> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const before = await lockUser(tx, id);
@@ -99,7 +114,9 @@ export class PrismaUserRepository extends UserRepository {
           },
           include: WITH_GRANTS,
         });
-        return { status: 'UPDATED', before, after: toRecord(after) } as const;
+        const change = { status: 'UPDATED', before, after: toRecord(after) } as const;
+        await trail?.(change, tx);
+        return change;
       });
     } catch (error) {
       throw mapDuplicate(error);
@@ -110,7 +127,11 @@ export class PrismaUserRepository extends UserRepository {
    * Vai + TOAN BO quyen rieng trong MOT giao dich: khong ai doc duoc mot tai khoan vai moi ma quyen
    * rieng cu (hay nguoc lai). Ha vai Giam doc di qua khoa Giam doc (`lockActiveAdmins`).
    */
-  setAccess(id: string, access: SetAccessRecord): Promise<GuardedUserChange> {
+  setAccess(
+    id: string,
+    access: SetAccessRecord,
+    trail?: UserChangeTrail,
+  ): Promise<GuardedUserChange> {
     return this.prisma.$transaction(async (tx) => {
       const admins = await lockActiveAdmins(tx);
       const before = await lockUser(tx, id);
@@ -129,11 +150,13 @@ export class PrismaUserRepository extends UserRepository {
         data: { role: access.role },
         include: WITH_GRANTS,
       });
-      return { status: 'UPDATED', before, after: toRecord(after) } as const;
+      const change = { status: 'UPDATED', before, after: toRecord(after) } as const;
+      await trail?.(change, tx);
+      return change;
     });
   }
 
-  disable(id: string): Promise<GuardedUserChange> {
+  disable(id: string, trail?: UserChangeTrail): Promise<GuardedUserChange> {
     return this.prisma.$transaction(async (tx) => {
       const admins = await lockActiveAdmins(tx);
       const before = await lockUser(tx, id);
@@ -146,11 +169,13 @@ export class PrismaUserRepository extends UserRepository {
         data: { disabledAt: new Date(), credentialVersion: { increment: 1 } },
         include: WITH_GRANTS,
       });
-      return { status: 'UPDATED', before, after: toRecord(after) } as const;
+      const change = { status: 'UPDATED', before, after: toRecord(after) } as const;
+      await trail?.(change, tx);
+      return change;
     });
   }
 
-  enable(id: string): Promise<UserWrite> {
+  enable(id: string, trail?: UserChangeTrail): Promise<UserWrite> {
     return this.prisma.$transaction(async (tx) => {
       const before = await lockUser(tx, id);
       if (!before) return { status: 'NOT_FOUND' } as const;
@@ -160,7 +185,9 @@ export class PrismaUserRepository extends UserRepository {
         data: { disabledAt: null },
         include: WITH_GRANTS,
       });
-      return { status: 'UPDATED', before, after: toRecord(after) } as const;
+      const change = { status: 'UPDATED', before, after: toRecord(after) } as const;
+      await trail?.(change, tx);
+      return change;
     });
   }
 
@@ -168,6 +195,7 @@ export class PrismaUserRepository extends UserRepository {
     id: string,
     passwordHash: string,
     temporaryUntil: Date | null,
+    trail?: UserChangeTrail,
   ): Promise<UserWrite> {
     return this.prisma.$transaction(async (tx) => {
       const before = await lockUser(tx, id);
@@ -184,7 +212,9 @@ export class PrismaUserRepository extends UserRepository {
         },
         include: WITH_GRANTS,
       });
-      return { status: 'UPDATED', before, after: toRecord(after) } as const;
+      const change = { status: 'UPDATED', before, after: toRecord(after) } as const;
+      await trail?.(change, tx);
+      return change;
     });
   }
 

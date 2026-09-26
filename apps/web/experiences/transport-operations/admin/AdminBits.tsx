@@ -107,6 +107,20 @@ export function AdminError({
   );
 }
 
+/**
+ * TRA TIEU DIEM ve nut da mo chi tiet (`data-opens="<khoa>"`) sau khi chi tiet dong. Nut do vua bi an
+ * (man hep) hoac go khoi DOM (man dia diem), nen tieu diem khong tu ve duoc — de nguyen thi roi ve
+ * `<body>` va nguoi dung ban phim phai Tab lai tu dau trang. `false` khi khong con nut nao de ve.
+ */
+export function focusOpener(container: HTMLElement | null, key: string): boolean {
+  const opener = Array.from(container?.querySelectorAll<HTMLElement>('[data-opens]') ?? []).find(
+    (node) => node.dataset.opens === key,
+  );
+  if (opener === undefined) return false;
+  opener.focus();
+  return true;
+}
+
 export function AdminNotice({ message }: { readonly message: string | null }) {
   return (
     <p className="tx-notice tx-admin-notice" role="status" hidden={message === null}>

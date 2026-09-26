@@ -89,7 +89,7 @@ const HTTP: Readonly<
 /** Cau mac dinh cho ma khong phai quyet dinh; ma quyet dinh dung nhan cua bo tu vung. */
 const NON_DECISION_MESSAGES: Readonly<Record<(typeof NON_DECISION_REASONS)[number], string>> = {
   ACCOUNT_INPUT_INVALID: 'Thông tin tài khoản không hợp lệ',
-  TEMPORARY_PASSWORD_EXPIRED: 'Mật khẩu tạm đã hết hạn. Nhờ Giám đốc cấp mật khẩu mới.',
+  TEMPORARY_PASSWORD_EXPIRED: 'Mật khẩu tạm đã hết hạn. Nhờ người quản trị cấp mật khẩu mới.',
   PASSWORD_CHANGE_REQUIRED: 'Bạn cần đổi mật khẩu tạm trước khi tiếp tục.',
 };
 

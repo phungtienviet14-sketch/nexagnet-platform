@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthRole } from '../../../lib/auth';
 import { useAuth } from '../../../components/auth/AuthGate';
 import { PageHeader, StatusBadge } from '../components/primitives';
@@ -24,7 +24,7 @@ import {
 import { adminErrorMessage } from './admin-reasons';
 import { useAccounts, usePermissionCatalog } from './admin-hooks';
 import type { AccountStatusFilter, AccountView } from './admin-types';
-import { ChipRow, FilterChip } from './AdminBits';
+import { ChipRow, FilterChip, focusOpener } from './AdminBits';
 import { AccountDetail } from './AccountDetail';
 import { AccountWizard } from './AccountWizard';
 import './transport-admin.css';
@@ -78,6 +78,7 @@ function PersonRow({
         type="button"
         className="tx-admin-person"
         aria-current={isSelected ? 'true' : undefined}
+        data-opens={account.username}
         onClick={onOpen}
       >
         <span className="tx-admin-person__name">{account.name}</span>
@@ -118,6 +119,19 @@ export function AccountsAdminView({
   const visible = filterAccounts(list, filter);
   const selected =
     selection === null ? null : (list.find((entry) => entry.username === selection) ?? null);
+
+  /* Dong chi tiet → tieu diem ve DUNG dong da mo no, sau khi danh sach hien lai. */
+  const listRef = useRef<HTMLElement>(null);
+  const returnFocusTo = useRef<string | null>(null);
+  const hasDetail = selected !== null || isCreating;
+  useEffect(() => {
+    if (hasDetail || returnFocusTo.current === null) return;
+    // Dong do da bi loc khuat: ve o tim cua danh sach, khong de tieu diem roi ve `<body>`.
+    if (!focusOpener(listRef.current, returnFocusTo.current)) {
+      listRef.current?.querySelector<HTMLInputElement>('input')?.focus();
+    }
+    returnFocusTo.current = null;
+  }, [hasDetail]);
 
   if (!allowed) {
     return (
@@ -163,11 +177,8 @@ export function AccountsAdminView({
         }
       />
 
-      <div
-        className="tx-admin-split"
-        data-has-detail={selected !== null || isCreating ? '' : undefined}
-      >
-        <section className="tx-admin-listpane" aria-label="Danh sách tài khoản">
+      <div className="tx-admin-split" data-has-detail={hasDetail ? '' : undefined}>
+        <section className="tx-admin-listpane" aria-label="Danh sách tài khoản" ref={listRef}>
           <label className="tx-field tx-admin-search">
             <span>Tìm theo tên, tên đăng nhập, chức danh, số điện thoại</span>
             <input
@@ -250,7 +261,10 @@ export function AccountsAdminView({
               account={selected}
               catalog={catalog.data}
               currentUserId={user?.id ?? null}
-              onClose={() => onSelect(null)}
+              onClose={() => {
+                returnFocusTo.current = selected.username;
+                onSelect(null);
+              }}
             />
           ) : (
             <div className="tx-admin-placeholder">

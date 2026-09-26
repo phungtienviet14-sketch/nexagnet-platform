@@ -133,7 +133,7 @@ describe('cau khong co ten trong `detail` van la tieng Viet tron cau', () => {
       reasonMessage('PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE', { fields: ['address'] }),
     ).toMatch(/^Đổi địa chỉ của địa điểm/);
     expect(reasonMessage('PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE', {})).toMatch(
-      /^Thêm, đổi tên, đổi địa chỉ hay tắt/,
+      /^Thêm, đổi tên, đổi địa chỉ, tắt hay bật lại/,
     );
   });
 });
@@ -264,8 +264,99 @@ describe('cau goi TEN thu dang xung dot, lay tu `detail`', () => {
     expect(openWorkOf(new AuthApiError('x', 409, 'PLACE_NAME_TAKEN'))).toBeNull();
   });
 
-  it('loi khong co ly do giu NGUYEN cau cua may chu', () => {
+  it('loi khong co ly do giu NGUYEN cau cua may chu khi no la tieng Viet co dau', () => {
     expect(adminErrorMessage(new AuthApiError('Máy chủ bận', 503))).toBe('Máy chủ bận');
+    expect(adminErrorMessage(new Error('Còn thiếu thông tin.'))).toBe('Còn thiếu thông tin.');
     expect(adminErrorMessage(null)).toBe('Không thực hiện được yêu cầu. Hãy thử lại.');
+  });
+
+  it('bai du phong "Bật lại" khi bai khac dang bat: goi TEN bai chinh, chi dung duong', () => {
+    const error = new AuthApiError(
+      '"Bãi xe Hà Nội" đang là bãi chính.',
+      409,
+      'DEPOT_ALREADY_ACTIVE',
+      {
+        activeDepot: { id: 'gf-1', code: 'DEPOT-HN', name: 'Bãi xe Hà Nội' },
+      },
+    );
+    const message = adminErrorMessage(error);
+    expect(message).toBe(
+      '“Bãi xe Hà Nội” đang là bãi chính — mỗi lúc chỉ bật một bãi. Dùng “Đặt làm bãi chính” để chuyển sang bãi này.',
+    );
+    // Lan bat lai KHONG luu gi — cau khong duoc noi "bai moi da duoc luu".
+    expect(message).not.toMatch(/được lưu/);
+    expect(reasonMessage('DEPOT_ALREADY_ACTIVE', {})).toMatch(/^Một bãi xe khác đang là bãi chính/);
+  });
+
+  it('hop tai khoan voi ho so ben gop von da mat: cau tieng Viet, khong lo ma', () => {
+    expect(adminErrorMessage(new AuthApiError('x', 404, 'ASSET_STAKEHOLDER_NOT_FOUND'))).toBe(
+      'Không tìm thấy hồ sơ bên góp vốn đã chọn — tải lại danh sách rồi chọn lại.',
+    );
+  });
+});
+
+describe('may chu cu / duong nem khong kem `detail`: cau co dau cua may chu goi ten tot hon cau chung', () => {
+  it('trung ten trong cung don vi, `detail` rong → cau cua may chu', () => {
+    const error = new AuthApiError(
+      '"Công ty Y" đã có một địa điểm khác tên "Kho Hải Phòng".',
+      409,
+      'COUNTERPARTY_SITE_NAME_TAKEN',
+    );
+    expect(adminErrorMessage(error)).toBe(
+      '"Công ty Y" đã có một địa điểm khác tên "Kho Hải Phòng".',
+    );
+  });
+
+  it('chu da ngung hoat dong, `detail` rong → cau cua may chu; co ten → cau cua bang', () => {
+    const bare = new AuthApiError(
+      '"Công ty X" đã ngừng hoạt động — bật lại đơn vị hoặc khách hàng này trước.',
+      409,
+      'PLACE_OWNER_INACTIVE',
+    );
+    expect(adminErrorMessage(bare)).toMatch(/^"Công ty X" đã ngừng hoạt động/);
+    const named = new AuthApiError('x', 409, 'PLACE_OWNER_INACTIVE', { ownerName: 'Công ty X' });
+    expect(adminErrorMessage(named)).toMatch(/^“Công ty X” đã ngừng hoạt động — bật lại/);
+  });
+
+  it('cau may chu KHONG co dau (loi cu) thi van dung cau cua bang', () => {
+    const error = new AuthApiError('Site name taken', 409, 'COUNTERPARTY_SITE_NAME_TAKEN');
+    expect(adminErrorMessage(error)).toMatch(/^Đơn vị này đã có một địa điểm khác cùng tên/);
+  });
+});
+
+describe('loi KHONG co ly do co kieu: khong mot cau ky thuat tieng Anh nao len man hinh', () => {
+  it('429 cua ThrottlerGuard → cau "thao tác quá nhanh"', () => {
+    const error = new AuthApiError('ThrottlerException: Too Many Requests', 429);
+    expect(adminErrorMessage(error)).toBe(
+      'Bạn thao tác quá nhanh — chờ khoảng một phút rồi thử lại.',
+    );
+  });
+
+  it('400 cua zod khong ly do → cau "thông tin chưa hợp lệ"', () => {
+    const error = new AuthApiError(
+      'reason: Too big: expected string to have <=500 characters',
+      400,
+    );
+    expect(adminErrorMessage(error)).toBe(
+      'Thông tin gửi lên chưa hợp lệ — kiểm tra lại các ô vừa nhập.',
+    );
+  });
+
+  it('mat mang (`fetch` nem TypeError) → cau "không kết nối được"', () => {
+    expect(adminErrorMessage(new TypeError('Failed to fetch'))).toBe(
+      'Không kết nối được máy chủ — kiểm tra mạng rồi thử lại.',
+    );
+  });
+
+  it('403 va 5xx tieng Anh → cau theo ma trang thai; ma la khong co trong bang cung vay', () => {
+    expect(adminErrorMessage(new AuthApiError('Forbidden resource', 403))).toBe(
+      'Bạn không có quyền thực hiện thao tác này.',
+    );
+    expect(adminErrorMessage(new AuthApiError('Internal server error', 500))).toBe(
+      'Máy chủ đang gặp sự cố — thử lại sau ít phút.',
+    );
+    expect(adminErrorMessage(new AuthApiError('Too Many Requests', 429, 'SOME_NEW_CODE'))).toBe(
+      'Bạn thao tác quá nhanh — chờ khoảng một phút rồi thử lại.',
+    );
   });
 });

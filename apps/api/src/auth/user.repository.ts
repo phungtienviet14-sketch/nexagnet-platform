@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { TransactionTrail } from '../audit/audit-trail.js';
 import type { PermissionGrant } from './access/permission-domain.js';
 import type { UserRole } from './auth.types.js';
 
@@ -85,6 +86,15 @@ export type GuardedUserChange =
 
 export type UserWrite = UserChange | { readonly status: 'NOT_FOUND' };
 
+/**
+ * Dau vet cua lan ghi — kho Prisma goi no BEN TRONG giao dich, voi ban truoc/sau doc duoi khoa
+ * (`audit/audit-trail.ts`). Kho bo nho khong co giao dich: KHONG goi no. Lan ghi khong doi gi o kho
+ * (khoa lap lai) cung khong goi no.
+ */
+export type UserChangeTrail = TransactionTrail<UserChange>;
+/** Nhu `UserChangeTrail`, cho lan TAO: chi co ban sau. */
+export type UserCreateTrail = TransactionTrail<AuthUserRecord>;
+
 export class DuplicateUserError extends Error {
   constructor() {
     super('Duplicate user identity');
@@ -99,12 +109,20 @@ export abstract class UserRepository {
   abstract list(filter?: ListUsersFilter): Promise<AuthUserRecord[]>;
   /** So Giam doc DANG HOAT DONG — chi de xem truoc (`dryRun`); lan ghi that tu dem duoi khoa. */
   abstract countActiveAdmins(): Promise<number>;
-  abstract create(input: CreateUserRecord): Promise<AuthUserRecord>;
+  abstract create(input: CreateUserRecord, trail?: UserCreateTrail): Promise<AuthUserRecord>;
   /** Nem `DuplicateUserError` khi email / so dien thoai trung tai khoan khac. */
-  abstract updateProfile(id: string, patch: UpdateProfileRecord): Promise<UserWrite>;
-  abstract setAccess(id: string, access: SetAccessRecord): Promise<GuardedUserChange>;
-  abstract disable(id: string): Promise<GuardedUserChange>;
-  abstract enable(id: string): Promise<UserWrite>;
+  abstract updateProfile(
+    id: string,
+    patch: UpdateProfileRecord,
+    trail?: UserChangeTrail,
+  ): Promise<UserWrite>;
+  abstract setAccess(
+    id: string,
+    access: SetAccessRecord,
+    trail?: UserChangeTrail,
+  ): Promise<GuardedUserChange>;
+  abstract disable(id: string, trail?: UserChangeTrail): Promise<GuardedUserChange>;
+  abstract enable(id: string, trail?: UserChangeTrail): Promise<UserWrite>;
   /**
    * Doi mat khau. `temporaryUntil` co gia tri = mat khau TAM (dat lai / cap moi): bat
    * `mustChangePassword` va dat han; `null` = mat khau that (nguoi dung tu doi): xoa ca hai.
@@ -116,8 +134,14 @@ export abstract class UserRepository {
     id: string,
     passwordHash: string,
     temporaryUntil: Date | null,
+    trail?: UserChangeTrail,
   ): Promise<UserWrite>;
   abstract markLogin(id: string, at: Date): Promise<void>;
+}
+
+/** Lan ghi da doi mot tai khoan (ban truoc + sau) — `null` khi khong tim thay / bi chan. */
+export function updatedChange(result: UserWrite | GuardedUserChange): UserChange | null {
+  return result.status === 'UPDATED' ? result : null;
 }
 
 /* ------------------------------------------------------------------ *

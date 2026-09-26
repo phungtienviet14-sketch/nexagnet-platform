@@ -68,6 +68,24 @@ describe('tang luu tru cua dia diem van hanh (#395)', () => {
     expect(STATEMENTS).toContain('RAISE EXCEPTION');
   });
 
+  /**
+   * "Sua du lieu roi chay lai" la CHUA DU: lan hong de lai mot dong di tru HONG va `migrate deploy`
+   * tu choi moi lan sau voi P3009 (do tren DB nhap). MOI cau bao loi phai noi buoc `resolve`.
+   */
+  it('moi cau bao loi cua buoc kiem noi ca buoc `migrate resolve --rolled-back`', () => {
+    const raises = STATEMENTS.split('RAISE EXCEPTION').slice(1);
+    expect(raises).toHaveLength(2);
+    for (const raise of raises) {
+      expect(raise).toContain(
+        'prisma migrate resolve --rolled-back 20260925100100_transport_place_admin',
+      );
+      expect(raise).toContain('P3009');
+    }
+    expect(ROLLBACK).toContain(
+      'prisma migrate resolve --rolled-back 20260925100100_transport_place_admin',
+    );
+  });
+
   /** CHI THEM: khong doi cot cu, khong xoa, khong doi ten, khong tao bang, chi cham MOT bang. */
   it('khong sua mot cot hay bang nao dang ton tai', () => {
     expect(STATEMENTS).not.toMatch(/ALTER COLUMN/i);

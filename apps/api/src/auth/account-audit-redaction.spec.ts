@@ -5,6 +5,7 @@ import {
   accessSnapshot,
   accountSnapshot,
   onboardingSnapshot,
+  profileChangeAudit,
   profileSnapshot,
   statusSnapshot,
 } from './account-audit.js';
@@ -84,6 +85,24 @@ describe('payload kiem toan tai khoan song qua lop che', () => {
       mustChangePassword: AUDIT_REDACTED,
       hasPhone: AUDIT_REDACTED,
     });
+    // Co doi: ten KET THUC bang `phone` bi che — `contactNumberChanged` thi khong.
+    expect(redactAuditValue({ changedPhone: true, contactNumberChanged: true })).toEqual({
+      changedPhone: AUDIT_REDACTED,
+      contactNumberChanged: true,
+    });
+  });
+
+  it('dong sua thong tin: CO DOI email / so lien lac song qua ca hai lop che, gia tri thi khong', () => {
+    const change = profileChangeAudit(RECORD, {
+      ...RECORD,
+      email: 'khac@example.test',
+      phone: '0900000009',
+    });
+    for (const filtered of throughEveryFilter(change?.after)) {
+      expect(filtered).toMatchObject({ emailChanged: true, contactNumberChanged: true });
+    }
+    expect(JSON.stringify(change)).not.toMatch(/0900000009|khac@example\.test/);
+    expect(profileChangeAudit(RECORD, { ...RECORD })).toBeNull();
   });
 });
 

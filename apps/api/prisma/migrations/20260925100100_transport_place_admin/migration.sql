@@ -34,6 +34,10 @@ ALTER TABLE "TransportGeofence"
 -- hong voi mot thong bao kho doc ("Key ((1))=(1) is duplicated") va chan ca lan khoi dong. Khoi nay
 -- hong TRUOC, bang mot cau noi dung viec phai lam. Tren preview (do 25/09/2026) co dung MOT hang rao
 -- DEPOT (`DEPOT-HN`, dang bat), nen khoi nay khong chan gi.
+--
+-- Cau noi ca buoc `prisma migrate resolve --rolled-back`: Postgres lui TRON di tru (khong cot, khong
+-- chi muc nao duoc tao), nhung Prisma van giu mot dong HONG trong `_prisma_migrations` va tu choi
+-- moi lan deploy sau (P3009) cho toi khi dong do duoc danh dau la da lui — do tren DB nhap.
 DO $$
 DECLARE
   active_depots integer;
@@ -45,7 +49,7 @@ BEGIN
 
   IF active_depots > 1 THEN
     RAISE EXCEPTION
-      'Co % hang rao DEPOT dang ACTIVE. Tu #395 chi duoc MOT bai xe dang bat. Chon bai dung, dat cac bai con lai thanh INACTIVE (UPDATE "TransportGeofence" SET "status" = ''INACTIVE'' WHERE "id" IN (...)), roi chay lai di tru.',
+      'Co % hang rao DEPOT dang ACTIVE. Tu #395 chi duoc MOT bai xe dang bat. Chon bai dung, dat cac bai con lai thanh INACTIVE (UPDATE "TransportGeofence" SET "status" = ''INACTIVE'' WHERE "id" IN (...)), roi deploy lai. Lan deploy vua hong da de lai mot dong di tru HONG trong _prisma_migrations: TRUOC khi deploy lai, chay prisma migrate resolve --rolled-back 20260925100100_transport_place_admin (neu khong, migrate deploy tu choi voi P3009).',
       active_depots;
   END IF;
 
@@ -60,7 +64,7 @@ BEGIN
 
   IF duplicated_codes > 0 THEN
     RAISE EXCEPTION
-      'Co % ma bai xe (subjectId cua hang rao DEPOT) bi dung cho nhieu hang rao. Moi ma bai xe chi thuoc MOT hang rao: doi "subjectId" cua cac hang thua sang mot ma moi (vd them hau to -2), roi chay lai di tru.',
+      'Co % ma bai xe (subjectId cua hang rao DEPOT) bi dung cho nhieu hang rao. Moi ma bai xe chi thuoc MOT hang rao: doi "subjectId" cua cac hang thua sang mot ma moi (vd them hau to -2), roi deploy lai. Lan deploy vua hong da de lai mot dong di tru HONG trong _prisma_migrations: TRUOC khi deploy lai, chay prisma migrate resolve --rolled-back 20260925100100_transport_place_admin (neu khong, migrate deploy tu choi voi P3009).',
       duplicated_codes;
   END IF;
 END

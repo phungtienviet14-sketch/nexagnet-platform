@@ -263,6 +263,7 @@ export interface AccountHarness {
   readonly telemetry: TelemetryService & {
     readonly step: ReturnType<typeof vi.fn>;
     readonly decision: ReturnType<typeof vi.fn>;
+    readonly stateChange: ReturnType<typeof vi.fn>;
   };
   readonly registry: PermissionDomainRegistry;
 }
@@ -283,6 +284,7 @@ export function accountHarness(
   const telemetry = {
     step: vi.fn(async (_name: string, run: () => Promise<unknown>) => run()),
     decision: vi.fn(),
+    stateChange: vi.fn(),
   } as unknown as AccountHarness['telemetry'];
   const registry = new PermissionDomainRegistry();
   registry.register(fakeKhoDomain(options));

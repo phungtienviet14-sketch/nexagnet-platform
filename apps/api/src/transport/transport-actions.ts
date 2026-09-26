@@ -11,7 +11,8 @@ import type { UserRole } from '../auth/auth.types.js';
  * action, khong co vai `DRIVER`, khong co gioi han theo dong. T2 KHONG dung IAM moi — chi thi
  * workstream cam. Thay vao do:
  *
- *   · mien cong bo hang so co kieu (tep nay) va kiem quyen qua `roleCanPerform`;
+ *   · mien cong bo hang so co kieu (tep nay); vai KHOI DIEM tra qua `presetIncludes`, con quyen
+ *     THAT cua mot tai khoan qua `canPerformTransportAction` (`#395`);
  *   · cau BRIDGE vai→hanh dong nam DUNG MOT CHO, o day, o tang bien gioi;
  *   · code nghiep vu KHONG duoc viet `if (role === ...)` o bat cu dau.
  *
@@ -852,7 +853,7 @@ export const DIRECTOR_ONLY_ACTIONS: readonly TransportAction[] = [
 /**
  * VAI KHOI DIEM (`#395`). Bang nay KHONG con la cau tra loi cuoi cung cho mot tai khoan: quyen rieng
  * (ALLOW/DENY) cua tung nguoi chong len no trong `permissions/transport-permission-rules.ts`
- * (`canPerformTransportAction`). `roleCanPerform` duoi day chi con la tra cuu VAI KHOI DIEM.
+ * (`canPerformTransportAction`). `presetIncludes` duoi day chi con la tra cuu VAI KHOI DIEM.
  */
 const ROLE_ACTIONS: Readonly<Record<UserRole, readonly TransportAction[]>> = {
   ADMIN: OPERATIONS_ACTIONS,
@@ -865,5 +866,11 @@ const ROLE_ACTIONS: Readonly<Record<UserRole, readonly TransportAction[]>> = {
 
 export const actionsForRole = (role: UserRole): readonly TransportAction[] => ROLE_ACTIONS[role];
 
-export const roleCanPerform = (role: UserRole, action: TransportAction): boolean =>
+/**
+ * VAI KHOI DIEM co gom `action` khong — KHONG phai "tai khoan nay lam duoc khong". Ten cu
+ * `roleCanPerform` bi doi CO CHU Y (`#395`): mot duong goi viet truoc #395 (vd `GET /transport/access`
+ * cua nhanh mobile) se do bien dich thay vi lang le bo qua quyen rieng ALLOW/DENY. Hoi quyen that cua
+ * mot nguoi dung: `canPerformTransportAction` / `effectiveTransportActionList`.
+ */
+export const presetIncludes = (role: UserRole, action: TransportAction): boolean =>
   ROLE_ACTIONS[role].includes(action);

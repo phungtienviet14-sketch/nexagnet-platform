@@ -37,11 +37,16 @@ export interface PlaceOwnerOutcome {
 /** Khuon ma so thue cua `TransportCounterparty_taxCode_shape` — khuon khac thi bo (NULL). */
 const TAX_CODE_SHAPE = /^[0-9]{10}(-[0-9]{3})?$/;
 
-/** Chu cua dia diem (don vi / khach hang) da ngung hoat dong — dung chung cho tao va bat lai. */
-export const ownerInactive = (name: string): TransportDomainError =>
-  TransportDomainError.conflict(
+/**
+ * Chu cua dia diem (don vi / khach hang) da ngung hoat dong — dung chung cho tao va bat lai. Ten chu
+ * di vao `detail.ownerName` de man hinh goi dung ten (telemetry chi giu ma).
+ */
+export const ownerInactive = (name: string): PlaceAdminError =>
+  new PlaceAdminError(
+    'CONFLICT',
     'PLACE_OWNER_INACTIVE',
     `"${name}" đã ngừng hoạt động — bật lại đơn vị hoặc khách hàng này trước khi thêm hoặc bật địa điểm của họ.`,
+    { ownerName: name },
   );
 
 export async function resolveSiteOwner(
@@ -129,9 +134,11 @@ async function attachToExistingSite(
   if (renamed) {
     const clash = await tx.sites.findByName(site.counterpartyId, command.name);
     if (clash && clash.id !== site.id) {
-      throw TransportDomainError.conflict(
+      throw new PlaceAdminError(
+        'CONFLICT',
         'COUNTERPARTY_SITE_NAME_TAKEN',
-        `"${party.name}" đã có một địa điểm khác tên "${command.name}".`,
+        `"${party.name}" đã có một địa điểm khác tên "${clash.name}".`,
+        { siteId: clash.id, siteName: clash.name, counterpartyName: party.name },
       );
     }
   }

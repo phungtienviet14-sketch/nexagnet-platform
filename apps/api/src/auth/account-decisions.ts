@@ -42,7 +42,8 @@ export const ACCOUNT_DECISIONS = defineDecisionVocabulary({
   labels: {
     ACCOUNT_CHANGE_ALLOWED: 'Thay đổi tài khoản hợp lệ và đã được ghi',
     SELF_LOCKOUT: 'Không tự khoá, tự đổi quyền hay tự đặt lại mật khẩu của chính mình ở đây',
-    LAST_ACTIVE_ADMIN: 'Đây là Giám đốc đang hoạt động cuối cùng — không khoá hay hạ vai được',
+    LAST_ACTIVE_ADMIN:
+      'Đây là tài khoản quản trị đang hoạt động cuối cùng — không khoá hay hạ vai được',
     PROTECTED_SERVICE_ACCOUNT: 'Tài khoản hệ thống — không sửa ở màn hình quản trị',
     USERNAME_RESERVED: 'Tên đăng nhập này dành cho hệ thống',
     ACCOUNT_LINKED_TO_DRIVER: 'Tài khoản đang nối với hồ sơ lái xe — gỡ nối trước khi đổi vai',

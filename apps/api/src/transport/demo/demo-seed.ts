@@ -20,6 +20,7 @@ import { customerReconciliationFingerprint } from '../customer-ar/customer-ar-do
 import { calculatePayslip, payrollPolicyVersion } from '../workforce/payroll-calculator.js';
 import { loadDemoMonthDataset } from './demo-dataset.js';
 import { assertDemoResetAllowed, assertTransportDemoTenant } from './demo-guard.js';
+import { DEMO_STAFF_PERSONAS, demoDriverLogins } from './demo-logins.js';
 import { type DemoPlan, buildDemoPlan } from './demo-plan.js';
 
 /**
@@ -55,23 +56,8 @@ export const DEMO_SEED_ACTOR = 'demo-seed';
 /** Mat khau nhan vat mau den tu MOI TRUONG, khong bao gio tu kho ma nguon. */
 export const DEMO_DRIVER_PASSWORD_ENV = 'TRANSPORT_DEMO_DRIVER_PASSWORD';
 
-/**
- * NHAN VAT VAN PHONG cua ban demo — khong phai lai xe, nen khong co ho so `TransportDriver`.
- *
- * VI SAO VAI NAM TRONG MA NGUON CHU KHONG TRONG GOI KHACH:
- * mot goi khach khai duoc vai o tang xac thuc thi mot goi khach cung PHONG duoc quyen cua chinh
- * no — `role: 'ADMIN'` trong mot tep JSON la mot duong leo thang dac quyen. Nen goi khach quyet
- * dinh DU LIEU, con ma nguon quyet dinh QUYEN.
- *
- * VI SAO CAN MOT KE TOAN THAT: `ACCOUNTING` khong phai `ADMIN` bi cat bot cho vui — no bi tu choi
- * DUNG BA hanh dong (`transport-actions.ts`): huy chuyen (`GD-02`: huy thay xoa), mo lai ky chi phi
- * va mo lai ky doi soat bang ke (ca hai deu `GD-11`). Khong co mot tai khoan `ACCOUNTING` that thi
- * ba duong tu choi do khong bao gio duoc DO tren ban dang chay — chi duoc do trong bo nho.
- */
-export const DEMO_STAFF_PERSONAS = [
-  { login: 'ke-toan', name: 'Kế toán mẫu', role: 'ACCOUNTING' },
-  { login: 'giam-doc', name: 'Giám đốc mẫu', role: 'ADMIN' },
-] as const;
+/** Nhan vat van phong — hang so nam o `demo-logins.ts` (tep nhe, mien phan quyen doc duoc). */
+export { DEMO_STAFF_PERSONAS } from './demo-logins.js';
 
 export interface DemoSeedOptions {
   /** Ngay nghiep vu lam moc. Mac dinh: hom nay theo mui gio cua goi khach. */
@@ -394,11 +380,6 @@ export async function resetTransportDemoData(
   if (users.count > 0) deleted['user'] = users.count;
 
   return deleted;
-}
-
-/** Ten dang nhap lai xe cua bo du lieu mau — tap ten ma lan gieo tao ra. */
-function demoDriverLogins(): readonly string[] {
-  return loadDemoMonthDataset().drivers.map((driver) => driver.login);
 }
 
 /**

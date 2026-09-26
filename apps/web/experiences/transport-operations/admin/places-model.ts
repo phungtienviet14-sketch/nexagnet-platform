@@ -6,7 +6,7 @@ import {
   VIETNAM_PICKER_BOUNDS,
   type PickerMarker,
 } from '../workspace/place-lookup';
-import { foldText } from './accounts-model';
+import { foldText, withAuditReason } from './accounts-model';
 import type {
   CreatePlaceInput,
   DepotPlannerStatus,
@@ -93,6 +93,17 @@ export const DEPOT_PLANNER_SHORT: Readonly<Record<DepotPlannerStatus, string>> =
   AMBIGUOUS: 'Nhiều bãi đang bật',
   NOT_IN_USE: 'Không dùng lập kế hoạch',
 };
+
+/**
+ * Bai du phong la bai DA TAT cho san de doi sang — goi no "Đã tắt" canh nhan "Bãi dự phòng" la hai
+ * cau trai nhau tren cung mot dong. Dong danh sach bo nhan trang thai (nhan bai xe da noi du), the
+ * chi tiet goi dung ten nghiep vu.
+ */
+export const isStandbyDepot = (place: Pick<PlaceAdminView, 'depot'>): boolean =>
+  place.depot?.plannerStatus === 'STANDBY';
+
+export const placeStatusLabel = (place: PlaceAdminView): string =>
+  isStandbyDepot(place) ? DEPOT_PLANNER_SHORT.STANDBY : PLACE_STATUS_LABEL[place.effectiveStatus];
 
 export const DEPOT_PLANNER_TONE: Readonly<Record<DepotPlannerStatus, StatusTone>> = {
   IN_USE: 'go',
@@ -585,7 +596,7 @@ export function placeFieldLocks(
 export const NAME_LOCKED_HINT =
   'Đổi tên địa điểm của đơn vị khác cần quyền quản lý khách hàng, đối tác.';
 export const ADDRESS_LOCKED_HINT =
-  'Đổi địa chỉ địa điểm của đơn vị khác cần quyền quản lý khách hàng, đối tác.';
+  'Đổi địa chỉ của địa điểm thuộc đơn vị khác cần quyền quản lý khách hàng, đối tác.';
 
 /**
  * Dien ten/dia chi tu ket qua tim (xuoi hoac nguoc) — CHI o dang trong VA khong bi khoa. Mot o bi
@@ -607,6 +618,8 @@ export function withLookupFill(
 
 const HISTORY_ACTION_LABEL: Readonly<Record<string, string>> = {
   'transport.place.create': 'Thêm địa điểm',
+  // Duong dang ky CU (`POST /transport/geofences`) van gan — dong dau cua dia diem tao qua duong do.
+  'transport.geofence.register': 'Thêm địa điểm',
   'transport.place.update': 'Sửa địa điểm',
   'transport.place.deactivate': 'Tắt địa điểm',
   'transport.place.activate': 'Bật lại địa điểm',
@@ -615,14 +628,20 @@ const HISTORY_ACTION_LABEL: Readonly<Record<string, string>> = {
   'transport.counterparty_site.update': 'Sửa địa điểm của đơn vị',
 };
 
-/** Cau cho mot dong lich su: cau may chu viet neu co, khong thi ten viec — khong bao gio ma. */
+/**
+ * Cau cho mot dong lich su: cau may chu viet neu co, khong thi ten viec — khong bao gio ma. Kem LY
+ * DO (`after.reason`) khi co: hop thoai tat hoi "Lý do tắt (ghi vào lịch sử)", nen ly do phai doc lai
+ * duoc o chinh lich su nay.
+ */
 export function placeHistoryLabel(entry: {
   readonly action: string;
   readonly summary?: string | null;
+  readonly after?: unknown;
 }): string {
   const summary = entry.summary?.trim() ?? '';
-  if (summary.length > 0) return summary;
-  return HISTORY_ACTION_LABEL[entry.action] ?? 'Thay đổi khác';
+  const label =
+    summary.length > 0 ? summary : (HISTORY_ACTION_LABEL[entry.action] ?? 'Thay đổi khác');
+  return withAuditReason(label, entry.after);
 }
 
 /** Ma dong viec dang mo — ma nghiep vu neu co, khong thi ma ky thuat rut gon. */

@@ -22,6 +22,11 @@ export interface AuthUser {
   mustChangePassword?: boolean;
   temporaryPasswordExpiresAt?: string | null;
   jobTitle?: string | null;
+  /**
+   * Quyen RIENG cua tai khoan (them/bot so voi vai khoi diem) — may chu tra tren moi `AccountView`.
+   * `/settings` doc no de canh bao: doi vai bang duong cu XOA het cac dong nay.
+   */
+  permissionGrants?: readonly { readonly permission: string; readonly effect: 'ALLOW' | 'DENY' }[];
 }
 
 /**

@@ -991,6 +991,31 @@
   flex: none;
 }
 
+/* Chu giai ghim — cung ky hieu voi ghim tren ban do, nho lai cho mot dong chu. */
+.tx-admin-maplegend {
+  flex: none;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  margin: 0;
+  padding: 0;
+  font-size: 0.76rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-maplegend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tx-admin-maplegend .tx-pin {
+  width: 1.2rem;
+  height: 1.2rem;
+  cursor: default;
+}
+
 .tx-admin-maptoggle {
   display: none;
 }

@@ -84,8 +84,14 @@ export function GroupEditor({
             {group.summary}
           </span>
         </div>
-        <span className="tx-admin-group__count" aria-label={`${box.held} trên ${box.total} việc`}>
-          {box.held}/{box.total}
+        {/* `aria-label` tren `<span>` bi cam (ARIA 1.2): so cho mat, cau cho trinh doc man hinh. */}
+        <span className="tx-admin-group__count">
+          <span aria-hidden="true">
+            {box.held}/{box.total}
+          </span>
+          <span className="tx-visually-hidden">
+            {box.held} trên {box.total} việc
+          </span>
         </span>
         <button
           type="button"
@@ -99,13 +105,15 @@ export function GroupEditor({
         </button>
       </div>
       <ul className="tx-admin-actionlist" id={listId} hidden={!isOpen}>
-        {rows.map((row) => (
+        {rows.map((row, index) => (
           <li key={row.code} className="tx-admin-action" data-origin={row.origin}>
             <label>
               <input
                 type="checkbox"
                 checked={row.isOn}
                 disabled={row.lockedReason !== null}
+                // O khoa noi VI SAO khoa, khong chi "disabled".
+                aria-describedby={row.lockedReason === null ? undefined : `${listId}-lock-${index}`}
                 onChange={(event) =>
                   onToggleAction(row.code, event.target.checked, row.needsConfirmation)
                 }
@@ -116,7 +124,9 @@ export function GroupEditor({
               {row.kindLabel}
             </span>
             {row.lockedReason === null ? null : (
-              <span className="tx-admin-action__lock">{row.lockedReason}</span>
+              <span className="tx-admin-action__lock" id={`${listId}-lock-${index}`}>
+                {row.lockedReason}
+              </span>
             )}
             {row.origin === 'GRANTED' ? (
               <span className="tx-admin-action__origin">Cấp thêm</span>

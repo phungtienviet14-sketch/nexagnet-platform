@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Page, Route } from '@playwright/test';
+import { localUsernameSuggestion } from '../../experiences/transport-operations/admin/accounts-model';
 import { actionsForRole } from '../../experiences/transport-operations/transport-actions';
 
 /**
@@ -87,11 +88,30 @@ export interface Recorded {
   readonly body: unknown;
 }
 
+/** Dong lich su — CUNG hinh dang `toHistoryEntry` cua may chu (`after` mang ly do khoa). */
+export interface HistoryRow {
+  readonly at: string;
+  readonly actor: string;
+  readonly action: string;
+  readonly summary: string;
+  readonly after?: unknown;
+}
+
+/** Mot lan tra loi LOI cho yeu cau ke tiep khop — bai kiem dung de dung duong loi THAT. */
+export interface Failure {
+  readonly method: string;
+  readonly path: string;
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+}
+
 export interface AccountsWorld {
   readonly accounts: Account[];
   readonly drivers: Driver[];
   readonly requests: Recorded[];
-  readonly history: Map<string, { at: string; actor: string; action: string; summary: string }[]>;
+  readonly history: Map<string, HistoryRow[]>;
+  /** Tra loi LOI mot lan cho yeu cau ke tiep khop (vd `429` cua ThrottlerGuard) roi tu go. */
+  failNext: Failure | null;
   /** Tai khoan dang dang nhap, va tap quyen `/auth/me` tra (`null` = may chu cu, khong tra). */
   me: { accountId: string; permissions: readonly string[] | null };
   /** Tao lai ma CSRF sau lan doi mat khau — man hinh phai giu ma MOI. */
@@ -341,21 +361,26 @@ function violations(role: Role, grants: readonly Grant[]) {
     );
 }
 
-const slug = (name: string): string =>
-  name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[đĐ]/g, 'd')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .reverse()
-    .join('.');
+/*
+ * Cau lich su CUA MAY CHU (`HISTORY_SUMMARY` trong `apps/api/src/auth/account-audit.ts`) — may chu
+ * gia khong tu dat cau, de bai kiem khang dinh dung cai man hinh that se hien.
+ */
+const SUMMARY = {
+  'auth.user.create': 'Tạo tài khoản',
+  'auth.user.access.change': 'Đổi vai trò hoặc quyền',
+  'auth.user.disable': 'Khoá tài khoản',
+  'auth.user.enable': 'Mở khoá tài khoản',
+  'auth.credentials.reset': 'Cấp mật khẩu tạm mới',
+} as const;
 
-function remember(world: AccountsWorld, userId: string, action: string, summary: string): void {
+function remember(
+  world: AccountsWorld,
+  userId: string,
+  action: keyof typeof SUMMARY,
+  after?: unknown,
+): void {
   const rows = world.history.get(userId) ?? [];
-  rows.unshift({ at: NOW, actor: 'giam-doc', action, summary });
+  rows.unshift({ at: NOW, actor: 'giam-doc', action, summary: SUMMARY[action], after });
   world.history.set(userId, rows);
 }
 
@@ -380,8 +405,9 @@ async function answerUsers(
   if (path === '/settings/users' && method === 'GET') return json(route, world.accounts);
   if (path === '/settings/users/permission-catalog') return json(route, CATALOG);
   if (path === '/settings/users/suggest-username') {
+    // CUNG luat voi `usernameBase` cua may chu — ban web do da duoc doi chieu voi bang vi du cua API.
     return json(route, {
-      username: `${String(body.prefix ?? '')}${slug(String(body.name ?? ''))}`,
+      username: localUsernameSuggestion(String(body.name ?? ''), String(body.prefix ?? '')),
     });
   }
   if (path === '/settings/users' && method === 'POST') {
@@ -390,7 +416,13 @@ async function answerUsers(
       return problem(route, 409, 'ESCALATION_CONFIRMATION_REQUIRED', 'Cần xác nhận');
     }
     if (world.accounts.some((entry) => entry.username === body.username)) {
-      return problem(route, 409, 'ACCOUNT_IDENTITY_TAKEN', 'Trùng', { field: 'username' });
+      // May chu that KHONG kem `detail` cho ly do nay (`auth.service` → `deny(..., {})`).
+      return problem(
+        route,
+        409,
+        'ACCOUNT_IDENTITY_TAKEN',
+        'Tên đăng nhập, email hoặc số điện thoại đã được dùng',
+      );
     }
     const grants = (body.grants as Grant[] | undefined) ?? [];
     const found = violations(role, grants);
@@ -408,7 +440,7 @@ async function answerUsers(
     });
     const credential = issueCredential(created);
     world.accounts.push(created);
-    remember(world, created.id, 'auth.user.create', 'Tạo tài khoản');
+    remember(world, created.id, 'auth.user.create');
     return json(route, { ...created, credential }, 201);
   }
   const match = /^\/settings\/users\/([^/]+)(\/.*)?$/.exec(path);
@@ -429,30 +461,28 @@ async function answerUsers(
     if (body.dryRun === true) return json(route, breakdown(world, target, role, grants));
     target.role = role;
     target.permissionGrants = grants;
-    remember(world, target.id, 'auth.user.access.change', 'Đổi quyền');
+    remember(world, target.id, 'auth.user.access.change');
     return json(route, { account: target, access: breakdown(world, target, role, grants) });
   }
   if (suffix === '/history') return json(route, world.history.get(target.id) ?? []);
   if (suffix === '/disable') {
     if (isSelf) return problem(route, 403, 'SELF_LOCKOUT', 'Tự khoá');
     target.disabledAt = NOW;
-    remember(
-      world,
-      target.id,
-      'auth.user.disable',
-      `Khoá tài khoản${body.reason ? ` — ${String(body.reason)}` : ''}`,
-    );
+    remember(world, target.id, 'auth.user.disable', {
+      disabledAt: NOW,
+      reason: body.reason ?? null,
+    });
     return json(route, target);
   }
   if (suffix === '/enable') {
     target.disabledAt = null;
-    remember(world, target.id, 'auth.user.enable', 'Mở khoá tài khoản');
+    remember(world, target.id, 'auth.user.enable');
     return json(route, target);
   }
   if (suffix === '/credentials/reset') {
     if (isSelf) return problem(route, 403, 'SELF_LOCKOUT', 'Tự khoá');
     const credential = issueCredential(target);
-    remember(world, target.id, 'auth.credentials.reset', 'Đặt lại mật khẩu');
+    remember(world, target.id, 'auth.credentials.reset');
     return json(route, { ...target, credential });
   }
   if (suffix === '' && method === 'PATCH') {
@@ -469,6 +499,11 @@ async function answer(route: Route, world: AccountsWorld): Promise<void> {
   const path = url.pathname;
   const body = (method === 'GET' ? {} : (request.postDataJSON() ?? {})) as Record<string, unknown>;
   world.requests.push({ method, path, body });
+  const failure = world.failNext;
+  if (failure !== null && failure.method === method && failure.path === path) {
+    world.failNext = null;
+    return json(route, failure.body, failure.status);
+  }
   const me = world.accounts.find((entry) => entry.id === world.me.accountId) as Account;
 
   if (path === '/auth/config') return json(route, { mode: 'session' });
@@ -584,6 +619,7 @@ export async function serveAccounts(
     },
     csrf: 'e2e-csrf',
     myVehicles: options.myVehicles ?? null,
+    failNext: null,
   };
   await page.route(
     (url) =>
