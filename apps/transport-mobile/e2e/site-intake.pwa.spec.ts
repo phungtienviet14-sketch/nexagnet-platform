@@ -4,6 +4,7 @@ import {
   request as playwrightRequest,
   test,
   type APIRequestContext,
+  type APIResponse,
   type Browser,
   type BrowserContext,
   type Page,
@@ -54,13 +55,32 @@ let office: APIRequestContext;
 let baselineQueueTotal = 0;
 let autoOrder: { readonly orderId: string; readonly orderCode: string; readonly intakeId: string };
 
+/**
+ * `/auth/native/session` chiu gioi han 5 lan/60 giay MOI IP, va `prepare.mjs` vua dang nhap DUNG 5
+ * tai khoan tu cung may ngay truoc do. Khi ban xuat web + Chromium xong trong duoi mot phut, lan nay
+ * la lan thu 6 -> 429 (run 36225231902). Cho het cua so theo `Retry-After` cua may chu, KHONG noi gioi
+ * han dang nhap cua san pham.
+ */
+const LOGIN_WINDOW_MS = 75_000;
+
+async function nativeSession(probe: APIRequestContext): Promise<APIResponse> {
+  const deadline = Date.now() + LOGIN_WINDOW_MS;
+  for (;;) {
+    const response = await probe.post('/auth/native/session', {
+      headers: { 'x-nexagnet-client': 'e2e/pwa-site-intake' },
+      data: { username: fixture.director, password: PASSWORD },
+    });
+    if (response.status() !== 429 || Date.now() >= deadline) return response;
+    const retryAfter = Number(response.headers()['retry-after']);
+    const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5;
+    await new Promise((done) => setTimeout(done, Math.min(waitSeconds, 30) * 1_000));
+  }
+}
+
 async function officeApi(): Promise<APIRequestContext> {
   const probe = await playwrightRequest.newContext({ baseURL: API });
-  const session = await probe.post('/auth/native/session', {
-    headers: { 'x-nexagnet-client': 'e2e/pwa-site-intake' },
-    data: { username: fixture.director, password: PASSWORD },
-  });
-  expect(session.ok()).toBeTruthy();
+  const session = await nativeSession(probe);
+  expect(session.ok(), `dang nhap Giam doc -> HTTP ${session.status()}`).toBeTruthy();
   const { sessionToken } = (await session.json()) as { sessionToken: string };
   await probe.dispose();
   return playwrightRequest.newContext({
