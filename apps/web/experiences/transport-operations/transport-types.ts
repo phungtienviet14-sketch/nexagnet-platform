@@ -2299,7 +2299,9 @@ export type ActionQueueKind =
   | 'MAINTENANCE_OVERDUE'
   | 'MAINTENANCE_DUE_SOON'
   | 'VEHICLE_STATE_INCONSISTENT'
-  | 'CHECKPOINT_LOCATION_PROOF_MISSING';
+  | 'CHECKPOINT_LOCATION_PROOF_MISSING'
+  /** `#398`: viec tai xe nhan truc tiep chua du dieu kien tao don (chi ngoai le). */
+  | 'SITE_INTAKE_NEEDS_REVIEW';
 
 export type PendingActionQueueKind =
   | 'RECEIVER_WAITING_ABOVE_THRESHOLD'
@@ -2329,7 +2331,13 @@ export interface ActionQueueItem {
   readonly detail: Readonly<Record<string, number | string | null>>;
 }
 
-export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS' | 'CHECKPOINT';
+export type ControlTowerSource =
+  | 'EXPENSE_CLAIMS'
+  | 'FUEL'
+  | 'OPERATIONAL_ALERTS'
+  | 'CHECKPOINT'
+  /** `#398`: viec tai xe nhan truc tiep — bang hien tren ung dung di dong. */
+  | 'SITE_INTAKE';
 
 /**
  * Ban SAO cua `FleetPresenceView` o `apps/api/src/transport/control-tower/control-tower.types.ts`.

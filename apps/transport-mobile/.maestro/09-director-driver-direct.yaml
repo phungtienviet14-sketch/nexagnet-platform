@@ -19,11 +19,16 @@ tags:
 - extendedWaitUntil:
     visible: 'Hôm nay'
     timeout: 45000
+# Cuon toi CHINH the don (khong chi tieu de muc): muc nam duoi phan "Can quyet truoc", va dung o
+# tieu de thi the don con o duoi mep man hinh (run 36214207789).
 - scrollUntilVisible:
     element:
-      id: director-driver-orders
+      id: 'director-driver-order-.*'
     direction: DOWN
-    timeout: 30000
+    timeout: 45000
+    centerElement: true
+- assertVisible:
+    id: director-driver-orders
 - assertVisible: '.*${MAESTRO_INTAKE_DRIVER_NAME}.*'
 - assertNotVisible: 'Duyệt đơn'
 - takeScreenshot: 09-hom-nay-don-moi-tu-tai-xe
