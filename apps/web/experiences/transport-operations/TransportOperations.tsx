@@ -1,9 +1,8 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
-import { AccountsAdminView } from './admin/AccountsAdminView';
-import { PlacesAdminView } from './admin/PlacesAdminView';
-import { ErrorState } from './components/SectionState';
+import { ErrorState, LoadingState } from './components/SectionState';
 import { DriverShell, roleLabelOf, TransportShell } from './components/TransportShell';
 import { DriverSurface } from './driver/DriverSurface';
 import { useNavigationInput } from './hooks/useTransportWorkspace';
@@ -48,6 +47,21 @@ import { ControlTowerView } from './views/ControlTowerView';
 import { FinanceView } from './views/FinanceView';
 import { OverviewView } from './views/OverviewView';
 import { TripsView } from './views/TripsView';
+
+/*
+ * HAI MAN QUAN TRI TAI THEO YEU CAU (`#395`). Chi Giam doc mo chung, va chung nang (~6 nghin dong
+ * cung CSS rieng): nhap tinh thi MOI nguoi dung — lai xe tren dien thoai, ke toan — tai them
+ * chung o moi lan mo trang, va moi lan tai lai trang (bam mot lien ket muc) cham han. Nhap dong
+ * dua chung ra mot goi rieng, chi tai khi mo dung muc.
+ */
+const AccountsAdminView = dynamic(
+  () => import('./admin/AccountsAdminView').then((module) => module.AccountsAdminView),
+  { loading: () => <LoadingState label="Đang mở Tài khoản & quyền…" /> },
+);
+const PlacesAdminView = dynamic(
+  () => import('./admin/PlacesAdminView').then((module) => module.PlacesAdminView),
+  { loading: () => <LoadingState label="Đang mở Địa điểm vận hành…" /> },
+);
 
 /**
  * Be mat VAN HANH VAN TAI — `GD-23`.

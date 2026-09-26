@@ -393,7 +393,8 @@ const defaultExportName = (file: string): string | null => {
 };
 
 /**
- * `const X = dynamic(() => import('./Y'), …)` (Next.js) → `<X />` ve component MAC DINH cua `Y`.
+ * `const X = dynamic(() => import('./Y'), …)` (Next.js) → `<X />` ve component MAC DINH cua `Y`;
+ * `dynamic(() => import('./Y').then((module) => module.Z), …)` → ve export TEN `Z` cua `Y`.
  * Thieu mat xich nay thi moi query cua mot component nap dong se lot khoi bai do.
  */
 const dynamicImportsOf = (file: string, source: ts.SourceFile): ReadonlyMap<string, string> => {
@@ -412,6 +413,7 @@ const dynamicImportsOf = (file: string, source: ts.SourceFile): ReadonlyMap<stri
         continue;
       }
       let specifier: string | null = null;
+      let namedExport: string | null = null;
       const find = (child: ts.Node): void => {
         if (
           specifier === null &&
@@ -420,6 +422,10 @@ const dynamicImportsOf = (file: string, source: ts.SourceFile): ReadonlyMap<stri
         ) {
           specifier = stringOf(child.arguments[0]);
         }
+        // `.then((module) => module.Z)` — ten export duoc chon; `then` chinh no khong phai ten do.
+        if (ts.isPropertyAccessExpression(child) && child.name.text !== 'then') {
+          namedExport = child.name.text;
+        }
         ts.forEachChild(child, find);
       };
       find(call);
@@ -427,7 +433,7 @@ const dynamicImportsOf = (file: string, source: ts.SourceFile): ReadonlyMap<stri
       if (target === null) continue;
       map.set(
         declaration.name.text,
-        keyOf(target, defaultExportName(target) ?? declaration.name.text),
+        keyOf(target, namedExport ?? defaultExportName(target) ?? declaration.name.text),
       );
     }
   }
@@ -589,7 +595,8 @@ export function readSourceGraph(input: {
 /** `case '<muc>': return <View ... />;` trong `SectionBody` → khoa cua component. */
 function sectionRootsOf(file: string): ReadonlyMap<string, string> {
   const source = parse(file);
-  const imports = importsOf(file, source);
+  // Muc co the tro toi mot man NAP DONG (`dynamic(...)`, vd hai man quan tri) — cung la goc cua muc.
+  const imports = new Map([...importsOf(file, source), ...dynamicImportsOf(file, source)]);
   const roots = new Map<string, string>();
   const body = topLevelFunctions(source).find(([name]) => name === 'SectionBody')?.[1];
   if (body === undefined) throw new Error('Khong tim thay SectionBody');
