@@ -172,14 +172,14 @@ export class SiteIntakeReviewController {
   ): Promise<SiteIntakeCommandResponse<CommercialOutcome>> {
     const actor = transportActorOf(request);
     const parsed = parse(officeCompleteSchema, body);
+    const pick = parsed.destination;
     return this.guard(async () => {
       const outcome = await this.commercial.completeAsOffice({
         actor,
         intakeId,
         idempotencyKey: parsed.idempotencyKey,
-        ...(parsed.destination === undefined
-          ? {}
-          : { choice: await this.places.choiceOf(parsed.destination) }),
+        // HAM, khong gia tri: dich vu chi tim lai khi that su phai ghi (khong phai lan gui lai).
+        ...(pick === undefined ? {} : { choice: () => this.places.choiceOf(pick) }),
         ...(parsed.attestOrigin === undefined ? {} : { attestOrigin: parsed.attestOrigin }),
       });
       return { outcome, intake: await this.reviews.detail(intakeId) };

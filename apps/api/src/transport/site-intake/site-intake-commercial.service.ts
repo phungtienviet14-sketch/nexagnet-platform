@@ -58,6 +58,17 @@ export type DestinationChoice =
   | { readonly kind: 'KNOWN_PLACE'; readonly placeId: string }
   | { readonly kind: 'VERIFIED_SEARCH'; readonly destination: ResolvedDestination };
 
+/**
+ * Lua chon diem giao, hoac mot HAM tao ra no. Ham chi duoc goi khi lenh THAT SU phai ghi mot diem
+ * giao moi: lan GUI LAI cung khoa (hoac viec da dong) tra ket cuc da ghi ma KHONG tim lai dia diem —
+ * mat phan hoi roi gui lai khong duoc thanh "tim dia diem dang ban" chi vi bo nho dem cua lan tim da
+ * mat (khoi dong lai, may khac, bi day ra).
+ */
+export type DestinationChoiceSource = DestinationChoice | (() => Promise<DestinationChoice>);
+
+const choiceFrom = (source: DestinationChoiceSource): Promise<DestinationChoice> =>
+  typeof source === 'function' ? source() : Promise.resolve(source);
+
 /** KET CUC cua mot lenh thuong mai — doc tu su that SAU lenh, khong tu y dinh cua nguoi goi. */
 export interface CommercialOutcome {
   readonly intakeId: string;
@@ -86,14 +97,14 @@ export interface DriverDestinationCommand {
   readonly authUserId: string;
   readonly intakeId: string;
   readonly clientEventId: string;
-  readonly choice: DestinationChoice;
+  readonly choice: DestinationChoiceSource;
 }
 
 export interface OfficeCompleteCommand {
   readonly actor: string;
   readonly intakeId: string;
   readonly idempotencyKey: string;
-  readonly choice?: DestinationChoice;
+  readonly choice?: DestinationChoiceSource;
   readonly attestOrigin?: boolean;
 }
 
@@ -204,7 +215,13 @@ export class SiteIntakeCommercialService {
    */
   async chooseDestinationAsDriver(command: DriverDestinationCommand): Promise<CommercialOutcome> {
     const intake = await this.requireOwnIntake(command.authUserId, command.intakeId);
-    const destination = await this.resolve(command.choice);
+    // GUI LAI TRUOC KHI TIM LAI: cung khoa (hoac viec da dong) thi khong can mot diem giao moi, nen
+    // khong goi tim dia diem — lan gui lai phai tra DUNG ket cuc cu, ke ca khi tim dang tat/ban.
+    const recorded = await this.store.findByIntake(intake.id);
+    const settled =
+      recorded !== null &&
+      (recorded.destination?.eventId === command.clientEventId || recorded.status !== 'PENDING');
+    const destination = settled ? null : await this.resolve(await choiceFrom(command.choice));
 
     return this.runCommand(
       'site_intake.driver_destination',
@@ -220,6 +237,9 @@ export class SiteIntakeCommercialService {
         if (scope.commercial.status !== 'PENDING') {
           return this.outcomeOf(scope, await this.readinessIn(scope), false, false);
         }
+        // Doc truoc khoa noi "da xong", duoi khoa thi khong con dung (vd van phong vua ghi mot diem
+        // giao khac) — mot cua so hep; gui lai CUNG khoa se doc lai va di tiep.
+        if (destination === null) throw stateChanged();
 
         await this.recordDestination(scope, destination, {
           by: command.authUserId,
@@ -241,11 +261,26 @@ export class SiteIntakeCommercialService {
    */
   async completeAsOffice(command: OfficeCompleteCommand): Promise<CommercialOutcome> {
     const intake = await this.requireIntake(command.intakeId);
-    const destination = command.choice ? await this.resolve(command.choice) : null;
+    // Cung quy tac voi lai xe: gui lai cung khoa / viec da dong -> khong tim lai dia diem.
+    const recorded = command.choice === undefined ? null : await this.store.findByIntake(intake.id);
+    const settled =
+      recorded !== null &&
+      (recorded.status !== 'PENDING' || recorded.destination?.eventId === command.idempotencyKey);
+    const destination =
+      command.choice === undefined || settled
+        ? null
+        : await this.resolve(await choiceFrom(command.choice));
 
     return this.runCommand('site_intake.office_complete', intake.id, {}, async (scope, record) => {
       if (scope.commercial.status !== 'PENDING') {
         return this.outcomeOf(scope, await this.readinessIn(scope), false, true);
+      }
+      if (
+        command.choice !== undefined &&
+        destination === null &&
+        scope.commercial.destination?.eventId !== command.idempotencyKey
+      ) {
+        throw stateChanged();
       }
       if (
         destination !== null &&
@@ -964,6 +999,13 @@ function bindingDenied(reason: SiteIntakeBindingDenyReason): TransportDomainErro
 }
 
 /** Hai diem trung nhau (duoi mot met) — dung o tang doi chieu ket qua tim dia diem. */
+/** Trang thai doi giua lan doc truoc khoa va lan ghi duoi khoa — gui lai CUNG khoa la di tiep. */
+const stateChanged = (): TransportDomainError =>
+  TransportDomainError.conflict(
+    'SITE_INTAKE_STATE_CHANGED',
+    'Viec vua duoc cap nhat — tai lai roi gui lai',
+  );
+
 export const samePoint = (
   left: { latitude: number; longitude: number },
   right: { latitude: number; longitude: number },

@@ -946,6 +946,10 @@ export class PlanningService {
    */
   private planGuardConflict(error: unknown, orderId: string, vehicleId: string): unknown {
     if (!isPlanGuardConflict(error)) return error;
+    // Cong thu ba (`#398`): don con chang co hang SONG cua viec tai xe nhan. Kho van chuyen da ghi
+    // quyet dinh `run.leg_change`; ma do noi dung su that hon "da co ke hoach" (ke hoach co the da
+    // bi huy) — tra nguyen.
+    if ((error as TransportDomainError).reason === 'LEG_ORDER_ADOPTED_BY_SITE_INTAKE') return error;
     return (error as TransportDomainError).reason === 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE'
       ? this.conflict('planning.commit', 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE', {
           orderId,
@@ -996,11 +1000,16 @@ export class PlanningService {
   }
 }
 
-/** Hai cong duoi khoa cua kho: khoa DON (`#398` gan don co san) va khoa XE (`#398` tai xe xac nhan). */
+/**
+ * Ba cong duoi khoa cua kho: khoa DON (`#398` gan don co san; don con chang co hang song cua viec tai
+ * xe nhan) va khoa XE (`#398` tai xe xac nhan). Ca ba deu co the bat sau khi lan nay da ghi mot phan
+ * (vong chay moi / chang rong) — nen ca ba deu phai go phan dang do.
+ */
 const isPlanGuardConflict = (error: unknown): boolean =>
   error instanceof TransportDomainError &&
   (error.reason === 'PLAN_ORDER_ALREADY_PLANNED' ||
-    error.reason === 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE');
+    error.reason === 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE' ||
+    error.reason === 'LEG_ORDER_ADOPTED_BY_SITE_INTAKE');
 
 /** Ly do ghi vao chang/vong chay bi huy — noi DUNG ben nao da thang. */
 const abandonReasonOf = (error: unknown): string =>

@@ -93,7 +93,9 @@ function world(
       return { available: true as const, places: [KNOWN] };
     },
     async completeAsOffice(command: OfficeCompleteCommand) {
-      completes.push(command);
+      // Dich vu that goi ham lua chon khi phai ghi — gia lap dung dieu do.
+      const choice = typeof command.choice === 'function' ? await command.choice() : command.choice;
+      completes.push({ ...command, ...(choice === undefined ? {} : { choice }) });
       return OUTCOME;
     },
   };

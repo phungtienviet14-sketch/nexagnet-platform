@@ -5,6 +5,8 @@ import {
   LOCATION_AGE_MAX_MS,
   needsFreshFix,
   toSiteIntakeScreen,
+  usableRetake,
+  USABLE_ACCURACY_MAX_METRES,
   withLocationAge,
   SITE_INTAKE_LOCATION_HINTS,
 } from '../site-intake';
@@ -216,6 +218,22 @@ describe('tuoi ban dinh vi luc gui — #398', () => {
       withLocationAge({ location: coords, fixAtMs: at - 2 * LOCATION_AGE_MAX_MS }, at)
         .locationAgeMs,
     ).toBe(LOCATION_AGE_MAX_MS);
+  });
+
+  it('ban xin lai QUA THO hoac rong thi khong gui toa do; ban dung duoc giu nguyen', () => {
+    const fix = { location: coords, fixAtMs: at };
+    expect(usableRetake(fix)).toBe(fix);
+    expect(
+      usableRetake({
+        location: { ...coords, accuracyMetres: USABLE_ACCURACY_MAX_METRES + 1 },
+        fixAtMs: at,
+      }),
+    ).toEqual({ location: {}, fixAtMs: null });
+    expect(usableRetake({ location: {}, fixAtMs: null })).toEqual({ location: {}, fixAtMs: null });
+    expect(usableRetake({ location: coords, fixAtMs: null })).toEqual({
+      location: {},
+      fixAtMs: null,
+    });
   });
 
   it('xin lai vi tri khi ban dinh vi cu hon nguong, hoac khong ro tuoi', () => {

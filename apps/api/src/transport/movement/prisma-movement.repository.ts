@@ -302,14 +302,24 @@ async function requireOrderUnplanned(tx: TxClient, orderId: string): Promise<voi
  * va lan them chang nay xep hang: gan truoc -> o day thay `ORDER_BOUND`; them chang truoc -> lenh
  * gan doc `liveLegCount > 0` duoi khoa va tu choi `ORDER_ALREADY_ON_RUN`.
  *
- * `ORDER_BOUND` la vinh vien (trigger `transport_site_intake_commercial_guard`), ke ca sau bao bat
- * thuong — va don da huy thi `MovementService.resolveLegOrder` da tu choi truoc. Khach khong bat
- * `transport-site-intake` thi bang rong va cau hoi luon tra "khong".
+ * CHI KHI CHANG DO CON SONG. `ORDER_BOUND` la vinh vien (trigger
+ * `transport_site_intake_commercial_guard`), nhung chang cua lan nhan viec thi khong: van phong huy
+ * ke hoach `ADOPTED` khi xe chua chay (`PlanningService.cancelPlan`) se huy CHINH chang do. Hoi theo
+ * `ORDER_BOUND` tran thi tu do don khong bao gio co lai chang co hang — cong nay chan mot chang THAY
+ * THE, khong phai mot chang THU HAI. Nen cau hoi la su that bat bien that: "don nay dang co chang co
+ * hang cua viec tai xe nhan, chua huy". Don da huy thi `MovementService.resolveLegOrder` da tu choi
+ * truoc. Khach khong bat `transport-site-intake` thi bang rong va cau hoi luon tra "khong".
  */
 async function requireOrderNotAdoptedBySiteIntake(tx: TxClient, orderId: string): Promise<void> {
   const adopted: unknown = await tx.$queryRaw`
-    SELECT 1 FROM "TransportSiteIntakeCommercial"
-     WHERE "orderId" = ${orderId} AND "status" = 'ORDER_BOUND'
+    SELECT 1
+      FROM "TransportSiteIntakeCommercial" c
+      JOIN "TransportRunSiteIntake" i ON i."id" = c."intakeId"
+      JOIN "TransportRunLeg" l ON l."id" = i."legId"
+     WHERE c."orderId" = ${orderId}
+       AND c."status" = 'ORDER_BOUND'
+       AND l."orderId" = ${orderId}
+       AND l."status" <> 'CANCELLED'
      LIMIT 1`;
   if (Array.isArray(adopted) && adopted.length > 0) {
     throw new LegOrderAdoptedBySiteIntakeError(orderId);
@@ -460,6 +470,9 @@ export class PrismaMovementRepository extends MovementRepository {
       return this.prisma.$transaction(
         async (tx: unknown) => {
           await requireOrderUnplanned(tx as TxClient, orderId);
+          // `#398`: don con chang co hang song cua viec tai xe nhan (vd ke hoach `ADOPTED` bi huy khi
+          // xe da lan banh) — tu choi TRUOC lan ghi dau tien, khong de lai vong chay mo coi.
+          await requireOrderNotAdoptedBySiteIntake(tx as TxClient, orderId);
           // Khoa don TRUOC, khoa xe SAU — xem `requireVehicleFreeOfPendingIntake()`.
           await requireVehicleFreeOfPendingIntake(tx as TxClient, input.vehicleId);
           return toRun(
@@ -784,6 +797,11 @@ export class PrismaMovementRepository extends MovementRepository {
           // — ma ma no biet go phan dang do (`abandonPartialCommit`). Don da nhan viec tai xe luon
           // co ke hoach `ADOPTED` hieu luc, nen voi planner cong nay nem truoc.
           await requireOrderUnplanned(tx as TxClient, guardOrderId);
+          // Chang RONG dau tien cua planner (MULTI: vong chay co san) cung hoi — tu choi TRUOC lan
+          // ghi dau tien thay vi de chang co hang tu choi sau mot chang rong da ghi.
+          if (carriedOrderId !== guardOrderId) {
+            await requireOrderNotAdoptedBySiteIntake(tx as TxClient, guardOrderId);
+          }
         }
         if (carriedOrderId !== null) {
           // Chang CO HANG cho mot don: hoi "don da nhan chang cua viec tai xe chua" DUOI khoa don.

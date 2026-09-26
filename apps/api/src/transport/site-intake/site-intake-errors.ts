@@ -36,6 +36,8 @@ export const TRANSPORT_SITE_INTAKE_ERROR_REASONS = [
   'SITE_INTAKE_COMMERCIAL_CLOSED',
   /** Van phong bam "tao don" ma lan nhan viec van chua du dieu kien. */
   'SITE_INTAKE_NOT_READY',
+  /** Viec vua doi giua lan doc truoc khoa va lan ghi — gui lai CUNG khoa la di tiep. */
+  'SITE_INTAKE_STATE_CHANGED',
   /** Chang vua doi trang thai giua luc doc va luc ghi — tai lai roi thu lai. */
   'SITE_INTAKE_LEG_NOT_ADOPTABLE',
   'SITE_INTAKE_ORDER_NOT_FOUND',

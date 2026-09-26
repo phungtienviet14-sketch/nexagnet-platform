@@ -69,7 +69,7 @@ const OFFICE_REASON_TEXT: Readonly<Record<string, string>> = {
   SITE_INTAKE_DESTINATION_UNVERIFIED:
     'Kết quả tìm không khớp kết quả của máy chủ — tìm lại rồi chọn.',
   SITE_INTAKE_DESTINATION_SEARCH_UNAVAILABLE:
-    'Tìm địa điểm đang tắt — chọn trong danh sách địa điểm đã biết.',
+    'Tìm địa điểm đang tắt hoặc tạm bận — chọn trong danh sách địa điểm đã biết, hoặc thử lại sau.',
   SITE_INTAKE_COMMERCIAL_CLOSED: 'Việc này đã có đơn hoặc đã hủy — không bổ sung được nữa.',
   SITE_INTAKE_NOT_READY: 'Việc này vẫn chưa đủ điều kiện tạo đơn — xem phần còn thiếu.',
   SITE_INTAKE_LEG_NOT_ADOPTABLE: 'Chặng vừa đổi trạng thái — tải lại rồi thử lại.',
@@ -83,6 +83,7 @@ const OFFICE_REASON_TEXT: Readonly<Record<string, string>> = {
     'Đơn này lấy hàng ở nơi khác với nơi tài xế nhận chuyến — chọn đơn khác.',
   SITE_INTAKE_EXCEPTION_ALREADY_RECORDED: 'Việc này đã được báo bất thường trước đó.',
   SITE_INTAKE_EXCEPTION_REASON_REQUIRED: 'Cần ghi lý do trước khi báo bất thường hoặc hủy.',
+  SITE_INTAKE_STATE_CHANGED: 'Việc vừa được cập nhật — gửi lại, sẽ không ghi hai lần.',
   SITE_INTAKE_ORDER_SOURCE_NOT_FOUND: 'Đơn này không tạo từ xác nhận của tài xế.',
 };
 

@@ -305,6 +305,90 @@ describe.each(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN'] as const)(
       expect((await auditRepo.list({ action: 'transport.order.create' })).length).toBe(1);
     });
 
+    /**
+     * MAT PHAN HOI roi gui lai CUNG khoa: lan gui lai KHONG duoc phu thuoc vao viec tim dia diem con
+     * chay — bo nho dem cua lan tim da mat (khoi dong lai, may khac) hoac nha cung cap dang ban. Lua
+     * chon den duoi dang HAM; lan gui lai khong goi no.
+     */
+    const searchDown = () => {
+      let calls = 0;
+      return {
+        calls: () => calls,
+        choice: async (): Promise<never> => {
+          calls += 1;
+          throw TransportDomainError.conflict('SITE_INTAKE_DESTINATION_SEARCH_UNAVAILABLE', 'ban');
+        },
+      };
+    };
+
+    it('tai xe gui lai CUNG khoa khi tim dia diem dang ban -> ket cuc cu, KHONG tim lai', async () => {
+      const intake = await confirm();
+      const first = await commercial.chooseDestinationAsDriver({
+        authUserId: AUTH,
+        intakeId: intake.intakeId,
+        clientEventId: 'diem-giao-1',
+        choice: async () => ({ kind: 'KNOWN_PLACE', placeId: destinationPlaceId }),
+      });
+      const after = await counts();
+      const down = searchDown();
+
+      const replay = await commercial.chooseDestinationAsDriver({
+        authUserId: AUTH,
+        intakeId: intake.intakeId,
+        clientEventId: 'diem-giao-1',
+        choice: down.choice,
+      });
+      expect(replay).toMatchObject({ orderId: first.orderId, replayed: true, bound: false });
+      // Viec da dong + khoa KHAC: cung khong can diem giao moi, khong tim lai.
+      const late = await commercial.chooseDestinationAsDriver({
+        authUserId: AUTH,
+        intakeId: intake.intakeId,
+        clientEventId: 'diem-giao-2',
+        choice: down.choice,
+      });
+      expect(late).toMatchObject({ orderId: first.orderId, status: 'ORDER_BOUND', bound: false });
+      expect(down.calls()).toBe(0);
+      expect(await counts()).toEqual(after);
+    });
+
+    it('van phong gui lai CUNG khoa khi tim dia diem dang ban -> ket cuc cu, KHONG tim lai', async () => {
+      const intake = await confirm();
+      const office = await commercial.completeAsOffice({
+        actor: OFFICE,
+        intakeId: intake.intakeId,
+        idempotencyKey: 'hoan-thien-1',
+        choice: async () => ({ kind: 'KNOWN_PLACE', placeId: destinationPlaceId }),
+      });
+      expect(office).toMatchObject({ status: 'ORDER_BOUND', bound: true });
+      const after = await counts();
+      const down = searchDown();
+
+      const again = await commercial.completeAsOffice({
+        actor: OFFICE,
+        intakeId: intake.intakeId,
+        idempotencyKey: 'hoan-thien-1',
+        choice: down.choice,
+      });
+      expect(again).toMatchObject({ orderId: office.orderId, replayed: true, bound: false });
+      expect(down.calls()).toBe(0);
+      expect(await counts()).toEqual(after);
+
+      // Lan dau (chua co gi) thi VAN tim: loi tim dia diem di len nguyen, khong ghi gi.
+      const fresh = await confirm({ authUserId: OTHER_AUTH, clientEventId: 'cham-hai' });
+      const other = searchDown();
+      expect(
+        await reasonOf(() =>
+          commercial.completeAsOffice({
+            actor: OFFICE,
+            intakeId: fresh.intakeId,
+            idempotencyKey: 'hoan-thien-2',
+            choice: other.choice,
+          }),
+        ),
+      ).toBe('SITE_INTAKE_DESTINATION_SEARCH_UNAVAILABLE');
+      expect(other.calls()).toBe(1);
+    });
+
     it('chua co diem giao -> PENDING, NEEDS_REVIEW DESTINATION_MISSING, khong don', async () => {
       const intake = await confirm();
       const view = await review.detail(intake.intakeId);
@@ -550,6 +634,69 @@ describe.each(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN'] as const)(
       expect((await movementRepo.listLegsByOrder(orderId)).map((leg) => leg.id)).toEqual([
         intake.legId,
       ]);
+    });
+
+    /* ================================================================ *
+     * VAN PHONG HUY KE HOACH ADOPTED — cong chan chang THU HAI, khong chan chang THAY THE
+     * ================================================================ */
+
+    const liveLoadedLegs = async (orderId: string) =>
+      (await movementRepo.listLegsByOrder(orderId)).filter(
+        (leg) => leg.kind === 'LOADED' && leg.status !== 'CANCELLED',
+      );
+
+    const runsOf = async (vehicle: string) =>
+      (await movementRepo.listRuns()).filter((run) => run.vehicleId === vehicle);
+
+    it('xe CHUA chay: huy ke hoach ADOPTED roi lap lai cho xe khac -> DUNG mot chang co hang song, khong vong chay mo coi', async () => {
+      const intake = await confirm();
+      const outcome = await chooseDestination(intake.intakeId);
+      const orderId = outcome.orderId ?? '';
+      const adopted = await plans.findActiveForOrder(orderId);
+
+      await planning.cancelPlan(adopted?.id ?? '', 'Doi xe khac', OFFICE);
+      expect((await movementRepo.findLeg(intake.legId))?.status).toBe('CANCELLED');
+
+      const replanned = await planning.commit(
+        orderId,
+        { vehicleId: otherVehicleId, idempotencyKey: 'plan-lai', pendingWork },
+        OFFICE,
+      );
+
+      const live = await liveLoadedLegs(orderId);
+      expect(live).toHaveLength(1);
+      expect(live[0]?.id).toBe(replanned.plan.loadedLegId);
+      expect(live[0]?.id).not.toBe(intake.legId);
+      expect(replanned.run.vehicleId).toBe(otherVehicleId);
+      expect((await plans.findActiveForOrder(orderId))?.id).toBe(replanned.plan.id);
+    });
+
+    it('xe DA chay: huy ke hoach ADOPTED roi lap lai -> tu choi TRUOC moi lan ghi, khong vong chay/chang mo coi', async () => {
+      const intake = await confirm();
+      const outcome = await chooseDestination(intake.intakeId);
+      const orderId = outcome.orderId ?? '';
+      const adopted = await plans.findActiveForOrder(orderId);
+      await movement.transitionLeg(intake.legId, 'IN_TRANSIT', AUTH);
+
+      // Chang dang chay thi `cancelPlan` giu nguyen chang, chi huy ke hoach.
+      await planning.cancelPlan(adopted?.id ?? '', 'Nham ke hoach', OFFICE);
+      expect((await movementRepo.findLeg(intake.legId))?.status).toBe('IN_TRANSIT');
+      const before = await counts();
+
+      for (const key of ['plan-lai-1', 'plan-lai-2']) {
+        expect(
+          await reasonOf(() =>
+            planning.commit(
+              orderId,
+              { vehicleId: otherVehicleId, idempotencyKey: key, pendingWork },
+              OFFICE,
+            ),
+          ),
+        ).toBe('LEG_ORDER_ADOPTED_BY_SITE_INTAKE');
+      }
+      expect(await counts()).toEqual(before);
+      expect(await runsOf(otherVehicleId)).toEqual([]);
+      expect((await liveLoadedLegs(orderId)).map((leg) => leg.id)).toEqual([intake.legId]);
     });
 
     /* ================================================================ *

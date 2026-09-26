@@ -306,9 +306,12 @@ describe('quyen cac tuyen viec tai xe nhan truc tiep qua HTTP that (#398)', () =
           `/transport/site-intakes/${intakeId}/exception`,
           { reason: 'Tu huy viec cua minh', idempotencyKey: 'k-sale' },
         ],
+        // Hai tuyen diem giao cua VAN PHONG (lai xe co tuyen rieng duoi `/transport/me`).
+        ['GET', '/transport/site-intakes/destinations', undefined],
+        ['POST', '/transport/site-intakes/destinations/search', { query: 'Dinh Vu' }],
       ] as const;
 
-    it.each([0, 1, 2, 3, 4])('tuyen #%i', async (index) => {
+    it.each([0, 1, 2, 3, 4, 5, 6])('tuyen #%i', async (index) => {
       const [method, path, payload] = officeRoutes(intakeOfA)[index]!;
       const before = await stateOf(intakeOfA);
 

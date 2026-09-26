@@ -6,6 +6,7 @@ import {
   classifyLoadFailure,
   confirmBody,
   confirmLocation,
+  USABLE_ACCURACY_MAX_METRES,
   destinationBody,
   destinationIdentity,
   doneModel,
@@ -368,6 +369,7 @@ describe('loi — chua chac khac bi tu choi', () => {
       timeoutError(20_000),
       classifyHttpError(502, { message: 'bad gateway' }),
       classifyHttpError(409, { reason: 'SITE_INTAKE_CREATE_IN_FLIGHT', message: 'x' }),
+      classifyHttpError(409, { reason: 'SITE_INTAKE_STATE_CHANGED', message: 'x' }),
       new Error('la'),
     ]) {
       const failure = classifyIntakeFailure(error, 'CONFIRM');
@@ -630,6 +632,37 @@ describe('tuoi cua vi tri — #398 §3.1', () => {
 
     expect(probe.calls).toHaveLength(1);
     expect(chosen).toEqual(NO_CAPTURED_LOCATION);
+  });
+
+  /** Duoi mai ton: ban chup lai MOI nhung QUA THO — may chu chac chan tu choi, dung gui no. */
+  it('chup lai ra ban moi nhung sai so qua lon -> gui KHONG toa do, khong ket o "Tìm lại địa điểm"', async () => {
+    const now = T0 + 10 * 60_000;
+    const coarse = (accuracyMetres: number) =>
+      recaptureOf({
+        kind: 'OK',
+        fix: {
+          latitude: 20.845,
+          longitude: 106.6882,
+          accuracyMetres,
+          capturedAt: new Date(now - 500).toISOString(),
+        },
+      });
+
+    const tooCoarse = await confirmLocation(
+      FRESH,
+      coarse(USABLE_ACCURACY_MAX_METRES + 100).recapture,
+      () => now,
+    );
+    expect(tooCoarse).toEqual(NO_CAPTURED_LOCATION);
+    expect(confirmBody('s1', 'k1', tooCoarse, now)).toEqual({ siteId: 's1', clientEventId: 'k1' });
+
+    // DUNG bang tran van gui: may chu chi tu choi khi LON HON tran.
+    const atLimit = await confirmLocation(
+      FRESH,
+      coarse(USABLE_ACCURACY_MAX_METRES).recapture,
+      () => now,
+    );
+    expect(atLimit.location.accuracyMetres).toBe(USABLE_ACCURACY_MAX_METRES);
   });
 
   it('khong co toa do tu dau -> khong chup lai, khong gui toa do', async () => {

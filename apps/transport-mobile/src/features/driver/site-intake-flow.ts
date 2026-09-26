@@ -300,6 +300,18 @@ export function locationFromFix(
  */
 export const FRESH_FIX_MAX_AGE_MS = 120_000;
 
+/**
+ * Sai so lon nhat may chu con dung mot ban dinh vi (`DEFAULT_SITE_CANDIDATE_POLICY.maxAccuracyMetres`).
+ * Ban CHUP LAI te hon muc nay thi may chu CHAC CHAN tu choi (`SITE_INTAKE_LOCATION_UNUSABLE`) — va
+ * lai xe dung duoi mai ton se ket o "Tìm lại địa điểm". Coi no nhu "khong co ban moi": gui khong toa
+ * do, may chu ghi `NO_LOCATION`, phan thuong mai doi van phong xac nhan noi lay.
+ */
+export const USABLE_ACCURACY_MAX_METRES = 150;
+
+const tooCoarse = (location: SiteIntakeLocationInput): boolean =>
+  typeof location.accuracyMetres === 'number' &&
+  location.accuracyMetres > USABLE_ACCURACY_MAX_METRES;
+
 /** Tran `locationAgeMs` cua may chu. Cu hon thi gui DUNG tran — van la "qua han", khong phai 400. */
 export const LOCATION_AGE_MAX_MS = 86_400_000;
 
@@ -352,6 +364,8 @@ export function needsFreshFix(fixAtMs: number | null, nowMs: number): boolean {
  *
  * Khong gui lai ban cu voi tuoi that cua no: may chu se tu choi (`LOCATION_STALE`), va tren web ban
  * chup lai co the chinh la ban cu trong bo nho dem — lai xe se bi ket trong vong "Tìm lại địa điểm".
+ * Cung ly do, ban chup lai QUA THO (sai so > `USABLE_ACCURACY_MAX_METRES`) cung tinh la "khong co ban
+ * moi": mot dien thoai tra ban te khong duoc thiet hon mot dien thoai khong tra gi.
  */
 export async function confirmLocation(
   snapshot: CapturedLocation,
@@ -361,7 +375,11 @@ export async function confirmLocation(
   if (!needsFreshFix(snapshot.fixAtMs, clock())) return snapshot;
   const outcome = await recapture();
   const { captured } = locationFromFix(outcome, clock());
-  if (captured.fixAtMs === null || needsFreshFix(captured.fixAtMs, clock())) {
+  if (
+    captured.fixAtMs === null ||
+    needsFreshFix(captured.fixAtMs, clock()) ||
+    tooCoarse(captured.location)
+  ) {
     return NO_CAPTURED_LOCATION;
   }
   return captured;
@@ -393,8 +411,11 @@ const UNCERTAIN_TEXT: Readonly<Record<IntakeCommand, string>> = {
   DESTINATION: 'Chưa chắc lệnh đã tới máy chủ — bấm thử lại, điểm giao sẽ không bị ghi hai lần',
 };
 
-/** Ma nghia "lenh CUNG khoa dang chay" — gui lai dung khoa cu, khong phai tu choi. */
-const RETRY_SAME_KEY = new Set(['SITE_INTAKE_CREATE_IN_FLIGHT']);
+/**
+ * Ma nghia "gui lai DUNG khoa cu la di tiep" — khong phai tu choi: lenh cung khoa dang chay
+ * (`CREATE_IN_FLIGHT`), hoac viec vua doi giua lan doc va lan ghi cua may chu (`STATE_CHANGED`).
+ */
+const RETRY_SAME_KEY = new Set(['SITE_INTAKE_CREATE_IN_FLIGHT', 'SITE_INTAKE_STATE_CHANGED']);
 
 const NEXT_BY_REASON: Readonly<Record<string, RefusalNext>> = {
   SITE_INTAKE_OPEN_RUN_EXISTS: 'BACK_TO_WORK',

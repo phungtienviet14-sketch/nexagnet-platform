@@ -60,6 +60,7 @@ const REASON_TEXT: Record<string, string> = {
   SITE_INTAKE_OBSERVATION_ALREADY_USED: 'Bản định vị đã được dùng — tìm lại địa điểm.',
   SITE_INTAKE_CREATE_IN_FLIGHT:
     'Lần bấm trước đang được xử lý — bấm thử lại sau một lát, sẽ không tạo chuyến thứ hai.',
+  SITE_INTAKE_STATE_CHANGED: 'Việc vừa được cập nhật — bấm thử lại, sẽ không ghi hai lần.',
   SITE_INTAKE_NOT_FOUND: 'Không tìm thấy chuyến này — về màn Việc để xem lại.',
   SITE_INTAKE_DESTINATION_NOT_FOUND: 'Điểm giao này không còn trong danh sách — chọn nơi khác.',
   SITE_INTAKE_DESTINATION_UNVERIFIED: 'Kết quả tìm không còn khớp — tìm lại rồi chọn.',

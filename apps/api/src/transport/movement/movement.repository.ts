@@ -644,10 +644,19 @@ export class InMemoryMovementRepository extends MovementRepository {
   /**
    * `#398` — don da NHAN chang cua viec tai xe nhan truc tiep (qua `bindOrderToUnboundLoadedLeg`,
    * duong adopt DUY NHAT cua ban trong bo nho). Song doi cua "phan thuong mai `ORDER_BOUND` voi don
-   * do" ma ban Prisma doc duoi khoa don: ca hai deu la vinh vien — lan bao bat thuong khong go
-   * `ORDER_BOUND`, va don bi huy thi `resolveLegOrder` da tu choi truoc (`LEG_ORDER_CANCELLED`).
+   * do" ma ban Prisma doc duoi khoa don. Giu CHANG da nhan, khong chi don: cong chi chan khi chang
+   * do CON SONG (chua huy) — cung cau hoi voi ban Prisma. Chang bi huy (vd van phong huy ke hoach
+   * `ADOPTED` khi xe chua chay) thi don duoc lap ke hoach lai; don bi huy thi `resolveLegOrder` da tu
+   * choi truoc (`LEG_ORDER_CANCELLED`).
    */
-  private readonly adoptedOrderIds = new Set<string>();
+  private readonly adoptedLegByOrder = new Map<string, string>();
+
+  /** Don co chang co hang SONG cua viec tai xe nhan — song doi `requireOrderNotAdoptedBySiteIntake`. */
+  private hasLiveAdoptedLeg(orderId: string): boolean {
+    const legId = this.adoptedLegByOrder.get(orderId);
+    const leg = legId === undefined ? undefined : this.legs.get(legId);
+    return leg !== undefined && leg.orderId === orderId && leg.status !== 'CANCELLED';
+  }
 
   /**
    * Kho dau vet, de ban nay ghi dau vet dong vong chay o CUNG mot luot voi buoc chuyen trang thai.
@@ -777,6 +786,10 @@ export class InMemoryMovementRepository extends MovementRepository {
     // `memory` la mot duong chay that (demo, CI khong co CSDL), khong phai mot ban gia de test.
     for (const existing of this.runs.values()) {
       if (existing.code === input.code) throw storageUniqueViolation(RUN_CODE);
+    }
+    // `#398`: cung cong voi ban Prisma — tu choi TRUOC lan ghi dau tien cua lan lap ke hoach.
+    if (input.planGuardOrderId && this.hasLiveAdoptedLeg(input.planGuardOrderId)) {
+      throw new LegOrderAdoptedBySiteIntakeError(input.planGuardOrderId);
     }
     const now = iso(new Date());
     const run: VehicleRun = {
@@ -983,9 +996,12 @@ export class InMemoryMovementRepository extends MovementRepository {
     if (
       input.kind === 'LOADED' &&
       input.orderId !== null &&
-      this.adoptedOrderIds.has(input.orderId)
+      this.hasLiveAdoptedLeg(input.orderId)
     ) {
       throw new LegOrderAdoptedBySiteIntakeError(input.orderId);
+    }
+    if (input.planGuardOrderId && this.hasLiveAdoptedLeg(input.planGuardOrderId)) {
+      throw new LegOrderAdoptedBySiteIntakeError(input.planGuardOrderId);
     }
     const run = this.runs.get(input.runId);
     if (run && (run.status === 'COMPLETED' || run.status === 'CANCELLED')) {
@@ -1078,7 +1094,7 @@ export class InMemoryMovementRepository extends MovementRepository {
         updatedAt: iso(input.at),
       };
       this.legs.set(next.id, next);
-      this.adoptedOrderIds.add(input.orderId);
+      this.adoptedLegByOrder.set(input.orderId, next.id);
       return next;
     });
   }

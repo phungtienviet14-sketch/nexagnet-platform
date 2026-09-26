@@ -7,6 +7,7 @@ import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterpart
 import { PrismaCounterpartySiteRepository } from '../counterparty/prisma-counterparty-site.repository.js';
 import { CounterpartySiteService } from '../counterparty/site.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
+import { PlanningService } from '../planning/planning.service.js';
 import type { TransportPlanningPolicy } from '../planning/planning.types.js';
 import { PrismaRunPlanRepository } from '../planning/prisma-planning.repository.js';
 import { PrismaGeofenceRepository } from '../proof/geofence.repository.js';
@@ -14,6 +15,7 @@ import { PrismaSiteIntakeCommercialStore } from '../site-intake/prisma-site-inta
 import { PrismaSiteIntakeConfirmationWriter } from '../site-intake/prisma-site-intake-confirmation.writer.js';
 import { PrismaRunSiteIntakeRepository } from '../site-intake/prisma-site-intake.repository.js';
 import { SiteIntakeCommercialService } from '../site-intake/site-intake-commercial.service.js';
+import { SiteIntakePlanningPendingWorkSource } from '../site-intake/site-intake-composition.adapters.js';
 import {
   TransportSiteIntakeCoreFactsAdapter,
   TransportSiteIntakeGeoFactsAdapter,
@@ -110,6 +112,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       core,
       reader,
     );
+    const planning = new PlanningService(
+      movement,
+      planRepo,
+      fleet,
+      audit,
+      CORE_POLICY,
+      PLANNING_POLICY,
+    );
+    const pendingWork = new SiteIntakePlanningPendingWorkSource(review);
 
     let siteId = '';
     let destinationPlaceId = '';
@@ -351,6 +362,74 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       }
       expect(await liveLoadedLegsOf(orderId)).toBe(1);
       expect(await prisma.transportRunLeg.count({ where: { runId: manualRun.id } })).toBe(0);
+    });
+
+    /* ---------------------------------------------------------------- *
+     * Van phong huy ke hoach ADOPTED — cong chan chang THU HAI, khong chan chang THAY THE
+     * ---------------------------------------------------------------- */
+
+    const anAutoOrder = async () => {
+      const who = await anIntake();
+      const outcome = await commercial.chooseDestinationAsDriver({
+        authUserId: who.auth,
+        intakeId: who.intake.intakeId,
+        clientEventId: 'diem-giao-1',
+        choice: { kind: 'KNOWN_PLACE', placeId: destinationPlaceId },
+      });
+      const orderId = outcome.orderId ?? '';
+      const plan = await planRepo.findActiveForOrder(orderId);
+      return { ...who, orderId, planId: plan?.id ?? '' };
+    };
+
+    it('xe CHUA chay: huy ke hoach ADOPTED roi lap lai cho xe khac -> DUNG mot chang co hang song, khong vong chay mo coi', async () => {
+      const { intake, orderId, planId } = await anAutoOrder();
+      await planning.cancelPlan(planId, 'Doi xe khac', OFFICE);
+      expect(
+        (await prisma.transportRunLeg.findUnique({ where: { id: intake.legId } }))?.status,
+      ).toBe('CANCELLED');
+      const other = await aDriver();
+
+      const replanned = await planning.commit(
+        orderId,
+        { vehicleId: other.vehicleId, idempotencyKey: `${PREFIX}-lai-${++suffix}`, pendingWork },
+        OFFICE,
+      );
+
+      expect(await liveLoadedLegsOf(orderId)).toBe(1);
+      expect(replanned.plan.loadedLegId).not.toBe(intake.legId);
+      expect(replanned.run.vehicleId).toBe(other.vehicleId);
+    });
+
+    it('xe DA chay: huy ke hoach ADOPTED roi lap lai -> LEG_ORDER_ADOPTED_BY_SITE_INTAKE TRUOC moi lan ghi', async () => {
+      const { auth, intake, orderId, planId } = await anAutoOrder();
+      await movement.transitionLeg(intake.legId, 'IN_TRANSIT', auth);
+      // Chang dang chay thi `cancelPlan` giu nguyen chang, chi huy ke hoach.
+      await planning.cancelPlan(planId, 'Nham ke hoach', OFFICE);
+      const other = await aDriver();
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const [settled] = await Promise.allSettled([
+          planning.commit(
+            orderId,
+            {
+              vehicleId: other.vehicleId,
+              idempotencyKey: `${PREFIX}-lai-${++suffix}`,
+              pendingWork,
+            },
+            OFFICE,
+          ),
+        ]);
+        expect(reasonOf(settled as PromiseSettledResult<unknown>)).toBe(
+          'LEG_ORDER_ADOPTED_BY_SITE_INTAKE',
+        );
+      }
+      expect(
+        await prisma.transportVehicleRun.count({ where: { vehicleId: other.vehicleId } }),
+      ).toBe(0);
+      expect(await liveLoadedLegsOf(orderId)).toBe(1);
+      expect(
+        (await prisma.transportRunLeg.findUnique({ where: { id: intake.legId } }))?.status,
+      ).toBe('IN_TRANSIT');
     });
 
     it('trinh sua tay khong doi nghia gi khac: don khac, chang chua co don, chang rong van them duoc', async () => {

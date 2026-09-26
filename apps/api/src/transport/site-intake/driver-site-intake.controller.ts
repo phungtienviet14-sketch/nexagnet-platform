@@ -208,7 +208,8 @@ export class DriverSiteIntakeController {
         authUserId,
         intakeId,
         clientEventId: parsed.data.clientEventId,
-        choice: await this.places.choiceOf(parsed.data.destination),
+        // HAM, khong gia tri: dich vu chi tim lai khi that su phai ghi (khong phai lan gui lai).
+        choice: () => this.places.choiceOf(parsed.data.destination),
       });
       return {
         intake: await this.reviews.driverIntake(authUserId, intakeId),

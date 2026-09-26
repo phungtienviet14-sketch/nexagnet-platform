@@ -84,14 +84,18 @@ của #379). Không LLM trong cổng này.
 
 - Tọa độ do máy tài xế gửi (`DRIVER_REPORTED`) đi kèm `locationAgeMs`: tuổi bản định vị đo bằng
   **đồng hồ của chính máy** lúc gửi (hiệu hai lần đọc cùng một đồng hồ), nên lệch giờ giữa điện thoại
-  và máy chủ không làm sai kết quả. Máy chủ đặt `observedAt = now − locationAgeMs`, rồi áp hạn
+  và máy chủ không làm sai kết quả (lệch giữa đồng hồ GNSS của bản định vị và đồng hồ máy thì **không**
+  được bù — hướng lỗi của nó là đóng: bị coi là cũ, không bao giờ bị coi là mới). Máy chủ đặt
+  `observedAt = now − locationAgeMs`, rồi áp hạn
   `maxAgeSeconds = 300` sẵn có của #267: `propose` trả `LOCATION_UNUSABLE/LOCATION_STALE` và không
   ghi gì; `confirm` trả `400 SITE_INTAKE_LOCATION_UNUSABLE` **trước mọi lần ghi**.
 - App giữ giờ của bản định vị (cái cũ hơn giữa dấu giờ của bản định vị và lúc máy nhận nó). Lúc bấm
   "Nhận chuyến tại đây", bản định vị từ lúc mở màn cũ hơn 120 giây (`FRESH_FIX_MAX_AGE_MS`, thấp hơn
   300 giây của máy chủ) thì app **xin lại một lần**; không có bản mới thì **không gửi tọa độ** — lần
   xác nhận ghi `siteMatch = NO_LOCATION`, việc vận hành vẫn được nhận, phần thương mại ra
-  `NEEDS_REVIEW (ORIGIN_LOCATION_UNVERIFIED)`. Tọa độ không rõ tuổi không bao giờ được gửi.
+  `NEEDS_REVIEW (ORIGIN_LOCATION_UNVERIFIED)`. Bản xin lại **quá thô** (sai số > 150 m, bằng
+  `maxAccuracyMetres` của máy chủ) cũng tính là "không có bản mới" — một điện thoại trả bản tệ dưới mái
+  tôn không được thiệt hơn một điện thoại không trả gì. Tọa độ không rõ tuổi không bao giờ được gửi.
 - PWA: `captureFix()` ép `maximumAge: 0` — bản web của `expo-location` mặc định `maximumAge: Infinity`,
   tức nhận mọi vị trí còn trong bộ nhớ đệm của trình duyệt. Web cũ (#267) cũng gửi `locationAgeMs` và
   xin lại vị trí khi quá 120 giây.
@@ -161,7 +165,7 @@ Bốn lớp chặn nhân đôi:
 2. planner cho **xe đang giữ việc tài xế nhận chưa có đơn** → `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE`: hỏi nhanh qua cổng `PlanningPendingWorkSource` (mặc định rỗng ở `transport-core`, `transport-site-intake` ghi đè), và **hỏi lại dưới khóa xe** trong kho;
 3. tài xế xác nhận khi **xe đã có vòng chạy mở** (vd văn phòng vừa lập, chưa ai cầm) → `SITE_INTAKE_VEHICLE_BUSY`, không ghi gì;
 4. tầng DB: trigger `transport_run_leg_order_binding_once` — chặng `orderId` X → Y bị cấm; X → NULL **cũng** bị cấm, trừ khi do chính khóa ngoại `ON DELETE SET NULL` ghi khi đơn bị xóa cứng (`pg_trigger_depth() > 1`; một `UPDATE` viết tay, kể cả trong khối `DO`, chạy ở độ sâu 1) ⇒ không còn đường gán lại bằng hai lệnh thô X → NULL → Y. Kèm `TransportSiteIntakeCommercial_orderId_key` và trigger `transport_site_intake_commercial_guard`;
-5. trình sửa vòng chạy/chặng tay (`POST /transport/runs/:id/legs`): thêm chặng `LOADED` cho một đơn đã **nhận chặng của việc tài xế nhận** (`ORDER_BOUND`) → `409 LEG_ORDER_ADOPTED_BY_SITE_INTAKE`, kiểm dưới khóa đơn. Đua với "gắn đơn có sẵn": gắn trước → chặng tay bị từ chối; chặng tay trước → gắn nhận `SITE_INTAKE_BINDING_DENIED (ORDER_ALREADY_ON_RUN)` (bài `transport-movement-adopted-order.int.spec.ts`).
+5. đơn đã **nhận chặng của việc tài xế nhận** mà chặng đó **còn sống** (`ORDER_BOUND` + chặng chưa `CANCELLED`) → `409 LEG_ORDER_ADOPTED_BY_SITE_INTAKE` cho mọi chặng `LOADED` mới: trình sửa tay (`POST /transport/runs/:id/legs`) và planner — với planner, kiểm ngay ở **lần ghi đầu tiên** (tạo vòng chạy / chặng rỗng) dưới khóa đơn, nên không bao giờ để lại vòng chạy mồ côi; mã này cũng được tính là xung đột để `abandonPartialCommit` gỡ phần dở dang. Văn phòng hủy kế hoạch `ADOPTED` khi xe **chưa chạy** thì chặng đó bị hủy theo → đơn được lập kế hoạch lại bình thường (chặng **thay thế**, không phải chặng thứ hai); xe **đã chạy** thì chặng còn sống → planner bị từ chối trước mọi lần ghi. Đua với "gắn đơn có sẵn": gắn trước → chặng tay bị từ chối; chặng tay trước → gắn nhận `SITE_INTAKE_BINDING_DENIED (ORDER_ALREADY_ON_RUN)` (bài `transport-movement-adopted-order.int.spec.ts`).
 
 ---
 
@@ -207,6 +211,14 @@ diễn ra, không phải nghĩa vụ thương mại). Với đơn đã `FULFILLE
 `destination` = `{kind:'KNOWN_PLACE', placeId}` hoặc `{kind:'PLACE_SEARCH', query, label, latitude,
 longitude}` — kết quả tìm được máy chủ **tìm lại và đối chiếu** nhãn + tọa độ; một cặp số tự do không
 qua được. Mọi thân `.strict()` — trường tiền/khách/xe/tài xế bị từ chối.
+
+**Gửi lại TRƯỚC khi tìm lại.** Cả lệnh tài xế chọn điểm giao lẫn `complete` của văn phòng nhận lựa
+chọn dưới dạng **hàm**: dịch vụ đọc phần thương mại trước, và nếu đây là lần gửi lại cùng khóa (hoặc
+việc đã đóng) thì trả kết cục đã ghi **không gọi tìm địa điểm** — mất phản hồi rồi gửi lại không thành
+`SEARCH_UNAVAILABLE`/`DESTINATION_UNVERIFIED` chỉ vì bộ nhớ đệm của lần tìm đã mất (API khởi động
+lại, máy khác) hay nhà cung cấp đang bận. Khoảng hẹp giữa lần đọc trước khóa và lần ghi dưới khóa (văn
+phòng vừa ghi một điểm giao khác) trả `409 SITE_INTAKE_STATE_CHANGED`; app coi mã này như "gửi lại
+đúng khóa cũ".
 
 `locationAgeMs`: số nguyên ms, `0..86_400_000`, chỉ đi **cùng** `latitude/longitude`; đi với
 `observationId` hoặc không kèm tọa độ → `400`. Xem §2 "Vị trí cũ thất bại đóng".

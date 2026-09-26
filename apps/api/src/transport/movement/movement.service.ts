@@ -298,6 +298,14 @@ export class MovementService {
             `Ma vong chay "${input.code}" da duoc dung.`,
           );
         }
+        // `#398`: don cua lan lap ke hoach con chang co hang song cua viec tai xe nhan — kho tu choi
+        // DUOI khoa don, TRUOC khi tao vong chay (khong de lai vong chay mo coi).
+        if (error instanceof LegOrderAdoptedBySiteIntakeError) {
+          throw this.conflictDecision('run.leg_change', 'LEG_ORDER_ADOPTED_BY_SITE_INTAKE', {
+            orderId: error.orderId,
+            vehicleId: input.vehicleId,
+          });
+        }
         throw error;
       });
 

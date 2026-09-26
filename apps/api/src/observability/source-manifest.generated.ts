@@ -221,7 +221,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.location": {
       "functionName": "MovementService.recordOrderLocation",
       "filePath": "apps/api/src/transport/movement/movement.service.ts",
-      "line": 1093
+      "line": 1101
     },
     "order.manual_approve": {
       "functionName": "OrdersService.approveTurn",
@@ -400,12 +400,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "site_intake.adopt": {
       "functionName": "SiteIntakeCommercialService.adopt",
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
-      "line": 640
+      "line": 675
     },
     "site_intake.bind_existing_order": {
       "functionName": "SiteIntakeCommercialService.bindExistingOrder",
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
-      "line": 293
+      "line": 328
     },
     "site_intake.commercial": {
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts"
@@ -416,12 +416,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "site_intake.driver_destination": {
       "functionName": "SiteIntakeCommercialService.chooseDestinationAsDriver",
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
-      "line": 210
+      "line": 227
     },
     "site_intake.office_complete": {
       "functionName": "SiteIntakeCommercialService.completeAsOffice",
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
-      "line": 246
+      "line": 274
     },
     "site_intake.propose": {
       "filePath": "apps/api/src/transport/site-intake/site-intake.service.ts"
@@ -429,12 +429,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "site_intake.report_exception": {
       "functionName": "SiteIntakeCommercialService.reportException",
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
-      "line": 394
+      "line": 429
     },
     "site_intake.settle": {
       "functionName": "SiteIntakeCommercialService.settle",
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
-      "line": 560
+      "line": 595
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
@@ -1794,7 +1794,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.location|*": {
       "functionName": "MovementService.requireOrderPoint",
       "filePath": "apps/api/src/transport/movement/movement.service.ts",
-      "line": 1070
+      "line": 1078
     },
     "outbound.authority|*": {
       "functionName": "AgentOrchestrator.composeReply",
@@ -1954,7 +1954,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "site_intake.exception|*": {
       "functionName": "SiteIntakeCommercialService.decideException",
       "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
-      "line": 924
+      "line": 959
     },
     "source.approval|*": {
       "filePath": "apps/api/src/source-registry/source-registry.service.ts"

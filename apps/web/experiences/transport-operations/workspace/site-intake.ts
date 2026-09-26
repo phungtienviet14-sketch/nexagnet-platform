@@ -221,6 +221,29 @@ export function withLocationAge(fix: BrowserFix, nowMs: number): SiteIntakeLocat
   return { ...location, locationAgeMs: Math.min(Math.max(0, age), LOCATION_AGE_MAX_MS) };
 }
 
+/**
+ * Sai so lon nhat may chu con dung (`DEFAULT_SITE_CANDIDATE_POLICY.maxAccuracyMetres`). Ban xin lai
+ * te hon muc nay thi may chu CHAC CHAN tu choi — coi nhu khong co ban moi.
+ */
+export const USABLE_ACCURACY_MAX_METRES = 150;
+
+/**
+ * Ban XIN LAI luc xac nhan: khong co toa do, khong ro tuoi, hoac qua tho -> KHONG gui toa do (may
+ * chu ghi `NO_LOCATION`, phan thuong mai doi van phong xac nhan noi lay) thay vi mot ban ma may chu
+ * se tu choi va de lai xe ket o man de nghi.
+ */
+export function usableRetake(fix: BrowserFix): BrowserFix {
+  const { location, fixAtMs } = fix;
+  if (fixAtMs === null || location.latitude === undefined) return { location: {}, fixAtMs: null };
+  if (
+    typeof location.accuracyMetres === 'number' &&
+    location.accuracyMetres > USABLE_ACCURACY_MAX_METRES
+  ) {
+    return { location: {}, fixAtMs: null };
+  }
+  return fix;
+}
+
 /** Ban dinh vi da cu (hoac khong ro tuoi) thi xin lai truoc khi xac nhan. */
 export function needsFreshFix(fix: BrowserFix, nowMs: number): boolean {
   if (fix.location.latitude === undefined) return false;

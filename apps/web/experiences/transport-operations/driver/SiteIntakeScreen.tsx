@@ -8,6 +8,7 @@ import type { SiteIntakeProposal, SiteIntakeResult } from '../transport-types';
 import {
   needsFreshFix,
   toSiteIntakeScreen,
+  usableRetake,
   withLocationAge,
   type BrowserFix,
   type SiteIntakeScreen,
@@ -68,12 +69,14 @@ export function DriverSiteIntake() {
     mutationFn: async (siteId: string) => {
       eventKey.current ??= newCorrelationKey();
       const key = eventKey.current;
-      // `#398`: ban dinh vi cua luc de nghi da cu thi xin lai — may chu tu choi vi tri qua tuoi.
-      if (needsFreshFix(locationRef.current, Date.now())) {
-        locationRef.current = await readBrowserLocation();
-      }
+      // `#398`: ban dinh vi cua luc de nghi da cu thi xin lai — may chu tu choi vi tri qua tuoi. Ban
+      // xin lai CHI dung cho lan gui nay: giu nguyen ban goc de lan bam sau van biet phai xin lai.
+      const snapshot = locationRef.current;
+      const fix = needsFreshFix(snapshot, Date.now())
+        ? usableRetake(await readBrowserLocation())
+        : snapshot;
       return transportApi.me.confirmSite({
-        ...withLocationAge(locationRef.current, Date.now()),
+        ...withLocationAge(fix, Date.now()),
         siteId,
         clientEventId: key,
       });

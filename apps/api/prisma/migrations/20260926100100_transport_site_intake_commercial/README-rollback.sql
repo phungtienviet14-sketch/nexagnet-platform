@@ -13,7 +13,13 @@
 -- tro sang bang moi. Chang da nhan don van giu `orderId` — lui migration KHONG go lan gan do.
 --
 -- Lui xong, trigger `transport_run_leg_order_binding_once` bien mat: chang lai doi don duoc bang tay
--- (`X -> Y`, `X -> NULL`) — dung nhu truoc #398. Ap lai migration thi lan dien bu chay lai tu dau.
+-- (`X -> Y`, `X -> NULL`) — dung nhu truoc #398.
+--
+-- AP LAI: Prisma KHONG tu chay lai mot migration da ghi trong `_prisma_migrations`. Muon ap lai phai
+-- xoa dong `20260926100100_...` o do (`prisma migrate resolve --rolled-back`) roi `migrate deploy`.
+-- Lan dien bu khi ay chi thay tinh hinh LUC AP LAI: moi lan nhan viec con dang do, chua mang don,
+-- deu thanh `PENDING` — ke ca lan truoc khi lui DA bi bao bat thuong (`REJECTED`), vi ket cuc do da
+-- mat cung bang. Xuat CSV o duoi TRUOC khi lui de doi chieu lai sau khi ap.
 --
 -- Truoc khi chay, DEM va XUAT:
 --
@@ -39,7 +45,9 @@ DROP TYPE IF EXISTS "TransportSiteIntakeCommercialStatus";
 DROP TYPE IF EXISTS "TransportSiteIntakeSiteMatch";
 
 -- `TransportRunPlanOutcome.ADOPTED` (migration `20260926100000_...`) KHONG go duoc bang `ALTER TYPE`:
--- Postgres khong co `DROP VALUE`. Ke hoach `ADOPTED` da ghi van doc duoc; neu can go han gia tri do
--- thi phai dung lai kieu enum — mot thao tac rieng, doi dem truoc:
+-- Postgres khong co `DROP VALUE`. Hang `ADOPTED` van nam trong DB, NHUNG Prisma client cua ban truoc
+-- #398 khong biet gia tri do va se NEM khi doc mot ke hoach `ADOPTED` (lap ke hoach, xem ke hoach cua
+-- don). Lui ma chua xu ly cac hang nay la de lai mot loi doc. Neu can go han gia tri do thi phai dung
+-- lai kieu enum — mot thao tac rieng, doi dem truoc:
 --
 --     SELECT count(*) FROM "TransportOrderRunPlan" WHERE "outcome" = 'ADOPTED';
