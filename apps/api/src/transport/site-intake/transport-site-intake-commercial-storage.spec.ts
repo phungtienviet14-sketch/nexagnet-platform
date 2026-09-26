@@ -86,15 +86,81 @@ describe('tang luu tru cua viec tai xe nhan truc tiep -> don (#398)', () => {
   });
 
   /**
-   * CHANG GAN DON MOT LAN: `X -> Y` bi cam. `X -> NULL` KHONG bi cam, co y — khoa ngoai `SET NULL`
-   * cua lane A can no. Bai nay khoa ca hai chieu cua dieu kien.
+   * CHANG GAN DON MOT LAN: `X -> Y` bi cam, VA `X -> NULL` viet tay cung bi cam — neu khong thi
+   * `X -> Y` chi con la hai lenh tho (`X -> NULL`, roi `NULL -> Y`). Chi khoa ngoai `ON DELETE SET
+   * NULL` (lenh `UPDATE` chay ben trong trigger RI, `pg_trigger_depth() = 2`) con ghi duoc `NULL`.
+   * Hanh vi that do o bai Postgres `transport-site-intake-commercial-backfill.int.spec.ts`.
    */
-  it('trigger chang: `orderId` X -> Y bi cam, X -> NULL van qua', () => {
+  it('trigger chang: `orderId` X -> Y bi cam; X -> NULL chi qua khi do khoa ngoai SET NULL ghi', () => {
     expect(commercialSql).toContain('CREATE TRIGGER "transport_run_leg_order_binding_once"');
     expect(commercialSql).toContain('BEFORE UPDATE ON "TransportRunLeg"');
-    expect(commercialSql).toMatch(
-      /IF OLD\."orderId" IS NOT NULL AND NEW\."orderId" IS NOT NULL\s+AND NEW\."orderId" IS DISTINCT FROM OLD\."orderId" THEN/,
+    const body = commercialSql.slice(
+      commercialSql.indexOf('CREATE OR REPLACE FUNCTION "transport_run_leg_order_binding_once"'),
+      commercialSql.indexOf('CREATE TRIGGER "transport_run_leg_order_binding_once"'),
     );
+    expect(body).toMatch(
+      /IF OLD\."orderId" IS NOT NULL AND NEW\."orderId" IS NOT NULL\s+AND NEW\."orderId" IS DISTINCT FROM OLD\."orderId" THEN\s+RAISE EXCEPTION/,
+    );
+    expect(body).toMatch(
+      /IF OLD\."orderId" IS NOT NULL AND NEW\."orderId" IS NULL AND pg_trigger_depth\(\) <= 1 THEN\s+RAISE EXCEPTION/,
+    );
+    // Hai duong tu choi, MOT loi ra — khong co `RETURN NEW` som nao bo qua mot trong hai cong.
+    expect(body.match(/RAISE EXCEPTION/g)).toHaveLength(2);
+    expect(body.match(/RETURN NEW/g)).toHaveLength(1);
+  });
+
+  /**
+   * DIEN BU lan nhan viec truoc #398. Hai cong chan nhan doi chi doc bang thuong mai, nen lan nhan
+   * viec con dang do luc deploy phai co hang `PENDING` — va CHI viec con dang do, va hang do TRONG
+   * (khong diem giao, khong don, khong nguoi ghi nao bia ra). Bai Postgres chay CHINH doan nay.
+   */
+  describe('dien bu phan thuong mai cho lan nhan viec truoc #398', () => {
+    const BEGIN = '-- >>> DIEN-BU-398 BAT-DAU >>>';
+    const END = '-- <<< DIEN-BU-398 KET-THUC <<<';
+    const block = commercial.slice(
+      commercial.indexOf(BEGIN) + BEGIN.length,
+      commercial.indexOf(END),
+    );
+    /** Gop khoang trang de khang dinh tren CAU LENH, khong tren cach xuong dong. */
+    const statement = block.replace(/\s+/g, ' ').trim();
+
+    it('co dung MOT doan danh dau, o CUOI migration, va chi chua MOT cau lenh', () => {
+      expect(commercial.split(BEGIN)).toHaveLength(2);
+      expect(commercial.split(END)).toHaveLength(2);
+      expect(commercial.indexOf(BEGIN)).toBeLessThan(commercial.indexOf(END));
+      expect(commercial.indexOf(BEGIN)).toBeGreaterThan(
+        commercial.indexOf('CREATE TRIGGER "transport_run_leg_order_binding_once"'),
+      );
+      expect(commercial.slice(commercial.indexOf(END) + END.length).trim()).toBe('');
+      expect(sqlOf(block).match(/;/g)).toHaveLength(1);
+    });
+
+    it('chi CHEN hang PENDING trong: dung nam cot, khong diem giao/don/nguoi ghi', () => {
+      expect(statement).toMatch(
+        /^INSERT INTO "TransportSiteIntakeCommercial" \("id", "intakeId", "status", "createdAt", "updatedAt"\) SELECT gen_random_uuid\(\)::text, i\."id", 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM "TransportRunSiteIntake" i /,
+      );
+      expect(statement).not.toMatch(
+        /destination|originAttested|bindingMode|boundBy|boundAt|exception/i,
+      );
+      // Khong sua, khong xoa hang nao — ke ca `ON CONFLICT DO UPDATE`.
+      expect(statement).not.toMatch(/\b(UPDATE|DELETE)\b/);
+    });
+
+    it('bo loc DUNG: chua co hang, vong chay mo, chang co hang chua huy/chua xong/chua mang don', () => {
+      for (const clause of [
+        'JOIN "TransportVehicleRun" r ON r."id" = i."runId"',
+        'JOIN "TransportRunLeg" l ON l."id" = i."legId"',
+        'WHERE NOT EXISTS ( SELECT 1 FROM "TransportSiteIntakeCommercial" c WHERE c."intakeId" = i."id" )',
+        `AND r."status" IN ('PLANNED', 'ACTIVE')`,
+        `AND l."kind" = 'LOADED'`,
+        `AND l."status" NOT IN ('CANCELLED', 'COMPLETED')`,
+        'AND l."orderId" IS NULL',
+        'ON CONFLICT ("intakeId") DO NOTHING;',
+      ]) {
+        expect(statement).toContain(clause);
+      }
+      expect(statement.endsWith('ON CONFLICT ("intakeId") DO NOTHING;')).toBe(true);
+    });
   });
 
   it('`siteMatch` la cot NULLABLE (hang truoc #398 = khong biet), khong mac dinh doan', () => {

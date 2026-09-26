@@ -7,10 +7,13 @@
 --   · MOT cot nullable tren `TransportRunSiteIntake` (`siteMatch`) — hang cu giu `NULL`, nghia la
 --     "khong biet lan xac nhan do khop dia diem ra sao", KHONG PHAI mot gia tri doan;
 --   · MOT bang moi `TransportSiteIntakeCommercial` kem rang buoc va trigger cua chinh no;
---   · MOT trigger tren `TransportRunLeg`: `orderId` gan MOT LAN (`X -> Y` bi cam).
+--   · MOT trigger tren `TransportRunLeg`: `orderId` gan MOT LAN (`X -> Y` bi cam, `X -> NULL` chi
+--     qua khi do CHINH khoa ngoai `ON DELETE SET NULL` ghi);
+--   · MOT lan DIEN BU (muc 5): lan nhan viec CON DANG DO truoc #398 nhan mot hang thuong mai
+--     `PENDING` trong — khong diem giao, khong don, khong nguoi nao duoc bia ra.
 --
--- Khong cot nao doi kieu, khong rang buoc nao bi go, khong hang cu nao bi viet lai. Duong lui o
--- `README-rollback.sql` cung thu muc.
+-- Khong cot nao doi kieu, khong rang buoc nao bi go, khong hang cu nao bi viet lai (lan dien bu chi
+-- CHEN hang moi vao bang moi). Duong lui o `README-rollback.sql` cung thu muc.
 --
 -- CANH BAO: `prisma migrate dev` diff schema voi DB se sinh lenh XOA moi `CHECK` va trigger duoi
 -- day. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong do truoc khi commit — cung
@@ -238,12 +241,26 @@ CREATE TRIGGER "transport_site_intake_commercial_guard"
 -- MOT duong dat `orderId` len mot chang da ton tai (lenh nhan lai cua `transport-site-intake`, voi
 -- `WHERE "orderId" IS NULL`); trigger nay chan moi duong con lai, ke ca psql.
 --
--- `X -> NULL` KHONG bi chan o day, va do la co y: khoa ngoai `TransportRunLeg_orderId_fkey` da co
--- tu `20260907190000_transport_movement` la `ON DELETE SET NULL`, tuc chinh Postgres ghi `NULL`
--- khi mot don bi xoa cung. Chan no se lam hong mot rang buoc cua lane khac. Mien khong co duong
--- xoa don nao (`GD-02`), nen canh do chi mo cho ha tang, khong cho mot lan gan lai.
+-- `X -> NULL` CUNG bi chan, tru DUNG mot duong. De ngo no thi `X -> Y` chi con la HAI lenh tho
+-- (`X -> NULL`, roi `NULL -> Y`) — dung lan gan lai ma trigger nay ton tai de chan.
 --
--- Chang da `COMPLETED` van bi khoa CA cot nay boi `transport_run_leg_completed_is_immutable`.
+-- Duong duoc giu: khoa ngoai `TransportRunLeg_orderId_fkey` (tu `20260907190000_transport_movement`)
+-- la `ON DELETE SET NULL`, tuc chinh Postgres ghi `NULL` khi mot don bi xoa cung. Lenh `UPDATE` do
+-- chay BEN TRONG trigger he thong cua rang buoc (RI), nen o day `pg_trigger_depth()` la 2; mot lenh
+-- `UPDATE` viet tay — psql, khoi `DO`, mot ham goi thang — thay 1. Da do tren Postgres 16: cap lenh
+-- tren cung mot hang cho ra dung 1 va 2.
+--
+-- Da soat truoc khi siet: khong duong ma nao cua san pham ghi `orderId = NULL` len mot chang da co
+-- don (lan ghi `orderId` duy nhat la lenh nhan lai, `WHERE "orderId" IS NULL`). Reset demo
+-- (`demo-seed.ts`) xoa DON bang `deleteMany()` trong luc chang con tro toi — tuc di qua dung khoa
+-- ngoai `SET NULL` o tren, van chay. Mien khong co duong xoa don nao (`GD-02`).
+--
+-- Khe con lai (ghi ten, khong giau): mot trigger NGUOI DUNG tren bang khac tu `UPDATE` chang ve
+-- `NULL` cung chay o do sau > 1 va se lot. Hom nay khong co trigger nao nhu vay; them mot cai la
+-- mot lenh DDL — cung quyen voi `DISABLE TRIGGER`.
+--
+-- Chang da `COMPLETED` van bi khoa CA cot nay boi `transport_run_leg_completed_is_immutable` (no
+-- cung la `BEFORE UPDATE` va ten dung truoc theo thu tu chu cai, nen no bao loi truoc).
 -- ---------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION "transport_run_leg_order_binding_once"()
 RETURNS TRIGGER AS $$
@@ -253,6 +270,11 @@ BEGIN
     RAISE EXCEPTION
       'transport_run_leg_order_binding_once: chang % da phuc vu don %, khong gan sang don khac', OLD."id", OLD."orderId";
   END IF;
+  -- `X -> NULL` o muc ngoai cung (do sau 1) = mot lenh viet tay, KHONG phai khoa ngoai `SET NULL`.
+  IF OLD."orderId" IS NOT NULL AND NEW."orderId" IS NULL AND pg_trigger_depth() <= 1 THEN
+    RAISE EXCEPTION
+      'transport_run_leg_order_binding_once: chang % da phuc vu don %, khong go don khoi chang', OLD."id", OLD."orderId";
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -260,3 +282,49 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "transport_run_leg_order_binding_once"
   BEFORE UPDATE ON "TransportRunLeg"
   FOR EACH ROW EXECUTE FUNCTION "transport_run_leg_order_binding_once"();
+
+-- ---------------------------------------------------------------------------------------------
+-- 5. DIEN BU: lan nhan viec CON DANG DO truoc #398 phai hien ra voi hai cong cua bo lap ke hoach.
+--
+-- Truoc migration nay khong co bang thuong mai, nen MOI lan nhan viec cu deu KHONG co hang o day.
+-- Kho chi tao hang do LUOI, ben trong mot lenh thuong mai (`withIntake`). Nhung ca hai cong chan
+-- nhan doi — `requireVehicleFreeOfPendingIntake` (duoi khoa xe) va `listPendingForVehicle` /
+-- `listByStatus` (hang "Can xu ly") — CHI doc bang nay. Khong dien bu thi mot viec tai xe nhan
+-- con mo luc deploy la vo hinh: van phong lap ke hoach cho chinh xe do se sinh vong chay/chang
+-- THU HAI cho dung mot viec that (R2/L2), va viec do khong bao gio vao "Can xu ly".
+--
+-- CHI cho viec con dang do — dung dieu kien de lenh nhan lai con gan duoc don vao chang:
+--   · vong chay `PLANNED`/`ACTIVE`;
+--   · chang cua lan nhan viec (`legId`) la chang CO HANG, chua huy, chua xong (tuc `PLANNED` /
+--     `IN_TRANSIT`), va chua mang don nao.
+-- Lan nhan viec da dong / da huy / da gan don KHONG duoc hang nao: hang `PENDING` cho chung se la
+-- mot viec "dang cho" gia. Neu mot lenh thuong mai cham toi chung sau nay, duong LUOI cua kho van
+-- tao hang, trong chinh giao dich giu khoa.
+--
+-- Hang dien bu la hang TRONG va dung su that: `PENDING`, moi cot khac `NULL` — khong diem giao,
+-- khong xac nhan noi lay, khong don, khong nguoi ghi. Moi CHECK cua bang deu nhan hinh dang do
+-- (khoi diem giao / xac nhan noi lay / gan don / bat thuong deu "khong co gi"), va trigger
+-- `transport_site_intake_commercial_guard` chi gac `UPDATE`/`DELETE`. `siteMatch` cua lan nhan
+-- viec cu la `NULL` ("khong biet") -> `evaluateCommercialReadiness` ra `NEEDS_REVIEW` voi
+-- `ORIGIN_LOCATION_UNVERIFIED` (+ `DESTINATION_MISSING`): van phong xac nhan noi lay va chon diem
+-- giao, khong gi tu dong.
+--
+-- Chay lai la khong doi: `NOT EXISTS` bo qua lan nhan viec da co hang, va `ON CONFLICT` giu dung
+-- mot hang khi mot lenh thuong mai tao hang LUOI cung luc. Bai Postgres
+-- `transport-site-intake-commercial-backfill.int.spec.ts` chay CHINH doan giua hai dong danh dau.
+-- ---------------------------------------------------------------------------------------------
+-- >>> DIEN-BU-398 BAT-DAU >>>
+INSERT INTO "TransportSiteIntakeCommercial" ("id", "intakeId", "status", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, i."id", 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  FROM "TransportRunSiteIntake" i
+  JOIN "TransportVehicleRun" r ON r."id" = i."runId"
+  JOIN "TransportRunLeg" l ON l."id" = i."legId"
+ WHERE NOT EXISTS (
+         SELECT 1 FROM "TransportSiteIntakeCommercial" c WHERE c."intakeId" = i."id"
+       )
+   AND r."status" IN ('PLANNED', 'ACTIVE')
+   AND l."kind" = 'LOADED'
+   AND l."status" NOT IN ('CANCELLED', 'COMPLETED')
+   AND l."orderId" IS NULL
+ON CONFLICT ("intakeId") DO NOTHING;
+-- <<< DIEN-BU-398 KET-THUC <<<

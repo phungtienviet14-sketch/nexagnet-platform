@@ -5,11 +5,15 @@
 --
 -- MIGRATION NAY CHI THEM. Bang moi `TransportSiteIntakeCommercial` tro khoa ngoai RA `TransportRunSiteIntake`
 -- va `TransportOrder`; khong bang cu nao tro VAO no. Cot moi `TransportRunSiteIntake.siteMatch` la
--- nullable. Hai trigger moi chi CHAN, khong ghi gi.
+-- nullable. Hai trigger moi chi CHAN, khong ghi gi. Lan dien bu (muc 5 cua migration) chi CHEN hang
+-- `PENDING` TRONG vao chinh bang moi — no mat cung bang, va khong mang su that nao de mat.
 --
 -- CAI THAT SU MAT KHI LUI: moi diem giao tai xe/van phong da chon, moi lan xac nhan noi lay hang, dau
 -- vet gan don va moi lan bao bat thuong. DON, VONG CHAY, CHANG va KE HOACH van o nguyen: chung khong
 -- tro sang bang moi. Chang da nhan don van giu `orderId` — lui migration KHONG go lan gan do.
+--
+-- Lui xong, trigger `transport_run_leg_order_binding_once` bien mat: chang lai doi don duoc bang tay
+-- (`X -> Y`, `X -> NULL`) — dung nhu truoc #398. Ap lai migration thi lan dien bu chay lai tu dau.
 --
 -- Truoc khi chay, DEM va XUAT:
 --
