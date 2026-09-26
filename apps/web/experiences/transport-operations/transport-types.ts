@@ -2048,7 +2048,8 @@ export interface RunMovementSummary {
 }
 
 export type RunGrouping = 'ONE_ORDER_PER_RUN' | 'MULTI_ORDER_RUN';
-export type RunPlanOutcome = 'NEW_RUN' | 'APPENDED';
+/** `ADOPTED` (#398): don nhan lai vong chay + chang cu cua mot lan tai xe nhan viec truc tiep. */
+export type RunPlanOutcome = 'NEW_RUN' | 'APPENDED' | 'ADOPTED';
 
 /**
  * CHINH SACH LAP KE HOACH dang ap dung cho khach nay — be mat CHAN DOAN cua `GET

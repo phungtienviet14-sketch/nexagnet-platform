@@ -60,6 +60,9 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
     const denied = literalsInArray(source, 'ACCOUNTING_DENIED');
     expect(denied).toEqual([
       'transport.trip.cancel',
+      // Issue #398 — bao bat thuong / huy viec tai xe nhan truc tiep la quyet dinh cua SEP; ke toan
+      // van hoan thien duoc phan thuong mai con thieu (`.review.complete`).
+      'transport.site_intake.exception',
       'transport.costing.period.reopen',
       'transport.fuel.reconciliation.reopen',
       // Issue #235 Lane B — Ke toan doc TOM TAT bam vi tri, khong doc duong di tung phut cua mot

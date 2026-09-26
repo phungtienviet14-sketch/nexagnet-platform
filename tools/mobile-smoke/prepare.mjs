@@ -98,10 +98,21 @@ async function waitForHealth() {
 
 const items = (body) => (Array.isArray(body) ? body : (body?.items ?? []));
 
+const demoMonth = () =>
+  JSON.parse(readFileSync(join(REPO, 'tenants/transport-preview/data/demo-month.json'), 'utf8'));
+
+/** Lai xe mau theo login, KEM bien so xe dang gan — `null` khi khong co hoac chua gan xe. */
+function driverByLogin(login) {
+  const month = demoMonth();
+  const driver = month.drivers.find((row) => row.login === login);
+  const vehicle = driver?.vehicle ? month.vehicles.find((row) => row.ref === driver.vehicle) : null;
+  return driver && vehicle
+    ? { login: driver.login, name: driver.name, plate: vehicle.plate }
+    : null;
+}
+
 function pickDriver() {
-  const month = JSON.parse(
-    readFileSync(join(REPO, 'tenants/transport-preview/data/demo-month.json'), 'utf8'),
-  );
+  const month = demoMonth();
   const wanted = process.env.SMOKE_DRIVER_LOGIN;
   const driver = month.drivers.find((row) =>
     wanted ? row.login === wanted : row.vehicle !== null && row.vehicle !== undefined,
@@ -130,6 +141,11 @@ function exportForMaestro(result) {
     MAESTRO_DELIVERY_LNG: String(DELIVERY.longitude),
     MAESTRO_RUN_CODE: result.run.runCode,
     MAESTRO_ORDER_CODE: result.order.code,
+    // #398 — nhan chuyen truc tiep: hai lai xe KHONG co viec, va dia diem giao da biet.
+    MAESTRO_INTAKE_DRIVER_USERNAME: result.intake.driver.login,
+    MAESTRO_INTAKE_DRIVER_NAME: result.intake.driver.name,
+    MAESTRO_REVIEW_DRIVER_USERNAME: result.intake.reviewDriver.login,
+    MAESTRO_INTAKE_DESTINATION_PLACE_ID: result.intake.destination.placeId,
   };
   if (process.env.GITHUB_ENV) {
     appendFileSync(
@@ -209,8 +225,11 @@ async function main() {
     fail(`Vong chay ${run.runCode} khong co moc nao de bam: ${JSON.stringify(actions)}`);
   }
 
+  const intake = await prepareDriverDirectIntake(pick.login);
+
   const result = {
     api: API,
+    intake,
     driver: pick,
     director: DIRECTOR,
     accountant: ACCOUNTANT,
@@ -228,6 +247,57 @@ async function main() {
   const json = `${JSON.stringify(result, null, 2)}\n`;
   if (process.env.SMOKE_OUTPUT) writeFileSync(process.env.SMOKE_OUTPUT, json);
   process.stdout.write(json);
+}
+
+/**
+ * #398 — THE GIOI cho luong "tai xe nhan chuyen tai dia diem hien tai".
+ *
+ * Hai lai xe mau KHONG co viec nao (mot cho duong thuong -> don tu tao, mot cho "chua biet diem
+ * giao" -> Can xu ly) va MOT dia diem giao da biet (hang rao cua ban gieo). Script CHI DOC o day:
+ * khong tao vong chay, khong tao don — lan xac nhan phai den tu CHINH cai cham cua lai xe tren may.
+ * De nghi dia diem (POST proposals) la duong CHI DOC cua #267, dung o day de chac chan kho lay hang
+ * duoc nhan ra DUY NHAT truoc khi Maestro bam.
+ */
+async function prepareDriverDirectIntake(activeLogin) {
+  const wanted = [
+    process.env.SMOKE_INTAKE_DRIVER_LOGIN ?? 'lx.hung',
+    process.env.SMOKE_REVIEW_DRIVER_LOGIN ?? 'lx.tuan',
+  ];
+  if (wanted.includes(activeLogin) || wanted[0] === wanted[1]) {
+    fail(`Lai xe nhan chuyen truc tiep phai khac nhau va khac ${activeLogin}.`);
+  }
+  const drivers = [];
+  for (const login of wanted) {
+    const profile = driverByLogin(login);
+    if (!profile) fail(`Lai xe mau ${login} khong co hoac chua gan xe.`);
+    const session = await signIn(login);
+    if (session.role !== 'SALE') fail(`${login} phai la SALE, thay ${session.role}.`);
+    const work = await request('GET', '/transport/me/field-work', { token: session.token });
+    if (work.runs.length > 0) fail(`${login} da co vong chay mo — DB khong sach.`);
+    drivers.push({ ...profile, token: session.token });
+  }
+  const [driver, reviewDriver] = drivers;
+
+  const proposal = await request('POST', '/transport/me/site-intake/proposals', {
+    token: driver.token,
+    body: { latitude: PICKUP.latitude, longitude: PICKUP.longitude, accuracyMetres: 10 },
+  });
+  if (proposal.outcome !== 'UNIQUE' || proposal.candidates[0]?.siteName !== PICKUP.label) {
+    fail(`De nghi tai ${PICKUP.label} khong DUY NHAT: ${JSON.stringify(proposal).slice(0, 300)}`);
+  }
+  const known = await request('GET', '/transport/me/site-intake/destinations', {
+    token: driver.token,
+  });
+  const place = (known.places ?? []).find((row) => row.name === DELIVERY.label);
+  if (!place) fail(`Khong thay dia diem giao da biet "${DELIVERY.label}".`);
+
+  const strip = ({ token: _token, ...rest }) => rest;
+  return {
+    driver: strip(driver),
+    reviewDriver: strip(reviewDriver),
+    pickupSite: proposal.candidates[0].siteName,
+    destination: { placeId: place.id, name: place.name, detail: place.detail ?? null },
+  };
 }
 
 main().catch((error) => fail(error instanceof Error ? error.message : String(error)));

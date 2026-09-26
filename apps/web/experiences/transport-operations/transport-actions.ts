@@ -162,6 +162,10 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
+  // `#398`: ba ma VAN PHONG cho viec tai xe nhan truc tiep — doc, hoan thien, bao bat thuong.
+  'transport.site_intake.review.read',
+  'transport.site_intake.review.complete',
+  'transport.site_intake.exception',
   /**
    * MO MOT PHIEN CHO NGUOI NHAN (`#279` O5) — nut `Bat dau cho` cua chinh lai xe do.
    *
@@ -295,6 +299,8 @@ const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
  */
 const ACCOUNTING_DENIED: readonly TransportAction[] = [
   'transport.trip.cancel',
+  // `#398`: bao bat thuong / huy viec tai xe nhan truc tiep la quyet dinh cua SEP.
+  'transport.site_intake.exception',
   'transport.costing.period.reopen',
   'transport.fuel.reconciliation.reopen',
   /**

@@ -1,0 +1,84 @@
+# #398 — LAI XE DUOC GOI DI LAY HANG: nhan chuyen tai dia diem hien tai -> chon diem giao -> don TU
+# TAO nhan dung vong chay + chang vua co. Duong THUONG, khong ai phai duyet.
+#
+# The gioi (tools/mobile-smoke/prepare.mjs): lai xe MAESTRO_INTAKE_DRIVER_USERNAME khong co viec nao;
+# vi tri may ao dat DUNG nha may co hang rao trong ban gieo (de nghi DUY NHAT); diem giao la mot dia
+# diem da biet (MAESTRO_INTAKE_DESTINATION_PLACE_ID).
+#
+# testID la hop dong voi man lai xe (src/features/driver/TEST_IDS.md). Khong mot chu "Tạo chuyến",
+# "đơn", "vòng chạy" nao duoc hien cho lai xe.
+appId: com.nexagnet247.transport.preview
+tags:
+  - driver
+  - intake
+  - smoke
+---
+- setLocation:
+    latitude: ${MAESTRO_PICKUP_LAT}
+    longitude: ${MAESTRO_PICKUP_LNG}
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_INTAKE_DRIVER_USERNAME}
+- setPermissions:
+    permissions:
+      location: allow
+# Viec: chua co viec -> the "Ban duoc goi di lay hang?" (khong co tab thu nam).
+- extendedWaitUntil:
+    visible:
+      id: driver-site-intake-start
+    timeout: 45000
+- assertVisible: 'Bạn được gọi đi lấy hàng?'
+- assertNotVisible: 'tạm thời dùng bản web'
+- assertVisible: 'Việc'
+- assertVisible: 'Bản đồ'
+- assertVisible: 'Nhiên liệu'
+- assertVisible: 'Tiền'
+- takeScreenshot: 07-viec-chua-co-viec
+- tapOn:
+    id: driver-site-intake-start
+# De nghi dia diem: DUNG mot nha may, nut "Nhan chuyen tai day".
+- extendedWaitUntil:
+    visible:
+      id: site-intake-confirm
+    timeout: 45000
+- assertVisible: 'Nhận chuyến tại đây'
+- assertNotVisible: 'Tạo chuyến'
+- takeScreenshot: 07-de-nghi-dia-diem
+- tapOn:
+    id: site-intake-confirm
+# Da nhan hang tai A -> "Giao toi dau?"
+- extendedWaitUntil:
+    visible:
+      id: site-intake-destination-choose
+    timeout: 45000
+- assertVisible: 'Giao tới đâu?'
+- takeScreenshot: 07-giao-toi-dau
+- tapOn:
+    id: site-intake-destination-choose
+- extendedWaitUntil:
+    visible:
+      id: site-intake-destination-option-${MAESTRO_INTAKE_DESTINATION_PLACE_ID}
+    timeout: 30000
+- tapOn:
+    id: site-intake-destination-option-${MAESTRO_INTAKE_DESTINATION_PLACE_ID}
+- tapOn:
+    id: site-intake-destination-submit
+- extendedWaitUntil:
+    visible:
+      id: site-intake-done
+    timeout: 45000
+- assertVisible: 'Đã nhận chuyến'
+- takeScreenshot: 07-da-nhan-chuyen
+- tapOn:
+    id: site-intake-back-to-work
+# Ve Viec: da co viec -> the nhan chuyen KHONG con (ACTIVE_RUN thang).
+- extendedWaitUntil:
+    visible:
+      id: driver-work
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible:
+      id: driver-site-intake-start
+    timeout: 30000
+- takeScreenshot: 07-ve-viec

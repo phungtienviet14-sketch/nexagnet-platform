@@ -1,0 +1,36 @@
+# #398 — GIAM DOC thay DUNG hai ket cuc cua 07/08:
+#
+#   · don tu tao cua 07 la TIN TUC trong "Hom nay" (muc "Don moi tu tai xe"), khong phai viec can
+#     quyet — va KHONG co nut duyet nao;
+#   · viec thieu diem giao cua 08 nam trong "Can xu ly".
+#
+# "Don binh thuong khong lam tang hang viec" duoc kiem bang so qua API o
+# tools/mobile-smoke/verify-driver-direct.mjs (Maestro khong dem duoc).
+appId: com.nexagnet247.transport.preview
+tags:
+  - director
+  - intake
+  - smoke
+---
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_DIRECTOR_USERNAME}
+- extendedWaitUntil:
+    visible: 'Hôm nay'
+    timeout: 45000
+- scrollUntilVisible:
+    element:
+      id: director-driver-orders
+    direction: DOWN
+    timeout: 30000
+- assertVisible: '.*${MAESTRO_INTAKE_DRIVER_NAME}.*'
+- assertNotVisible: 'Duyệt đơn'
+- takeScreenshot: 09-hom-nay-don-moi-tu-tai-xe
+- tapOn: 'Cần xử lý'
+- scrollUntilVisible:
+    element: 'Việc tài xế nhận trực tiếp chưa đủ thông tin'
+    direction: DOWN
+    timeout: 30000
+- assertVisible: '.*điểm giao.*'
+- takeScreenshot: 09-can-xu-ly-thieu-diem-giao
