@@ -139,7 +139,8 @@ function PlaceRow({
 }
 
 function PlaceHistory({ placeId }: { readonly placeId: string }) {
-  const history = usePlaceHistory(placeId, true);
+  const navigation = useNavigationInput();
+  const history = usePlaceHistory(navigation, placeId, true);
   if (history.isPending) return <LoadingState label="Đang đọc lịch sử…" />;
   if (history.error !== null) return <AdminError error={history.error} />;
   if (history.data.length === 0) return <p className="tx-note">Chưa có thay đổi nào được ghi.</p>;
@@ -509,7 +510,9 @@ export function PlacesAdminView() {
   const canManage = canPerform(navigation, 'transport.geofence.manage');
   const canManageCounterparties = canPerform(navigation, 'transport.counterparty.manage');
   const canLookUp = canPerform(navigation, 'transport.order.manage');
-  const places = useAdminPlaces(canManage);
+  // Doc danh sach bang ma DOC cua route (`transport.geofence.read`) — truoc `#395` hook nhan ma SUA
+  // tu day, va nguoi chi duoc sua nhan `403` o chinh lan doc nay.
+  const places = useAdminPlaces(navigation);
   const invalidate = useInvalidatePlaces();
   const [filter, setFilter] = useState<PlaceFilter>(DEFAULT_PLACE_FILTER);
   const [selectedId, setSelectedId] = useState<string | null>(null);

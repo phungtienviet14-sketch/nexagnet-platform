@@ -449,6 +449,16 @@ export const canPerform = (viewer: TransportViewerInput, action: TransportAction
 };
 
 /**
+ * Nguoi nay lam duoc MOI viec trong bo (`#395`): mot muc chi mo khi doc duoc DU du lieu chinh. Bo
+ * rong tra `true` — nguoi goi (vd `sectionPermitted`) tu chan mot bo rong, vi voi no mot muc khai
+ * thieu quyen la muc SAI chu khong phai muc ai cung mo.
+ */
+export const canPerformAll = (
+  viewer: TransportViewerInput,
+  actions: readonly TransportAction[],
+): boolean => actions.every((action) => canPerform(viewer, action));
+
+/**
  * Co it nhat mot hanh dong van hanh — tuc thay duoc mot man hinh dieu hanh nao do. Voi tap quyen
  * cua may chu, mot `MANAGER` duoc cap nhom "Đội xe & lái xe" CO pham vi van hanh — truoc `#395`
  * cau nay doc bang vai va tra `false`, nen man hinh chan dung nguoi ma API dang cho phep.

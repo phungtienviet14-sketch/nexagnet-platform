@@ -53,6 +53,12 @@ export interface CatalogGroup {
   /** `false` = nhom den tu LIEN KET ho so (lai xe, ben gop von) — khong bat tat bang o danh dau. */
   readonly grantable: boolean;
   readonly actions: readonly CatalogAction[];
+  /**
+   * QUYEN KEM THEO DE DUNG DUOC (`#395`) — phep XEM cua NHOM KHAC ma man hinh cua nhom nay can (vd
+   * nhom "Quỹ lái xe / lương" can "Xem hồ sơ lái xe" de chon lai xe). Trinh chinh quyen bat kem khi
+   * Giam doc bat nhom, va ghi ro "Kèm theo để dùng được …". May chu cu khong tra = khong kem gi.
+   */
+  readonly needs?: readonly string[];
 }
 
 export interface CatalogPreset {

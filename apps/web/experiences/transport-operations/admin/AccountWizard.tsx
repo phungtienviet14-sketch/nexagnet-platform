@@ -3,7 +3,9 @@
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { TemporaryCredential } from '../../../lib/auth';
+import { PermissionGate } from '../components/PermissionGate';
 import { ConfirmAction } from '../components/SectionState';
+import { useNavigationInput } from '../hooks/useTransportWorkspace';
 import { buildSectionUrl } from '../navigation';
 import {
   buildCreateInput,
@@ -18,9 +20,11 @@ import {
   identityProblems,
   isDirectorConfirmed,
   localUsernameSuggestion,
+  neededByOf,
+  needsSentence,
   permissionLabelLookup,
   PRESET_CHOICES,
-  setAction,
+  setGroupAction,
   stakeholderCandidates,
   toggleGroup,
   transportGroupsOf,
@@ -31,7 +35,7 @@ import {
 } from './accounts-model';
 import { accountLinksApi, accountsApi } from './admin-api';
 import { useDriverCandidates, useInvalidateAccount, useStakeholderCandidates } from './admin-hooks';
-import type { AccountView, PermissionCatalog } from './admin-types';
+import type { AccountView, CatalogGroup, PermissionCatalog } from './admin-types';
 import { AdminError } from './AdminBits';
 import { CredentialCard } from './CredentialCard';
 import { GroupEditor } from './PermissionEditor';
@@ -84,7 +88,11 @@ export function AccountWizard({
   const [linkTarget, setLinkTarget] = useState('');
   const [access, setAccess] = useState<AccessDraft>(changeRole('MANAGER'));
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
-  const [pending, setPending] = useState<{ code: string; label: string } | null>(null);
+  const [pending, setPending] = useState<{
+    code: string;
+    label: string;
+    group: CatalogGroup;
+  } | null>(null);
   const [showProblems, setShowProblems] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
   const [link, setLink] = useState<LinkState>({ status: 'NONE' });
@@ -92,10 +100,11 @@ export function AccountWizard({
   const groups = transportGroupsOf(catalog).filter((group) => group.grantable);
   const labelOf = useMemo(() => permissionLabelLookup(catalog), [catalog]);
   const invalidate = useInvalidateAccount();
+  const navigation = useNavigationInput();
   const wantsDriver = choiceId === 'DRIVER';
   const wantsStakeholder = choiceId === 'OWNER';
-  const drivers = useDriverCandidates(wantsDriver);
-  const stakeholders = useStakeholderCandidates(wantsStakeholder);
+  const drivers = useDriverCandidates(navigation, wantsDriver);
+  const stakeholders = useStakeholderCandidates(navigation, wantsStakeholder);
 
   useEffect(() => heading.current?.focus(), [step]);
 
@@ -293,42 +302,47 @@ export function AccountWizard({
             thanh mot phan TEN cua o chon. Trinh doc man hinh doc no qua `aria-describedby`.
           */}
           {wantsDriver || wantsStakeholder ? (
-            <div className="tx-admin-field">
-              <label className="tx-field">
-                <span>
-                  {wantsDriver
-                    ? 'Hồ sơ lái xe (chưa có tài khoản)'
-                    : 'Hồ sơ bên góp vốn (chưa có tài khoản)'}
-                </span>
-                <select
-                  value={linkTarget}
-                  onChange={(event) => pickLinkTarget(event.target.value)}
-                  aria-describedby={wantsDriver ? driverHintId : undefined}
-                >
-                  <option value="">— Chọn hồ sơ —</option>
-                  {(wantsDriver
-                    ? driverCandidates(drivers.data ?? []).map((entry) => ({
-                        id: entry.id,
-                        label: `${entry.fullName} · ${entry.phone}`,
-                      }))
-                    : stakeholderCandidates(stakeholders.data ?? []).map((entry) => ({
-                        id: entry.id,
-                        label: entry.displayName,
-                      }))
-                  ).map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {wantsDriver ? (
-                <small className="tx-admin-hint" id={driverHintId}>
-                  Chưa có hồ sơ? Thêm ở <a href={buildSectionUrl('fleet')}>Đội xe &amp; lái xe</a>{' '}
-                  rồi quay lại.
-                </small>
-              ) : null}
-            </div>
+            <PermissionGate
+              viewer={navigation}
+              action={wantsDriver ? 'transport.driver.read' : 'transport.asset_ownership.read'}
+            >
+              <div className="tx-admin-field">
+                <label className="tx-field">
+                  <span>
+                    {wantsDriver
+                      ? 'Hồ sơ lái xe (chưa có tài khoản)'
+                      : 'Hồ sơ bên góp vốn (chưa có tài khoản)'}
+                  </span>
+                  <select
+                    value={linkTarget}
+                    onChange={(event) => pickLinkTarget(event.target.value)}
+                    aria-describedby={wantsDriver ? driverHintId : undefined}
+                  >
+                    <option value="">— Chọn hồ sơ —</option>
+                    {(wantsDriver
+                      ? driverCandidates(drivers.data ?? []).map((entry) => ({
+                          id: entry.id,
+                          label: `${entry.fullName} · ${entry.phone}`,
+                        }))
+                      : stakeholderCandidates(stakeholders.data ?? []).map((entry) => ({
+                          id: entry.id,
+                          label: entry.displayName,
+                        }))
+                    ).map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {wantsDriver ? (
+                  <small className="tx-admin-hint" id={driverHintId}>
+                    Chưa có hồ sơ? Thêm ở <a href={buildSectionUrl('fleet')}>Đội xe &amp; lái xe</a>{' '}
+                    rồi quay lại.
+                  </small>
+                ) : null}
+              </div>
+            </PermissionGate>
           ) : null}
           <div className="tx-admin-fields">
             <label className="tx-field">
@@ -408,6 +422,8 @@ export function AccountWizard({
                 group={group}
                 draft={access}
                 isOpen={openGroups.has(group.id)}
+                neededBy={neededByOf(groups, access)}
+                needsNote={needsSentence(group, labelOf)}
                 onToggleOpen={() =>
                   setOpenGroups((current) => {
                     const next = new Set(current);
@@ -418,8 +434,9 @@ export function AccountWizard({
                 }
                 onToggleGroup={() => setAccess((current) => toggleGroup(current, group))}
                 onToggleAction={(code, isOn, needsConfirmation) => {
-                  if (isOn && needsConfirmation) setPending({ code, label: labelOf(code) ?? code });
-                  else setAccess((current) => setAction(current, code, isOn));
+                  if (isOn && needsConfirmation) {
+                    setPending({ code, label: labelOf(code) ?? code, group });
+                  } else setAccess((current) => setGroupAction(current, group, code, isOn));
                 }}
               />
             ))}
@@ -506,7 +523,9 @@ export function AccountWizard({
         confirmLabel="Tôi hiểu, cấp quyền"
         onCancel={() => setPending(null)}
         onConfirm={() => {
-          if (pending !== null) setAccess((current) => setAction(current, pending.code, true));
+          if (pending !== null) {
+            setAccess((current) => setGroupAction(current, pending.group, pending.code, true));
+          }
           setPending(null);
         }}
       />

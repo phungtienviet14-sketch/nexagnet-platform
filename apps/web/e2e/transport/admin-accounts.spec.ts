@@ -6,6 +6,7 @@ import {
 import {
   ACCOUNTANT,
   groupCodes,
+  groupNeeds,
   lastRequest,
   makeAccount,
   serveAccounts,
@@ -119,6 +120,51 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
     await shoot(page, 'accounts-detail-1440');
   });
 
+  test('bat nhom Bao duong: quyen "kèm theo để dùng được" cua nhom Doi xe bat cung, ghi ro ly do', async ({
+    page,
+  }) => {
+    const world = await serveAccounts(page);
+    await page.goto('/?section=admin-accounts');
+    await page.getByRole('button', { name: 'Thêm tài khoản' }).click();
+    await page.getByRole('radio', { name: /Điều hành \/ Quản lý/ }).check();
+    await page.getByRole('button', { name: 'Tiếp tục' }).click();
+    await page.getByLabel('Họ tên').fill('Lê Văn Bảo');
+    await expect(page.getByLabel('Tên đăng nhập', { exact: true })).toHaveValue('le.van.bao');
+    await page.getByRole('button', { name: 'Tiếp tục' }).click();
+
+    const maintenance = page.getByRole('checkbox', { name: 'Nhóm Bảo dưỡng / giấy tờ' });
+    const fleet = page.getByRole('checkbox', { name: 'Nhóm Đội xe & lái xe' });
+    // Nhom NOI truoc no se bat kem gi — Giam doc khong bi bat ngo.
+    await expect(
+      page
+        .locator('.tx-admin-group')
+        .filter({ has: maintenance })
+        .locator('.tx-admin-group__needs'),
+    ).toHaveText('Kèm theo để dùng được: Xem danh sách xe, Xem hồ sơ lái xe');
+    await expect(fleet).toHaveAttribute('aria-checked', 'false');
+
+    await maintenance.click();
+    await expect(maintenance).toHaveAttribute('aria-checked', 'true');
+    // Hai phep XEM cua nhom Doi xe bat cung → nhom do "do dang", va dong cua no noi VI SAO.
+    await expect(fleet).toHaveAttribute('aria-checked', 'mixed');
+    await page.getByRole('button', { name: 'Từng việc của nhóm Đội xe & lái xe' }).click();
+    const vehicleRow = page.locator('.tx-admin-action').filter({ hasText: 'Xem danh sách xe' });
+    await expect(vehicleRow.getByRole('checkbox')).toBeChecked();
+    await expect(vehicleRow).toContainText('Kèm theo để dùng được Bảo dưỡng / giấy tờ');
+    await shoot(page, 'accounts-wizard-needs-1440');
+
+    await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
+    await expect(page.getByTestId('credential-card')).toBeVisible();
+    const created = lastRequest(world, 'POST', '/settings/users')?.body as {
+      grants: { permission: string; effect: string }[];
+    };
+    const granted = created.grants.map((grant) => `${grant.effect}:${grant.permission}`);
+    expect(groupNeeds('bao-duong')).toEqual(['transport.vehicle.read', 'transport.driver.read']);
+    for (const need of groupNeeds('bao-duong')) expect(granted).toContain(`ALLOW:${need}`);
+    // Chi PHEP XEM kem theo — khong mot viec ghi nao cua nhom Doi xe.
+    expect(granted).not.toContain('ALLOW:transport.vehicle.manage');
+  });
+
   test('dat lai mat khau, khoa va mo khoa — moi viec co xac nhan va vao lich su', async ({
     page,
   }) => {
@@ -228,6 +274,21 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
     await expect(violations).not.toContainText('transport.');
     const preview = lastRequest(world, 'PUT', `/settings/users/${ACCOUNTANT.id}/access`)?.body;
     expect(preview).toMatchObject({ role: 'ACCOUNTING', dryRun: true });
+    // `#395` (e): may chu VUA noi bo quyen nay vi pham → "Lưu quyền" TAT, va noi vi sao.
+    const save = detail.getByRole('button', { name: 'Lưu quyền' });
+    await expect(save).toBeDisabled();
+    await expect(detail.getByRole('status').filter({ hasText: 'Chưa lưu được' })).toContainText(
+      'còn vi phạm quy tắc ở khung “Xem trước”',
+    );
+    // Khong mot lan GHI nao duoc gui (chi co cac lan xem truoc).
+    expect(
+      world.requests.filter(
+        (entry) =>
+          entry.method === 'PUT' &&
+          entry.path === `/settings/users/${ACCOUNTANT.id}/access` &&
+          (entry.body as { dryRun?: boolean }).dryRun !== true,
+      ),
+    ).toEqual([]);
 
     // Vai Giam doc: phai GO cau xac nhan, mot lan bam la qua re cho toan quyen.
     await detail.getByRole('radio', { name: /^Giám đốc/ }).check();
@@ -236,7 +297,6 @@ test.describe('Tài khoản & quyền — Giám đốc', () => {
     await expect(fleetGroup).toHaveAttribute('aria-disabled', 'true');
     await expect(fleetGroup).toHaveAttribute('aria-checked', 'true');
     await expect(fleetGroup).toHaveText('✓');
-    const save = detail.getByRole('button', { name: 'Lưu quyền' });
     await expect(save).toBeDisabled();
     await detail.getByLabel(/Gõ đúng câu/).fill('Tôi hiểu Giám đốc có toàn quyền');
     await expect(save).toBeEnabled();
@@ -315,6 +375,86 @@ test.describe('Man hinh doc TAP QUYEN cua may chu', () => {
       .poll(() => world.requests.filter((entry) => entry.path === '/transport/me/vehicles').length)
       .toBeGreaterThan(0);
     await expect(nav(page).getByRole('link', { name: 'Xe tôi có cổ phần' })).toHaveCount(0);
+  });
+
+  /**
+   * `#395` — QUYEN RIENG luon cho ra mot man dung duoc. Bam o nhom tren trinh chinh quyen = moi viec
+   * thuong cua nhom (khong nhay cam, khong chi Giam doc) — dung bo `diag-groups` da cap tren may that.
+   */
+  const groupToggle = (id: string): string[] =>
+    groupCodes(id).filter((code) => code !== 'transport.trip.cancel');
+  const manager = () =>
+    makeAccount({ id: 'u-bao', username: 'bao', name: 'Lê Văn Bảo', role: 'MANAGER' });
+
+  test('#395 Dieu hanh duoc cap DUNG nhom Bao duong (kem quyen kem theo): man Bao duong doc duoc bien so', async ({
+    page,
+  }) => {
+    await serveAccounts(page, {
+      me: manager(),
+      permissions: [...groupToggle('bao-duong'), ...groupNeeds('bao-duong')],
+    });
+    await page.goto('/?section=maintenance');
+
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Bảo dưỡng & giấy tờ' }),
+    ).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: '29H-123.45' })).toBeVisible();
+    await expect(page.getByText('Bạn chưa được cấp quyền xem')).toHaveCount(0);
+    await expect(page.getByText(MANAGER_HAS_NO_TRANSPORT_SCOPE)).toHaveCount(0);
+  });
+
+  test('#395 nhom Bao duong KHONG co quyen kem theo: muc van mo, ten xe noi mot cau, KHONG hoi may chu', async ({
+    page,
+  }) => {
+    const world = await serveAccounts(page, {
+      me: manager(),
+      permissions: groupToggle('bao-duong'),
+    });
+    await page.goto('/');
+
+    // Truoc ban sua: danh muc trong + "Tài khoản của bạn chưa được cấp quyền…".
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Bảo dưỡng & giấy tờ' }),
+    ).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Bảo dưỡng & giấy tờ' })).toBeVisible();
+    await expect(page.getByText(MANAGER_HAS_NO_TRANSPORT_SCOPE)).toHaveCount(0);
+    await expect(
+      page.getByText('Bạn chưa được cấp quyền xem danh sách xe và hồ sơ lái xe.'),
+    ).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: 'Xe chưa đọc được tên' })).toBeVisible();
+    expect(
+      world.requests.filter((entry) =>
+        ['/transport/vehicles', '/transport/drivers'].includes(entry.path),
+      ),
+    ).toEqual([]);
+  });
+
+  test('#395 Dieu hanh duoc cap nhom Dieu hanh: KHONG thay "Hiệu quả từng chuyến" (man do doc bao cao quyet toan)', async ({
+    page,
+  }) => {
+    await serveAccounts(page, {
+      me: manager(),
+      permissions: [...groupToggle('dieu-hanh'), ...groupNeeds('dieu-hanh')],
+    });
+    await page.goto('/');
+    await expect(nav(page).getByRole('link', { name: 'Đơn hàng & vòng chạy' })).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Hiệu quả từng chuyến' })).toHaveCount(0);
+  });
+
+  test('#395 CHI co quyen sua dia diem: khong muc nao mo duoc, va danh muc noi dung ly do', async ({
+    page,
+  }) => {
+    const world = await serveAccounts(page, {
+      me: manager(),
+      permissions: ['transport.geofence.manage'],
+    });
+    await page.goto('/?section=admin-places');
+
+    await expect(page.getByText(MANAGER_HAS_NO_TRANSPORT_SCOPE)).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Địa điểm vận hành' })).toHaveCount(0);
+    await expect(nav(page)).toContainText('Chưa có mục nào bạn được cấp quyền mở.');
+    await expect(nav(page)).not.toContainText('Không có mục nào khớp');
+    expect(world.requests.filter((entry) => entry.path === '/transport/places/admin')).toEqual([]);
   });
 
   test('Ke toan bi BOT nhom Nhien lieu: muc do bien khoi danh muc; tra lai thi hien', async ({

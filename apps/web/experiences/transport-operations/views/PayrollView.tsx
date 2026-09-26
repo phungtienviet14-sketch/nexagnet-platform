@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { formatVnd } from '../../../lib/format';
+import { PermissionNote } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -106,6 +107,11 @@ export function PayrollView() {
         <ErrorState message={periods.errorMessage} onRetry={periods.refetch} />
       )}
       {periods.isLoading ? <LoadingState label="Đang đọc kỳ lương…" /> : null}
+      {/* `#395` — ten lai xe va bien so tren phieu luong la danh ba RIENG: thieu quyen thi noi ra. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.driver.read', 'transport.vehicle.read']}
+      />
 
       <section className="tx-panel" aria-label="Kỳ lương">
         <h2>Kỳ lương</h2>
@@ -114,7 +120,8 @@ export function PayrollView() {
           viewer={navigation}
           onChanged={refreshPayroll}
         />
-        {periodRows.length === 0 && !periods.isLoading ? (
+        {/* Mot lan doc LOI (vd `403`) khong phai "chua co ky nao" — loi da noi o tren (`#395`). */}
+        {periods.errorMessage !== null ? null : periodRows.length === 0 && !periods.isLoading ? (
           <EmptyState title="Chưa có kỳ lương nào được mở." />
         ) : (
           <DataTable

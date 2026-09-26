@@ -105,7 +105,8 @@
               "escalation": true,
               "sod": null
             }
-          ]
+          ],
+          "needs": ["transport.customer.read", "transport.vehicle.read"]
         },
         {
           "id": "hien-truong",
@@ -193,7 +194,8 @@
               "escalation": true,
               "sod": "EVIDENCE"
             }
-          ]
+          ],
+          "needs": ["transport.order.read", "transport.run.read"]
         },
         {
           "id": "doi-xe",
@@ -249,7 +251,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": []
         },
         {
           "id": "khach-hang",
@@ -305,7 +308,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": ["transport.order.read"]
         },
         {
           "id": "ke-toan",
@@ -433,6 +437,11 @@
               "escalation": false,
               "sod": null
             }
+          ],
+          "needs": [
+            "transport.customer.read",
+            "transport.order.read",
+            "transport.operational_document.read"
           ]
         },
         {
@@ -553,7 +562,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": ["transport.vehicle.read"]
         },
         {
           "id": "quy-luong",
@@ -705,7 +715,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": ["transport.driver.read"]
         },
         {
           "id": "bao-duong",
@@ -777,7 +788,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": ["transport.vehicle.read", "transport.driver.read"]
         },
         {
           "id": "ban-do",
@@ -825,7 +837,8 @@
               "escalation": true,
               "sod": "EVIDENCE"
             }
-          ]
+          ],
+          "needs": ["transport.vehicle.read", "transport.run.read"]
         },
         {
           "id": "phi-duong",
@@ -873,7 +886,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": ["transport.vehicle.read"]
         },
         {
           "id": "bao-cao",
@@ -897,7 +911,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": ["transport.customer.read", "transport.partner.read"]
         },
         {
           "id": "quan-tri",
@@ -913,7 +928,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": []
         },
         {
           "id": "lai-xe",
@@ -1073,7 +1089,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": []
         },
         {
           "id": "chu-xe",
@@ -1089,7 +1106,8 @@
               "escalation": false,
               "sod": null
             }
-          ]
+          ],
+          "needs": []
         }
       ],
       "presets": [

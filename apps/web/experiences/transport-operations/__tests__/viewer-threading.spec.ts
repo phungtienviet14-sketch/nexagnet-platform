@@ -25,6 +25,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const EXPERIENCE = resolve(HERE, '..');
 const HELPERS = [
   'canPerform',
+  // `#395`: cong BO ma cua muc, va cau "Bạn chưa được cấp quyền xem …" cua phan phu.
+  'canPerformAll',
+  'missingActions',
   'hasOperationsScope',
   'hasDriverScope',
   'operationsEmptyMessage',
@@ -78,6 +81,8 @@ describe('#395 — moi cong quyen cua man hinh nhan NGUOI DANG XEM, khong nhan c
     expect([...'hasOperationsScope(input.role)'.matchAll(HELPER_ON_ROLE)]).toHaveLength(1);
     expect([...'<X role={navigation.role} />'.matchAll(ROLE_PROP)]).toHaveLength(1);
     expect([...'canPerform(navigation, action)'.matchAll(HELPER_ON_ROLE)]).toHaveLength(0);
+    expect([...'canPerformAll(input.role, actions)'.matchAll(HELPER_ON_ROLE)]).toHaveLength(1);
+    expect([...'<PermissionGate viewer={navigation.role} />'.matchAll(ROLE_PROP)]).toHaveLength(1);
   });
 });
 

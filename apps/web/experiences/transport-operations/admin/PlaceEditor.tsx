@@ -2,6 +2,8 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
+import { useNavigationInput } from '../hooks/useTransportWorkspace';
 import { transportApi } from '../transport-api';
 import type { GeoPoint, PlaceCandidate } from '../transport-types';
 import { readOfficePosition } from '../views/order-composer/browser-position';
@@ -110,8 +112,12 @@ export function PlaceEditor({
   const [positionMessage, setPositionMessage] = useState<string | null>(null);
   const [showProblems, setShowProblems] = useState(false);
   const [openWork, setOpenWork] = useState<OpenWorkDetail | null>(null);
-  const customers = useOwnerCustomers(isCreate && draft.ownerChoice === 'CUSTOMER');
-  const counterparties = useOwnerCounterparties(isCreate && draft.ownerChoice === 'PARTNER');
+  const navigation = useNavigationInput();
+  const customers = useOwnerCustomers(navigation, isCreate && draft.ownerChoice === 'CUSTOMER');
+  const counterparties = useOwnerCounterparties(
+    navigation,
+    isCreate && draft.ownerChoice === 'PARTNER',
+  );
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const onChangeRef = useRef(onChange);
@@ -298,70 +304,74 @@ export function PlaceEditor({
         ) : null}
 
         {isCreate && ownerChoice?.id === 'CUSTOMER' ? (
-          <label className="tx-field">
-            <span>Khách hàng</span>
-            <select
-              value={draft.customerId}
-              onChange={(event) => onChange({ ...draft, customerId: event.target.value })}
-            >
-              <option value="">— Chọn khách hàng —</option>
-              {(customers.data ?? [])
-                .filter((customer) => customer.status === 'ACTIVE')
-                .map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-            </select>
-          </label>
+          <PermissionGate viewer={navigation} action="transport.customer.read">
+            <label className="tx-field">
+              <span>Khách hàng</span>
+              <select
+                value={draft.customerId}
+                onChange={(event) => onChange({ ...draft, customerId: event.target.value })}
+              >
+                <option value="">— Chọn khách hàng —</option>
+                {(customers.data ?? [])
+                  .filter((customer) => customer.status === 'ACTIVE')
+                  .map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </PermissionGate>
         ) : null}
 
         {isCreate && ownerChoice?.id === 'PARTNER' ? (
-          <div className="tx-admin-fields">
-            <label className="tx-field">
-              <span>Đơn vị</span>
-              <select
-                value={draft.counterpartyId}
-                onChange={(event) => onChange({ ...draft, counterpartyId: event.target.value })}
-              >
-                <option value="">— Chọn đơn vị —</option>
-                {(counterparties.data ?? [])
-                  .filter((entry) => entry.status === 'ACTIVE')
-                  .map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.name}
-                      {entry.taxCode === null ? '' : ` · MST ${entry.taxCode}`}
-                    </option>
-                  ))}
-                <option value={NEW_COUNTERPARTY}>+ Thêm đơn vị mới</option>
-              </select>
-            </label>
-            {draft.counterpartyId === NEW_COUNTERPARTY ? (
-              <>
-                <label className="tx-field">
-                  <span>Tên đơn vị mới</span>
-                  <input
-                    value={draft.newCounterpartyName}
-                    onChange={(event) =>
-                      onChange({ ...draft, newCounterpartyName: event.target.value })
-                    }
-                    maxLength={200}
-                  />
-                </label>
-                <label className="tx-field">
-                  <span>Mã số thuế (nếu có)</span>
-                  <input
-                    value={draft.newCounterpartyTaxCode}
-                    onChange={(event) =>
-                      onChange({ ...draft, newCounterpartyTaxCode: event.target.value })
-                    }
-                    inputMode="numeric"
-                    maxLength={20}
-                  />
-                </label>
-              </>
-            ) : null}
-          </div>
+          <PermissionGate viewer={navigation} action="transport.counterparty.read">
+            <div className="tx-admin-fields">
+              <label className="tx-field">
+                <span>Đơn vị</span>
+                <select
+                  value={draft.counterpartyId}
+                  onChange={(event) => onChange({ ...draft, counterpartyId: event.target.value })}
+                >
+                  <option value="">— Chọn đơn vị —</option>
+                  {(counterparties.data ?? [])
+                    .filter((entry) => entry.status === 'ACTIVE')
+                    .map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.name}
+                        {entry.taxCode === null ? '' : ` · MST ${entry.taxCode}`}
+                      </option>
+                    ))}
+                  <option value={NEW_COUNTERPARTY}>+ Thêm đơn vị mới</option>
+                </select>
+              </label>
+              {draft.counterpartyId === NEW_COUNTERPARTY ? (
+                <>
+                  <label className="tx-field">
+                    <span>Tên đơn vị mới</span>
+                    <input
+                      value={draft.newCounterpartyName}
+                      onChange={(event) =>
+                        onChange({ ...draft, newCounterpartyName: event.target.value })
+                      }
+                      maxLength={200}
+                    />
+                  </label>
+                  <label className="tx-field">
+                    <span>Mã số thuế (nếu có)</span>
+                    <input
+                      value={draft.newCounterpartyTaxCode}
+                      onChange={(event) =>
+                        onChange({ ...draft, newCounterpartyTaxCode: event.target.value })
+                      }
+                      inputMode="numeric"
+                      maxLength={20}
+                    />
+                  </label>
+                </>
+              ) : null}
+            </div>
+          </PermissionGate>
         ) : null}
 
         {!isCreate || draft.ownerChoice !== null ? (

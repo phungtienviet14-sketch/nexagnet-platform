@@ -11,11 +11,13 @@ import {
   escalatedAllows,
   groupCheckbox,
   isDirectorConfirmed,
+  neededByOf,
+  needsSentence,
   permissionLabelLookup,
   presetsOf,
   presetLabelOf,
   sameAccess,
-  setAction,
+  setGroupAction,
   toggleGroup,
   transportGroupsOf,
   type AccessDraft,
@@ -50,6 +52,8 @@ export function GroupEditor({
   group,
   draft,
   isOpen,
+  neededBy,
+  needsNote,
   onToggleOpen,
   onToggleGroup,
   onToggleAction,
@@ -57,6 +61,10 @@ export function GroupEditor({
   readonly group: CatalogGroup;
   readonly draft: AccessDraft;
   readonly isOpen: boolean;
+  /** Ma → nhan cac nhom dang can no (`neededByOf`) — "Kèm theo để dùng được …" (`#395`). */
+  readonly neededBy: ReadonlyMap<string, readonly string[]>;
+  /** Cau "Kèm theo để dùng được: …" duoi ten nhom (`needsSentence`); `null` = nhom khong kem gi. */
+  readonly needsNote: string | null;
   readonly onToggleOpen: () => void;
   readonly onToggleGroup: () => void;
   readonly onToggleAction: (code: string, isOn: boolean, needsConfirmation: boolean) => void;
@@ -64,7 +72,7 @@ export function GroupEditor({
   const summaryId = useId();
   const listId = useId();
   const box = groupCheckbox(group, draft);
-  const rows = actionRows(group, draft);
+  const rows = actionRows(group, draft, neededBy);
   const isDirectorOnly = group.actions.every((action) => action.directorOnly);
 
   return (
@@ -83,6 +91,7 @@ export function GroupEditor({
             {isDirectorOnly ? 'Chỉ Giám đốc — ' : ''}
             {group.summary}
           </span>
+          {needsNote === null ? null : <small className="tx-admin-group__needs">{needsNote}</small>}
         </div>
         {/* `aria-label` tren `<span>` bi cam (ARIA 1.2): so cho mat, cau cho trinh doc man hinh. */}
         <span className="tx-admin-group__count">
@@ -134,6 +143,9 @@ export function GroupEditor({
             {row.origin === 'DENIED' ? (
               <span className="tx-admin-action__origin">Đã bớt</span>
             ) : null}
+            {row.neededByLabel === null ? null : (
+              <span className="tx-admin-action__needed">{row.neededByLabel}</span>
+            )}
             {row.sodLabel === null ? null : (
               <small className="tx-admin-action__sod">{row.sodLabel}</small>
             )}
@@ -162,7 +174,11 @@ export function PermissionEditor({
   const [draft, setDraft] = useState<AccessDraft>(initial);
   const [typedConfirmation, setTypedConfirmation] = useState('');
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
-  const [pending, setPending] = useState<{ code: string; label: string } | null>(null);
+  const [pending, setPending] = useState<{
+    code: string;
+    label: string;
+    group: CatalogGroup;
+  } | null>(null);
   const [preview, setPreview] = useState<AccessBreakdown | null>(null);
   const [previewError, setPreviewError] = useState<unknown>(null);
   const groups = transportGroupsOf(catalog).filter((group) => group.grantable);
@@ -171,6 +187,7 @@ export function PermissionEditor({
   const isChanged = !sameAccess(draft, initial);
   const needsDirectorPhrase = draft.role === 'ADMIN' && account.role !== 'ADMIN';
   const escalated = escalatedAllows(draft, groups);
+  const neededBy = neededByOf(groups, draft);
 
   /* XEM TRUOC moi thay doi — tre mot nhip de mot chuoi bam o khong ban mot chuoi yeu cau. */
   useEffect(() => {
@@ -218,18 +235,31 @@ export function PermissionEditor({
       return next;
     });
 
-  const onToggleAction = (code: string, isOn: boolean, needsConfirmation: boolean) => {
+  const onToggleAction = (
+    group: CatalogGroup,
+    code: string,
+    isOn: boolean,
+    needsConfirmation: boolean,
+  ) => {
     if (isOn && needsConfirmation) {
-      setPending({ code, label: labelOf(code) ?? code });
+      setPending({ code, label: labelOf(code) ?? code, group });
       return;
     }
-    setDraft((current) => setAction(current, code, isOn));
+    setDraft((current) => setGroupAction(current, group, code, isOn));
   };
 
-  const violations = violationsOf(previewError).concat(violationsOf(save.error));
+  /**
+   * `#395` (e) — lan XEM TRUOC gan nhat cua may chu con bao vi pham (tach nhiem, quyen chi Giam
+   * doc…) thi KHONG cho luu: bam "Lưu quyền" luc do chi nhan lai dung loi do, va nut sang lam nguoi
+   * doc tuong bo quyen da hop le. Sua ban nhap thi may chu xem lai; het vi pham thi nut sang lai.
+   */
+  const previewViolations = violationsOf(previewError);
+  const violations = previewViolations.concat(violationsOf(save.error));
+  const hasPreviewViolations = isChanged && previewViolations.length > 0;
   const canSave =
     isChanged &&
     !save.isPending &&
+    !hasPreviewViolations &&
     (!needsDirectorPhrase || isDirectorConfirmed(typedConfirmation));
 
   return (
@@ -284,9 +314,13 @@ export function PermissionEditor({
             group={group}
             draft={draft}
             isOpen={openGroups.has(group.id)}
+            neededBy={neededBy}
+            needsNote={needsSentence(group, labelOf)}
             onToggleOpen={() => toggleOpen(group.id)}
             onToggleGroup={() => setDraft((current) => toggleGroup(current, group))}
-            onToggleAction={onToggleAction}
+            onToggleAction={(code, isOn, needsConfirmation) =>
+              onToggleAction(group, code, isOn, needsConfirmation)
+            }
           />
         ))}
       </ul>
@@ -339,7 +373,12 @@ export function PermissionEditor({
         <button type="button" className="tx-btn tx-btn--ghost" onClick={onCancel}>
           Huỷ
         </button>
-        {needsDirectorPhrase && !isDirectorConfirmed(typedConfirmation) ? (
+        {hasPreviewViolations ? (
+          <span className="tx-admin-actions__status" role="status">
+            Chưa lưu được: bộ quyền này còn vi phạm quy tắc ở khung “Xem trước”. Bỏ bớt quyền gây
+            xung đột rồi lưu.
+          </span>
+        ) : needsDirectorPhrase && !isDirectorConfirmed(typedConfirmation) ? (
           <span className="tx-admin-actions__status">Cần gõ câu xác nhận trước khi lưu.</span>
         ) : null}
       </div>
@@ -351,7 +390,9 @@ export function PermissionEditor({
         confirmLabel="Tôi hiểu, cấp quyền"
         onCancel={() => setPending(null)}
         onConfirm={() => {
-          if (pending !== null) setDraft((current) => setAction(current, pending.code, true));
+          if (pending !== null) {
+            setDraft((current) => setGroupAction(current, pending.group, pending.code, true));
+          }
           setPending(null);
         }}
       />

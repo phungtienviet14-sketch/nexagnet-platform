@@ -20,12 +20,16 @@ import {
   groupCheckbox,
   groupCheckState,
   identityProblems,
+  includeNeeds,
   isDirectorConfirmed,
   localUsernameSuggestion,
+  neededByOf,
+  needsSentence,
   permissionLabelLookup,
   relativeLastLogin,
   sameAccess,
   setAction,
+  setGroupAction,
   toggleGroup,
   triStateOf,
   usernameAfterPresetChange,
@@ -189,6 +193,118 @@ describe('bo quyen rieng toi gian tu tung lan bam (#395)', () => {
     expect(actionRows(FIELD, accounting)[1]).toMatchObject({
       isOn: false,
       needsConfirmation: true,
+    });
+  });
+
+  /**
+   * QUYEN KEM THEO (`#395`): bat nhom Bao duong thi bat kem "Xem danh sách xe" cua nhom Doi xe — ma
+   * khong co, man bao duong chi ghi "Xe chưa đọc được tên" o moi dong. Dong kem theo noi VI SAO no
+   * dang bat.
+   */
+  describe('quyen "kèm theo để dùng được"', () => {
+    const MAINTENANCE: CatalogGroup = {
+      id: 'bao-duong',
+      label: 'Bảo dưỡng / giấy tờ',
+      summary: 'Lịch bảo dưỡng',
+      grantable: true,
+      actions: [
+        action('transport.maintenance.plan.read', 'Xem kế hoạch bảo dưỡng'),
+        action('transport.maintenance.plan.manage', 'Lập kế hoạch bảo dưỡng'),
+      ],
+      needs: ['transport.vehicle.read'],
+    };
+    const labelOf = (code: string) =>
+      [...GROUPS, MAINTENANCE]
+        .flatMap((group) => group.actions)
+        .find((entry) => entry.code === code)?.label;
+
+    it('bam o nhom → bat ca nhom VA quyen kem theo (mot dong ALLOW toi gian)', () => {
+      const next = toggleGroup(manager, MAINTENANCE);
+      expect(next.grants.map((grant) => grant.permission)).toEqual([
+        'transport.maintenance.plan.read',
+        'transport.maintenance.plan.manage',
+        'transport.vehicle.read',
+      ]);
+      expect(next.grants.every((grant) => grant.effect === 'ALLOW')).toBe(true);
+      // Nhom Doi xe thanh "do dang": dung mot phep xem, khong phai ca nhom.
+      expect(groupCheckState(FLEET, draftEffective(next))).toBe('mixed');
+    });
+
+    it('tat nhom KHONG go quyen kem theo (co the nhom khac dang can, hoac da cap chu dong)', () => {
+      const on = toggleGroup(manager, MAINTENANCE);
+      const off = toggleGroup(on, MAINTENANCE);
+      expect(off.grants).toEqual([{ permission: 'transport.vehicle.read', effect: 'ALLOW' }]);
+    });
+
+    it('viec DAU TIEN cua nhom trong → kem theo; nhom da co viec → khong them lai', () => {
+      const first = setGroupAction(manager, MAINTENANCE, 'transport.maintenance.plan.read', true);
+      expect(draftEffective(first).has('transport.vehicle.read')).toBe(true);
+      // Giam doc chu dong bo phep xem xe, roi bat them mot viec cua nhom: khong bat lai.
+      const trimmed = setAction(first, 'transport.vehicle.read', false);
+      const second = setGroupAction(
+        trimmed,
+        MAINTENANCE,
+        'transport.maintenance.plan.manage',
+        true,
+      );
+      expect(draftEffective(second).has('transport.vehicle.read')).toBe(false);
+      // Tat mot o khong bao gio them gi.
+      expect(
+        setGroupAction(manager, MAINTENANCE, 'transport.maintenance.plan.read', false),
+      ).toEqual(manager);
+    });
+
+    it('quyen kem theo KHONG day chuyen: nhom chi giu phep xem bi keo theo thi khong "can" gi', () => {
+      // Nhom Doi xe (gia dinh) cung can mot phep xem khac; Bao duong keo "Xem danh sách xe" theo.
+      const fleetWithNeeds: CatalogGroup = { ...FLEET, needs: ['transport.driver.read'] };
+      const on = toggleGroup(manager, MAINTENANCE);
+      const neededBy = neededByOf([fleetWithNeeds, MAINTENANCE], on);
+      expect(neededBy.get('transport.vehicle.read')).toEqual(['Bảo dưỡng / giấy tờ']);
+      // Doi xe chi dang giu phep xem bi keo theo → khong phai nhom "dang dung" → khong day chuyen.
+      expect(neededBy.has('transport.driver.read')).toBe(false);
+      // Giam doc bat them mot viec THAT cua Doi xe → luc do no moi can phep xem cua no.
+      const fleetOn = setAction(on, 'transport.vehicle.manage', true);
+      expect(
+        neededByOf([fleetWithNeeds, MAINTENANCE], fleetOn).get('transport.driver.read'),
+      ).toEqual(['Đội xe & lái xe']);
+    });
+
+    it('vai khoi diem da co san quyen kem theo → khong dong nao; vai khong nhan quyen rieng → giu nguyen', () => {
+      const accounting = changeRole('ACCOUNTING');
+      expect(includeNeeds(accounting, MAINTENANCE)).toEqual(accounting);
+      const driver = changeRole('SALE');
+      expect(includeNeeds(driver, MAINTENANCE)).toBe(driver);
+    });
+
+    it('dong kem theo noi nhom nao dang can no; nhom noi no kem theo gi', () => {
+      const on = toggleGroup(manager, MAINTENANCE);
+      const neededBy = neededByOf([FLEET, MAINTENANCE], on);
+      expect(neededBy.get('transport.vehicle.read')).toEqual(['Bảo dưỡng / giấy tờ']);
+      expect(actionRows(FLEET, on, neededBy)[0]).toMatchObject({
+        code: 'transport.vehicle.read',
+        isOn: true,
+        origin: 'GRANTED',
+        neededByLabel: 'Kèm theo để dùng được Bảo dưỡng / giấy tờ',
+      });
+      // Giam doc chu dong bo phep xem xe trong khi nhom Bao duong van bat → dong noi no dang thieu.
+      const trimmed = setAction(on, 'transport.vehicle.read', false);
+      expect(
+        actionRows(FLEET, trimmed, neededByOf([FLEET, MAINTENANCE], trimmed))[0],
+      ).toMatchObject({
+        isOn: false,
+        neededByLabel: 'Cần để dùng được Bảo dưỡng / giấy tờ',
+      });
+      // Co SAN theo vai khoi diem (Ke toan, Giam doc) → khong nhan nao: chi la nhieu.
+      for (const role of ['ACCOUNTING', 'ADMIN'] as const) {
+        const preset = changeRole(role);
+        const rows = actionRows(FLEET, preset, neededByOf([FLEET, MAINTENANCE], preset));
+        expect(rows[0]?.neededByLabel, role).toBeNull();
+      }
+      // Nhom can dang TRONG thi khong ai "can" — khong co nhan.
+      expect(neededByOf([FLEET, MAINTENANCE], manager).size).toBe(0);
+      expect(actionRows(FLEET, manager)[0]?.neededByLabel).toBeNull();
+      expect(needsSentence(MAINTENANCE, labelOf)).toBe('Kèm theo để dùng được: Xem danh sách xe');
+      expect(needsSentence(FLEET, labelOf)).toBeNull();
     });
   });
 

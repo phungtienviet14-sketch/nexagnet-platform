@@ -57,6 +57,8 @@ interface CatalogGroup {
   readonly label: string;
   readonly grantable: boolean;
   readonly actions: readonly CatalogAction[];
+  /** Quyen "kèm theo để dùng được" cua nhom (`#395`). */
+  readonly needs?: readonly string[];
 }
 
 export const CATALOG = JSON.parse(
@@ -67,6 +69,11 @@ export const GROUPS: readonly CatalogGroup[] = CATALOG.domains[0].groups;
 
 export const groupCodes = (id: string): string[] =>
   (GROUPS.find((group) => group.id === id)?.actions ?? []).map((action) => action.code);
+
+/** Quyen "kèm theo để dùng được" cua mot nhom, tu ban chup danh muc (`#395`). */
+export const groupNeeds = (id: string): string[] => [
+  ...(GROUPS.find((group) => group.id === id)?.needs ?? []),
+];
 
 const ACTION_BY_CODE = new Map(GROUPS.flatMap((group) => group.actions.map((a) => [a.code, a])));
 
@@ -200,6 +207,23 @@ const DRIVERS: readonly Driver[] = [
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
 ];
+
+/** Mot ke hoach bao duong den han cua xe `veh-1` — de man hinh phai doc TEN xe (bien so). */
+const MAINTENANCE_DUE = {
+  planId: 'plan-1',
+  vehicleId: 'veh-1',
+  planName: 'Thay dầu động cơ',
+  triggerKind: 'ODOMETER',
+  state: 'DUE_SOON',
+  dueAtOdoKm: 121_000,
+  dueOnDate: null,
+  odoRemainingKm: 550,
+  daysRemaining: null,
+  reachedBy: null,
+  currentOdoKm: 120_450,
+  lastServicedDate: '2026-06-01',
+  lastServicedOdoKm: 111_000,
+};
 
 export const VEHICLES = [
   {
@@ -564,6 +588,15 @@ async function answer(route: Route, world: AccountsWorld): Promise<void> {
     return world.myVehicles === null ? notAStakeholder(route) : json(route, world.myVehicles);
   }
   if (path === '/transport/drivers') return json(route, world.drivers);
+  // `#395` — man "Bảo dưỡng & giấy tờ" cho Dieu hanh duoc cap DUNG nhom Bao duong.
+  if (path === '/transport/maintenance/due') return json(route, { due: [MAINTENANCE_DUE] });
+  if (path === '/transport/maintenance/work-orders') return json(route, { workOrders: [] });
+  if (path === '/transport/compliance/documents') return json(route, { documents: [] });
+  if (path === '/transport/compliance/alerts') return json(route, { alerts: [] });
+  if (path === '/transport/fleet-status') return json(route, { vehicles: [] });
+  if (path === '/transport/alerts') {
+    return json(route, { generatedFor: '2026-09-26', alerts: [], unavailableSources: [] });
+  }
   if (path === '/transport/asset-ownership/stakeholders') return json(route, []);
   if (path === '/transport/vehicles') return json(route, VEHICLES);
   return problem(route, 404, 'ROUTE_NOT_MOCKED', `khong co mock cho ${method} ${path}`);

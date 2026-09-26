@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { PermissionNote } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -76,6 +77,11 @@ export function DriverSettlementView() {
 
       {balances.isLoading ? <LoadingState label="Đang đọc số dư quyết toán" /> : null}
       {balances.errorMessage ? <ErrorState message={balances.errorMessage} /> : null}
+      {/* `#395` — ten lai xe va bien so la danh ba RIENG: thieu quyen thi noi ra, khong in `id`. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.driver.read', 'transport.vehicle.read']}
+      />
       {!balances.isLoading && !balances.errorMessage && balanceRows.length === 0 ? (
         <EmptyState title="Chưa có lái xe nào có phiếu lương đã chốt." />
       ) : null}

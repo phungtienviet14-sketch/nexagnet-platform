@@ -334,14 +334,82 @@ export function groupCheckbox(group: CatalogGroup, draft: AccessDraft): GroupChe
   };
 }
 
-/** Bam o nhom: dang du → tat het; con lai (trong hoac do dang) → bat het cac o bat tat duoc. */
+/**
+ * Bam o nhom: dang du → tat het; con lai (trong hoac do dang) → bat het cac o bat tat duoc, KEM cac
+ * quyen "kèm theo để dùng được" cua nhom (`CatalogGroup.needs`, `#395`).
+ *
+ * Tat nhom KHONG go quyen kem theo: phep xem do thuoc nhom KHAC, co the dang duoc mot nhom khac can
+ * hoac duoc Giam doc chu dong cap — va no hien ro o dong cua chinh no ("Kèm theo để dùng được …").
+ */
 export function toggleGroup(draft: AccessDraft, group: CatalogGroup): AccessDraft {
   const state = groupCheckState(group, draftEffective(draft));
   if (state === 'locked') return draft;
   const turnOn = state !== 'on';
-  return group.actions
+  const next = group.actions
     .filter(isGroupToggleable)
-    .reduce((next, action) => setAction(next, action.code, turnOn), draft);
+    .reduce((current, action) => setAction(current, action.code, turnOn), draft);
+  return turnOn ? includeNeeds(next, group) : next;
+}
+
+/**
+ * QUYEN KEM THEO (`#395`): bat moi phep XEM ma nhom can nhung ban nhap chua co. May chu van la noi
+ * quyet dinh — o day chi them dong `ALLOW` toi gian (khong dong thua neu vai khoi diem da co san).
+ */
+export function includeNeeds(draft: AccessDraft, group: CatalogGroup): AccessDraft {
+  if (!roleAcceptsGrants(draft.role)) return draft;
+  return (group.needs ?? []).reduce(
+    (next, code) => (draftEffective(next).has(code) ? next : setAction(next, code, true)),
+    draft,
+  );
+}
+
+/**
+ * Bat/tat MOT o cua mot nhom. Khi o do la viec DAU TIEN duoc bat cua nhom (nhom dang trong), quyen
+ * kem theo cua nhom duoc bat cung — cung luat voi bam o nhom. Nhom da co viec thi khong them lai:
+ * Giam doc da thay (va co the da chu dong bo) dong kem theo.
+ */
+export function setGroupAction(
+  draft: AccessDraft,
+  group: CatalogGroup,
+  code: string,
+  isOn: boolean,
+): AccessDraft {
+  const effective = draftEffective(draft);
+  const wasEmpty = !group.actions.some((action) => effective.has(action.code));
+  const next = setAction(draft, code, isOn);
+  return isOn && wasEmpty ? includeNeeds(next, group) : next;
+}
+
+/**
+ * "Kèm theo để dùng được …" — voi moi ma, NHAN cac nhom DANG CO viec trong ban nhap ma can ma do.
+ * Dong cua ma do (o nhom chu cua no) noi ra, de Giam doc biet vi sao mot phep xem cua nhom khac
+ * dang bat.
+ */
+export function neededByOf(
+  groups: readonly CatalogGroup[],
+  draft: AccessDraft,
+): ReadonlyMap<string, readonly string[]> {
+  const effective = draftEffective(draft);
+  const pulledIn = new Set(groups.flatMap((group) => group.needs ?? []));
+  const map = new Map<string, string[]>();
+  for (const group of groups) {
+    // Nhom chi co nhung phep XEM ma nhom khac keo theo thi chua phai nhom "dang dung" — cung luat
+    // voi cau "chưa dùng được đủ" cua may chu (`access-breakdown.ts`): khong day chuyen.
+    const held = group.actions.filter((action) => effective.has(action.code));
+    if (held.length === 0 || held.every((action) => pulledIn.has(action.code))) continue;
+    for (const code of group.needs ?? []) map.set(code, [...(map.get(code) ?? []), group.label]);
+  }
+  return map;
+}
+
+/** Cau duoi ten nhom: nhom nay bat kem nhung phep xem nao. `null` khi khong kem gi. */
+export function needsSentence(
+  group: CatalogGroup,
+  labelOf: (code: string) => string | undefined,
+): string | null {
+  const needs = group.needs ?? [];
+  if (needs.length === 0) return null;
+  return `Kèm theo để dùng được: ${needs.map((code) => labelOf(code) ?? code).join(', ')}`;
 }
 
 export type ActionOrigin = 'PRESET' | 'GRANTED' | 'DENIED' | 'NONE';
@@ -358,6 +426,8 @@ export interface ActionRowView {
   /** Bat o nay phai xac nhan leo thang. */
   readonly needsConfirmation: boolean;
   readonly sodLabel: string | null;
+  /** "Kèm theo để dùng được <nhom>" — ma nay dang duoc mot nhom KHAC trong ban nhap can (`#395`). */
+  readonly neededByLabel: string | null;
 }
 
 export const KIND_LABEL: Readonly<Record<CatalogAction['kind'], string>> = {
@@ -372,7 +442,11 @@ const SOD_LABEL: Readonly<Record<'DECISION' | 'EVIDENCE', string>> = {
   EVIDENCE: 'Sửa căn cứ — không đi cùng quyền duyệt tiền',
 };
 
-export function actionRows(group: CatalogGroup, draft: AccessDraft): readonly ActionRowView[] {
+export function actionRows(
+  group: CatalogGroup,
+  draft: AccessDraft,
+  neededBy: ReadonlyMap<string, readonly string[]> = new Map(),
+): readonly ActionRowView[] {
   const preset = presetSet(draft.role);
   const effective = draftEffective(draft);
   const acceptsGrants = roleAcceptsGrants(draft.role);
@@ -405,9 +479,26 @@ export function actionRows(group: CatalogGroup, draft: AccessDraft): readonly Ac
       lockedReason,
       needsConfirmation: action.escalation && !preset.has(action.code),
       sodLabel: action.sod === null ? null : SOD_LABEL[action.sod],
+      neededByLabel: neededByLabelOf(neededBy.get(action.code), origin, effective.has(action.code)),
     };
   });
 }
+
+/**
+ * Nhan "kèm theo" CHI khi no giai thich mot dieu Giam doc dang thay: dong DUOC CAP THEM vi mot nhom
+ * khac can ("Kèm theo để dùng được …"), hoac dong dang TAT ma mot nhom dang bat can ("Cần để dùng
+ * được …" — cung y cau "… chưa dùng được đủ trên màn hình" cua may chu). Dong co san theo vai khoi diem
+ * khong gan nhan: Ke toan va Giam doc co san moi phep xem, nhan o do chi la nhieu.
+ */
+const neededByLabelOf = (
+  groups: readonly string[] | undefined,
+  origin: ActionOrigin,
+  isOn: boolean,
+): string | null => {
+  if (groups === undefined || groups.length === 0) return null;
+  if (!isOn) return `Cần để dùng được ${groups.join(', ')}`;
+  return origin === 'GRANTED' ? `Kèm theo để dùng được ${groups.join(', ')}` : null;
+};
 
 /** Nhom van tai co the chinh (co it nhat mot o); nhom lien ket va nhom khoa van hien, chi doc. */
 export const transportGroupsOf = (

@@ -1,6 +1,6 @@
 'use client';
 
-import type { TransportViewerInput } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ErrorState, LoadingState } from '../components/SectionState';
@@ -27,7 +27,8 @@ export function FuelCostAttributionPanel({
   const view = useQuery({
     queryKey,
     queryFn: () => transportApi.fuel.costAttribution(entryId),
-    enabled: isOpen,
+    // Cong = ma cua route (`#395`); khoi nay nam trong man Nhien lieu nen nguoi mo no von co ma do.
+    enabled: isOpen && canPerform(viewer, 'transport.fuel.entry.read'),
   });
 
   const [targetKey, setTargetKey] = useState('');

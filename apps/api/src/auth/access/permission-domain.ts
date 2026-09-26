@@ -119,6 +119,13 @@ export interface PermissionGroupView {
   /** `false` = nhom den tu LIEN KET (lai xe, ben huu quan), khong bat tat bang quyen rieng. */
   readonly grantable: boolean;
   readonly actions: readonly PermissionActionView[];
+  /**
+   * QUYEN KEM THEO DE DUNG DUOC (`#395`) — ma DOC cua NHOM KHAC ma man hinh cua nhom nay can (vd
+   * nhom quy lai xe can "Xem hồ sơ lái xe" de chon lai xe). Moi ma van thuoc DUNG MOT nhom; day chi
+   * la loi chi duong: trinh chinh quyen bat kem, va "Người này làm được gì?" noi khi con thieu.
+   * Thieu = khong kem theo gi (mien khong khai).
+   */
+  readonly needs?: readonly string[];
 }
 
 export interface PermissionPresetView {

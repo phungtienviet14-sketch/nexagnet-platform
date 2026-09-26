@@ -819,6 +819,23 @@
   color: var(--tx-wait);
 }
 
+/*
+ * `#395` QUYEN KEM THEO — phep xem cua nhom KHAC ma man hinh cua mot nhom can. Cung dang nhan tron
+ * voi "Cấp thêm"/"Đã bớt", mau muc (khong mau canh bao): day la mot loi chi duong, khong phai loi.
+ */
+.tx-admin-action__needed {
+  font-size: 0.72rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--tx-ink-soft) 10%, var(--tx-paper));
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-group__text > .tx-admin-group__needs {
+  font-size: 0.74rem;
+  color: var(--tx-ink-faint);
+}
+
 .tx-admin-kind {
   font-size: 0.68rem;
   font-weight: 600;

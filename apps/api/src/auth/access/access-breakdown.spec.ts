@@ -172,6 +172,84 @@ describe('buildAccessBreakdown — mien van tai', () => {
     expect(result.sentences).toEqual([linked.sentence, 'Không duyệt được tiền']);
   });
 
+  /**
+   * QUYEN KEM THEO (`#395`): Giam doc bat nhom "Quỹ lái xe / lương" thi trinh chinh quyen bat kem
+   * "Xem hồ sơ lái xe" (de chon lai xe). Cau tra loi phai noi VI SAO mot phep xem cua nhom Doi xe
+   * xuat hien — va khi phep do bi thieu, noi rang nhom chua dung duoc du tren man hinh.
+   */
+  const groupActions = (id: string): PermissionGrant[] =>
+    transportPermissionDomain()
+      .catalog()
+      .groups.find((entry) => entry.id === id)!
+      .actions.filter((action) => !action.directorOnly && !action.escalation)
+      .map((action) => grant(action.code));
+  const managerWith = (grants: readonly PermissionGrant[]): AccessBreakdown =>
+    buildAccessBreakdown({
+      account: toAccountView(
+        userRecord('u-1', 'dieu.hanh', 'MANAGER', { permissionGrants: grants }),
+      ),
+      domains: [transportPermissionDomain()],
+      scopes: [],
+    });
+
+  it('quyen kem theo DUOC CAP: noi "Kèm theo để dùng được …"', () => {
+    const result = managerWith([...groupActions('quy-luong'), grant('transport.driver.read')]);
+    expect(result.sentences).toContain(
+      'Kèm theo để dùng được Quỹ lái xe / lương: Xem hồ sơ lái xe',
+    );
+    expect(result.sentences.some((line) => line.includes('chưa dùng được đủ'))).toBe(false);
+  });
+
+  it('quyen kem theo THIEU: noi nhom chua dung duoc du tren man hinh, va thieu gi', () => {
+    const result = managerWith(groupActions('bao-duong'));
+    expect(result.sentences).toContain(
+      'Bảo dưỡng / giấy tờ: chưa dùng được đủ trên màn hình — cần kèm theo Xem danh sách xe, Xem hồ sơ lái xe',
+    );
+  });
+
+  it('quyen kem theo KHONG day chuyen: nhom chi dang giu phep xem bi keo theo thi khong bi canh bao', () => {
+    const fieldGroup = transportPermissionDomain()
+      .catalog()
+      .groups.find((entry) => entry.id === 'hien-truong')!;
+    const result = managerWith([
+      ...groupActions('hien-truong'),
+      ...(fieldGroup.needs ?? []).map((code) => grant(code)),
+    ]);
+    expect(result.sentences.some((line) => line.includes('chưa dùng được đủ'))).toBe(false);
+    expect(
+      result.sentences.some((line) => line.startsWith('Kèm theo để dùng được Hiện trường')),
+    ).toBe(true);
+  });
+
+  it('vai khoi diem da co san quyen kem theo: khong them cau nao (Giam doc, Ke toan)', () => {
+    for (const role of ['ADMIN', 'ACCOUNTING'] as const) {
+      const sentences = transport(role).sentences;
+      expect(
+        sentences.some((line) => line.startsWith('Kèm theo')),
+        role,
+      ).toBe(false);
+      expect(
+        sentences.some((line) => line.includes('chưa dùng được đủ')),
+        role,
+      ).toBe(false);
+    }
+  });
+
+  it('Ke toan bi BOT mot quyen kem theo: nhom dung no noi ra dieu do', () => {
+    const result = buildAccessBreakdown({
+      account: toAccountView(
+        userRecord('u-1', 'ke.toan', 'ACCOUNTING', {
+          permissionGrants: [grant('transport.vehicle.read', 'DENY')],
+        }),
+      ),
+      domains: [transportPermissionDomain()],
+      scopes: [],
+    });
+    expect(result.sentences).toContain(
+      'Bảo dưỡng / giấy tờ: chưa dùng được đủ trên màn hình — cần kèm theo Xem danh sách xe',
+    );
+  });
+
   it('Chu xe (Dieu hanh trong + ho so gop von): chi xem xe minh co co phan', () => {
     const investor: AccessScopeNote = {
       id: 'chu-xe',

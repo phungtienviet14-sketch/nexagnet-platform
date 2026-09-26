@@ -58,6 +58,15 @@ interface BreakdownInput {
   readonly grants?: readonly PermissionGrant[];
 }
 
+/**
+ * QUYEN KEM THEO cua mot nhom (`PermissionGroupView.needs`, `#395`): phep XEM cua nhom khac ma man
+ * hinh cua nhom nay can. Nen tang khong biet ma nao nghia la gi — chi so trang thai cua ma do.
+ */
+interface GroupNeeds {
+  readonly group: AccessGroupBreakdown;
+  readonly needs: readonly string[];
+}
+
 /** Mot nhom lien ket ma vai co viec nhung CHUA co lien ket nao mo — de noi "chua noi ho so". */
 interface UnlinkedScope {
   readonly group: AccessGroupBreakdown;
@@ -73,6 +82,7 @@ export function buildAccessBreakdown(input: BreakdownInput): AccessBreakdown {
   );
   const groups = perDomain.flatMap((entry) => entry.groups);
   const unlinked = perDomain.flatMap((entry) => entry.unlinked);
+  const needs = perDomain.flatMap((entry) => entry.needs);
   const notes = input.scopes.flatMap((entry) => entry.notes);
   const platform = platformBreakdown(role);
   return {
@@ -82,7 +92,7 @@ export function buildAccessBreakdown(input: BreakdownInput): AccessBreakdown {
     platform,
     groups,
     scopes: notes,
-    sentences: accessSentences(groups, platform, notes, unlinked),
+    sentences: accessSentences(groups, platform, notes, unlinked, needs),
   };
 }
 
@@ -116,7 +126,11 @@ function domainGroups(
   role: UserRole,
   grants: readonly PermissionGrant[],
   scopes: readonly AccessScopeNote[],
-): { readonly groups: AccessGroupBreakdown[]; readonly unlinked: UnlinkedScope[] } {
+): {
+  readonly groups: AccessGroupBreakdown[];
+  readonly unlinked: UnlinkedScope[];
+  readonly needs: GroupNeeds[];
+} {
   const preset = new Set(domain.effective({ role }));
   const effective = new Set(domain.effective({ role, permissionGrants: grants }));
   // Viec ma KHONG vai nao co san (vd xem xe minh gop von) chi den tu lien ket; viec ma mot vai co
@@ -124,7 +138,8 @@ function domainGroups(
   const inSomePreset = new Set(
     USER_ROLES.flatMap((candidate) => domain.effective({ role: candidate })),
   );
-  const groups = domain.catalog().groups.map((group): AccessGroupBreakdown => {
+  const catalog = domain.catalog().groups;
+  const groups = catalog.map((group): AccessGroupBreakdown => {
     const actions = group.actions.map((action): AccessActionBreakdown => ({
       code: action.code,
       label: action.label,
@@ -148,7 +163,11 @@ function domainGroups(
     .filter((group) => !scopes.some((scope) => scope.id === group.id))
     .filter((group) => group.actions.some((action) => action.state === 'SCOPE_INACTIVE'))
     .map((group) => ({ group, presetLabel: label }));
-  return { groups, unlinked };
+  const needs = groups.flatMap((group, index): GroupNeeds[] => {
+    const codes = catalog[index]?.needs ?? [];
+    return codes.length === 0 ? [] : [{ group, needs: codes }];
+  });
+  return { groups, unlinked, needs };
 }
 
 function grantableState(
@@ -197,6 +216,7 @@ function accessSentences(
   platform: readonly PlatformPermissionBreakdown[],
   scopes: readonly AccessScopeNote[],
   unlinked: readonly UnlinkedScope[],
+  needs: readonly GroupNeeds[] = [],
 ): string[] {
   const canDoAnything =
     platform.some((entry) => entry.state === 'PRESET') ||
@@ -231,6 +251,8 @@ function accessSentences(
     sentences.push(`${group.label}: ${listActions(usableActions(group))}`);
   }
 
+  sentences.push(...prerequisiteSentences(groups, needs));
+
   const denied = grantable.flatMap((group) =>
     group.actions.filter((action) => action.state === 'DENIED'),
   );
@@ -248,6 +270,55 @@ function accessSentences(
     sentences.push('Không duyệt được tiền');
   }
   return unique(sentences);
+}
+
+/**
+ * QUYEN KEM THEO trong cau tra loi (`#395`) — hai cau, chi khi can:
+ *
+ *   · nhom dang dung ma THIEU ma kem theo → "…: chưa dùng được đủ trên màn hình — cần kèm theo …"
+ *     (vd Ke toan bi bot "Xem danh sách xe" thi lich bao duong chi con "Xe chưa đọc được tên");
+ *   · ma kem theo DUOC CAP RIENG ma nhom cua no khong du → "Kèm theo để dùng được …: …" — de Giam
+ *     doc hieu vi sao "Chỉ xem: Đội xe & lái xe" hien ra khi ho chi bat nhom quy lai xe.
+ *
+ * Ma kem theo co san theo vai khoi diem (hoac nam trong mot nhom du) thi khong noi gi them.
+ */
+function prerequisiteSentences(
+  groups: readonly AccessGroupBreakdown[],
+  needs: readonly GroupNeeds[],
+): string[] {
+  const owners = new Map<string, { group: AccessGroupBreakdown; action: AccessActionBreakdown }>();
+  for (const group of groups) {
+    for (const action of group.actions) owners.set(action.code, { group, action });
+  }
+  const pulledIn = new Set(needs.flatMap((entry) => entry.needs));
+  const sentences: string[] = [];
+  for (const { group, needs: codes } of needs) {
+    if (!group.grantable || group.summary === 'NONE') continue;
+    // Nhom chi dang giu nhung phep XEM ma nhom khac keo theo thi KHONG phai nhom Giam doc da bat —
+    // canh bao "chua dung duoc du" cho no la noi ve mot nhom ho chua he chon (khong day chuyen).
+    if (usableActions(group).every((action) => pulledIn.has(action.code))) continue;
+    const found = codes.flatMap((code) => {
+      const owner = owners.get(code);
+      return owner === undefined ? [] : [owner];
+    });
+    const missing = found.filter((entry) => !USABLE.has(entry.action.state));
+    if (missing.length > 0) {
+      sentences.push(
+        `${group.label}: chưa dùng được đủ trên màn hình — cần kèm theo ${listActions(
+          missing.map((entry) => entry.action),
+        )}`,
+      );
+    }
+    const granted = found.filter(
+      (entry) => entry.action.state === 'GRANTED' && entry.group.summary !== 'FULL',
+    );
+    if (granted.length > 0) {
+      sentences.push(
+        `Kèm theo để dùng được ${group.label}: ${listActions(granted.map((entry) => entry.action))}`,
+      );
+    }
+  }
+  return sentences;
 }
 
 function usableActions(group: AccessGroupBreakdown): AccessActionBreakdown[] {

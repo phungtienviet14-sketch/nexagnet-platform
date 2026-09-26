@@ -3,8 +3,11 @@
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import type { TemporaryCredential } from '../../../lib/auth';
+import { PermissionGate } from '../components/PermissionGate';
 import { StatusBadge } from '../components/primitives';
 import { ConfirmAction, LoadingState } from '../components/SectionState';
+import { useNavigationInput } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
 import {
   ACCOUNT_STATUS_LABEL,
   ACCOUNT_STATUS_TONE,
@@ -167,11 +170,16 @@ function LinksPanel({
   readonly onChanged: (message: string) => void;
 }) {
   const selectId = useId();
-  const links = useAccountLinks(account.id, true);
+  const navigation = useNavigationInput();
+  const links = useAccountLinks(navigation, account.id);
   const wantsDriver = account.role === 'SALE';
   const wantsStakeholder = account.role === 'MANAGER';
-  const drivers = useDriverCandidates(isEditable && wantsDriver && links.data?.driver === null);
+  const drivers = useDriverCandidates(
+    navigation,
+    isEditable && wantsDriver && links.data?.driver === null,
+  );
   const stakeholders = useStakeholderCandidates(
+    navigation,
     isEditable && wantsStakeholder && links.data?.stakeholder === null,
   );
   const [choice, setChoice] = useState('');
@@ -209,6 +217,11 @@ function LinksPanel({
     setUnlinking(kind);
   };
 
+  // Noi tai khoan la viec CHI Giam doc (`transport.account_link.manage`): khong co quyen do thi query
+  // khong chay — noi ro thay vi treo o "Đang đọc…" mai mai.
+  if (!canPerform(navigation, 'transport.account_link.manage')) {
+    return <p className="tx-note">Chỉ Giám đốc xem và nối được hồ sơ lái xe, bên góp vốn.</p>;
+  }
   if (links.isPending) return <LoadingState label="Đang đọc hồ sơ đã nối…" />;
   if (links.error !== null) {
     return (
@@ -279,41 +292,46 @@ function LinksPanel({
       ) : null}
       {isEditable &&
       ((wantsDriver && driver === null) || (wantsStakeholder && stakeholder === null)) ? (
-        <div className="tx-inlineform">
-          <label className="tx-field tx-field--inline" htmlFor={selectId}>
-            <span>
-              {wantsDriver
-                ? 'Hồ sơ lái xe chưa có tài khoản'
-                : 'Hồ sơ bên góp vốn chưa có tài khoản'}
-            </span>
-            <select
-              id={selectId}
-              value={choice}
-              onChange={(event) => setChoice(event.target.value)}
+        <PermissionGate
+          viewer={navigation}
+          action={wantsDriver ? 'transport.driver.read' : 'transport.asset_ownership.read'}
+        >
+          <div className="tx-inlineform">
+            <label className="tx-field tx-field--inline" htmlFor={selectId}>
+              <span>
+                {wantsDriver
+                  ? 'Hồ sơ lái xe chưa có tài khoản'
+                  : 'Hồ sơ bên góp vốn chưa có tài khoản'}
+              </span>
+              <select
+                id={selectId}
+                value={choice}
+                onChange={(event) => setChoice(event.target.value)}
+              >
+                <option value="">— Chọn —</option>
+                {candidates.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="tx-btn"
+              disabled={choice.length === 0 || link.isPending}
+              onClick={() =>
+                link.mutate({
+                  kind: wantsDriver ? 'DRIVER' : 'STAKEHOLDER',
+                  targetId: choice,
+                  on: true,
+                })
+              }
             >
-              <option value="">— Chọn —</option>
-              {candidates.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="tx-btn"
-            disabled={choice.length === 0 || link.isPending}
-            onClick={() =>
-              link.mutate({
-                kind: wantsDriver ? 'DRIVER' : 'STAKEHOLDER',
-                targetId: choice,
-                on: true,
-              })
-            }
-          >
-            {wantsDriver ? 'Nối hồ sơ lái xe' : 'Nối hồ sơ bên góp vốn'}
-          </button>
-        </div>
+              {wantsDriver ? 'Nối hồ sơ lái xe' : 'Nối hồ sơ bên góp vốn'}
+            </button>
+          </div>
+        </PermissionGate>
       ) : null}
       {unlinking === null ? <AdminError error={link.error} /> : null}
       <ConfirmAction

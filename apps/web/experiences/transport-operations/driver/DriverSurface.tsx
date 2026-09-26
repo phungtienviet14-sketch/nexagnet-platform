@@ -17,7 +17,6 @@ import {
   type DriverFuelForm,
 } from '../workspace/fuel-declaration';
 import { useDriverFuelRuns } from '../hooks/useDriverFuelRuns';
-import { canPerform } from '../transport-actions';
 import type { DriverFuelSlipView } from '../transport-types';
 import { fuelContextLabel } from '../workspace/fuel';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
@@ -238,9 +237,7 @@ function DriverFuel() {
    * tu tim vong xe dang mo cua chinh lai xe (`GET /transport/me/fuel/runs`) va kiem lai moi thu luc
    * nop — o chon o day chi DE XUAT.
    */
-  const fuelRuns = toSectionQuery(
-    useDriverFuelRuns(canPerform(navigation, 'transport.driver.self.fuel.submit')),
-  );
+  const fuelRuns = toSectionQuery(useDriverFuelRuns(navigation));
   const [contextKey, setContextKey] = useState<string | null>(null);
   const [legId, setLegId] = useState('');
 

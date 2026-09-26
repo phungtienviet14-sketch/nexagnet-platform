@@ -118,6 +118,40 @@ describe('danh muc quyen van tai (#395)', () => {
     expect(transportPermissionCatalog().presets).toBe(TRANSPORT_PRESETS);
   });
 
+  /**
+   * QUYEN KEM THEO (`#395`) chi la loi chi duong toi man hinh cua nhom khac — no KHONG duoc thanh mot
+   * duong cap ngam mot quyen nhay cam: chi phep XEM thuong, cap duoc, cua NHOM KHAC, khong trung.
+   * (Bai web `section-access.spec.ts` khoa phan con lai: nhom + kem theo mo it nhat mot muc.)
+   */
+  it('quyen kem theo la phep XEM thuong, cap duoc, cua nhom KHAC', () => {
+    const views = new Map(
+      transportPermissionCatalog().groups.flatMap((group) =>
+        group.actions.map((action) => [action.code, { group: group.id, action }] as const),
+      ),
+    );
+    for (const group of TRANSPORT_PERMISSION_GROUPS) {
+      expect(new Set(group.needs).size, group.id).toBe(group.needs.length);
+      if (!group.grantable) expect(group.needs, group.id).toEqual([]);
+      for (const need of group.needs) {
+        const found = views.get(need);
+        expect(found?.group, `${group.id} → ${need}`).not.toBe(group.id);
+        expect(transportPermissionGroupOf(need)?.grantable, need).toBe(true);
+        expect(found?.action.kind, need).toBe('XEM');
+        expect(found?.action.escalation, need).toBe(false);
+        expect(found?.action.directorOnly, need).toBe(false);
+        expect(found?.action.sod, need).toBeNull();
+      }
+    }
+    // Than HTTP cua danh muc mang dung bo do.
+    for (const view of transportPermissionCatalog().groups) {
+      const source = TRANSPORT_PERMISSION_GROUPS.find((group) => group.id === view.id);
+      expect(view.needs, view.id).toEqual(source?.needs);
+    }
+    expect(TRANSPORT_PERMISSION_GROUPS.find((group) => group.id === 'quy-luong')?.needs).toContain(
+      'transport.driver.read',
+    );
+  });
+
   it('tra nguoc nhom cua mot ma', () => {
     for (const action of TRANSPORT_ACTIONS) {
       expect(transportPermissionGroupOf(action)?.actions[action], action).toBeDefined();

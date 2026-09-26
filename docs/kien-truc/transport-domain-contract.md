@@ -630,6 +630,23 @@ phải phần chênh): `ADMIN_PRESET_IS_FULL` · `DRIVER_PRESET_IS_SELF_SCOPE_ON
 Loại của mỗi mã **suy từ quy tắc**, không gõ tay: `NHAY_CAM` (chỉ Giám đốc hoặc leo thang) · `DUYET`
 (quyết định tiền) · `XEM` (`.read`) · `THAO_TAC`.
 
+**Quyền kèm theo để dùng được** (`TransportPermissionGroup.needs`, trả trong `PermissionGroupView.needs`).
+Việc của một số nhóm hiện trên màn hình của nhóm khác — lịch bảo dưỡng cần biển số xe, quỹ lái xe
+chọn theo hồ sơ lái xe, mốc hiện trường nằm trên chặng của một vòng chạy trong một đơn. Mỗi nhóm
+khai các **phép XEM của nhóm khác** mà màn hình của nó cần. Luật "mỗi mã đúng một nhóm" không đổi: mã
+kèm theo vẫn thuộc nhóm của nó, và chỉ được là phép xem thường — không leo thang, không chỉ Giám đốc,
+không tách nhiệm (spec khoá). Trình chỉnh quyền bật kèm khi Giám đốc bật nhóm, ghi rõ "Kèm theo để
+dùng được …"; "Người này làm được gì?" nói khi một nhóm đang dùng mà còn thiếu mã kèm theo.
+
+**Màn hình web mở một mục khi đọc được dữ liệu chính của nó.** Mỗi mục của thanh bên khai
+`requiredActions` (mọi mã mà các lần đọc chính của mục đòi) và `optionalActions` (phần phụ: không hỏi
+máy chủ khi thiếu quyền, nói "Bạn chưa được cấp quyền xem …" thay vì một ô trống). Bộ mã không gõ theo
+cảm tính: `section-access.spec.ts` dựng lại chuỗi controller API (`@RequiresTransportAction`) → hàm
+client → `useQuery` (`queryFn` + cổng `enabled`) → component → `SectionBody` từ mã nguồn, và đòi (1)
+cổng của mỗi query bằng đúng mã route, (2) mỗi lần đọc của mục đã khai, (3) mỗi mã phụ được phần vẽ
+xử lý, (4) mọi nhóm cấp được — cộng quyền kèm theo — mở ít nhất một mục. `preset-sections.spec.ts`
+chứng minh bốn vai khởi điểm vẫn thấy đúng các mục như trước khi đổi cổng.
+
 ### 11.6. `#395` — bất biến nối tài khoản với hồ sơ lái xe
 
 Phạm vi "việc của chính lái xe" đặt trên `TransportDriver.authUserId`. Một ô nhập tự do ở hồ sơ lái

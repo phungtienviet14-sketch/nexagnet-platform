@@ -93,6 +93,8 @@ Tạo tài khoản bắt đầu bằng câu hỏi **"Người này là ai?"**:
 
 Có 11 nhóm việc để chọn: điều hành đơn, vòng xe, chặng · hiện trường và bằng chứng · đội xe và lái xe · khách hàng, đối tác · kế toán và công nợ · nhiên liệu · quỹ lái xe, lương · bảo dưỡng, giấy tờ · bản đồ, vị trí và địa điểm · phí đường bộ (ETC) · báo cáo. Nhóm thứ 12, quản trị, chỉ Giám đốc có. Mỗi lần bật tắt, màn hình hiện lại câu **"Người này làm được gì?"** do máy chủ viết, trước khi lưu.
 
+Một số nhóm cần **xem** dữ liệu của nhóm khác thì màn hình mới dùng được — ví dụ lịch bảo dưỡng cần danh sách xe để hiện biển số, quỹ lái xe cần hồ sơ lái xe để chọn người. Bật nhóm đó thì màn hình **bật kèm** các quyền xem này và ghi rõ **"Kèm theo để dùng được …"**; Giám đốc vẫn tắt được từng dòng. Khi bộ quyền đang chọn vi phạm quy tắc (ví dụ tách nhiệm bên dưới), nút **Lưu quyền** tạm khoá và nói lý do cho tới khi sửa xong.
+
 Ba điều máy chủ không cho, dù Giám đốc bấm gì:
 
 - **Việc chỉ Giám đốc làm** không cấp được cho ai: mở lại kỳ chi phí, mở lại kỳ đối soát nhiên liệu, đảo một lần chi quyết toán, nối tài khoản với hồ sơ lái xe hay bên góp vốn, và quản trị tài khoản.

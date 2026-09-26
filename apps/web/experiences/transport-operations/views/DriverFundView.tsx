@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -11,7 +12,7 @@ import {
   useFundStatement,
   useNavigationInput,
 } from '../hooks/useTransportWorkspace';
-import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
+import { canPerform, hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { newCorrelationKey, transportApi } from '../transport-api';
 import {
   fundActionOffers,
@@ -213,7 +214,15 @@ export function DriverFundView() {
         <ErrorState message={statement.errorMessage} onRetry={statement.refetch} />
       )}
       {statement.isLoading ? <LoadingState label="Đang đọc sổ quỹ…" /> : null}
-      {activeDriverId === null && !drivers.isLoading ? (
+      {drivers.errorMessage === null ? null : (
+        <ErrorState message={drivers.errorMessage} onRetry={drivers.refetch} />
+      )}
+      {/*
+        `#395` — CHI noi "chua co ho so" khi da DOC duoc danh sach va no rong. Danh sach bi chan
+        (chua duoc cap quyen xem ho so lai xe) hoac doc loi la mot chuyen khac han, va truoc day
+        man nay noi cau sai do voi nguoi co 12 lai xe trong danh muc.
+      */}
+      {activeDriverId === null && drivers.data !== undefined && drivers.data.length === 0 ? (
         <EmptyState title="Chưa có hồ sơ lái xe nào để xem quỹ." />
       ) : null}
 
@@ -294,7 +303,9 @@ export function DriverFundView() {
 
       <section aria-label="Sổ quỹ lái xe">
         <h2>Sổ quỹ</h2>
-        {ledger.length === 0 && !statement.isLoading ? (
+        {/* Chua co lai xe nao dang xem, hoac so doc LOI: khong phai "chua co but toan" (`#395`). */}
+        {activeDriverId === null || statement.errorMessage !== null ? null : ledger.length === 0 &&
+          !statement.isLoading ? (
           <EmptyState title="Lái xe này chưa có bút toán quỹ nào." />
         ) : (
           <DataTable<FundLedgerRow>
@@ -350,7 +361,12 @@ export function DriverFundView() {
 
       <section aria-label="Kỳ quỹ">
         <h2>Kỳ quỹ</h2>
-        {periodRows.length === 0 ? (
+        {/* Ky quy doc bang ma KY KE TOAN (`transport.costing.period.read`) — phan phu cua man nay. */}
+        {!canPerform(navigation, 'transport.costing.period.read') ? (
+          <PermissionGate viewer={navigation} action="transport.costing.period.read" />
+        ) : periods.errorMessage !== null ? (
+          <ErrorState message={periods.errorMessage} onRetry={periods.refetch} />
+        ) : periodRows.length === 0 ? (
           <EmptyState title="Chưa mở kỳ quỹ nào cho lái xe này." />
         ) : (
           <>

@@ -54,6 +54,21 @@ export interface TransportPermissionGroup {
   readonly grantable: boolean;
   /** Ma → nhan, theo thu tu hien tren man hinh. */
   readonly actions: Readonly<Partial<Record<TransportAction, string>>>;
+  /**
+   * QUYEN KEM THEO DE DUNG DUOC (`#395`) — phep XEM cua NHOM KHAC ma man hinh cua nhom nay can.
+   *
+   * Bang chung chay that: Giam doc cap nhom "Bảo dưỡng / giấy tờ" cho mot nguoi, may chu cho phep
+   * dung, nhung man hinh bao duong chi ghi "Xe chưa đọc được tên" o moi dong; cap "Hiện trường &
+   * bằng chứng" thi khong mo duoc man nao — moc hien truong chi hien tren chang cua mot vong chay.
+   * Viec cua nhom nay LAM tu man cua nhom khac, nen no can phep XEM cua nhom do.
+   *
+   * KHONG doi luat "moi ma dung mot nhom": ma kem theo van thuoc nhom cua no, va chi la phep XEM
+   * thuong (khong leo thang, khong chi Giam doc, khong tach nhiem — spec khoa). Trinh chinh quyen bat
+   * kem khi Giam doc bat nhom (ghi ro "kèm theo để dùng được"); "Người này làm được gì?" noi ra khi
+   * mot nhom dang dung ma thieu ma kem theo. `section-access.spec.ts` (web) khoa: moi nhom cap duoc,
+   * cong ma kem theo, mo it nhat mot muc cua man hinh van hanh.
+   */
+  readonly needs: readonly TransportAction[];
 }
 
 export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = [
@@ -76,6 +91,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.trip.transition': 'Chuyển trạng thái chuyến (xuất phát, hoàn thành…)',
       'transport.trip.cancel': 'Huỷ chuyến xe',
     },
+    /** Ten khach cua don va bien so xe tren bang don, vong chay, chuyen. */
+    needs: ['transport.customer.read', 'transport.vehicle.read'],
   },
   {
     id: 'hien-truong',
@@ -94,6 +111,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.proof.read': 'Xem chứng cứ giao hàng',
       'transport.proof.withdraw': 'Rút một chứng cứ khỏi hồ sơ',
     },
+    /** Moc, chung tu va chung cu hien tren CHANG cua mot vong chay, trong mot don. */
+    needs: ['transport.order.read', 'transport.run.read'],
   },
   {
     id: 'doi-xe',
@@ -108,6 +127,7 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.asset_ownership.read': 'Xem sở hữu xe và bên góp vốn',
       'transport.asset_ownership.manage': 'Cập nhật sở hữu xe và bên góp vốn',
     },
+    needs: [],
   },
   {
     id: 'khach-hang',
@@ -122,6 +142,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.counterparty.read': 'Xem pháp nhân của khách hàng, đối tác',
       'transport.counterparty.manage': 'Thêm, sửa pháp nhân và nhà máy, kho của họ',
     },
+    /** Khong co man danh muc khach rieng: khach hien ra tren don hang. */
+    needs: ['transport.order.read'],
   },
   {
     id: 'ke-toan',
@@ -145,6 +167,15 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.customer_payment.correct': 'Sửa phân bổ tiền khách trả',
       'transport.settlement.document.read': 'Xem chuỗi chứng từ gốc và các lần điều chỉnh',
     },
+    /**
+     * Ten khach va ma don trong so phai thu, lo doi soat; chung tu so cua don trong hop quyet dinh
+     * "Kết thúc đơn" (ke toan xac nhan chung tu — can THAY chung tu do).
+     */
+    needs: [
+      'transport.customer.read',
+      'transport.order.read',
+      'transport.operational_document.read',
+    ],
   },
   {
     id: 'nhien-lieu',
@@ -167,6 +198,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.fuel.reconciliation.close': 'Đóng kỳ đối soát nhiên liệu',
       'transport.fuel.reconciliation.reopen': 'Mở lại kỳ đối soát nhiên liệu đã đóng',
     },
+    /** O chon xe cua bang tieu hao nhien lieu (L/100km theo xe). */
+    needs: ['transport.vehicle.read'],
   },
   {
     id: 'quy-luong',
@@ -193,6 +226,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.driver_settlement.cashout': 'Chi tiền quyết toán cho lái xe',
       'transport.driver_settlement.reverse': 'Đảo một lần chi quyết toán',
     },
+    /** Chon lai xe de xem quy, luong, quyet toan. */
+    needs: ['transport.driver.read'],
   },
   {
     id: 'bao-duong',
@@ -209,6 +244,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.fleet_status.read': 'Xem tình trạng sẵn sàng của đội xe',
       'transport.alerts.read': 'Xem cảnh báo vận hành',
     },
+    /** Bien so xe va ten lai xe tren lich bao duong, giay to. */
+    needs: ['transport.vehicle.read', 'transport.driver.read'],
   },
   {
     id: 'ban-do',
@@ -222,6 +259,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.geofence.read': 'Xem địa điểm vận hành',
       'transport.geofence.manage': 'Thêm, sửa, tắt địa điểm vận hành',
     },
+    /** Suc khoe vi tri hien o ho so xe; duong di hien tren ban do vong chay. */
+    needs: ['transport.vehicle.read', 'transport.run.read'],
   },
   {
     id: 'phi-duong',
@@ -235,6 +274,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.toll.review.read': 'Xem các dòng phí cần đối soát',
       'transport.toll.review.resolve': 'Xử lý dòng phí cần đối soát',
     },
+    /** Bien so xe gan voi tai khoan thu phi. */
+    needs: ['transport.vehicle.read'],
   },
   {
     id: 'bao-cao',
@@ -245,6 +286,8 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.settlement.report.read': 'Xem báo cáo công nợ và quyết toán',
       'transport.analytics.read': 'Xem chỉ số vận hành (km rỗng, hiệu quả chuyến)',
     },
+    /** Ten doi tac, khach tren bang phai tra va vi the doi tac. */
+    needs: ['transport.customer.read', 'transport.partner.read'],
   },
   {
     id: 'quan-tri',
@@ -254,6 +297,7 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
     actions: {
       'transport.account_link.manage': 'Nối tài khoản đăng nhập với hồ sơ lái xe, bên góp vốn',
     },
+    needs: [],
   },
   {
     id: 'lai-xe',
@@ -282,6 +326,7 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
       'transport.driver.self.document.record': 'Ghi chứng từ vận hành của mình',
       'transport.driver.self.receipt_handover.record': 'Báo đang giữ biên nhận giấy',
     },
+    needs: [],
   },
   {
     id: 'chu-xe',
@@ -291,6 +336,7 @@ export const TRANSPORT_PERMISSION_GROUPS: readonly TransportPermissionGroup[] = 
     actions: {
       'transport.stakeholder.self.vehicle.read': 'Xem xe mình có cổ phần',
     },
+    needs: [],
   },
 ];
 
@@ -372,6 +418,7 @@ function groupView(group: TransportPermissionGroup): PermissionGroupView {
     actions: Object.entries(group.actions)
       .filter(isTransportActionEntry)
       .map(([code, label]) => actionView(code, label)),
+    needs: group.needs,
   };
 }
 

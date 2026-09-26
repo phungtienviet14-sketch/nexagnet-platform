@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { PermissionGate, PermissionNote } from '../components/PermissionGate';
 import { DataTable, DetailRow, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -162,6 +163,17 @@ export function TripsView({
           }}
         />
       ) : null}
+
+      {/* `#395` — ten khach, doi tac, xe, lai xe la danh ba RIENG: thieu quyen thi noi ra. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={[
+          'transport.customer.read',
+          'transport.partner.read',
+          'transport.vehicle.read',
+          'transport.driver.read',
+        ]}
+      />
 
       <form
         className="tx-filters"
@@ -476,7 +488,9 @@ function TripDetailView({
 
         <div className="tx-detail__block">
           <h3>Chi phí &amp; nhiên liệu</h3>
-          {costModel.isEmpty ? (
+          {!canPerform(navigation, 'transport.costing.expense.read') ? (
+            <PermissionGate viewer={navigation} action="transport.costing.expense.read" />
+          ) : costModel.isEmpty ? (
             <EmptyState title="Chưa ghi khoản chi nào cho chuyến này." />
           ) : (
             <ul className="tx-timeline">
@@ -504,7 +518,9 @@ function TripDetailView({
          */}
         <div className="tx-detail__block tx-detail__block--wide">
           <h3>Phiếu đổ dầu</h3>
-          <TripFuelEntries tripId={tripId} onChanged={onChanged} />
+          <PermissionGate viewer={navigation} action="transport.fuel.entry.read">
+            <TripFuelEntries tripId={tripId} onChanged={onChanged} />
+          </PermissionGate>
         </div>
       </div>
 

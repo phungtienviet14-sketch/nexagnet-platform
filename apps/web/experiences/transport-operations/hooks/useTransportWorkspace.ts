@@ -7,6 +7,7 @@ import { FORBIDDEN_IS_ANSWER_META } from '../../../components/auth/session-signa
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import type { FuelDocumentListQuery } from '../fuel-review-types';
 import { shouldProbeStakeholderScope, type NavigationInput } from '../navigation';
+import { isActionNotPermitted, SECTION_ACCESS_REVOKED } from '../permission-notes';
 import type { TollSpendReportQuery } from '../toll-report-types';
 import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
@@ -327,6 +328,20 @@ export function useVehicleDriverHistory(input: NavigationInput, vehicleId: strin
     queryKey: [...TRANSPORT_QUERY_KEYS.vehicles, vehicleId, 'driver-history'],
     queryFn: () => transportApi.fleet.vehicleDriverHistory(vehicleId as string),
     enabled: vehicleId !== null && allowed(input, 'transport-core', 'transport.vehicle.read'),
+  });
+}
+
+/**
+ * SUC KHOE VI TRI cua MOT xe (`#297`) — `transport.tracking.read`, route cua `transport-proof`.
+ *
+ * Truoc `#395` query nay nam THANG trong `FleetView` va KHONG co cong: nguoi chi duoc xem ho so xe
+ * bam mot xe la nhan `403` in giua trang. Chi goi khi da MO mot xe, giong `useVehicleDriverHistory`.
+ */
+export function useVehicleLocationHealth(input: NavigationInput, vehicleId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'vehicles', vehicleId, 'location-health'],
+    queryFn: () => transportApi.fleet.locationHealth(vehicleId ?? ''),
+    enabled: vehicleId !== null && allowed(input, 'transport-proof', 'transport.tracking.read'),
   });
 }
 
@@ -1182,6 +1197,15 @@ export const toSectionQuery = <T>(query: UseQueryResult<T>): SectionQuery<T> => 
   // `isPending` + `fetchStatus === 'idle'` la dau hieu query bi `enabled: false` chan lai.
   isLoading: query.isPending && query.fetchStatus !== 'idle',
   isBlocked: query.isPending && query.fetchStatus === 'idle',
-  errorMessage: query.error === null ? null : query.error.message,
+  errorMessage: errorMessageOf(query.error),
   refetch: () => void query.refetch(),
 });
+
+/**
+ * `403 ACTION_NOT_PERMITTED` cua cong hanh dong (`#395`) noi mot cau NGHIEP VU, khong phai "Bạn
+ * không có quyền thực hiện thao tác này." (cau cua mot THAO TAC) va khong bao gio la "chua co du
+ * lieu". Moi query da gac bang dung ma cua route, nen dieu nay chi xay ra khi quyen vua bi doi —
+ * `AuthGate` doc lai `/auth/me` ngay sau mot `403` va danh muc tu cap nhat.
+ */
+const errorMessageOf = (error: Error | null): string | null =>
+  error === null ? null : isActionNotPermitted(error) ? SECTION_ACCESS_REVOKED : error.message;
