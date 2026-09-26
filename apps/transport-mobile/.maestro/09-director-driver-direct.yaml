@@ -33,9 +33,17 @@ tags:
 - assertNotVisible: 'Duyệt đơn'
 - takeScreenshot: 09-hom-nay-don-moi-tu-tai-xe
 - tapOn: 'Cần xử lý'
+# Viec thieu diem giao nam GAN CUOI hang (~50 muc cua demo): may chu xep theo MUC roi theo TEN LOAI,
+# `SITE_INTAKE_…` dung sau `FUEL_…`/`MAINTENANCE_…`. 30s cuon tren man 320x640 chi toi muc ~33
+# (run 36216258929) — cuon toi CHINH the viec, du thoi gian, va dua the vao giua man.
 - scrollUntilVisible:
-    element: 'Việc tài xế nhận trực tiếp chưa đủ thông tin'
+    element:
+      id: 'director-queue-item-SITE_INTAKE_NEEDS_REVIEW'
     direction: DOWN
-    timeout: 30000
-- assertVisible: '.*điểm giao.*'
+    timeout: 150000
+    centerElement: true
+- assertVisible: 'Việc tài xế nhận trực tiếp chưa đủ thông tin'
+- assertVisible:
+    id: director-queue-note-SITE_INTAKE_NEEDS_REVIEW
+    text: '.*điểm giao.*'
 - takeScreenshot: 09-can-xu-ly-thieu-diem-giao
