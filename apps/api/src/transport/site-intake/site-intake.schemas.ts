@@ -53,3 +53,66 @@ export const confirmSiteIntakeSchema = z
 
 export type ProposeSiteIntakeBody = z.infer<typeof proposeSiteIntakeSchema>;
 export type ConfirmSiteIntakeBody = z.infer<typeof confirmSiteIntakeSchema>;
+
+/* ------------------------------------------------------------------ *
+ * `#398` — DIEM GIAO, HOAN THIEN, GAN DON CO SAN, BAO BAT THUONG
+ * ------------------------------------------------------------------ */
+
+/**
+ * LUA CHON DIEM GIAO — HAI hinh dang, va khong hinh dang nao la "mot cap so tu do".
+ *
+ *   · `KNOWN_PLACE`  — id mot hang rao; may chu tu doc nhan + toa do;
+ *   · `PLACE_SEARCH` — mot ket qua tim dia diem, KEM chuoi tim: may chu tim LAI (tu bo nho dem cua
+ *     chinh no) va chi nhan ket qua co CUNG nhan + CUNG toa do. Mot toa do bia khong qua duoc.
+ *
+ * `.strict()` o moi nhanh: `freightAmount`, `customerId`, `driverId`, `vehicleId` va moi truong tien
+ * bi TU CHOI chu khong bi bo qua — lai xe khong co cho nao de dat mot su that tien.
+ */
+export const destinationChoiceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('KNOWN_PLACE'), placeId: trimmed.min(1).max(100) }).strict(),
+  z
+    .object({
+      kind: z.literal('PLACE_SEARCH'),
+      query: trimmed.min(2).max(200),
+      label: trimmed.min(1).max(300),
+      latitude: z.number().finite().min(-90).max(90),
+      longitude: z.number().finite().min(-180).max(180),
+    })
+    .strict(),
+]);
+
+export const driverDestinationSchema = z
+  .object({
+    /** Khoa chong lap do may khach sinh — gui lai CUNG khoa tra ve dung ket cuc cu. */
+    clientEventId: trimmed.min(1).max(200),
+    destination: destinationChoiceSchema,
+  })
+  .strict();
+
+export const officeCompleteSchema = z
+  .object({
+    idempotencyKey: trimmed.min(1).max(120),
+    destination: destinationChoiceSchema.optional(),
+    /** Van phong XAC NHAN noi lay hang khi lan khop dia diem chua du chac. */
+    attestOrigin: z.boolean().optional(),
+  })
+  .strict();
+
+export const bindExistingOrderSchema = z
+  .object({ orderId: trimmed.min(1).max(100), idempotencyKey: trimmed.min(1).max(120) })
+  .strict();
+
+/** Ly do BAT BUOC — `#398` §9: mot lan huy khong co ly do la mot lan xoa lich su bang mot nut bam. */
+export const reportExceptionSchema = z
+  .object({ reason: trimmed.min(3).max(500), idempotencyKey: trimmed.min(1).max(120) })
+  .strict();
+
+export const reviewListQuerySchema = z
+  .object({ status: z.enum(['PENDING', 'ORDER_BOUND', 'REJECTED']).default('PENDING') })
+  .strict();
+
+export const activityQuerySchema = z
+  .object({ hours: z.coerce.number().int().min(1).max(168).default(24) })
+  .strict();
+
+export type DestinationChoiceBody = z.infer<typeof destinationChoiceSchema>;

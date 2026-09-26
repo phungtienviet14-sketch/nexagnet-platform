@@ -20,6 +20,17 @@ import {
 } from './site-intake.repository.js';
 import { PrismaRunSiteIntakeRepository } from './prisma-site-intake.repository.js';
 import { SiteIntakeService, TRANSPORT_SITE_INTAKE_POLICY } from './site-intake.service.js';
+import { AuditLogService } from '../../audit/audit-log.service.js';
+import { MovementRepository } from '../movement/movement.repository.js';
+import { RunPlanRepository } from '../planning/planning.repository.js';
+import { PrismaSiteIntakeCommercialStore } from './prisma-site-intake-commercial.store.js';
+import { SiteIntakeCommercialService } from './site-intake-commercial.service.js';
+import {
+  InMemorySiteIntakeCommercialStore,
+  SiteIntakeCommercialStore,
+} from './site-intake-commercial.store.js';
+import { SiteIntakeReadinessReader } from './site-intake-readiness.reader.js';
+import { SiteIntakeReviewService } from './site-intake-review.service.js';
 
 /**
  * Capability `transport-site-intake` — nhan viec tai dia diem A (`#267`).
@@ -66,7 +77,45 @@ import { SiteIntakeService, TRANSPORT_SITE_INTAKE_POLICY } from './site-intake.s
       useFactory: (): SiteCandidatePolicy => DEFAULT_SITE_CANDIDATE_POLICY,
     },
     SiteIntakeService,
+    /**
+     * `#398` — phan THUONG MAI. Kho chon theo `PERSISTENCE` cung khuon kho xac nhan o tren; ban trong
+     * bo nho di qua chinh cac kho trong bo nho cua `transport-core` (don, vong chay, chang, ke
+     * hoach) — nen CUNG mot ban kho xac nhan phai duoc dung o ca hai noi.
+     */
+    {
+      provide: SiteIntakeCommercialStore,
+      useFactory: (
+        prisma: PrismaService,
+        intakes: RunSiteIntakeRepository,
+        movement: MovementRepository,
+        plans: RunPlanRepository,
+        audit: AuditLogService,
+      ): SiteIntakeCommercialStore =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaSiteIntakeCommercialStore(prisma, audit)
+          : new InMemorySiteIntakeCommercialStore(
+              intakes as InMemoryRunSiteIntakeRepository,
+              movement,
+              plans,
+              audit,
+            ),
+      inject: [
+        PrismaService,
+        RunSiteIntakeRepository,
+        MovementRepository,
+        RunPlanRepository,
+        AuditLogService,
+      ],
+    },
+    SiteIntakeReadinessReader,
+    SiteIntakeCommercialService,
+    SiteIntakeReviewService,
   ],
-  exports: [SiteIntakeService, RunSiteIntakeRepository],
+  exports: [
+    SiteIntakeService,
+    RunSiteIntakeRepository,
+    SiteIntakeCommercialService,
+    SiteIntakeReviewService,
+  ],
 })
 export class TransportSiteIntakeModule {}

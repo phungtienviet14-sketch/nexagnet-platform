@@ -204,6 +204,17 @@ export interface CreateRunInput {
   readonly vehicleId: string;
   readonly businessDate: string;
   readonly note?: string | null;
+  /**
+   * `#398`: DON ma lan ghi nay dang LAP KE HOACH cho. Co mat thi kho gianh khoa tu van
+   * `transport-order-plan:<orderId>` TRUOC khoa hang vong chay, doc lai "don nay da co ke hoach
+   * hieu luc chua" DUOI khoa do, va tu choi `PLAN_ORDER_ALREADY_PLANNED` neu co. Cung khoa ma lenh
+   * gan don co san vao viec tai xe nhan truc tiep gianh — nen hai duong xep hang, va khong duong nao
+   * sinh ra mot vong chay/chang CO HANG thu hai cho mot don da nhan chang cua lai xe.
+   *
+   * Ban trong bo nho bo qua truong nay: no khong co giao dich de dua phep kiem vao, va lan lap ke
+   * hoach da tu kiem `findActiveForOrder` ngay truoc do.
+   */
+  readonly planGuardOrderId?: string | null;
 }
 
 export interface CancelRunInput {
@@ -223,6 +234,17 @@ export interface CreateLegInput {
   /** #276 L6 — km DU KIEN. Khong bao gio ghi de len `distanceKm`. */
   readonly plannedDistanceKm?: number | null;
   readonly note?: string | null;
+  /**
+   * `#398`: DON ma lan ghi nay dang LAP KE HOACH cho. Co mat thi kho gianh khoa tu van
+   * `transport-order-plan:<orderId>` TRUOC khoa hang vong chay, doc lai "don nay da co ke hoach
+   * hieu luc chua" DUOI khoa do, va tu choi `PLAN_ORDER_ALREADY_PLANNED` neu co. Cung khoa ma lenh
+   * gan don co san vao viec tai xe nhan truc tiep gianh — nen hai duong xep hang, va khong duong nao
+   * sinh ra mot vong chay/chang CO HANG thu hai cho mot don da nhan chang cua lai xe.
+   *
+   * Ban trong bo nho bo qua truong nay: no khong co giao dich de dua phep kiem vao, va lan lap ke
+   * hoach da tu kiem `findActiveForOrder` ngay truoc do.
+   */
+  readonly planGuardOrderId?: string | null;
 }
 
 /**
@@ -249,6 +271,13 @@ export interface LegStatusWriteResult {
   readonly leg: RunLeg;
   /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
   readonly applied: boolean;
+}
+
+export interface BindLegOrderInput {
+  readonly legId: string;
+  readonly orderId: string;
+  readonly destinationLabel: string;
+  readonly at: Date;
 }
 
 export interface AssignRunInput {
@@ -464,6 +493,21 @@ export abstract class MovementRepository {
    * `null` = khong co chang nao mang dinh danh do.
    */
   abstract setLegStatus(input: LegStatusWrite): Promise<LegStatusWriteResult | null>;
+
+  /**
+   * GAN DON VAO MOT CHANG CO HANG CHUA CO DON — `#398`, MOT LAN, co dieu kien.
+   *
+   * Khong phai mot `PATCH orderId` tong quat: chi di tiep khi, duoi khoa vong chay, chang VAN la
+   * `LOADED`, `orderId` VAN `NULL` va chang CHUA ket thuc (`PLANNED`/`IN_TRANSIT`). Mot lenh den
+   * sau nhan `null` va phai phan xu lai. Doi nhan diem den cung luc: nhan "Chua xac dinh" cua lan
+   * nhan viec nhuong cho nhan cua don.
+   *
+   * Ban Prisma cua `transport-site-intake` ghi dung dieu kien nay TRONG giao dich cua chinh no (khoa
+   * tu van + khoa hang vong chay); phuong thuc nay la duong cua ban trong bo nho va cua moi lan goi
+   * khong can mot giao dich rong hon. Trigger `transport_run_leg_order_binding_once` chan `X -> Y`
+   * o moi duong con lai.
+   */
+  abstract bindOrderToUnboundLoadedLeg(input: BindLegOrderInput): Promise<RunLeg | null>;
 
   abstract assignRun(runId: string, input: AssignRunInput): Promise<RunAssignmentChange>;
   abstract listRunAssignments(runId: string): Promise<RunAssignment[]>;
@@ -952,6 +996,30 @@ export class InMemoryMovementRepository extends MovementRepository {
       };
       this.legs.set(next.id, next);
       return { leg: next, applied: true };
+    });
+  }
+
+  async bindOrderToUnboundLoadedLeg(input: BindLegOrderInput): Promise<RunLeg | null> {
+    const owner = this.legs.get(input.legId);
+    if (!owner) return null;
+    return this.withRunLock(owner.runId, async () => {
+      const current = this.legs.get(input.legId);
+      if (
+        !current ||
+        current.kind !== 'LOADED' ||
+        current.orderId !== null ||
+        (current.status !== 'PLANNED' && current.status !== 'IN_TRANSIT')
+      ) {
+        return null;
+      }
+      const next: RunLeg = {
+        ...current,
+        orderId: input.orderId,
+        destinationLabel: input.destinationLabel,
+        updatedAt: iso(input.at),
+      };
+      this.legs.set(next.id, next);
+      return next;
     });
   }
 

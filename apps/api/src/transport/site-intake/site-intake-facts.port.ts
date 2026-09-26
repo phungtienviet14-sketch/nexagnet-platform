@@ -6,6 +6,8 @@ import type { VehicleRunStatus } from '../movement/movement.types.js';
 import { GeofenceRepository } from '../proof/geofence.repository.js';
 import { TrackingRepository } from '../proof/tracking.repository.js';
 import type { CounterpartySiteView } from '../counterparty/site.types.js';
+import { buildKnownPlaces } from '../places/known-places.js';
+import type { KnownPlace } from '../places/place-search.types.js';
 import type { SiteFence } from './site-candidate.js';
 
 /**
@@ -40,9 +42,25 @@ export interface SiteIntakeOpenRun {
   readonly status: VehicleRunStatus;
 }
 
+/** `#398`: ho so lai xe nhin tu phia van phong — de noi "ai" va "con hoat dong khong". */
+export interface SiteIntakeDriverProfile {
+  readonly id: string;
+  readonly fullName: string;
+  readonly active: boolean;
+}
+
+/** `#398`: dia diem BAT KE trang thai — de noi ten mot kho da nghi thay vi "???". */
+export interface SiteIntakeSiteProfile extends SiteIntakeSiteFacts {
+  readonly active: boolean;
+}
+
 export abstract class TransportSiteIntakeCoreFacts {
   /** Cau noi phien dang nhap -> ho so lai xe. Danh tinh KHONG bao gio den tu than yeu cau. */
   abstract findDriverByAuthUserId(authUserId: string): Promise<SiteIntakeDriverFacts | null>;
+  abstract findDriver(driverId: string): Promise<SiteIntakeDriverProfile | null>;
+  /** Bien so cua mot xe, `null` = khong tim thay. */
+  abstract findVehiclePlate(vehicleId: string): Promise<string | null>;
+  abstract findSite(siteId: string): Promise<SiteIntakeSiteProfile | null>;
   /** Xe lai xe DANG cam. `null` = chua duoc giao xe nao. */
   abstract activeVehicleForDriver(driverId: string): Promise<string | null>;
   /** Vong chay chua ket thuc ma lai xe DANG cam — `#267` H3. */
@@ -64,6 +82,11 @@ export abstract class TransportSiteIntakeCoreFacts {
  */
 export abstract class TransportSiteIntakeGeoFacts {
   abstract listActiveSiteFences(): Promise<readonly SiteFence[]>;
+  /**
+   * `#398`: DIEM GIAO DA BIET = hang rao dang hoat dong (bai xe, dia diem phap nhan, khach hang) —
+   * cung mot nguon voi "dia diem da biet" cua man tao don (#379), khong phai mot so thu hai.
+   */
+  abstract listKnownPlaces(): Promise<readonly KnownPlace[]>;
 }
 
 export interface SiteIntakeObservationFacts {
@@ -111,6 +134,26 @@ export class TransportSiteIntakeCoreFactsAdapter extends TransportSiteIntakeCore
     return this.fleet.activeVehicleForDriver(driverId);
   }
 
+  async findDriver(driverId: string): Promise<SiteIntakeDriverProfile | null> {
+    const driver = await this.fleet.findDriver(driverId);
+    return driver
+      ? { id: driver.id, fullName: driver.fullName, active: driver.status === 'ACTIVE' }
+      : null;
+  }
+
+  async findVehiclePlate(vehicleId: string): Promise<string | null> {
+    return (await this.fleet.findVehicle(vehicleId))?.registrationPlate ?? null;
+  }
+
+  async findSite(siteId: string): Promise<SiteIntakeSiteProfile | null> {
+    try {
+      const view = await this.sites.get(siteId);
+      return { ...toFacts(view), active: view.site.status === 'ACTIVE' };
+    } catch {
+      return null;
+    }
+  }
+
   async listOpenRunsForDriver(driverId: string): Promise<readonly SiteIntakeOpenRun[]> {
     const runs = await this.movement.listOpenRunsForDriver(driverId);
     return runs.map((run) => ({ runId: run.id, code: run.code, status: run.status }));
@@ -139,8 +182,35 @@ const toFacts = (view: CounterpartySiteView): SiteIntakeSiteFacts => ({
 
 @Injectable()
 export class TransportSiteIntakeGeoFactsAdapter extends TransportSiteIntakeGeoFacts {
-  constructor(private readonly geofences: GeofenceRepository) {
+  constructor(
+    private readonly geofences: GeofenceRepository,
+    private readonly sites: CounterpartySiteService,
+  ) {
     super();
+  }
+
+  async listKnownPlaces(): Promise<readonly KnownPlace[]> {
+    const fences = await this.geofences.listActive();
+    const siteIds = fences.flatMap((fence) =>
+      fence.subjectKind === 'COUNTERPARTY_SITE' && fence.subjectId !== null
+        ? [fence.subjectId]
+        : [],
+    );
+    const views = siteIds.length === 0 ? [] : await this.sites.activeViews([...new Set(siteIds)]);
+    return buildKnownPlaces(
+      // Hang rao `COUNTERPARTY_SITE` cua mot dia diem da nghi bi bo: `activeViews` khong tra no.
+      fences.filter(
+        (fence) =>
+          fence.subjectKind !== 'COUNTERPARTY_SITE' ||
+          views.some((view) => view.site.id === fence.subjectId),
+      ),
+      new Map(
+        views.map((view) => [
+          view.site.id,
+          { siteName: view.site.name, counterpartyName: view.counterpartyName },
+        ]),
+      ),
+    );
   }
 
   async listActiveSiteFences(): Promise<readonly SiteFence[]> {

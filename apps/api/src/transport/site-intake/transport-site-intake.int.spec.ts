@@ -87,7 +87,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const service = new SiteIntakeService(
       intakes,
       new TransportSiteIntakeCoreFactsAdapter(fleet, movementRepo, siteService),
-      new TransportSiteIntakeGeoFactsAdapter(geofences),
+      new TransportSiteIntakeGeoFactsAdapter(geofences, siteService),
       locations,
       movement,
       POLICY,
@@ -388,6 +388,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
           clientEventId: 'it-si-cham-mot',
           confirmedAt: new Date(),
           businessDate: '2026-09-09',
+          siteMatch: 'NO_LOCATION',
         });
       } catch (error) {
         recognised = isUniqueViolationOn(error, SITE_INTAKE_DRIVER_EVENT);

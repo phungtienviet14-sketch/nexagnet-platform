@@ -201,6 +201,8 @@ export const ACTION_QUEUE_SUBJECTS = [
   /** Mot moc van hanh cua `transport-checkpoint` — ban ghi goc cua mot canh bao thieu chung cu. */
   'RUN_CHECKPOINT',
   'COMPANY',
+  /** `#398`: mot lan tai xe nhan viec truc tiep (`TransportRunSiteIntake.id`). */
+  'SITE_INTAKE',
 ] as const;
 export type ActionQueueSubjectKind = (typeof ACTION_QUEUE_SUBJECTS)[number];
 
@@ -290,6 +292,19 @@ export const ACTION_QUEUE_KINDS = [
    * DUNG MOT loai (`DELIVERY_RECEIPT`).
    */
   'DELIVERY_PROOF_DOCUMENT_MISSING',
+  /* --- `transport-site-intake` (`#398`) --- */
+  /**
+   * Mot viec TAI XE NHAN TRUC TIEP chua du dieu kien tat dinh de tu tao don: thieu diem giao, vi
+   * tri khop dia diem chua du chac, xung dot chang/ke hoach... `detail.reasons` mang MA cu the.
+   *
+   * CHI ngoai le moi vao day. Mot don tu tao BINH THUONG la tin tuc cua ban tin "Hom nay", KHONG
+   * phai mot viec can quyet — dem no vao day se lam hang viec phong len moi lan tai xe lam dung
+   * viec cua minh.
+   *
+   * Muc `WARNING`: van hanh da dung (xe dang o nha may, vong chay da co); cai thieu la phan THUONG
+   * MAI, va no khong chan xe chay.
+   */
+  'SITE_INTAKE_NEEDS_REVIEW',
 ] as const;
 export type ActionQueueKind = (typeof ACTION_QUEUE_KINDS)[number];
 
@@ -396,6 +411,8 @@ export const CONTROL_TOWER_SOURCES = [
    * nao dang thieu.
    */
   'FIELD_OPERATIONS',
+  /** `#398` — `transport-site-intake`: viec tai xe nhan truc tiep chua du dieu kien tao don. */
+  'SITE_INTAKE',
 ] as const;
 export type ControlTowerSource = (typeof CONTROL_TOWER_SOURCES)[number];
 

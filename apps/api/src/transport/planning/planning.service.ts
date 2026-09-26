@@ -18,6 +18,7 @@ import {
   TRANSPORT_PLANNING_DECISIONS,
   type TransportPlanningDecisionReason,
 } from './planning-decisions.js';
+import type { PlanningPendingWorkSource } from './planning-pending-work.port.js';
 import { TRANSPORT_PLANNING_POLICY, resolveDepot, usableDepot } from './planning-policy.js';
 import {
   ORDER_RUN_PLAN_ACTIVE_ORDER,
@@ -52,6 +53,11 @@ export interface PlanOrderCommand {
 export interface CommitPlanCommand extends PlanOrderCommand {
   /** Khoa chong lap do nguoi goi dat. Cung khoa = cung mot hieu qua nghiep vu. */
   readonly idempotencyKey: string;
+  /**
+   * `#398`: viec dang do cua xe (viec tai xe nhan truc tiep chua co don). Tang ghep mang vao — xem
+   * `planning-pending-work.port.ts`. Vang mat = khong co nguon, dung nhu khach chi bat `transport-core`.
+   */
+  readonly pendingWork?: PlanningPendingWorkSource;
 }
 
 export interface RunPlanCommitResult {
@@ -317,10 +323,31 @@ export class PlanningService {
     const active = await this.plans.findActiveForOrder(orderId);
     if (active) throw this.conflict('planning.commit', 'PLAN_ORDER_ALREADY_PLANNED', { orderId });
 
+    /*
+     * `#398`: XE DANG GIU MOT VIEC TAI XE NHAN TRUC TIEP CHUA CO DON.
+     *
+     * Mo chuyen moi luc nay (ONE) hoac noi chang moi (MULTI) se nhan doi dung mot viec that: lai xe
+     * da dung o nha may, vong chay + chang co hang da ton tai. Duong dung la GAN don vao viec do —
+     * don nhan lai vong chay/chang cu. Hoi TRUOC moi lan ghi, nen tu choi khong de lai gi.
+     */
+    const pending = await command.pendingWork?.pendingIntakeForVehicle(command.vehicleId);
+    if (pending) {
+      throw this.conflict('planning.commit', 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE', {
+        orderId,
+        vehicleId: command.vehicleId,
+        intakeId: pending.intakeId,
+        runCode: pending.runCode,
+      });
+    }
+
     const { proposal } = await this.buildProposal(order, command);
     const businessDate = toBusinessDate(this.now(), this.corePolicy.timeZone);
 
-    const run = await this.resolveTargetRun(proposal, command, businessDate, driverId, actor);
+    const run = await this.resolveTargetRun(proposal, command, businessDate, driverId, actor).catch(
+      (error: unknown) => {
+        throw this.planGuardConflict(error, orderId);
+      },
+    );
     if (run === null) {
       // Ban kia da chiem ma vong chay nhung chua ghi xong ke hoach. Doan la sai, nen noi that.
       throw this.conflict('planning.commit', 'PLAN_COMMIT_IN_FLIGHT', {
@@ -330,24 +357,42 @@ export class PlanningService {
     }
 
     const created: RunLeg[] = [];
-    for (const planned of proposal.legs) {
-      created.push(
-        await this.movement.addLeg(
+    try {
+      for (const planned of proposal.legs) {
+        created.push(
+          await this.movement.addLeg(
+            run.id,
+            {
+              sequence: planned.sequence,
+              kind: planned.kind,
+              orderId: planned.orderId,
+              originLabel: planned.originLabel,
+              destinationLabel: planned.destinationLabel,
+              businessDate,
+              distanceKm: null,
+              plannedDistanceKm: planned.plannedDistanceKm,
+              note: null,
+              // `#398`: cong ke hoach cua don, DUOI khoa cua don — xem `CreateLegInput`.
+              planGuardOrderId: orderId,
+            },
+            actor,
+          ),
+        );
+      }
+    } catch (error) {
+      /*
+       * `#398`: MOT LENH GAN DON VUA THANG trong khe giua lan mo vong chay va lan them chang dau.
+       * Vong chay moi chua co chang nao va chua co ai cam — huy no NGAY (khong xoa), de khong de
+       * lai mot vong chay mo coi tren bang dieu hanh. Vong chay DANG CHAY thi khong dong vao.
+       */
+      if (isPlanGuardConflict(error) && proposal.outcome === 'NEW_RUN' && created.length === 0) {
+        await this.movement.cancelRun(
           run.id,
-          {
-            sequence: planned.sequence,
-            kind: planned.kind,
-            orderId: planned.orderId,
-            originLabel: planned.originLabel,
-            destinationLabel: planned.destinationLabel,
-            businessDate,
-            distanceKm: null,
-            plannedDistanceKm: planned.plannedDistanceKm,
-            note: null,
-          },
+          'Don vua duoc gan vao viec tai xe nhan truc tiep',
           actor,
-        ),
-      );
+        );
+      }
+      throw this.planGuardConflict(error, orderId);
     }
 
     const loadedLeg = created.find((leg) => leg.kind === 'LOADED');
@@ -673,7 +718,14 @@ export class PlanningService {
     const code = planRunCode(businessDate, this.planDigest(command));
     try {
       return await this.movement.createRun(
-        { code, vehicleId: command.vehicleId, businessDate, note: null },
+        {
+          code,
+          vehicleId: command.vehicleId,
+          businessDate,
+          note: null,
+          // `#398`: cong ke hoach cua don, DUOI khoa cua don — xem `CreateRunInput`.
+          planGuardOrderId: proposal.orderId,
+        },
         actor,
       );
     } catch (error) {
@@ -869,6 +921,16 @@ export class PlanningService {
     return this.clock ? this.clock() : new Date();
   }
 
+  /** Loi cong ke hoach cua kho -> dung ma + dong quyet dinh cua duong tuan tu. Loi khac di nguyen. */
+  private planGuardConflict(error: unknown, orderId: string): unknown {
+    return isPlanGuardConflict(error)
+      ? this.conflict('planning.commit', 'PLAN_ORDER_ALREADY_PLANNED', {
+          orderId,
+          by: 'ORDER_LOCK',
+        })
+      : error;
+  }
+
   private decide(
     point: DecisionPoint,
     outcome: 'allowed' | 'denied',
@@ -906,3 +968,6 @@ export class PlanningService {
     return TransportDomainError.conflict(reason, TRANSPORT_PLANNING_DECISIONS.labels[reason]);
   }
 }
+
+const isPlanGuardConflict = (error: unknown): boolean =>
+  error instanceof TransportDomainError && error.reason === 'PLAN_ORDER_ALREADY_PLANNED';

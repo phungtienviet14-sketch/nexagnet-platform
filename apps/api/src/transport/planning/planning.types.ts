@@ -78,7 +78,11 @@ export interface TransportPlanningPolicy {
  * LICH SU LAP KE HOACH
  * ------------------------------------------------------------------ */
 
-export const RUN_PLAN_OUTCOMES = ['NEW_RUN', 'APPENDED'] as const;
+/**
+ * `ADOPTED` (`#398`): don NHAN LAI vong chay + chang co hang da ton tai cua mot lan tai xe nhan viec
+ * truc tiep — ke hoach khong sinh chang nao.
+ */
+export const RUN_PLAN_OUTCOMES = ['NEW_RUN', 'APPENDED', 'ADOPTED'] as const;
 export type RunPlanOutcome = (typeof RUN_PLAN_OUTCOMES)[number];
 
 export interface OrderRunPlan {

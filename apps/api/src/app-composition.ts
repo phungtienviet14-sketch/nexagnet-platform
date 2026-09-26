@@ -156,6 +156,17 @@ import { TransportWaitingPayrollBridgeModule } from './transport/waiting/waiting
 import { WaitingController } from './transport/waiting/waiting.controller.js';
 import { TransportSiteIntakeModule } from './transport/site-intake/transport-site-intake.module.js';
 import { DriverSiteIntakeController } from './transport/site-intake/driver-site-intake.controller.js';
+import { SiteIntakeReviewController } from './transport/site-intake/site-intake-review.controller.js';
+import { SiteIntakePlaceSearchBridge } from './transport/site-intake/site-intake-place-search.bridge.js';
+import {
+  SiteIntakeControlTowerFacts,
+  SiteIntakePlanningPendingWorkSource,
+} from './transport/site-intake/site-intake-composition.adapters.js';
+import { ControlTowerSiteIntakeFacts } from './transport/control-tower/control-tower-facts.port.js';
+import {
+  NoPlanningPendingWorkSource,
+  PlanningPendingWorkSource,
+} from './transport/planning/planning-pending-work.port.js';
 import { TransportAcceptanceModule } from './transport/acceptance/transport-acceptance.module.js';
 import { CommercialAcceptanceController } from './transport/acceptance/commercial-acceptance.controller.js';
 import { CheckpointsController } from './transport/checkpoint/checkpoints.controller.js';
@@ -578,6 +589,8 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // dinh kem chung cu vi tri. Xem `CheckpointService`: hai duong do tach han o tang dich vu.
   owned('transport-checkpoint', DriverCheckpointsController),
   owned('transport-site-intake', DriverSiteIntakeController),
+  // `#398`: be mat VAN PHONG cua viec tai xe nhan truc tiep (Can xu ly, ban tin, nguon cua don).
+  owned('transport-site-intake', SiteIntakeReviewController),
   owned('transport-checkpoint', CheckpointsController),
   /**
    * PHIEN CHO NGUOI NHAN (`#279` O5) — cung capability, cung khuon HAI be mat.
@@ -724,6 +737,20 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-core', TransportPlaceService),
   owned('transport-proof', { provide: KnownPlacesFacts, useClass: KnownPlacesFactsAdapter }),
   /**
+   * `#398` — VIEC TAI XE NHAN TRUC TIEP. Ba provider o GOC, den/di cung `transport-site-intake`:
+   *
+   *   · cau noi tim dia diem (#379) — `TransportPlaceService` la provider o goc, khong module nao
+   *     `TransportSiteIntakeModule` import thay duoc no;
+   *   · nguon hang "Can xu ly" cho thap dieu hanh;
+   *   · ban GHI DE cua "viec dang do cua xe" cho lan lap ke hoach — PHAI nam SAU ban rong cua
+   *     `transport-core` (Nest lay provider cuoi cung cho mot token).
+   */
+  owned('transport-site-intake', SiteIntakePlaceSearchBridge),
+  owned('transport-site-intake', {
+    provide: ControlTowerSiteIntakeFacts,
+    useClass: SiteIntakeControlTowerFacts,
+  }),
+  /**
    * DONG VONG CHAY DO HE THONG QUAN (`#293` Lane R).
    *
    * Ba dong, va thu tu cua chung la mot phan cua hop dong:
@@ -737,6 +764,14 @@ const PROVIDERS: readonly Owned<Provider>[] = [
    * nam TRUOC dong ghi de do, va thu tu do la co y: Nest lay provider CUOI CUNG cho mot token.
    */
   owned('transport-core', RunClosureService),
+  /**
+   * `#398` — VIEC DANG DO CUA XE ma lan lap ke hoach phai hoi. Mac dinh RONG o `transport-core`,
+   * GHI DE boi `transport-site-intake` ben duoi (Nest lay provider CUOI CUNG cho mot token).
+   */
+  owned('transport-core', {
+    provide: PlanningPendingWorkSource,
+    useClass: NoPlanningPendingWorkSource,
+  }),
   owned('transport-core', RunClosureSweepScheduler),
   owned('transport-core', {
     provide: RunClosureBlockerSource,
@@ -781,6 +816,15 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-checkpoint', {
     provide: RunClosureBlockerSource,
     useClass: TransportCheckpointRunClosureBlockerSource,
+  }),
+  /**
+   * `#398` — GHI DE ban rong "viec dang do cua xe" cua `transport-core`: lan lap ke hoach dung lai
+   * khi xe dang giu mot viec tai xe nhan truc tiep chua co don. Thu tu la hop dong: dong nay PHAI
+   * nam SAU ban rong.
+   */
+  owned('transport-site-intake', {
+    provide: PlanningPendingWorkSource,
+    useClass: SiteIntakePlanningPendingWorkSource,
   }),
   /**
    * CHANG CO HANG KHONG "XONG" TRAI HIEN TRUONG (`#332`) — GHI DE ban rong cua `transport-core`.

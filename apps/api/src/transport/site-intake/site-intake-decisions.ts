@@ -87,11 +87,59 @@ export const SITE_INTAKE_CONFIRM_REASONS = [
 ] as const;
 export type SiteIntakeConfirmReason = (typeof SITE_INTAKE_CONFIRM_REASONS)[number];
 
-export type TransportSiteIntakeDecisionReason = SiteIntakeProposeReason | SiteIntakeConfirmReason;
+/* ------------------------------------------------------------------ *
+ * site_intake.commercial — `#398`, SiteIntakeCommercialService
+ * ------------------------------------------------------------------ */
+export const SITE_INTAKE_COMMERCIAL_REASONS = [
+  /** Du dieu kien tat dinh — he thong TU tao don va don nhan DUNG vong chay + chang cu. */
+  'SITE_INTAKE_ORDER_AUTO_CREATED',
+  /** Van phong bo sung phan con thieu, va CUNG lenh do tao don nhan vong chay + chang cu. */
+  'SITE_INTAKE_ORDER_OFFICE_COMPLETED',
+  /** Van phong CHON TAY mot don co san — don do nhan vong chay + chang cu. */
+  'SITE_INTAKE_ORDER_BOUND_EXISTING',
+  /** Da co don — lenh goi lai tra ve DUNG don do, khong tao don thu hai. */
+  'SITE_INTAKE_ALREADY_BOUND',
+  /** Chua du dieu kien — giu `PENDING`, ly do co ma nam trong `detail.reasons`. */
+  'SITE_INTAKE_NEEDS_REVIEW',
+  /** Khong bao gio tu tao nua (da tu choi / vong chay huy / chang huy). */
+  'SITE_INTAKE_COMMERCIAL_REJECTED',
+  /** Da ghi diem giao (lai xe hoac van phong). */
+  'SITE_INTAKE_DESTINATION_RECORDED',
+  /** Gui lai DUNG lenh diem giao cu — khong ghi lan hai. */
+  'SITE_INTAKE_DESTINATION_REPLAYED',
+  /** Gan don co san bi tu choi — ma cu the nam o `detail.reason`. */
+  'SITE_INTAKE_BINDING_DENIED',
+] as const;
+export type SiteIntakeCommercialReason = (typeof SITE_INTAKE_COMMERCIAL_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * site_intake.exception — `#398` §9
+ * ------------------------------------------------------------------ */
+export const SITE_INTAKE_EXCEPTION_REASONS = [
+  'SITE_INTAKE_EXCEPTION_ORDER_CANCELLED_WORK_CANCELLED',
+  'SITE_INTAKE_EXCEPTION_ORDER_CANCELLED_OPERATION_PRESERVED',
+  'SITE_INTAKE_EXCEPTION_INTAKE_REJECTED_WORK_CANCELLED',
+  'SITE_INTAKE_EXCEPTION_INTAKE_REJECTED_OPERATION_PRESERVED',
+  'SITE_INTAKE_EXCEPTION_ANOMALY_RECORDED_ORDER_TERMINAL',
+  'SITE_INTAKE_EXCEPTION_REPLAYED',
+  'SITE_INTAKE_EXCEPTION_ALREADY_RECORDED',
+] as const;
+export type SiteIntakeExceptionReason = (typeof SITE_INTAKE_EXCEPTION_REASONS)[number];
+
+export type TransportSiteIntakeDecisionReason =
+  | SiteIntakeProposeReason
+  | SiteIntakeConfirmReason
+  | SiteIntakeCommercialReason
+  | SiteIntakeExceptionReason;
 
 export const TRANSPORT_SITE_INTAKE_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-site-intake',
-  points: ['site_intake.propose', 'site_intake.confirm'],
+  points: [
+    'site_intake.propose',
+    'site_intake.confirm',
+    'site_intake.commercial',
+    'site_intake.exception',
+  ],
   labels: {
     SITE_PROPOSAL_UNIQUE: 'Nhận ra đúng một địa điểm',
     SITE_PROPOSAL_AMBIGUOUS: 'Nhiều địa điểm hợp lý — để người chọn',
@@ -112,5 +160,28 @@ export const TRANSPORT_SITE_INTAKE_DECISIONS = defineDecisionVocabulary({
     SITE_INTAKE_OBSERVATION_NOT_OWNED: 'Bản định vị đó không thuộc về bạn',
     SITE_INTAKE_OBSERVATION_ALREADY_USED: 'Bản định vị đó đã dùng cho một lần nhận việc khác',
     SITE_INTAKE_CREATE_IN_FLIGHT: 'Lần bấm này đang được xử lý — bấm lại sau một lát',
+
+    SITE_INTAKE_ORDER_AUTO_CREATED: 'Đủ điều kiện — tự tạo đơn trên đúng vòng chạy và chặng cũ',
+    SITE_INTAKE_ORDER_OFFICE_COMPLETED: 'Văn phòng bổ sung đủ — tạo đơn trên đúng vòng chạy cũ',
+    SITE_INTAKE_ORDER_BOUND_EXISTING: 'Văn phòng gắn một đơn có sẵn vào đúng vòng chạy cũ',
+    SITE_INTAKE_ALREADY_BOUND: 'Đã có đơn — trả về đúng đơn đó',
+    SITE_INTAKE_NEEDS_REVIEW: 'Chưa đủ điều kiện tạo đơn — cần người xem',
+    SITE_INTAKE_COMMERCIAL_REJECTED: 'Không tạo đơn nữa cho lần nhận việc này',
+    SITE_INTAKE_DESTINATION_RECORDED: 'Đã ghi điểm giao',
+    SITE_INTAKE_DESTINATION_REPLAYED: 'Gửi lại đúng lệnh điểm giao cũ',
+    SITE_INTAKE_BINDING_DENIED: 'Không gắn được đơn có sẵn',
+
+    SITE_INTAKE_EXCEPTION_ORDER_CANCELLED_WORK_CANCELLED:
+      'Hủy đơn — xe chưa chạy nên việc vận hành cũng hủy',
+    SITE_INTAKE_EXCEPTION_ORDER_CANCELLED_OPERATION_PRESERVED:
+      'Hủy đơn — xe đã chạy nên giữ nguyên vòng chạy, chặng, mốc',
+    SITE_INTAKE_EXCEPTION_INTAKE_REJECTED_WORK_CANCELLED:
+      'Không tạo đơn — xe chưa chạy nên việc vận hành cũng hủy',
+    SITE_INTAKE_EXCEPTION_INTAKE_REJECTED_OPERATION_PRESERVED:
+      'Không tạo đơn — xe đã chạy nên giữ nguyên hoạt động vận hành',
+    SITE_INTAKE_EXCEPTION_ANOMALY_RECORDED_ORDER_TERMINAL:
+      'Đơn đã ở trạng thái cuối — chỉ ghi nhận bất thường',
+    SITE_INTAKE_EXCEPTION_REPLAYED: 'Gửi lại đúng lần báo bất thường cũ',
+    SITE_INTAKE_EXCEPTION_ALREADY_RECORDED: 'Đã có một lần báo bất thường cho việc này',
   } satisfies Record<TransportSiteIntakeDecisionReason, string>,
 });

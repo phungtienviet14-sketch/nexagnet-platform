@@ -14,6 +14,8 @@ import {
   type ControlTowerClaimFact,
   type ControlTowerFuelEntryFact,
   type ControlTowerReconciliationFact,
+  ControlTowerSiteIntakeFacts,
+  type ControlTowerSiteIntakeFact,
 } from './control-tower-facts.port.js';
 import { ControlTowerReadService } from './control-tower-read.service.js';
 import { isRunningBoardColumn } from './control-tower.types.js';
@@ -196,6 +198,21 @@ class FieldStub extends ControlTowerFieldFacts {
   }
 }
 
+class SiteIntakeStub extends ControlTowerSiteIntakeFacts {
+  constructor(private readonly facts: readonly ControlTowerSiteIntakeFact[]) {
+    super();
+  }
+  listPendingReview() {
+    return Promise.resolve(this.facts);
+  }
+}
+
+class ThrowingSiteIntakeStub extends ControlTowerSiteIntakeFacts {
+  listPendingReview(): Promise<readonly ControlTowerSiteIntakeFact[]> {
+    return Promise.reject(new Error('kho viec tai xe nhan truc tiep hong'));
+  }
+}
+
 describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
   it('khach chi bat `transport-core` — bon nguon deu duoc cong bo la thieu', async () => {
     const service = new ControlTowerReadService(new CoreStub(), policy);
@@ -210,6 +227,8 @@ describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
       'FIELD_OPERATIONS',
       'FUEL',
       'OPERATIONAL_ALERTS',
+      // `#398` — viec tai xe nhan truc tiep chua du dieu kien tao don.
+      'SITE_INTAKE',
     ]);
     expect(view.queue).toHaveLength(0);
   });
@@ -224,11 +243,73 @@ describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
       new CheckpointStub(),
       undefined,
       new FieldStub(),
+      new SiteIntakeStub([]),
     );
 
     const view = await service.view(NOW);
 
     expect(view.unavailableSources).toEqual([]);
+  });
+
+  it('#398: viec tai xe nhan truc tiep CHUA du dieu kien vao hang "Can xu ly" — tro dung ban ghi goc', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub(),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new SiteIntakeStub([
+        {
+          intakeId: 'intake-1',
+          runId: 'run-1',
+          runCode: 'RUN-A260926-ABCDEF12',
+          driverId: 'driver-1',
+          vehicleId: 'vehicle-1',
+          siteName: 'Kho so 2',
+          reasons: ['DESTINATION_MISSING'],
+        },
+      ]),
+    );
+
+    const view = await service.view(NOW);
+
+    expect(view.queue).toEqual([
+      {
+        kind: 'SITE_INTAKE_NEEDS_REVIEW',
+        severity: 'WARNING',
+        subject: { kind: 'SITE_INTAKE', id: 'intake-1', reference: 'RUN-A260926-ABCDEF12' },
+        detail: {
+          runId: 'run-1',
+          driverId: 'driver-1',
+          vehicleId: 'vehicle-1',
+          siteName: 'Kho so 2',
+          reasons: 'DESTINATION_MISSING',
+        },
+      },
+    ]);
+    expect(view.queueTotal).toBe(1);
+  });
+
+  it('#398: nguon viec tai xe nhan truc tiep HONG khong lam hong ca bang', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub(),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new ThrowingSiteIntakeStub(),
+    );
+
+    const view = await service.view(NOW);
+
+    expect(view.queue).toHaveLength(0);
+    expect(view.board.length).toBeGreaterThan(0);
   });
 
   /*

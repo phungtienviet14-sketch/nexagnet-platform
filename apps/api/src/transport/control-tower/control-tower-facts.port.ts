@@ -275,3 +275,28 @@ export class ControlTowerAlertFactsAdapter extends ControlTowerAlertFacts {
     return this.alerts.feed(now);
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * transport-site-intake — TUY CHON (`#398`)
+ * ------------------------------------------------------------------ */
+
+/**
+ * MOT viec tai xe nhan truc tiep CAN nguoi xem. `reasons` la MA, khong phai cau chu; RONG khi da du
+ * dieu kien nhung chua tao don (vd mot su that ngoai vua doi lai) — nguoi xem chi can bam Hoan thien.
+ *
+ * Khong co mot so tien nao: phan thuong mai con thieu la su that TIEN chua ai quyet, va no khong di
+ * qua mot be mat dieu hanh.
+ */
+export interface ControlTowerSiteIntakeFact {
+  readonly intakeId: string;
+  readonly runId: string;
+  readonly runCode: string;
+  readonly driverId: string;
+  readonly vehicleId: string;
+  readonly siteName: string | null;
+  readonly reasons: readonly string[];
+}
+
+export abstract class ControlTowerSiteIntakeFacts {
+  abstract listPendingReview(): Promise<readonly ControlTowerSiteIntakeFact[]>;
+}

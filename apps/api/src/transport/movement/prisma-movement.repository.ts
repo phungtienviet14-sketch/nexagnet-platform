@@ -9,6 +9,7 @@ import {
   MovementRepository,
   RunClosedForNewWorkError,
   type AssignRunInput,
+  type BindLegOrderInput,
   type CancelOrderInput,
   type CancelRunInput,
   type CreateLegInput,
@@ -67,7 +68,7 @@ const model = (prisma: PrismaService | TxClient, name: string): any =>
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type TxClient = any;
 
-interface OrderRow {
+export interface OrderRow {
   id: string;
   code: string;
   status: OrderStatus;
@@ -89,7 +90,7 @@ interface OrderRow {
   cancellationReason: string | null;
 }
 
-interface RunRow {
+export interface RunRow {
   id: string;
   code: string;
   vehicleId: string;
@@ -104,7 +105,7 @@ interface RunRow {
   cancellationReason: string | null;
 }
 
-interface LegRow {
+export interface LegRow {
   id: string;
   runId: string;
   sequence: number;
@@ -158,7 +159,7 @@ const isoOrNull = (value: Date | null): string | null => (value === null ? null 
 const toPoint = (latitude: number | null, longitude: number | null): GeoPoint | null =>
   latitude === null || longitude === null ? null : { latitude, longitude };
 
-const toOrder = (row: OrderRow): Order => ({
+export const toOrder = (row: OrderRow): Order => ({
   id: row.id,
   code: row.code,
   status: row.status,
@@ -184,7 +185,7 @@ const toOrder = (row: OrderRow): Order => ({
  * quen o MOT duong la duong do ghi lech. Diem vang (`undefined`/`null`) ghi ca cap NULL, dung hinh
  * cua CHECK `*_point_paired`; duong chieu tu chuyen v1 di qua day va khong bao gio co toa do.
  */
-const orderCreateData = (input: CreateOrderInput) => ({
+export const orderCreateData = (input: CreateOrderInput) => ({
   code: input.code,
   businessDate: input.businessDate,
   originLabel: input.originLabel,
@@ -199,7 +200,7 @@ const orderCreateData = (input: CreateOrderInput) => ({
   note: input.note ?? null,
 });
 
-const toRun = (row: RunRow): VehicleRun => ({
+export const toRun = (row: RunRow): VehicleRun => ({
   id: row.id,
   code: row.code,
   vehicleId: row.vehicleId,
@@ -214,7 +215,7 @@ const toRun = (row: RunRow): VehicleRun => ({
   cancellationReason: row.cancellationReason,
 });
 
-const toLeg = (row: LegRow): RunLeg => ({
+export const toLeg = (row: LegRow): RunLeg => ({
   id: row.id,
   runId: row.runId,
   sequence: row.sequence,
@@ -256,6 +257,25 @@ const toOrderLink = (row: OrderLinkRow): TripOrderLink => ({
   projectedBy: row.projectedBy,
   createdAt: iso(row.createdAt),
 });
+
+/**
+ * `#398` — CONG KE HOACH CUA DON, duoi khoa tu van cua chinh don do.
+ *
+ * Khoa `transport-order-plan:<orderId>` la khoa ma lenh gan don co san vao viec tai xe nhan truc
+ * tiep cung gianh (`transport-site-intake`). Doc "da co ke hoach hieu luc" SAU khi co khoa, nen mot
+ * lan gan don vua commit KHONG the lot qua giua phep kiem va lan ghi.
+ */
+async function requireOrderUnplanned(tx: TxClient, orderId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`transport-order-plan:${orderId}`}, 0))`;
+  const active: unknown = await tx.$queryRaw`
+    SELECT 1 FROM "TransportOrderRunPlan" WHERE "orderId" = ${orderId} AND "cancelledAt" IS NULL LIMIT 1`;
+  if (Array.isArray(active) && active.length > 0) {
+    throw TransportDomainError.conflict(
+      'PLAN_ORDER_ALREADY_PLANNED',
+      'Don nay da co ke hoach hieu luc — khong lap them vong chay/chang.',
+    );
+  }
+}
 
 const prune = <T extends object>(patch: T): Partial<T> =>
   Object.fromEntries(
@@ -336,6 +356,25 @@ export class PrismaMovementRepository extends MovementRepository {
   }
 
   async createRun(input: CreateRunInput): Promise<VehicleRun> {
+    if (input.planGuardOrderId) {
+      const orderId = input.planGuardOrderId;
+      return this.prisma.$transaction(
+        async (tx: unknown) => {
+          await requireOrderUnplanned(tx as TxClient, orderId);
+          return toRun(
+            await model(tx as TxClient, 'transportVehicleRun').create({
+              data: {
+                code: input.code,
+                vehicleId: input.vehicleId,
+                businessDate: input.businessDate,
+                note: input.note ?? null,
+              },
+            }),
+          );
+        },
+        { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
+      );
+    }
     return toRun(
       await model(this.prisma, 'transportVehicleRun').create({
         data: {
@@ -635,6 +674,9 @@ export class PrismaMovementRepository extends MovementRepository {
   async createLeg(input: CreateLegInput): Promise<RunLeg> {
     return this.prisma.$transaction(
       async (tx: unknown) => {
+        // `#398`: khoa cua DON truoc, khoa hang vong chay sau — cung thu tu voi lenh gan don co san.
+        if (input.planGuardOrderId)
+          await requireOrderUnplanned(tx as TxClient, input.planGuardOrderId);
         await (tx as TxClient).$queryRaw`
           SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${input.runId} FOR UPDATE`;
         const run: { status: VehicleRunStatus } | null = await model(
@@ -732,6 +774,42 @@ export class PrismaMovementRepository extends MovementRepository {
           where: { id: input.legId },
         });
         return row ? { leg: toLeg(row), applied: updated.count === 1 } : null;
+      },
+      { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
+    );
+  }
+
+  async bindOrderToUnboundLoadedLeg(input: BindLegOrderInput): Promise<RunLeg | null> {
+    return this.prisma.$transaction(
+      async (tx: unknown) => {
+        const owner: { runId: string } | null = await model(
+          tx as TxClient,
+          'transportRunLeg',
+        ).findUnique({ where: { id: input.legId }, select: { runId: true } });
+        if (!owner) return null;
+        await (tx as TxClient).$queryRaw`
+          SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${owner.runId} FOR UPDATE`;
+        const updated: { count: number } = await model(
+          tx as TxClient,
+          'transportRunLeg',
+        ).updateMany({
+          where: {
+            id: input.legId,
+            kind: 'LOADED',
+            orderId: null,
+            status: { in: ['PLANNED', 'IN_TRANSIT'] },
+          },
+          data: {
+            orderId: input.orderId,
+            destinationLabel: input.destinationLabel,
+            updatedAt: input.at,
+          },
+        });
+        if (updated.count !== 1) return null;
+        const row: LegRow | null = await model(tx as TxClient, 'transportRunLeg').findUnique({
+          where: { id: input.legId },
+        });
+        return row ? toLeg(row) : null;
       },
       { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
     );

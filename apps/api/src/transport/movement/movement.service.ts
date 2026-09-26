@@ -100,6 +100,8 @@ export interface AddLegCommand {
   /** #276 L6 — km DU KIEN. Khong bao gio ghi de len `distanceKm`. */
   readonly plannedDistanceKm?: number | null;
   readonly note?: string | null;
+  /** `#398`: xem `CreateLegInput.planGuardOrderId`. */
+  readonly planGuardOrderId?: string | null;
 }
 
 export interface AssignRunCommand {
@@ -404,8 +406,11 @@ export class MovementService {
         distanceKm: command.distanceKm ?? null,
         plannedDistanceKm: command.plannedDistanceKm ?? null,
         note: command.note ?? null,
+        ...(command.planGuardOrderId ? { planGuardOrderId: command.planGuardOrderId } : {}),
       })
       .catch((error: unknown) => {
+        // `#398`: cong ke hoach cua don tu choi DUOI khoa — ma nghiep vu, khong phai va cham thu tu.
+        if (error instanceof TransportDomainError) throw error;
         /*
          * VONG CHAY DA DONG GIUA HAI BUOC. Phep kiem o dau ham doc truoc khi co khoa nao, nen no
          * khong nhin thay mot lan dong dang chay; kho — noi gianh cung khoa hang voi duong dong —

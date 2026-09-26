@@ -85,7 +85,7 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
     service = new SiteIntakeService(
       intakes,
       new TransportSiteIntakeCoreFactsAdapter(fleet, movementRepo, siteService),
-      new TransportSiteIntakeGeoFactsAdapter(geofences),
+      new TransportSiteIntakeGeoFactsAdapter(geofences, siteService),
       locations,
       movement,
       POLICY,

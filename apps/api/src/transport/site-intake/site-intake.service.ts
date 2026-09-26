@@ -29,6 +29,7 @@ import {
   type SiteIntakeObservationFacts,
   type SiteIntakeSiteFacts,
 } from './site-intake-facts.port.js';
+import type { SiteMatch } from './site-intake-commercial.types.js';
 import {
   RunSiteIntakeRepository,
   SITE_INTAKE_DRIVER_EVENT,
@@ -202,7 +203,10 @@ export class SiteIntakeService {
     }
 
     const located = await this.resolveLocation(command, driver.id);
-    const distanceMetres = await this.checkSiteAgainstLocation(command.siteId, located);
+    const { distanceMetres, siteMatch } = await this.checkSiteAgainstLocation(
+      command.siteId,
+      located,
+    );
 
     const confirmedAt = this.now();
     const businessDate = toBusinessDate(confirmedAt, this.corePolicy.timeZone);
@@ -285,6 +289,7 @@ export class SiteIntakeService {
         clientEventId: command.clientEventId,
         confirmedAt,
         businessDate,
+        siteMatch,
       });
       this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_CREATED', {
         intakeId: intake.id,
@@ -292,6 +297,7 @@ export class SiteIntakeService {
         legId: leg.id,
         siteId: site.siteId,
         locationTrust: intake.locationTrust,
+        siteMatch,
         destinationPending: command.destinationLabel === undefined,
       });
       return await this.resultOf(intake, site, false);
@@ -434,8 +440,8 @@ export class SiteIntakeService {
   private async checkSiteAgainstLocation(
     siteId: string,
     located: ResolvedLocation | null,
-  ): Promise<number | null> {
-    if (located === null) return null;
+  ): Promise<{ readonly distanceMetres: number | null; readonly siteMatch: SiteMatch }> {
+    if (located === null) return { distanceMetres: null, siteMatch: 'NO_LOCATION' };
 
     const outcome = await this.assess(located);
     if (outcome.kind === 'LOCATION_UNUSABLE') {
@@ -456,7 +462,13 @@ export class SiteIntakeService {
         'Dia diem ban chon khong nam quanh vi tri vua gui len',
       );
     }
-    return Math.round(match.distanceMetres);
+    // `#398` §8: CHI mot kho, va vi tri nam TRONG hang rao cua no, moi la khop chac chan. Moi
+    // truong hop con lai — nhieu kho, hoac chi GAN mot kho — la lai xe TU CHON, va don se doi mot
+    // nguoi xac nhan truoc khi tu tao.
+    return {
+      distanceMetres: Math.round(match.distanceMetres),
+      siteMatch: outcome.kind === 'UNIQUE' ? 'UNIQUE_INSIDE' : 'CHOSEN_AMONG_SEVERAL',
+    };
   }
 
   private async describe(

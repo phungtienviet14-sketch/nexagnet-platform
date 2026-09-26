@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PlanningPendingWorkSource } from '../planning/planning-pending-work.port.js';
 import { PlanningService } from '../planning/planning.service.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type { DispatchCommitReason } from './dispatch-decisions.js';
@@ -74,7 +75,11 @@ export const dispatchIdempotencyKey = (orderId: string, vehicleId: string): stri
  */
 @Injectable()
 export class PlanningDispatchAssignmentPlanner extends DispatchAssignmentPlanner {
-  constructor(private readonly planning: PlanningService) {
+  constructor(
+    private readonly planning: PlanningService,
+    /** `#398`: cung cong "viec dang do cua xe" voi `TransportPlanningController`. */
+    private readonly pendingWork: PlanningPendingWorkSource,
+  ) {
     super();
   }
 
@@ -84,6 +89,7 @@ export class PlanningDispatchAssignmentPlanner extends DispatchAssignmentPlanner
       {
         vehicleId: command.vehicleId,
         idempotencyKey: dispatchIdempotencyKey(command.orderId, command.vehicleId),
+        pendingWork: this.pendingWork,
       },
       command.actor,
     );

@@ -5,6 +5,7 @@ import { PrismaService } from '../../config/prisma.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { MovementService } from '../movement/movement.service.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
+import { NoPlanningPendingWorkSource } from '../planning/planning-pending-work.port.js';
 import { PlanningService } from '../planning/planning.service.js';
 import type { TransportPlanningPolicy } from '../planning/planning.types.js';
 import { PrismaRunPlanRepository } from '../planning/prisma-planning.repository.js';
@@ -63,7 +64,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
     CORE_POLICY,
     planningPolicy,
   );
-  const planner = new PlanningDispatchAssignmentPlanner(planning);
+  const planner = new PlanningDispatchAssignmentPlanner(
+    planning,
+    new NoPlanningPendingWorkSource(),
+  );
 
   /** Don dep theo THU TU AN TOAN VE KHOA NGOAI: ke hoach -> chang -> vong chay -> don -> xe. */
   async function cleanup(): Promise<void> {

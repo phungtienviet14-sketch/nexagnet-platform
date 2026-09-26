@@ -10,6 +10,7 @@ import {
   ControlTowerFieldFacts,
   ControlTowerCoreFacts,
   ControlTowerFuelFacts,
+  ControlTowerSiteIntakeFacts,
 } from './control-tower-facts.port.js';
 import {
   buildOperationsBoard,
@@ -119,6 +120,12 @@ export class ControlTowerReadService {
      * biet.
      */
     @Optional() private readonly field?: ControlTowerFieldFacts,
+    /**
+     * VIEC TAI XE NHAN TRUC TIEP (`#398`) chua du dieu kien tao don. `@Optional()` cung khuon cac
+     * cong tren: khach tat `transport-site-intake` thi nguon nay vang mat va noi ra qua
+     * `unavailableSources`.
+     */
+    @Optional() private readonly siteIntakes?: ControlTowerSiteIntakeFacts,
   ) {}
 
   async view(now?: Date): Promise<ControlTowerView> {
@@ -160,6 +167,7 @@ export class ControlTowerReadService {
     queue.push(...(await this.fuelQueueItems(unavailableSources)));
     queue.push(...(await this.alertQueueItems(unavailableSources, now)));
     queue.push(...fieldInput.queue);
+    queue.push(...(await this.siteIntakeQueueItems(unavailableSources)));
 
     for (const source of unavailableSources) {
       this.telemetry?.decision({
@@ -392,6 +400,35 @@ export class ControlTowerReadService {
     }
 
     return { waitingLegIds, queue };
+  }
+
+  /**
+   * VIEC TAI XE NHAN TRUC TIEP can nguoi xem (`#398`) — MOT muc cho MOT viec, tro DUNG ban ghi goc.
+   *
+   * Don tu tao binh thuong KHONG vao day: no la ban tin, khong phai viec can quyet.
+   */
+  private async siteIntakeQueueItems(
+    unavailable: ControlTowerSource[],
+  ): Promise<readonly ActionQueueItem[]> {
+    const siteIntakes = this.siteIntakes;
+    if (!siteIntakes) {
+      unavailable.push('SITE_INTAKE');
+      return [];
+    }
+    return this.guard('SITE_INTAKE', async () =>
+      (await siteIntakes.listPendingReview()).map((fact): ActionQueueItem => ({
+        kind: 'SITE_INTAKE_NEEDS_REVIEW',
+        severity: 'WARNING',
+        subject: { kind: 'SITE_INTAKE', id: fact.intakeId, reference: fact.runCode },
+        detail: {
+          runId: fact.runId,
+          driverId: fact.driverId,
+          vehicleId: fact.vehicleId,
+          siteName: fact.siteName,
+          reasons: fact.reasons.join(','),
+        },
+      })),
+    );
   }
 
   private async fuelQueueItems(

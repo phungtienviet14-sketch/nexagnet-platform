@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { BusinessDate } from '../business-date.js';
 import { storageUniqueViolation } from '../proof/proof-storage-conflict.js';
 import type { UniqueIndexRef } from '../storage-conflict.js';
+import type { SiteMatch } from './site-intake-commercial.types.js';
 import type { RunSiteIntake, SiteIntakeLocationTrust } from './site-intake.types.js';
 
 /**
@@ -43,6 +44,7 @@ export interface CreateRunSiteIntakeInput {
   readonly clientEventId: string;
   readonly confirmedAt: Date;
   readonly businessDate: BusinessDate;
+  readonly siteMatch: SiteMatch;
 }
 
 /**
@@ -53,7 +55,12 @@ export interface CreateRunSiteIntakeInput {
  * lenh do o tang luu tru; o day khong co ham de goi chung.
  */
 export abstract class RunSiteIntakeRepository {
+  /**
+   * `#398`: ban Postgres tao CUNG giao dich mot hang `TransportSiteIntakeCommercial` `PENDING` — mot
+   * cu chet giua hai lan ghi se de lai mot lan nhan viec khong co cho de ghi phan thuong mai.
+   */
   abstract create(input: CreateRunSiteIntakeInput): Promise<RunSiteIntake>;
+  abstract findById(id: string): Promise<RunSiteIntake | null>;
   /** Tra cuu chong lap. Khoa la `(driverId, clientEventId)` — xem migration. */
   abstract findByEvent(driverId: string, clientEventId: string): Promise<RunSiteIntake | null>;
   abstract findByRun(runId: string): Promise<RunSiteIntake | null>;
@@ -100,9 +107,18 @@ export class InMemoryRunSiteIntakeRepository extends RunSiteIntakeRepository {
     return null;
   }
 
+  async findById(id: string): Promise<RunSiteIntake | null> {
+    return this.rows.get(id) ?? null;
+  }
+
   async findByRun(runId: string): Promise<RunSiteIntake | null> {
     for (const row of this.rows.values()) if (row.runId === runId) return row;
     return null;
+  }
+
+  /** CHI ban trong bo nho: phan thuong mai trong bo nho tao hang luoi cho moi lan nhan viec. */
+  async listAll(): Promise<readonly RunSiteIntake[]> {
+    return [...this.rows.values()];
   }
 
   async listForDriver(driverId: string): Promise<readonly RunSiteIntake[]> {
