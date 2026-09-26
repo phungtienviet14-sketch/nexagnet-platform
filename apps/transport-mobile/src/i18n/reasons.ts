@@ -49,6 +49,8 @@ const REASON_TEXT: Record<string, string> = {
   SITE_INTAKE_SITE_NOT_FOUND: 'Không còn tìm thấy địa điểm này — tìm lại địa điểm rồi chọn.',
   SITE_INTAKE_SITE_INACTIVE: 'Địa điểm này đã ngừng hoạt động — báo văn phòng.',
   SITE_INTAKE_OPEN_RUN_EXISTS: 'Bạn đang có chuyến chưa xong — ghi nhận vào chuyến đó ở màn Việc.',
+  SITE_INTAKE_VEHICLE_BUSY:
+    'Xe của bạn đang có một chuyến chưa kết thúc — xem ở màn Việc hoặc báo văn phòng.',
   SITE_INTAKE_LOCATION_UNUSABLE:
     'Vị trí lúc bấm chưa đủ để nhận ra địa điểm — tìm lại địa điểm rồi bấm lại.',
   SITE_INTAKE_SITE_NOT_A_CANDIDATE:

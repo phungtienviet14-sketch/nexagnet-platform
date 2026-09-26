@@ -282,6 +282,8 @@ const RETRY_SAME_KEY = new Set(['SITE_INTAKE_CREATE_IN_FLIGHT']);
 
 const NEXT_BY_REASON: Readonly<Record<string, RefusalNext>> = {
   SITE_INTAKE_OPEN_RUN_EXISTS: 'BACK_TO_WORK',
+  // Xe cua ban dang giu mot chuyen chua ket thuc (vd van phong vua lap) — viec do se hien o Viec.
+  SITE_INTAKE_VEHICLE_BUSY: 'BACK_TO_WORK',
   SITE_INTAKE_NO_ASSIGNED_VEHICLE: 'BACK_TO_WORK',
   SITE_INTAKE_DRIVER_BINDING_MISSING: 'BACK_TO_WORK',
   SITE_INTAKE_NOT_FOUND: 'BACK_TO_WORK',

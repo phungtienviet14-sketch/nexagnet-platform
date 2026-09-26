@@ -359,6 +359,16 @@ describe('loi — chua chac khac bi tu choi', () => {
     expect(odd).toMatchObject({ kind: 'REFUSED', next: 'STAY' });
     expect(refusalAction('STAY')).toBeNull();
     expect(refusalAction('BACK_TO_WORK')?.label).toBe('Về màn Việc');
+    // #398: xe dang giu mot chuyen chua ket thuc -> ve Viec, khong mo lai de nghi.
+    expect(
+      classifyIntakeFailure(
+        classifyHttpError(409, {
+          reason: 'SITE_INTAKE_VEHICLE_BUSY',
+          message: 'Xe dang co chuyen',
+        }),
+        'CONFIRM',
+      ),
+    ).toMatchObject({ kind: 'REFUSED', next: 'BACK_TO_WORK' });
     expect(refusalAction('RETRY_PROPOSAL')?.label).toBe('Tìm lại địa điểm');
   });
 
@@ -369,6 +379,7 @@ describe('loi — chua chac khac bi tu choi', () => {
       'SITE_INTAKE_SITE_NOT_FOUND',
       'SITE_INTAKE_SITE_INACTIVE',
       'SITE_INTAKE_OPEN_RUN_EXISTS',
+      'SITE_INTAKE_VEHICLE_BUSY',
       'SITE_INTAKE_LOCATION_UNUSABLE',
       'SITE_INTAKE_SITE_NOT_A_CANDIDATE',
       'SITE_INTAKE_OBSERVATION_NOT_FOUND',
