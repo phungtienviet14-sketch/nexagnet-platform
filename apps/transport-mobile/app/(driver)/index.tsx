@@ -18,11 +18,18 @@ import {
   type FieldScreenModel,
 } from '../../src/features/driver/field-work';
 import { ASSIGNED_NOTE, SITE_INTAKE_HINT } from '../../src/features/driver/labels';
-import { useDriverGates, useFieldWork } from '../../src/features/driver/queries';
+import { useDriverGates, useFieldWork, useOpenIntake } from '../../src/features/driver/queries';
+import {
+  openIntakeCard,
+  showAssignedNote,
+  SITE_INTAKE_START,
+} from '../../src/features/driver/site-intake-flow';
+import type { DriverIntakeView } from '../../src/features/driver/types';
 import { useFieldFlow } from '../../src/features/driver/use-field-flow';
 import { useQueueView, type QueueView } from '../../src/features/driver/use-queue';
 import { SPACE } from '../../src/theme/tokens';
 import { AccountButton } from '../../src/ui/AccountButton';
+import { Button } from '../../src/ui/Button';
 import { Notice } from '../../src/ui/Notice';
 import { Screen } from '../../src/ui/Screen';
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '../../src/ui/States';
@@ -42,6 +49,7 @@ export default function DriverWork() {
   const gates = useDriverGates();
   const { productName, timeZone } = useBranding();
   const work = useFieldWork(gates.field);
+  const openIntake = useOpenIntake(gates.siteIntake);
   const queue = useQueueView();
   const flow = useFieldFlow(queue.entries);
   const trackingState = useTrackingState();
@@ -54,6 +62,13 @@ export default function DriverWork() {
   const model = work.data ? toFieldScreen(work.data) : null;
   const openRun = (card: FieldLegCard) =>
     router.push({ pathname: '/(driver)/run/[runId]', params: { runId: card.runId } });
+  const startIntake = () => router.push('/(driver)/intake');
+  const chooseDestination = (intakeId: string) =>
+    router.push({ pathname: '/(driver)/intake', params: { intakeId } });
+  const refresh = () => {
+    void work.refetch();
+    if (gates.siteIntake) void openIntake.refetch();
+  };
 
   return (
     <Screen
@@ -61,8 +76,8 @@ export default function DriverWork() {
       eyebrow={productName}
       trailing={<AccountButton />}
       banner={<SyncBanner />}
-      refreshing={work.isRefetching}
-      onRefresh={() => void work.refetch()}
+      refreshing={work.isRefetching || openIntake.isRefetching}
+      onRefresh={refresh}
       testID="driver-work"
     >
       {!gates.field ? (
@@ -100,6 +115,11 @@ export default function DriverWork() {
           {flow.flash ? (
             <QueuedFlash flash={flow.flash} entries={queue.entries} sentIds={queue.sentIds} />
           ) : null}
+          <OpenIntakeCard
+            intake={gates.siteIntake ? openIntake.data : null}
+            canChoose={gates.siteIntakeConfirm}
+            onChoose={chooseDestination}
+          />
           <WorkBody
             model={model}
             queue={queue}
@@ -107,6 +127,8 @@ export default function DriverWork() {
             receivedAtMs={work.dataUpdatedAt}
             timeZone={timeZone}
             canIntake={gates.siteIntake}
+            openIntake={gates.siteIntake ? openIntake.data : null}
+            onStartIntake={startIntake}
             tracking={BUILD_INFO.backgroundLocationBuild && gates.tracking ? trackingState : null}
             onOpenRun={openRun}
           />
@@ -125,6 +147,8 @@ function WorkBody({
   receivedAtMs,
   timeZone,
   canIntake,
+  openIntake,
+  onStartIntake,
   tracking,
   onOpenRun,
 }: {
@@ -134,6 +158,8 @@ function WorkBody({
   readonly receivedAtMs: number;
   readonly timeZone: string;
   readonly canIntake: boolean;
+  readonly openIntake: DriverIntakeView | null | undefined;
+  readonly onStartIntake: () => void;
   readonly tracking: ReturnType<typeof useTrackingState> | null;
   readonly onOpenRun: (card: FieldLegCard) => void;
 }) {
@@ -146,17 +172,25 @@ function WorkBody({
           detail="Việc văn phòng giao sẽ hiện ở đây."
         />
         {canIntake ? (
-          <Card testID="driver-site-intake-entry">
-            <Text variant="body" tone="muted">
-              {SITE_INTAKE_HINT}
-            </Text>
-            <View style={styles.gap} />
-            {/* Man "Nhận việc" tren di dong chua dung xong (logic thuan da co + test): tam thoi chi
-                noi thang, khong bay mot nut dan toi man trong. */}
-            <Text variant="caption" tone="faint" testID="driver-site-intake">
-              Màn Nhận việc trên ứng dụng đang được hoàn thiện — tạm thời dùng bản web.
-            </Text>
-          </Card>
+          // KHONG co viec -> lai xe duoc goi di lay hang thi tu nhan chuyen o noi minh dung. Co
+          // chuyen chua xong thi the nay KHONG hien: chuyen dang mo thang (#267 ACTIVE_RUN).
+          <View testID="driver-site-intake-entry">
+            <Card rail="signal">
+              <Text variant="heading">{SITE_INTAKE_START.title}</Text>
+              <Text variant="body" tone="muted">
+                {SITE_INTAKE_HINT}
+              </Text>
+              <View style={styles.gap} />
+              <Button
+                kind="signal"
+                size="hero"
+                icon="map-marker-radius"
+                label={SITE_INTAKE_START.button}
+                onPress={onStartIntake}
+                testID="driver-site-intake-start"
+              />
+            </Card>
+          </View>
         ) : null}
       </>
     );
@@ -191,7 +225,7 @@ function WorkBody({
           refresh={tracking.refresh}
         />
       ) : null}
-      {canIntake ? (
+      {showAssignedNote(canIntake, openIntake, current?.runId ?? null) ? (
         <Text variant="caption" tone="faint">
           {ASSIGNED_NOTE}
         </Text>
@@ -202,6 +236,50 @@ function WorkBody({
         </Section>
       ) : null}
     </>
+  );
+}
+
+/**
+ * "CHUA CO DIEM GIAO" — lai xe da nhan chuyen roi thoat giua chung: dua lai DUNG buoc chon diem giao
+ * cua lan nhan chuyen do. Viec tiep theo tren chuyen (moc, chung tu) van la nut may chu tinh ben duoi.
+ */
+function OpenIntakeCard({
+  intake,
+  canChoose,
+  onChoose,
+}: {
+  readonly intake: DriverIntakeView | null | undefined;
+  readonly canChoose: boolean;
+  readonly onChoose: (intakeId: string) => void;
+}) {
+  const model = openIntakeCard(intake, canChoose);
+  if (!intake || !model) return null;
+  return (
+    <View testID="driver-site-intake-open">
+      <Card rail="caution">
+        <Text variant="bodyStrong">{model.title}</Text>
+        <Text variant="caption" tone="muted">
+          {model.detail}
+        </Text>
+        {model.caption ? (
+          <Text variant="caption" tone="faint">
+            {model.caption}
+          </Text>
+        ) : null}
+        {model.chooseLabel ? (
+          <>
+            <View style={styles.gap} />
+            <Button
+              kind="primary"
+              icon="map-marker-check-outline"
+              label={model.chooseLabel}
+              onPress={() => onChoose(intake.intakeId)}
+              testID="driver-site-intake-choose-destination"
+            />
+          </>
+        ) : null}
+      </Card>
+    </View>
   );
 }
 

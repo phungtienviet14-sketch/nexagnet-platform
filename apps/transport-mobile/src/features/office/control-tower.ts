@@ -48,6 +48,8 @@ const QUEUE_LABEL: Readonly<Record<string, string>> = {
   // Hai ma may chu DA phat nhung web chua co nhan — chu lay tu nhan "viec chua theo doi" cua web.
   DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL: 'Phụ cấp chờ của lái xe đang chờ duyệt',
   DELIVERY_PROOF_DOCUMENT_MISSING: 'Chặng đã giao xong nhưng thiếu chứng từ giao hàng',
+  // #398: CHI viec tai xe nhan truc tiep CHUA DU — don tu tao binh thuong khong vao hang nay.
+  SITE_INTAKE_NEEDS_REVIEW: 'Việc tài xế nhận trực tiếp chưa đủ thông tin',
 };
 
 /** Ma la (may chu moi hon ung dung) van hien — kem chinh ma, khong nuot mat mot viec. */
@@ -142,6 +144,7 @@ const SOURCE_LABEL: Readonly<Record<string, string>> = {
   OPERATIONAL_ALERTS: 'Bảo dưỡng & giấy tờ',
   CHECKPOINT: 'Mốc hiện trường',
   FIELD_OPERATIONS: 'Chờ người nhận, phụ cấp chờ, chứng từ hiện trường',
+  SITE_INTAKE: 'Việc tài xế nhận trực tiếp',
 };
 
 /** Nguon khach CHUA BAT — mot cau cho moi nguon; nguon la hien ma. */

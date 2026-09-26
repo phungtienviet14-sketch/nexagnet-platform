@@ -27,6 +27,10 @@ import {
   useOfficeAccess,
   useOfficeKey,
 } from '../../src/features/office/queries';
+import {
+  usePendingSiteIntakes,
+  useSiteIntakeGates,
+} from '../../src/features/office/site-intake-queries';
 import { AllowanceDecisionSheet } from '../../src/features/office/ui/AllowanceDecisionSheet';
 import { Notice } from '../../src/features/office/ui/Blocks';
 import { FilterChips } from '../../src/features/office/ui/Chips';
@@ -34,6 +38,7 @@ import {
   ClaimDecisionSheet,
   type DecisionOutcomeReport,
 } from '../../src/features/office/ui/ClaimDecisionSheet';
+import { SiteIntakeReviewSheet } from '../../src/features/office/ui/SiteIntakeReviewSheet';
 import { noticeFromReport, useNotice } from '../../src/features/office/useNotice';
 import { SPACE } from '../../src/theme/tokens';
 import { AccountButton } from '../../src/ui/AccountButton';
@@ -44,7 +49,8 @@ import { SyncBanner } from '../../src/ui/SyncBanner';
 import { Text } from '../../src/ui/Text';
 
 /**
- * "CẦN DUYỆT" — MOT hang tu ba nguon (de nghi chi, phieu dau, phu cap cho). Cham the -> to truot ->
+ * "CẦN DUYỆT" — MOT hang tu bon nguon (de nghi chi, phieu dau, phu cap cho, viec tai xe nhan truc
+ * tiep chua du — `#398`, cung ban ghi voi "Cần xử lý" cua giam doc). Cham the -> to truot ->
  * quyet -> tu mo viec KE TIEP (nhip "inbox zero"). The bi go khoi hang NGAY khi bam (lac quan) va tra
  * lai neu may chu khong nhan. Nguon tat / khong co quyen noi mot cau nho, khong lam trong ca hang.
  */
@@ -57,6 +63,10 @@ export default function AccountingQueue() {
   const claims = usePendingClaims(claimsOn);
   const fuel = useFuelInbox(fuelOn);
   const allowances = usePendingAllowanceList(allowancesOn);
+  // Ke toan BO SUNG duoc (diem giao, xac nhan noi lay, gan don) nhung khong bao bat thuong — nut do
+  // tu an vi tai khoan khong co `transport.site_intake.exception`.
+  const intakesOn = useSiteIntakeGates().complete;
+  const intakes = usePendingSiteIntakes(intakesOn);
   const drivers = useDrivers();
   const claimsKey = useOfficeKey('accounting', 'claims');
   const fuelKey = useOfficeKey('accounting', 'fuel', 'DECLARED');
@@ -65,7 +75,12 @@ export default function AccountingQueue() {
   const [open, setOpen] = useState<QueueEntry | null>(null);
   const [notice, showNotice] = useNotice();
 
-  const sources = { claims: claims.data, fuel: fuel.data, allowances: allowances.data };
+  const sources = {
+    claims: claims.data,
+    fuel: fuel.data,
+    allowances: allowances.data,
+    intakes: intakes.data,
+  };
   const visible = filterQueue(buildQueue(sources), filter);
   const counts = queueCounts(sources);
   const nameOf = (driverId: string) => driverNameOf(drivers.data, driverId);
@@ -94,15 +109,18 @@ export default function AccountingQueue() {
     if (claimsOn) void claims.refetch();
     if (fuelOn) void fuel.refetch();
     if (allowancesOn) void allowances.refetch();
+    if (intakesOn) void intakes.refetch();
   };
   const loading =
     (claimsOn && claims.isPending) ||
     (fuelOn && fuel.isPending) ||
-    (allowancesOn && allowances.isPending);
+    (allowancesOn && allowances.isPending) ||
+    (intakesOn && intakes.isPending);
   const failures = [
     { label: 'Đề nghị chi', on: claimsOn, query: claims },
     { label: 'Phiếu dầu', on: fuelOn, query: fuel },
     { label: 'Phụ cấp chờ', on: allowancesOn, query: allowances },
+    { label: 'Việc tài xế nhận trực tiếp', on: intakesOn, query: intakes },
   ].filter((source) => source.on && source.query.isError);
   const total = chipCount(counts.ALL);
 
@@ -113,7 +131,9 @@ export default function AccountingQueue() {
       trailing={<AccountButton />}
       banner={<SyncBanner />}
       onRefresh={refresh}
-      refreshing={claims.isRefetching || fuel.isRefetching || allowances.isRefetching}
+      refreshing={
+        claims.isRefetching || fuel.isRefetching || allowances.isRefetching || intakes.isRefetching
+      }
       testID="accounting-queue"
     >
       {notice ? (
@@ -165,7 +185,7 @@ export default function AccountingQueue() {
             rail={entry.type === 'FUEL' ? 'pending' : 'caution'}
             onPress={() => setOpen(entry)}
             testID={`accounting-card-${entry.id}`}
-            accessibilityLabel={`${model.typeLabel}: ${model.title}, ${model.amount}`}
+            accessibilityLabel={`${model.typeLabel}: ${model.title}${model.amount ? `, ${model.amount}` : ''}`}
           >
             <Text variant="overline" tone="muted">
               {model.typeLabel}
@@ -174,7 +194,7 @@ export default function AccountingQueue() {
               <Text variant="bodyStrong" style={styles.flex}>
                 {model.title}
               </Text>
-              <Text variant="figure">{model.amount}</Text>
+              {model.amount ? <Text variant="figure">{model.amount}</Text> : null}
             </View>
             <Text variant="caption" tone="muted">
               {model.subline}
@@ -185,7 +205,11 @@ export default function AccountingQueue() {
                   <Pill
                     key={warning}
                     label={warning}
-                    tone={warning === 'Chưa gắn chuyến' ? 'caution' : 'neutral'}
+                    tone={
+                      warning === 'Chưa gắn chuyến' || entry.type === 'INTAKE'
+                        ? 'caution'
+                        : 'neutral'
+                    }
                   />
                 ))}
               </View>
@@ -213,6 +237,10 @@ export default function AccountingQueue() {
         onClose={() => setOpen(null)}
         optimistic={(id) => removeOptimistically(allowancesKey, id)}
         onDecided={(report) => open && decided(open, report)}
+      />
+      <SiteIntakeReviewSheet
+        intakeId={open?.type === 'INTAKE' ? open.id : null}
+        onClose={() => setOpen(null)}
       />
     </Screen>
   );

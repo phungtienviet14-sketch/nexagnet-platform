@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACTIVE_RUN_NOTICE,
   distanceLine,
   intakeResultLines,
   intakeTarget,
   siteLocationInput,
+  SITE_INTAKE_CONFIRM_LABEL,
   toSiteIntakeScreen,
 } from './site-intake';
 import type { SiteCandidateView, SiteIntakeProposal } from './types';
@@ -37,6 +39,9 @@ describe('toSiteIntakeScreen — thu tu kiem la hop dong', () => {
     );
     expect(screen.mode).toBe('ACTIVE_RUN');
     expect(screen.canCreate).toBe(false);
+    // Khong bao gio moi tao: noi "ghi nhan vao chuyen do" va chi duong ve man Viec.
+    expect(screen.notice).toBe(ACTIVE_RUN_NOTICE);
+    expect(screen.primaryLabel).toBe('Về màn Việc');
   });
 
   it('vi tri khong dung duoc noi KHAC khong tim thay', () => {
@@ -62,6 +67,18 @@ describe('toSiteIntakeScreen — thu tu kiem la hop dong', () => {
     expect(screen.mode).toBe('CONFIRM');
     expect(screen.trustLabel).toBe('Vị trí do máy bạn báo');
     expect(intakeTarget(screen, null)).toBe('s1');
+  });
+
+  it('chu duoc duyet: "Nhận chuyến tại đây" o ca CONFIRM lan CHOOSE — khong con "Tạo chuyến"', () => {
+    const confirm = toSiteIntakeScreen(proposal());
+    const choose = toSiteIntakeScreen(
+      proposal({ outcome: 'AMBIGUOUS', candidates: [SITE, { ...SITE, siteId: 's2' }] }),
+    );
+    expect(confirm.primaryLabel).toBe(SITE_INTAKE_CONFIRM_LABEL);
+    expect(choose.primaryLabel).toBe('Nhận chuyến tại đây');
+    for (const screen of [confirm, choose]) {
+      expect(JSON.stringify(screen)).not.toMatch(/Tạo chuyến|đơn|vòng chạy|chặng/i);
+    }
   });
 
   it('nhieu kho -> CHOOSE, KHONG kho nao chon san', () => {
@@ -104,12 +121,17 @@ describe('siteLocationInput — toa do ca hai hoac khong gi', () => {
 describe('ket qua', () => {
   it('diem giao chua biet va vi tri do may bao duoc noi thang; lan phat lai noi ro', () => {
     const lines = intakeResultLines({
+      intakeId: 'i',
       runId: 'r',
       runCode: 'VX-9',
+      legId: 'l',
+      siteId: 's1',
       siteName: 'Kho',
       counterpartyName: 'A',
       locationTrust: 'DRIVER_REPORTED',
+      distanceMetres: null,
       destinationPending: true,
+      businessDate: '2026-09-26',
       replayed: true,
     });
     expect(lines.destination).toBe('Chưa xác định — văn phòng bổ sung sau');

@@ -16,7 +16,26 @@
 | `driver-leg-<legId>`                                        | tab Việc, chi tiết vòng  | hàng chặng chỉ đọc                                                                |
 | `driver-open-run`                                           | tab Việc                 | mở chi tiết vòng chạy                                                             |
 | `driver-tracking`, `driver-tracking-toggle`                 | tab Việc                 | bám vị trí ca chạy (chỉ bản dựng có tính năng)                                    |
-| `driver-site-intake-entry`, `driver-site-intake`            | tab Việc (không có việc) | lối vào Nhận việc                                                                 |
+| `driver-site-intake-entry`, `driver-site-intake-start`      | tab Việc (không có việc) | thẻ "Bạn được gọi đi lấy hàng?" + nút "Nhận chuyến tại địa điểm hiện tại" (#398)  |
+| `driver-site-intake-open`                                   | tab Việc                 | thẻ "Chưa có điểm giao" của lần nhận chuyến còn mở                                |
+| `driver-site-intake-choose-destination`                     | tab Việc                 | "Chọn điểm giao" — mở Nhận chuyến ở bước điểm giao                                |
+| `site-intake-screen`                                        | Nhận chuyến              | khung màn (ẩn khỏi thanh tab)                                                     |
+| `site-intake-offline`, `site-intake-retry`                  | Nhận chuyến              | "Cần mạng để nhận chuyến tại địa điểm này" + Thử lại                              |
+| `site-intake-load-failed`, `site-intake-location-note`      | Nhận chuyến              | đọc đề nghị hỏng / không lấy được vị trí                                          |
+| `site-intake-candidate-<siteId>`                            | Nhận chuyến              | thẻ địa điểm (CONFIRM) / hàng chọn (CHOOSE, không chọn sẵn)                       |
+| `site-intake-confirm`                                       | Nhận chuyến              | "Nhận chuyến tại đây" (lỗi mạng: "Thử lại", cùng khoá)                            |
+| `site-intake-not-here`, `site-intake-refusal-next`          | Nhận chuyến              | "Không phải địa điểm này" / đường đi tiếp sau khi bị từ chối                      |
+| `site-intake-active-run`, `site-intake-active-run-back`     | Nhận chuyến              | đang có chuyến chưa xong → về màn Việc                                            |
+| `site-intake-uncertain`, `site-intake-refused`              | Nhận chuyến              | chưa chắc lệnh đã tới / máy chủ từ chối                                           |
+| `site-intake-received`                                      | Nhận chuyến              | "Đã nhận hàng tại:" + "Giao tới đâu?"                                             |
+| `site-intake-destination-choose`, `site-intake-destination-unknown` | Nhận chuyến              | "Chọn điểm giao" / "Chưa biết — để văn phòng bổ sung"                             |
+| `site-intake-destination-filter`, `site-intake-destination-search` | Chọn điểm giao           | lọc không dấu / "Tìm theo tên"                                                    |
+| `site-intake-destination-option-<placeId>`                  | Chọn điểm giao           | một địa điểm đã biết                                                              |
+| `site-intake-destination-search-<n>`, `site-intake-search-notice` | Chọn điểm giao           | kết quả tìm theo tên / tìm đang tắt–bận                                           |
+| `site-intake-search-attribution`                            | Chọn điểm giao           | ghi nguồn dữ liệu tìm kiếm                                                        |
+| `site-intake-destination-summary`, `site-intake-destination-submit` | Chọn điểm giao           | "Giao tới …" + "Xác nhận điểm giao"                                               |
+| `site-intake-destination-back`                              | Chọn điểm giao           | quay lại "Giao tới đâu?"                                                          |
+| `site-intake-done`, `site-intake-back-to-work`              | Nhận chuyến              | "Đã nhận chuyến" + "Về màn Việc"                                                  |
 | `driver-legacy-toggle`, `driver-trip-<id>`                  | tab Việc                 | mục Chuyến cũ (thu gọn)                                                           |
 | `locating-overlay`, `locating-skip`, `locating-cancel`      | toàn màn                 | "Đang lấy vị trí…"                                                                |
 | `note-input`, `note-submit`                                 | tờ trượt                 | ghi chú mốc                                                                       |

@@ -46,12 +46,20 @@ export interface SiteIntakeScreen {
 export const SITE_INTAKE_LOCATION_HINTS: Readonly<
   Record<SiteIntakeLocationUnusableReason, string>
 > = {
-  COORDINATE_INVALID: 'Máy chưa đọc được vị trí. Bật định vị rồi thử lại, hoặc chọn nơi bằng tay.',
+  COORDINATE_INVALID: 'Máy chưa đọc được vị trí. Bật định vị rồi thử lại.',
   ACCURACY_UNUSABLE:
     'Định vị đang quá thô để phân biệt hai kho cạnh nhau. Ra chỗ thoáng vài giây rồi thử lại.',
   LOCATION_STALE:
     'Vị trí này là của lúc trước, không phải bây giờ. Chờ máy lấy lại định vị rồi thử lại.',
 };
+
+/**
+ * CHU DUOC DUYET cho lai xe (`#398` OWNER UI OVERRIDE): khong "Tạo chuyến", khong "đơn", khong "vòng
+ * chạy". Lai xe NHAN mot chuyen o noi minh dang dung — phan con lai la viec cua he thong.
+ */
+export const SITE_INTAKE_CONFIRM_LABEL = 'Nhận chuyến tại đây';
+export const ACTIVE_RUN_NOTICE = 'Bạn đang có chuyến chưa xong — ghi nhận vào chuyến đó';
+export const ACTIVE_RUN_BACK_LABEL = 'Về màn Việc';
 
 const TRUST_LABELS: Readonly<Record<SiteIntakeLocationTrust, string>> = {
   SERVER_BOUND: 'Vị trí đã xác thực',
@@ -84,9 +92,9 @@ export function toSiteIntakeScreen(proposal: SiteIntakeProposal): SiteIntakeScre
       headline: candidates.length > 0 ? 'Bạn đang ở' : 'Chuyến hiện tại của bạn',
       candidates,
       openRuns: proposal.openRuns,
-      primaryLabel: 'Ghi nhận đã đến / chụp giấy vào',
+      primaryLabel: ACTIVE_RUN_BACK_LABEL,
       secondaryLabel: null,
-      notice: null,
+      notice: ACTIVE_RUN_NOTICE,
       trustLabel,
       canCreate: false,
     };
@@ -124,7 +132,7 @@ export function toSiteIntakeScreen(proposal: SiteIntakeProposal): SiteIntakeScre
       headline: 'Bạn đang ở',
       candidates: [only],
       openRuns: [],
-      primaryLabel: 'Tạo chuyến',
+      primaryLabel: SITE_INTAKE_CONFIRM_LABEL,
       secondaryLabel: 'Không phải địa điểm này',
       notice: null,
       trustLabel,
@@ -136,7 +144,7 @@ export function toSiteIntakeScreen(proposal: SiteIntakeProposal): SiteIntakeScre
     headline: 'Bạn đang ở gần mấy nơi — chọn đúng nơi bạn đang đứng',
     candidates,
     openRuns: [],
-    primaryLabel: 'Tạo chuyến',
+    primaryLabel: SITE_INTAKE_CONFIRM_LABEL,
     secondaryLabel: 'Không phải nơi nào ở trên',
     notice: proposal.truncated
       ? 'Quanh đây còn nơi khác nữa — nếu không thấy đúng nơi, báo văn phòng.'

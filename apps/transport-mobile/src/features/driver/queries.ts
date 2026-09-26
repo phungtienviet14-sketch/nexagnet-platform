@@ -1,10 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { canPerform, hasCapability } from '../../api/platform';
 import { useBranding } from '../../branding/BrandingProvider';
 import { useHttp, useSession } from '../../session/SessionProvider';
 import { outboxScope } from '../../session/session-types';
 import type {
   DriverFieldWork,
+  DriverIntakeView,
   DriverFuelRunView,
   DriverFuelSlipView,
   DriverFuelStationView,
@@ -14,6 +16,7 @@ import type {
   DriverSettlementSelfStatement,
   DriverTripView,
   ExpenseCatalogue,
+  KnownPlacesResponse,
 } from './types';
 
 /**
@@ -159,4 +162,46 @@ export function useExpenseCatalogue(enabled: boolean) {
     staleTime: 10 * 60_000,
     queryFn: () => http.get<ExpenseCatalogue>('/transport/me/expense-categories'),
   });
+}
+
+/**
+ * `#398`: lan nhan chuyen CON MO cua chinh lai xe — man Viec dua lai buoc "Giao tới đâu?". Chi DOC;
+ * lenh nhan chuyen khong di qua day va khong bao gio vao hang doi ngoai tuyen.
+ */
+export function useOpenIntake(enabled: boolean) {
+  const http = useHttp();
+  const scope = useScope();
+  return useQuery({
+    queryKey: ['me', scope, 'site-intake', 'open'],
+    enabled,
+    refetchInterval: FIELD_REFRESH_MS,
+    queryFn: async () =>
+      (
+        await http.get<{ readonly intake: DriverIntakeView | null }>(
+          '/transport/me/site-intake/open',
+        )
+      ).intake,
+  });
+}
+
+/** Dia diem giao DA BIET (hang rao dang hoat dong) — cung nguon voi man tao don cua van phong. */
+export function useIntakeDestinations(enabled: boolean) {
+  const http = useHttp();
+  const scope = useScope();
+  return useQuery({
+    queryKey: ['me', scope, 'site-intake', 'destinations'],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: () => http.get<KnownPlacesResponse>('/transport/me/site-intake/destinations'),
+  });
+}
+
+/** Sau khi nhan chuyen: doc lai MOI thu cua lai xe (viec hien truong, lan nhan chuyen con mo...). */
+export function useInvalidateDriver(): () => Promise<void> {
+  const queryClient = useQueryClient();
+  const scope = useScope();
+  return useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['me', scope] }),
+    [queryClient, scope],
+  );
 }

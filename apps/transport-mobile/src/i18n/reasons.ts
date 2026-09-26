@@ -43,6 +43,28 @@ const REASON_TEXT: Record<string, string> = {
   FUEL_ENTRY_RUN_NOT_FOUND: 'Không tìm thấy vòng chạy của phiếu.',
   FUEL_ENTRY_CONTEXT_REQUIRED: 'Phiếu cần gắn với việc được điều.',
   FUEL_ENTRY_REVIEW_TRANSITION_NOT_PERMITTED: 'Phiếu đang ở trạng thái không cho thao tác này.',
+  // Nhan chuyen tai dia diem (#267/#398) — chu cho LAI XE: khong "đơn", "vòng chạy", "chặng".
+  SITE_INTAKE_DRIVER_BINDING_MISSING: 'Tài khoản chưa được gắn với hồ sơ lái xe — báo văn phòng.',
+  SITE_INTAKE_NO_ASSIGNED_VEHICLE: 'Bạn chưa được giao xe nào — báo điều độ để nhận xe trước.',
+  SITE_INTAKE_SITE_NOT_FOUND: 'Không còn tìm thấy địa điểm này — tìm lại địa điểm rồi chọn.',
+  SITE_INTAKE_SITE_INACTIVE: 'Địa điểm này đã ngừng hoạt động — báo văn phòng.',
+  SITE_INTAKE_OPEN_RUN_EXISTS: 'Bạn đang có chuyến chưa xong — ghi nhận vào chuyến đó ở màn Việc.',
+  SITE_INTAKE_LOCATION_UNUSABLE:
+    'Vị trí lúc bấm chưa đủ để nhận ra địa điểm — tìm lại địa điểm rồi bấm lại.',
+  SITE_INTAKE_SITE_NOT_A_CANDIDATE:
+    'Địa điểm này không còn nằm quanh vị trí của bạn — tìm lại địa điểm rồi chọn.',
+  SITE_INTAKE_OBSERVATION_NOT_FOUND: 'Bản định vị không dùng được — tìm lại địa điểm.',
+  SITE_INTAKE_OBSERVATION_NOT_OWNED: 'Bản định vị không dùng được — tìm lại địa điểm.',
+  SITE_INTAKE_OBSERVATION_ALREADY_USED: 'Bản định vị đã được dùng — tìm lại địa điểm.',
+  SITE_INTAKE_CREATE_IN_FLIGHT:
+    'Lần bấm trước đang được xử lý — bấm thử lại sau một lát, sẽ không tạo chuyến thứ hai.',
+  SITE_INTAKE_NOT_FOUND: 'Không tìm thấy chuyến này — về màn Việc để xem lại.',
+  SITE_INTAKE_DESTINATION_NOT_FOUND: 'Điểm giao này không còn trong danh sách — chọn nơi khác.',
+  SITE_INTAKE_DESTINATION_UNVERIFIED: 'Kết quả tìm không còn khớp — tìm lại rồi chọn.',
+  SITE_INTAKE_DESTINATION_SEARCH_UNAVAILABLE:
+    'Tìm theo tên đang tắt — chọn trong danh sách địa điểm đã biết.',
+  SITE_INTAKE_COMMERCIAL_CLOSED:
+    'Chuyến này văn phòng đã chốt xong — không đổi điểm giao được nữa.',
   // Chung
   SELF_SCOPE_NO_DRIVER_BINDING: 'Tài khoản chưa được gắn với hồ sơ lái xe — báo văn phòng.',
   NOT_MOUNTED: 'Nghiệp vụ này chưa được bật cho doanh nghiệp.',

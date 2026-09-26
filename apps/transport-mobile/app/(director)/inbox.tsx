@@ -33,6 +33,7 @@ import {
   ClaimDecisionSheet,
   type DecisionOutcomeReport,
 } from '../../src/features/office/ui/ClaimDecisionSheet';
+import { SiteIntakeReviewSheet } from '../../src/features/office/ui/SiteIntakeReviewSheet';
 import { WhyMissing } from '../../src/features/office/ui/WhyMissing';
 import { noticeFromReport, useNotice } from '../../src/features/office/useNotice';
 import { formatBusinessDate } from '../../src/format';
@@ -173,6 +174,10 @@ export default function DirectorInbox() {
         allowances={allowances.data ?? []}
         onClose={() => setActive(null)}
         onDecided={(report) => decided(report, true)}
+      />
+      <SiteIntakeReviewSheet
+        intakeId={sheet === 'SITE_INTAKE' ? (active?.subject.id ?? null) : null}
+        onClose={() => setActive(null)}
       />
       <ReadOnlySheet item={sheet === 'READ_ONLY' ? active : null} onClose={() => setActive(null)} />
       <CloseOutSheet

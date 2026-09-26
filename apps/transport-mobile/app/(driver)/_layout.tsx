@@ -60,6 +60,11 @@ export default function Layout() {
         options={{ ...HIDDEN, title: 'Chụp chứng từ', tabBarStyle: { display: 'none' } }}
       />
       <Tabs.Screen name="fuel-new" options={{ ...HIDDEN, title: 'Ghi phiếu đổ dầu' }} />
+      {/* #398: nhan chuyen tai dia diem — toan man hinh tu the tren man Viec, KHONG phai tab thu nam. */}
+      <Tabs.Screen
+        name="intake"
+        options={{ ...HIDDEN, title: 'Nhận chuyến', tabBarStyle: { display: 'none' } }}
+      />
       <Tabs.Screen name="run/[runId]" options={{ ...HIDDEN, title: 'Vòng chạy' }} />
     </Tabs>
   );

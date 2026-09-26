@@ -5,6 +5,7 @@ import { Icon } from '../../../ui/Icon';
 import { Card } from '../../../ui/Surface';
 import { Text } from '../../../ui/Text';
 import { queueKindLabel, severityTone, type FleetStat } from '../../office/control-tower';
+import { siteIntakeQueueNote } from '../../office/site-intake-review';
 import type { QueueItem } from '../../office/types';
 import { actionLabelFor, queueItemSubline } from '../inbox';
 
@@ -49,6 +50,7 @@ export function DecisionCard({
 }) {
   const tone = severityTone(item.severity);
   const subline = queueItemSubline(item);
+  const note = siteIntakeQueueNote(item);
   return (
     <Card
       rail={tone}
@@ -68,6 +70,11 @@ export function DecisionCard({
           {subline ? (
             <Text variant="caption" tone="muted">
               {subline}
+            </Text>
+          ) : null}
+          {note ? (
+            <Text variant="caption" tone="caution" testID={`director-queue-note-${item.kind}`}>
+              {note}
             </Text>
           ) : null}
           <Text variant="label" tone="brand">
