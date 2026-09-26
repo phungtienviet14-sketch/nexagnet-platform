@@ -87,7 +87,8 @@ export interface IntakeDone {
 export interface IntakeFlowState {
   readonly step: IntakeStep;
   readonly screen: SiteIntakeScreen | null;
-  readonly location: SiteIntakeLocationInput;
+  /** Vi tri chup luc mo man — toa do VA moc thoi gian cua no di cung nhau (`#398` §3.1). */
+  readonly captured: CapturedLocation;
   readonly locationNote: string | null;
   readonly chosenSiteId: string | null;
   readonly received: ReceivedPickup | null;
@@ -98,10 +99,24 @@ export interface IntakeFlowState {
   readonly busy: boolean;
 }
 
+/**
+ * VI TRI DA CHUP, kem MOC cua no tren dong ho MAY (`#398` §3.1).
+ *
+ * Toa do khong co moc la mot toa do khong biet tuoi — va may chu chi chan duoc vi tri cu khi biet
+ * tuoi. Nen hai thu di cung mot khoi: khong co cach cap nhat mot ben ma quen ben kia.
+ */
+export interface CapturedLocation {
+  readonly location: SiteIntakeLocationInput;
+  /** Epoch ms theo dong ho MAY luc co ban dinh vi. `null` = khong co toa do nao. */
+  readonly fixAtMs: number | null;
+}
+
+export const NO_CAPTURED_LOCATION: CapturedLocation = { location: {}, fixAtMs: null };
+
 export const INITIAL_INTAKE_FLOW: IntakeFlowState = {
   step: 'LOCATING',
   screen: null,
-  location: {},
+  captured: NO_CAPTURED_LOCATION,
   locationNote: null,
   chosenSiteId: null,
   received: null,
@@ -118,7 +133,7 @@ export type IntakeEvent =
   | {
       readonly type: 'PROPOSAL_LOADED';
       readonly proposal: SiteIntakeProposal;
-      readonly location: SiteIntakeLocationInput;
+      readonly captured: CapturedLocation;
       readonly locationNote: string | null;
     }
   | { readonly type: 'LOAD_FAILED'; readonly message: string }
@@ -153,7 +168,7 @@ export function intakeFlowReducer(state: IntakeFlowState, event: IntakeEvent): I
         ...INITIAL_INTAKE_FLOW,
         step: 'PROPOSAL',
         screen: toSiteIntakeScreen(event.proposal),
-        location: event.location,
+        captured: event.captured,
         locationNote: event.locationNote,
       };
     case 'LOAD_FAILED':
@@ -245,25 +260,126 @@ export type IntakeFixOutcome =
         readonly latitude: number;
         readonly longitude: number;
         readonly accuracyMetres: number | null;
+        /** Dau thoi gian CUA CHINH ban dinh vi (ISO) — `FrozenFix.capturedAt`. */
+        readonly capturedAt: string;
       };
     }
   | { readonly kind: 'FAILED' | 'TIMEOUT'; readonly message: string };
 
+const UNUSABLE_FIX_NOTE = 'Máy báo một vị trí không dùng được — chưa gửi vị trí nào.';
+
 /**
  * Khong co vi tri van DI TIEP voi `{}` — may chu tra `NO_MATCH` va man noi that vi sao. Toa do hong
- * (Null Island, NaN) cung la "khong co vi tri", khong bao gio la mot diem gui di.
+ * (Null Island, NaN) cung la "khong co vi tri", khong bao gio la mot diem gui di. Mot ban dinh vi
+ * khong doc duoc dau thoi gian cung vay: khong biet tuoi thi khong gui toa do.
+ *
+ * `receivedAtMs` = `Date.now()` NGAY khi `captureFixWithin` tra ve (xem `fixTakenAtMs`).
  */
-export function locationFromFix(outcome: IntakeFixOutcome): {
-  readonly location: SiteIntakeLocationInput;
-  readonly note: string | null;
-} {
+export function locationFromFix(
+  outcome: IntakeFixOutcome,
+  receivedAtMs: number,
+): { readonly captured: CapturedLocation; readonly note: string | null } {
   if (outcome.kind !== 'OK') {
-    return { location: {}, note: `Chưa lấy được vị trí: ${outcome.message}` };
+    return { captured: NO_CAPTURED_LOCATION, note: `Chưa lấy được vị trí: ${outcome.message}` };
   }
   const location = siteLocationInput(outcome.fix);
-  return location.latitude === undefined
-    ? { location, note: 'Máy báo một vị trí không dùng được — chưa gửi vị trí nào.' }
-    : { location, note: null };
+  const fixAtMs = fixTakenAtMs(outcome.fix.capturedAt, receivedAtMs);
+  if (location.latitude === undefined || fixAtMs === null) {
+    return { captured: NO_CAPTURED_LOCATION, note: UNUSABLE_FIX_NOTE };
+  }
+  return { captured: { location, fixAtMs }, note: null };
+}
+
+/* ------------------------------------------------------------------ *
+ * TUOI CUA VI TRI — `#398` §3.1 "vi tri cu phai that bai dong"
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban chup luc mo man con dung cho lan bam neu chua qua 2 phut. THAP HON han 300 giay cua may chu
+ * (`DEFAULT_SITE_CANDIDATE_POLICY.maxAgeSeconds`) de con cho cho thoi gian gui va mot lan chup lai.
+ */
+export const FRESH_FIX_MAX_AGE_MS = 120_000;
+
+/** Tran `locationAgeMs` cua may chu. Cu hon thi gui DUNG tran — van la "qua han", khong phai 400. */
+export const LOCATION_AGE_MAX_MS = 86_400_000;
+
+/**
+ * MOC cua ban dinh vi tren dong ho MAY: cai CU HON giua dau thoi gian cua chinh ban dinh vi va luc
+ * app nhan duoc no — cung quy uoc voi ban dinh vi cua Lane B o may chu.
+ *
+ *   · Dau thoi gian cua ban dinh vi noi that khi no CU: tren web, `expo-location` hoi trinh duyet
+ *     voi `maximumAge: Infinity`, nen mot lan "lay vi tri" co the tra lai ban trong bo nho dem tu
+ *     nhieu phut truoc. Lay luc nhan lam moc se lam ban cu do tre ra.
+ *   · Luc nhan chan tren: mot dau thoi gian o TUONG LAI (dong ho GPS lech dong ho may) khong duoc
+ *     lam ban dinh vi "moi mai" cho toi khi dong ho may duoi kip.
+ *
+ * Khong doc duoc mot trong hai -> `null` (khong biet tuoi).
+ */
+export function fixTakenAtMs(capturedAt: string, receivedAtMs: number): number | null {
+  const stamped = Date.parse(capturedAt);
+  if (!Number.isFinite(stamped) || !Number.isFinite(receivedAtMs)) return null;
+  return Math.min(stamped, receivedAtMs);
+}
+
+/**
+ * Tuoi gui kem (`locationAgeMs`), tinh LUC GUI tren CUNG dong ho da dong moc — hieu hai moc cua mot
+ * dong ho, nen lech gio giua dien thoai va may chu khong lot vao. Am (dong ho may vua lui) ep ve 0:
+ * lan bam da qua `needsFreshFix`, noi mot tuoi am da buoc chup lai.
+ */
+export function fixAgeMs(fixAtMs: number, nowMs: number): number {
+  const age = Math.round(nowMs - fixAtMs);
+  if (!Number.isFinite(age)) return LOCATION_AGE_MAX_MS;
+  return Math.min(Math.max(age, 0), LOCATION_AGE_MAX_MS);
+}
+
+/**
+ * Ban chup luc de nghi con dung cho lan bam khong. `null` (khong co toa do) -> khong co gi de lam
+ * moi. Tuoi am = dong ho may da lui sau luc chup -> khong con tin moc, chup lai.
+ */
+export function needsFreshFix(fixAtMs: number | null, nowMs: number): boolean {
+  if (fixAtMs === null) return false;
+  const age = nowMs - fixAtMs;
+  return !Number.isFinite(age) || age < 0 || age > FRESH_FIX_MAX_AGE_MS;
+}
+
+/**
+ * VI TRI GUI KEM LAN BAM "Nhận chuyến tại đây".
+ *
+ * Man chup MOT ban dinh vi luc mo; lai xe co the bam nhieu phut sau. Ban con moi -> gui no. Ban da
+ * cu -> chup LAI (co han, `recapture`) va gui ban moi. Chup lai khong ra ban nao MOI -> KHONG gui
+ * toa do: may chu ghi `NO_LOCATION`, viec van hanh van ra doi, con phan thuong mai doi van phong xac
+ * nhan noi lay (`ORIGIN_LOCATION_UNVERIFIED`) — that bai DONG ve thuong mai, khong chan lai xe.
+ *
+ * Khong gui lai ban cu voi tuoi that cua no: may chu se tu choi (`LOCATION_STALE`), va tren web ban
+ * chup lai co the chinh la ban cu trong bo nho dem — lai xe se bi ket trong vong "Tìm lại địa điểm".
+ */
+export async function confirmLocation(
+  snapshot: CapturedLocation,
+  recapture: () => Promise<IntakeFixOutcome>,
+  clock: () => number,
+): Promise<CapturedLocation> {
+  if (!needsFreshFix(snapshot.fixAtMs, clock())) return snapshot;
+  const outcome = await recapture();
+  const { captured } = locationFromFix(outcome, clock());
+  if (captured.fixAtMs === null || needsFreshFix(captured.fixAtMs, clock())) {
+    return NO_CAPTURED_LOCATION;
+  }
+  return captured;
+}
+
+/**
+ * Toa do + tuoi tinh LUC GUI. Khong toa do, hoac toa do khong biet tuoi -> KHONG gui gi: mot cap so
+ * khong kem tuoi se roi vao duong cua may khach `#267` cu, noi may chu coi no la "vua doc".
+ */
+export function proposalBody(
+  captured: CapturedLocation,
+  nowMs: number,
+): Readonly<Record<string, unknown>> {
+  const { location, fixAtMs } = captured;
+  if (fixAtMs === null || location.latitude === undefined || location.longitude === undefined) {
+    return {};
+  }
+  return { ...location, locationAgeMs: fixAgeMs(fixAtMs, nowMs) };
 }
 
 /* ------------------------------------------------------------------ *
@@ -379,13 +495,17 @@ export function proposalPrimary(
   };
 }
 
-/** Than `POST confirmations` — `clientEventId` la khoa CUA LAN THU, vi tri DA dong bang luc de nghi. */
+/**
+ * Than `POST confirmations` — `clientEventId` la khoa CUA LAN THU; vi tri la ban `confirmLocation`
+ * da chon, tuoi tinh LUC GUI (`proposalBody`).
+ */
 export function confirmBody(
   siteId: string,
   clientEventId: string,
-  location: SiteIntakeLocationInput,
+  captured: CapturedLocation,
+  nowMs: number,
 ): Readonly<Record<string, unknown>> {
-  return { siteId, clientEventId, ...location };
+  return { siteId, clientEventId, ...proposalBody(captured, nowMs) };
 }
 
 /* ------------------------------------------------------------------ *

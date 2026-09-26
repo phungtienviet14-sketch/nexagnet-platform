@@ -4,6 +4,7 @@ import { RUN_CHECKPOINT_TYPES } from '../checkpoint/checkpoint.types.js';
 import type { GeoPoint } from '../geo/geo-point.js';
 import {
   MOVEMENT_CHECKPOINT_TYPES,
+  ORDER_ORIGIN_TOLERANCE_METRES,
   ORIGIN_ATTESTABLE_REASONS,
   OFFICE_COMPLETABLE_REASONS,
   SITE_INTAKE_BINDING_DENY_REASONS,
@@ -12,6 +13,8 @@ import {
   evaluateCommercialReadiness,
   evaluateOrderBinding,
   hasMovementStarted,
+  isOrderOriginCompatible,
+  matchOrderOrigin,
   siteIntakeOrderCode,
   siteIntakePlanKey,
   type CommercialReadinessFacts,
@@ -336,12 +339,14 @@ const bindingFacts = (over: Partial<OrderBindingFacts> = {}): OrderBindingFacts 
   run: { status: 'PLANNED' },
   leg: { kind: 'LOADED', status: 'PLANNED', orderId: null },
   runCarriesOtherOneOrderPlan: false,
+  siteOriginPoints: [ORIGIN],
   target: {
     id: 'ord-x',
     status: 'OPEN',
     hasActivePlan: false,
     liveLegCount: 0,
     boundToOtherIntake: false,
+    originPoint: ORIGIN,
   },
   ...over,
 });
@@ -435,6 +440,11 @@ describe('evaluateOrderBinding — #398 §6 (null -> X, X -> X, X -> Y)', () => 
       'don da nhan mot viec tai xe khac',
       { target: target({ boundToOtherIntake: true }) },
     ],
+    [
+      'ORDER_ORIGIN_MISMATCH',
+      'don lay hang o noi khac (vuot dung sai)',
+      { target: target({ originPoint: shifted(ORIGIN, ORDER_ORIGIN_TOLERANCE_METRES + 50) }) },
+    ],
   ];
 
   it.each(DENY_CASES)('DENY %s — %s', (reason, _label, over) => {
@@ -459,6 +469,83 @@ describe('evaluateOrderBinding — #398 §6 (null -> X, X -> X, X -> Y)', () => 
         }),
       ),
     ).toEqual({ kind: 'DENY', reason: 'ORDER_BOUND_TO_OTHER_INTAKE' });
+  });
+
+  it('don lay hang o noi khac nhung DA co ke hoach: noi ORDER_ALREADY_PLANNED (san sang truoc, khop sau)', () => {
+    expect(
+      evaluateOrderBinding(
+        bindingFacts({
+          target: target({ hasActivePlan: true, originPoint: shifted(ORIGIN, 5_000) }),
+        }),
+      ),
+    ).toEqual({ kind: 'DENY', reason: 'ORDER_ALREADY_PLANNED' });
+  });
+
+  it('don KHONG co toa do diem lay: BIND — nguoi chon don tu chiu, khong bia toa do de tu choi', () => {
+    expect(evaluateOrderBinding(bindingFacts({ target: target({ originPoint: null }) }))).toEqual({
+      kind: 'BIND',
+    });
+  });
+
+  it('dia diem KHONG con hang rao nao: BIND — khong co diem de doi chieu', () => {
+    expect(
+      evaluateOrderBinding(
+        bindingFacts({
+          siteOriginPoints: [],
+          target: target({ originPoint: shifted(ORIGIN, 50_000) }),
+        }),
+      ),
+    ).toEqual({ kind: 'BIND' });
+  });
+
+  it('don lay hang trong dung sai quanh dia diem: BIND', () => {
+    expect(
+      evaluateOrderBinding(
+        bindingFacts({
+          target: target({ originPoint: shifted(ORIGIN, ORDER_ORIGIN_TOLERANCE_METRES - 20) }),
+        }),
+      ),
+    ).toEqual({ kind: 'BIND' });
+  });
+});
+
+describe('matchOrderOrigin — don co san co lay hang o noi tai xe nhan viec khong (#398 §6)', () => {
+  it('trung tam hang rao: MATCH 0 m', () => {
+    expect(matchOrderOrigin(ORIGIN, [ORIGIN])).toEqual({ kind: 'MATCH', distanceMetres: 0 });
+  });
+
+  it('bien dung sai: dung bang dung sai la MATCH, vuot mot chut la MISMATCH', () => {
+    const inside = matchOrderOrigin(shifted(ORIGIN, ORDER_ORIGIN_TOLERANCE_METRES - 1), [ORIGIN]);
+    const outside = matchOrderOrigin(shifted(ORIGIN, ORDER_ORIGIN_TOLERANCE_METRES + 1), [ORIGIN]);
+    expect(inside.kind).toBe('MATCH');
+    expect(outside.kind).toBe('MISMATCH');
+    expect(outside.kind === 'MISMATCH' && outside.distanceMetres).toBeGreaterThan(
+      ORDER_ORIGIN_TOLERANCE_METRES,
+    );
+  });
+
+  it('nhieu hang rao cua CUNG dia diem: chi can mot cai khop, khoang cach la cai GAN NHAT', () => {
+    const far = shifted(ORIGIN, 3_000);
+    const order = shifted(far, 100);
+    const match = matchOrderOrigin(order, [ORIGIN, far]);
+    expect(match.kind).toBe('MATCH');
+    expect(match.kind === 'MATCH' && Math.round(match.distanceMetres)).toBe(100);
+  });
+
+  it('khong doi chieu duoc thi noi RO vi sao, va khong phai MISMATCH', () => {
+    expect(matchOrderOrigin(null, [ORIGIN])).toEqual({ kind: 'ORDER_ORIGIN_UNKNOWN' });
+    expect(matchOrderOrigin(ORIGIN, [])).toEqual({ kind: 'SITE_POINT_UNKNOWN' });
+    expect(isOrderOriginCompatible(null, [ORIGIN])).toBe(true);
+    expect(isOrderOriginCompatible(ORIGIN, [])).toBe(true);
+  });
+
+  it('bo loc danh sach va cong gan don dung CUNG mot luat', () => {
+    for (const metres of [0, 100, ORDER_ORIGIN_TOLERANCE_METRES, 501, 2_000, 50_000]) {
+      const originPoint = shifted(ORIGIN, metres);
+      const listed = isOrderOriginCompatible(originPoint, [ORIGIN]);
+      const gate = evaluateOrderBinding(bindingFacts({ target: target({ originPoint }) }));
+      expect(gate.kind === 'BIND').toBe(listed);
+    }
   });
 });
 

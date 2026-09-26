@@ -97,6 +97,9 @@ export class DriverSiteIntakeController {
         ...(parsed.data.observationId === undefined
           ? {}
           : { observationId: parsed.data.observationId }),
+        ...(parsed.data.locationAgeMs === undefined
+          ? {}
+          : { locationAgeMs: parsed.data.locationAgeMs }),
       }),
     );
   }
@@ -126,6 +129,9 @@ export class DriverSiteIntakeController {
         ...(parsed.data.observationId === undefined
           ? {}
           : { observationId: parsed.data.observationId }),
+        ...(parsed.data.locationAgeMs === undefined
+          ? {}
+          : { locationAgeMs: parsed.data.locationAgeMs }),
       }),
     );
   }

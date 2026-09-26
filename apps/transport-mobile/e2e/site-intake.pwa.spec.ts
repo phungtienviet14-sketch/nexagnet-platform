@@ -110,6 +110,20 @@ async function driverContext(browser: Browser): Promise<BrowserContext> {
   });
 }
 
+/**
+ * Dat LAI vi tri gia lap ngay truoc khi nhan chuyen. Chromium giu NGUYEN dau thoi gian cua ban dinh
+ * vi gia lap tu luc dat, nen tuoi cua no tang theo thoi gian chay bai — va tu `#398` ung dung xin lai
+ * vi tri qua 120 giay, may chu tu choi qua 300 giay. Dat lai o day giu ban dinh vi "vua doc" dung
+ * nhu tren dien thoai that.
+ */
+async function freshFix(context: BrowserContext): Promise<void> {
+  await context.setGeolocation({
+    latitude: fixture.pickup.latitude,
+    longitude: fixture.pickup.longitude,
+    accuracy: 10,
+  });
+}
+
 async function signIn(page: Page, username: string): Promise<void> {
   await page.goto('/');
   const server = page.getByTestId('server-address');
@@ -140,6 +154,7 @@ test('khong mang: KHONG bao thanh cong, KHONG tao gi o may chu', async ({ browse
   await expect(page.getByTestId('driver-site-intake-start')).toBeVisible({ timeout: 45_000 });
 
   await context.setOffline(true);
+  await freshFix(context);
   await page.getByTestId('driver-site-intake-start').click();
   await expect(page.getByTestId('site-intake-offline')).toBeVisible();
   await expect(page.getByText('Cần mạng để nhận chuyến tại địa điểm này')).toBeVisible();
@@ -177,6 +192,7 @@ test('duong thuong: Viec -> Nhan chuyen -> diem giao -> Da nhan chuyen; hang vie
   await expect(page.getByText('Bạn được gọi đi lấy hàng?')).toBeVisible({ timeout: 45_000 });
   await page.screenshot({ path: 'e2e-results/pwa-02-viec-chua-co-viec.png', fullPage: true });
 
+  await freshFix(context);
   await page.getByTestId('driver-site-intake-start').click();
   await expect(page.getByTestId('site-intake-confirm')).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText(fixture.intake.pickupSite).first()).toBeVisible();
@@ -277,6 +293,7 @@ test('chua biet diem giao -> Can xu ly (+1), khong don bia; bao bat thuong can l
   const driverCtx = await driverContext(browser);
   const driverPage = await driverCtx.newPage();
   await signIn(driverPage, fixture.intake.reviewDriver.login);
+  await freshFix(driverCtx);
   await driverPage.getByTestId('driver-site-intake-start').click();
   await expect(driverPage.getByTestId('site-intake-confirm')).toBeVisible({ timeout: 45_000 });
   await driverPage.getByTestId('site-intake-confirm').click();

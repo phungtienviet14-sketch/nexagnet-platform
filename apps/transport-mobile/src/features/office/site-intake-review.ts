@@ -1,5 +1,13 @@
 import { ApiError } from '../../api/errors';
 import { formatBusinessDate, formatClock } from '../../format';
+import {
+  destinationIdentity,
+  searchOutcome,
+  searchQueryProblem,
+  SEARCH_MAX_CHARS,
+  type DestinationRow,
+} from '../driver/site-intake-flow';
+import type { DestinationChoice, PlaceSearchResponse } from '../driver/types';
 import type { DecisionErrorPolicy } from './decision-errors';
 import { checkText, normalizeSearch, type ParseResult } from './form-input';
 import type {
@@ -279,6 +287,135 @@ export function filterKnownPlaces(
   return places.filter((place) =>
     normalizeSearch(`${place.name} ${place.detail ?? ''}`).includes(needle),
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * CHON DIEM GIAO — DIA DIEM DA BIET + TIM THEO TEN (#379)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Van phong chon diem giao bang DUNG hai nguyen lieu cua lai xe: dia diem da biet (hang rao) va tim
+ * theo ten. Khong co o go toa do, khong co chu tu do thanh diem giao.
+ *
+ * Kiem chuoi tim, loc toa do hong va dung lua chon `PLACE_SEARCH` la ham CUA LAI XE
+ * (`driver/site-intake-flow.ts`) — mot ban duy nhat, de hai be mat khong lech nhau ve dieu may chu
+ * se doi chieu. Tep nay chi doi testID va cau chu cho hop voi to truot van phong.
+ *
+ * Lua chon tim duoc giu NGUYEN chuoi da gui + nhan + toa do may chu tra: lenh `complete` TIM LAI
+ * dung chuoi do va chi nhan ket qua trung khop — sua mot so la bi tu choi.
+ */
+
+export const REVIEW_SEARCH_MAX_CHARS = SEARCH_MAX_CHARS;
+
+/** `null` = gui duoc; nguoc lai la cau noi vi sao chua tim (it hon 2 / qua 200 ky tu). */
+export function reviewSearchProblem(query: string): string | null {
+  return searchQueryProblem(query);
+}
+
+export const reviewSearchResultTestId = (index: number): string =>
+  `site-intake-review-search-result-${index}`;
+
+/** Hang dia diem da biet — `choice` la DUNG than `destination` gui may chu. Khong chon san. */
+export function knownPlaceRows(
+  places: readonly KnownPlace[],
+  filter: string,
+): readonly DestinationRow[] {
+  return filterKnownPlaces(places, filter).map((place) => ({
+    key: `known:${place.id}`,
+    label: place.name,
+    detail: place.detail,
+    choice: { kind: 'KNOWN_PLACE', placeId: place.id },
+    testID: `site-intake-place-${place.id}`,
+  }));
+}
+
+export const KNOWN_PLACES_UNAVAILABLE_TEXT =
+  'Doanh nghiệp chưa có sổ địa điểm (hàng rào) — tìm điểm giao theo tên ở dưới.';
+export const KNOWN_PLACES_EMPTY_TEXT =
+  'Chưa có địa điểm đã biết nào — tìm điểm giao theo tên ở dưới.';
+export const KNOWN_PLACES_NO_MATCH_TEXT =
+  'Không có địa điểm đã biết nào khớp — thử tên khác, hoặc tìm theo tên ở dưới.';
+
+/** Cau duoi danh sach dia diem da biet — chi khi danh sach KHONG giup duoc (tat / rong / khong khop). */
+export function knownPlacesNote(state: {
+  readonly available: boolean;
+  readonly total: number;
+  readonly shown: number;
+}): string | null {
+  if (!state.available) return KNOWN_PLACES_UNAVAILABLE_TEXT;
+  if (state.total === 0) return KNOWN_PLACES_EMPTY_TEXT;
+  if (state.shown === 0) return KNOWN_PLACES_NO_MATCH_TEXT;
+  return null;
+}
+
+export const SEARCH_OFF_NO_KNOWN_TEXT =
+  'Tìm theo tên đang tắt và chưa có địa điểm đã biết nào — hiện chưa chọn được điểm giao ở đây.';
+export const SEARCH_BUSY_NO_KNOWN_TEXT = 'Tìm theo tên đang bận — thử lại sau ít phút.';
+export const SEARCH_EMPTY_NO_KNOWN_TEXT = 'Không tìm thấy nơi nào khớp — thử tên khác.';
+
+export interface ReviewSearchOutcome {
+  readonly rows: readonly DestinationRow[];
+  readonly notice: string | null;
+  readonly attribution: string | null;
+}
+
+/**
+ * Ket qua tim cho to truot van phong. `query` phai la DUNG chuoi da gui. Cau cua lai xe tro ve
+ * "danh sách địa điểm đã biết"; khi danh sach do RONG thi cau ay noi sai, nen doi sang cau khong
+ * tro vao dau ca.
+ */
+export function reviewSearchOutcome(
+  response: PlaceSearchResponse,
+  query: string,
+  knownCount: number,
+): ReviewSearchOutcome {
+  const base = searchOutcome(response, query);
+  const rows = base.rows.map((row, index) => ({ ...row, testID: reviewSearchResultTestId(index) }));
+  if (base.notice === null || knownCount > 0) return { ...base, rows };
+  const notice =
+    response.status === 'DISABLED'
+      ? SEARCH_OFF_NO_KNOWN_TEXT
+      : response.status === 'OK'
+        ? SEARCH_EMPTY_NO_KNOWN_TEXT
+        : SEARCH_BUSY_NO_KNOWN_TEXT;
+  return { ...base, rows, notice };
+}
+
+/** Hai hang cung mot lua chon (cung dia diem / cung chuoi + nhan + toa do) la CUNG mot lua chon. */
+export function samePick(row: DestinationRow, picked: DestinationRow | null): boolean {
+  return picked !== null && destinationIdentity(row.choice) === destinationIdentity(picked.choice);
+}
+
+/** Danh tinh lenh — doi lua chon thi doi khoa chong ghi trung (`attemptFor`). */
+export function destinationCommandIdentity(choice: DestinationChoice): string {
+  return `destination:${destinationIdentity(choice)}`;
+}
+
+/**
+ * Than `POST :intakeId/complete` cho diem giao. Dung lai DUNG cac truong cua lua chon — than may chu
+ * la `.strict()`, nen mot truong thua (vd `detail`, `testID`) se lam ca lenh bi 400.
+ */
+export function completeDestinationBody(
+  idempotencyKey: string,
+  choice: DestinationChoice,
+): Readonly<Record<string, unknown>> {
+  const destination =
+    choice.kind === 'KNOWN_PLACE'
+      ? { kind: choice.kind, placeId: choice.placeId }
+      : {
+          kind: choice.kind,
+          query: choice.query,
+          label: choice.label,
+          latitude: choice.latitude,
+          longitude: choice.longitude,
+        };
+  return { idempotencyKey, destination };
+}
+
+export const PICK_PROMPT_TEXT = 'Chọn một địa điểm đã biết, hoặc một kết quả tìm theo tên.';
+
+export function pickedDestinationLine(picked: DestinationRow | null): string {
+  return picked === null ? PICK_PROMPT_TEXT : `Điểm giao đã chọn: ${picked.label}`;
 }
 
 export function bindableOrderLine(order: BindableOrderView): string {

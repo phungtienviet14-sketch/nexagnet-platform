@@ -4,12 +4,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import { newCorrelationKey, transportApi } from '../transport-api';
-import type {
-  SiteIntakeLocationInput,
-  SiteIntakeProposal,
-  SiteIntakeResult,
-} from '../transport-types';
-import { toSiteIntakeScreen, type SiteIntakeScreen } from '../workspace/site-intake';
+import type { SiteIntakeProposal, SiteIntakeResult } from '../transport-types';
+import {
+  needsFreshFix,
+  toSiteIntakeScreen,
+  withLocationAge,
+  type BrowserFix,
+  type SiteIntakeScreen,
+} from '../workspace/site-intake';
 
 /**
  * NHAN VIEC TAI DIA DIEM A — `#267` H6.
@@ -42,15 +44,15 @@ export function DriverSiteIntake() {
   const [created, setCreated] = useState<SiteIntakeResult | null>(null);
   /** Chot MOT LAN cho moi lan cham, va giu qua cac lan thu lai. */
   const eventKey = useRef<string | null>(null);
-  const locationRef = useRef<SiteIntakeLocationInput>({});
+  const locationRef = useRef<BrowserFix>({ location: {}, fixAtMs: null });
 
   const ask = useCallback(async () => {
     setLocating(true);
     setFailure(null);
-    const location = await readBrowserLocation();
-    locationRef.current = location;
+    const fix = await readBrowserLocation();
+    locationRef.current = fix;
     try {
-      setProposal(await transportApi.me.proposeSite(location));
+      setProposal(await transportApi.me.proposeSite(withLocationAge(fix, Date.now())));
     } catch (error) {
       setFailure((error as Error).message);
     } finally {
@@ -63,12 +65,17 @@ export function DriverSiteIntake() {
   }, [ask]);
 
   const confirm = useMutation({
-    mutationFn: (siteId: string) => {
+    mutationFn: async (siteId: string) => {
       eventKey.current ??= newCorrelationKey();
+      const key = eventKey.current;
+      // `#398`: ban dinh vi cua luc de nghi da cu thi xin lai — may chu tu choi vi tri qua tuoi.
+      if (needsFreshFix(locationRef.current, Date.now())) {
+        locationRef.current = await readBrowserLocation();
+      }
       return transportApi.me.confirmSite({
-        ...locationRef.current,
+        ...withLocationAge(locationRef.current, Date.now()),
         siteId,
-        clientEventId: eventKey.current,
+        clientEventId: key,
       });
     },
     onSuccess: (result) => {
@@ -276,19 +283,25 @@ function IntakeCreated({
  * Khong nhan mot ban ghi cu: `maximumAge: 0`. Mot ban dinh vi trong bo dem cua trinh duyet noi ve
  * noi lai xe DA TUNG o — va `#267` H7 cam mot vi tri qua han lang le tao mot lan lay hang.
  */
-async function readBrowserLocation(): Promise<SiteIntakeLocationInput> {
-  if (typeof navigator === 'undefined' || navigator.geolocation === undefined) return {};
+async function readBrowserLocation(): Promise<BrowserFix> {
+  if (typeof navigator === 'undefined' || navigator.geolocation === undefined) {
+    return { location: {}, fixAtMs: null };
+  }
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) =>
         resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracyMetres: Number.isFinite(position.coords.accuracy)
-            ? position.coords.accuracy
-            : null,
+          location: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyMetres: Number.isFinite(position.coords.accuracy)
+              ? position.coords.accuracy
+              : null,
+          },
+          // Dau thoi gian o tuong lai (dong ho GPS lech) khong duoc lam ban dinh vi "moi hon".
+          fixAtMs: Math.min(position.timestamp, Date.now()),
         }),
-      () => resolve({}),
+      () => resolve({ location: {}, fixAtMs: null }),
       { enableHighAccuracy: true, timeout: 8_000, maximumAge: 0 },
     );
   });

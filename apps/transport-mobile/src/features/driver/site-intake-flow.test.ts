@@ -5,18 +5,25 @@ import {
   classifyIntakeFailure,
   classifyLoadFailure,
   confirmBody,
+  confirmLocation,
   destinationBody,
   destinationIdentity,
   doneModel,
+  fixAgeMs,
+  FRESH_FIX_MAX_AGE_MS,
   INITIAL_INTAKE_FLOW,
   intakeFlowReducer,
   knownDestinationRows,
+  LOCATION_AGE_MAX_MS,
   locationFromFix,
+  needsFreshFix,
+  NO_CAPTURED_LOCATION,
   OFFICE_FOLLOW_UP_TEXT,
   OFFLINE_TEXT,
   openIntakeCard,
   pickSummary,
   pickupLine,
+  proposalBody,
   proposalPrimary,
   refusalAction,
   REPLAY_NOTE,
@@ -26,7 +33,9 @@ import {
   searchQueryProblem,
   showAssignedNote,
   SITE_INTAKE_START,
+  type CapturedLocation,
   type IntakeEvent,
+  type IntakeFixOutcome,
   type IntakeFlowState,
 } from './site-intake-flow';
 import type {
@@ -105,6 +114,9 @@ const PLACES: KnownPlace[] = [
   },
 ];
 
+/** Mot moc co dinh tren "dong ho may" cho cac bai tuoi vi tri. */
+const T0 = Date.parse('2026-09-26T03:00:00.000Z');
+
 const run = (events: readonly IntakeEvent[], from: IntakeFlowState = INITIAL_INTAKE_FLOW) =>
   events.reduce(intakeFlowReducer, from);
 
@@ -114,7 +126,12 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
   it('khong mang luc doc: buoc OFFLINE; khong mang luc gui: GIU de nghi, chi bao loi', () => {
     expect(run([{ type: 'OFFLINE' }]).step).toBe('OFFLINE');
     const loaded = run([
-      { type: 'PROPOSAL_LOADED', proposal: proposal(), location: {}, locationNote: null },
+      {
+        type: 'PROPOSAL_LOADED',
+        proposal: proposal(),
+        captured: NO_CAPTURED_LOCATION,
+        locationNote: null,
+      },
       { type: 'OFFLINE' },
     ]);
     expect(loaded.step).toBe('PROPOSAL');
@@ -124,7 +141,12 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
 
   it('de nghi -> nhan chuyen -> "Giao tới đâu?" mang dung noi vua lay hang', () => {
     const state = run([
-      { type: 'PROPOSAL_LOADED', proposal: proposal(), location: {}, locationNote: null },
+      {
+        type: 'PROPOSAL_LOADED',
+        proposal: proposal(),
+        captured: NO_CAPTURED_LOCATION,
+        locationNote: null,
+      },
       { type: 'SENDING' },
       { type: 'CONFIRMED', result: RESULT },
     ]);
@@ -145,7 +167,12 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
       candidates: [SITE, { ...SITE, siteId: 's2' }],
     });
     const loaded = run([
-      { type: 'PROPOSAL_LOADED', proposal: choose, location: {}, locationNote: null },
+      {
+        type: 'PROPOSAL_LOADED',
+        proposal: choose,
+        captured: NO_CAPTURED_LOCATION,
+        locationNote: null,
+      },
     ]);
     expect(loaded.chosenSiteId).toBeNull();
     expect(proposalPrimary(loaded, true)).toMatchObject({ siteId: null, enabled: false });
@@ -175,7 +202,12 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
 
   it('nut nhan chuyen tat khi khong co quyen xac nhan / may chu noi khong tao duoc / dang gui', () => {
     const loaded = run([
-      { type: 'PROPOSAL_LOADED', proposal: proposal(), location: {}, locationNote: null },
+      {
+        type: 'PROPOSAL_LOADED',
+        proposal: proposal(),
+        captured: NO_CAPTURED_LOCATION,
+        locationNote: null,
+      },
     ]);
     expect(proposalPrimary(loaded, true)?.enabled).toBe(true);
     expect(proposalPrimary(loaded, false)?.enabled).toBe(false);
@@ -186,7 +218,7 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
       {
         type: 'PROPOSAL_LOADED',
         proposal: proposal({ canCreate: false }),
-        location: {},
+        captured: NO_CAPTURED_LOCATION,
         locationNote: null,
       },
     ]);
@@ -198,7 +230,7 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
       {
         type: 'PROPOSAL_LOADED',
         proposal: proposal({ openRuns: [{ runId: 'r', code: 'X', status: 'ACTIVE' }] }),
-        location: {},
+        captured: NO_CAPTURED_LOCATION,
         locationNote: null,
       },
     ]);
@@ -208,7 +240,7 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
       {
         type: 'PROPOSAL_LOADED',
         proposal: proposal({ outcome: 'NO_MATCH', candidates: [] }),
-        location: {},
+        captured: NO_CAPTURED_LOCATION,
         locationNote: null,
       },
     ]);
@@ -217,7 +249,12 @@ describe('buoc nhan chuyen — bo may trang thai', () => {
 
   it('chon diem giao -> xong; "Chưa biết" -> xong ma KHONG co lenh nao (intake null)', () => {
     const received = run([
-      { type: 'PROPOSAL_LOADED', proposal: proposal(), location: {}, locationNote: null },
+      {
+        type: 'PROPOSAL_LOADED',
+        proposal: proposal(),
+        captured: NO_CAPTURED_LOCATION,
+        locationNote: null,
+      },
       { type: 'CONFIRMED', result: RESULT },
     ]);
     const row = knownDestinationRows(PLACES, '')[0]!;
@@ -301,15 +338,23 @@ describe('khoa chong ghi trung — mot khoa cho mot lan thu', () => {
     expect(attemptFor(null, 's1', mint).key).toBe('k3');
   });
 
-  it('than lenh mang DUNG khoa va vi tri da dong bang; khong bao gio gui (0,0)', () => {
-    expect(confirmBody('s1', 'k1', { latitude: 21, longitude: 105, accuracyMetres: 8 })).toEqual({
+  it('than lenh mang DUNG khoa, vi tri va TUOI tinh luc gui; khong toa do thi khong tuoi', () => {
+    const captured = {
+      location: { latitude: 21, longitude: 105, accuracyMetres: 8 },
+      fixAtMs: T0,
+    };
+    expect(confirmBody('s1', 'k1', captured, T0 + 7_000)).toEqual({
       siteId: 's1',
       clientEventId: 'k1',
       latitude: 21,
       longitude: 105,
       accuracyMetres: 8,
+      locationAgeMs: 7_000,
     });
-    expect(confirmBody('s1', 'k1', {})).toEqual({ siteId: 's1', clientEventId: 'k1' });
+    expect(confirmBody('s1', 'k1', NO_CAPTURED_LOCATION, T0)).toEqual({
+      siteId: 's1',
+      clientEventId: 'k1',
+    });
     const choice = { kind: 'KNOWN_PLACE' as const, placeId: 'p1' };
     expect(destinationBody('k9', choice)).toEqual({ clientEventId: 'k9', destination: choice });
     expect(destinationIdentity(choice)).toBe('known:p1');
@@ -414,18 +459,197 @@ describe('loi — chua chac khac bi tu choi', () => {
 });
 
 describe('vi tri', () => {
+  const okFix = (over: Partial<{ capturedAt: string }> = {}): IntakeFixOutcome => ({
+    kind: 'OK',
+    fix: {
+      latitude: 21,
+      longitude: 105,
+      accuracyMetres: 9,
+      capturedAt: new Date(T0).toISOString(),
+      ...over,
+    },
+  });
+
   it('khong lay duoc vi tri van di tiep voi {} va noi that', () => {
-    expect(locationFromFix({ kind: 'FAILED', message: 'Chưa cấp quyền vị trí' })).toEqual({
-      location: {},
+    expect(locationFromFix({ kind: 'FAILED', message: 'Chưa cấp quyền vị trí' }, T0)).toEqual({
+      captured: NO_CAPTURED_LOCATION,
       note: 'Chưa lấy được vị trí: Chưa cấp quyền vị trí',
     });
-    expect(
-      locationFromFix({ kind: 'OK', fix: { latitude: 0, longitude: 0, accuracyMetres: 5 } })
-        .location,
-    ).toEqual({});
-    expect(
-      locationFromFix({ kind: 'OK', fix: { latitude: 21, longitude: 105, accuracyMetres: 9 } }),
-    ).toEqual({ location: { latitude: 21, longitude: 105, accuracyMetres: 9 }, note: null });
+    const nullIsland = {
+      kind: 'OK',
+      fix: { latitude: 0, longitude: 0, accuracyMetres: 5, capturedAt: new Date(T0).toISOString() },
+    } as const;
+    expect(locationFromFix(nullIsland, T0).captured).toEqual(NO_CAPTURED_LOCATION);
+    expect(locationFromFix(okFix(), T0 + 50)).toEqual({
+      captured: { location: { latitude: 21, longitude: 105, accuracyMetres: 9 }, fixAtMs: T0 },
+      note: null,
+    });
+  });
+
+  it('ban dinh vi GIU moc cua no; dau thoi gian hong -> khong gui toa do', () => {
+    // Ban trong bo nho dem cua trinh duyet (web `maximumAge: Infinity`): moc la moc CUA NO.
+    const cached = locationFromFix(okFix({ capturedAt: new Date(T0 - 600_000).toISOString() }), T0);
+    expect(cached.captured.fixAtMs).toBe(T0 - 600_000);
+    // Moc o TUONG LAI (GPS lech dong ho may) bi chan boi luc nhan.
+    const future = locationFromFix(
+      okFix({ capturedAt: new Date(T0 + 3_600_000).toISOString() }),
+      T0,
+    );
+    expect(future.captured.fixAtMs).toBe(T0);
+    const broken = locationFromFix(okFix({ capturedAt: 'khong-phai-gio' }), T0);
+    expect(broken.captured).toEqual(NO_CAPTURED_LOCATION);
+    expect(broken.note).toBe('Máy báo một vị trí không dùng được — chưa gửi vị trí nào.');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * `#398` §3.1 — vi tri cu phai that bai dong
+ * ------------------------------------------------------------------ */
+
+describe('tuoi cua vi tri — #398 §3.1', () => {
+  const FRESH: CapturedLocation = {
+    location: { latitude: 20.8449, longitude: 106.6881, accuracyMetres: 12 },
+    fixAtMs: T0,
+  };
+
+  it('de nghi giu toa do CUNG moc cua no trong trang thai; lam lai tu dau thi bo ca hai', () => {
+    const loaded = run([
+      { type: 'PROPOSAL_LOADED', proposal: proposal(), captured: FRESH, locationNote: null },
+    ]);
+    expect(loaded.captured).toEqual(FRESH);
+    expect(intakeFlowReducer(loaded, { type: 'LOCATE' }).captured).toEqual(NO_CAPTURED_LOCATION);
+  });
+
+  it('tuoi = hieu hai moc cua dong ho may, lam tron, chan duoi 0 va chan tren theo may chu', () => {
+    expect(fixAgeMs(T0, T0 + 5_400.4)).toBe(5_400);
+    expect(fixAgeMs(T0, T0)).toBe(0);
+    expect(fixAgeMs(T0, T0 - 1_000)).toBe(0);
+    expect(fixAgeMs(T0 - 3 * LOCATION_AGE_MAX_MS, T0)).toBe(LOCATION_AGE_MAX_MS);
+    expect(fixAgeMs(Number.NaN, T0)).toBe(LOCATION_AGE_MAX_MS);
+  });
+
+  it('needsFreshFix: con moi toi 2 phut; qua 2 phut, am hoac hong thi chup lai', () => {
+    expect(FRESH_FIX_MAX_AGE_MS).toBe(120_000);
+    // Thap hon han 300 giay cua may chu — con cho cho lan chup lai va thoi gian gui.
+    expect(FRESH_FIX_MAX_AGE_MS).toBeLessThan(300_000);
+    expect(needsFreshFix(T0, T0 + 5_000)).toBe(false);
+    expect(needsFreshFix(T0, T0 + FRESH_FIX_MAX_AGE_MS)).toBe(false);
+    expect(needsFreshFix(T0, T0 + FRESH_FIX_MAX_AGE_MS + 1)).toBe(true);
+    expect(needsFreshFix(T0, T0 - 1)).toBe(true);
+    expect(needsFreshFix(Number.NaN, T0)).toBe(true);
+    // Khong co toa do nao -> khong co gi de lam moi.
+    expect(needsFreshFix(null, T0)).toBe(false);
+  });
+
+  it('than de nghi mang tuoi tinh LUC GUI; khong toa do thi rong', () => {
+    expect(proposalBody(FRESH, T0 + 1_200)).toEqual({
+      latitude: 20.8449,
+      longitude: 106.6881,
+      accuracyMetres: 12,
+      locationAgeMs: 1_200,
+    });
+    expect(proposalBody(NO_CAPTURED_LOCATION, T0)).toEqual({});
+    // Toa do ma khong biet tuoi KHONG di: may chu se coi no la "vua doc" (may khach #267 cu).
+    expect(proposalBody({ location: FRESH.location, fixAtMs: null }, T0)).toEqual({});
+  });
+
+  const recaptureOf = (outcome: IntakeFixOutcome) => {
+    const calls: number[] = [];
+    return {
+      calls,
+      recapture: async () => {
+        calls.push(1);
+        return outcome;
+      },
+    };
+  };
+
+  it('ban chup luc mo man con moi -> gui NGUYEN ban do, khong chup lai', async () => {
+    const probe = recaptureOf({ kind: 'TIMEOUT', message: 'het gio' });
+    const now = T0 + 30_000;
+    const chosen = await confirmLocation(FRESH, probe.recapture, () => now);
+
+    expect(chosen).toBe(FRESH);
+    expect(probe.calls).toHaveLength(0);
+    expect(confirmBody('s1', 'k1', chosen, now)).toMatchObject({ locationAgeMs: 30_000 });
+  });
+
+  it('ban chup da cu -> CHUP LAI, va gui ban moi voi tuoi cua ban moi', async () => {
+    const now = T0 + 10 * 60_000;
+    const probe = recaptureOf({
+      kind: 'OK',
+      fix: {
+        latitude: 20.845,
+        longitude: 106.6882,
+        accuracyMetres: 6,
+        capturedAt: new Date(now - 800).toISOString(),
+      },
+    });
+    const chosen = await confirmLocation(FRESH, probe.recapture, () => now);
+
+    expect(probe.calls).toHaveLength(1);
+    expect(chosen).toEqual({
+      location: { latitude: 20.845, longitude: 106.6882, accuracyMetres: 6 },
+      fixAtMs: now - 800,
+    });
+    expect(confirmBody('s1', 'k1', chosen, now)).toEqual({
+      siteId: 's1',
+      clientEventId: 'k1',
+      latitude: 20.845,
+      longitude: 106.6882,
+      accuracyMetres: 6,
+      locationAgeMs: 800,
+    });
+  });
+
+  it('ban chup da cu va chup lai KHONG ra gi -> gui KHONG toa do (that bai dong ve thuong mai)', async () => {
+    const now = T0 + 10 * 60_000;
+    for (const outcome of [
+      { kind: 'TIMEOUT', message: 'het gio' },
+      { kind: 'FAILED', message: 'tat dinh vi' },
+    ] as const) {
+      const chosen = await confirmLocation(FRESH, recaptureOf(outcome).recapture, () => now);
+      expect(chosen).toEqual(NO_CAPTURED_LOCATION);
+      expect(confirmBody('s1', 'k1', chosen, now)).toEqual({ siteId: 's1', clientEventId: 'k1' });
+    }
+  });
+
+  /** Web: "chup lai" co the tra chinh ban cu trong bo nho dem — no KHONG duoc gui nhu ban moi. */
+  it('chup lai ma van ra ban CU -> cung gui KHONG toa do, khong gui ban cu', async () => {
+    const now = T0 + 10 * 60_000;
+    const probe = recaptureOf({
+      kind: 'OK',
+      fix: {
+        latitude: 20.8449,
+        longitude: 106.6881,
+        accuracyMetres: 12,
+        capturedAt: new Date(T0).toISOString(),
+      },
+    });
+    const chosen = await confirmLocation(FRESH, probe.recapture, () => now);
+
+    expect(probe.calls).toHaveLength(1);
+    expect(chosen).toEqual(NO_CAPTURED_LOCATION);
+  });
+
+  it('khong co toa do tu dau -> khong chup lai, khong gui toa do', async () => {
+    const probe = recaptureOf({ kind: 'TIMEOUT', message: 'het gio' });
+    const chosen = await confirmLocation(NO_CAPTURED_LOCATION, probe.recapture, () => T0);
+    expect(chosen).toEqual(NO_CAPTURED_LOCATION);
+    expect(probe.calls).toHaveLength(0);
+  });
+
+  it('may chu noi vi tri khong dung duoc -> cau co dau + nut "Tìm lại địa điểm"', () => {
+    const failure = classifyIntakeFailure(
+      classifyHttpError(400, {
+        reason: 'SITE_INTAKE_LOCATION_UNUSABLE',
+        message: 'Vi tri gui len khong dung duoc (LOCATION_STALE)',
+      }),
+      'CONFIRM',
+    );
+    expect(failure).toMatchObject({ kind: 'REFUSED', next: 'RETRY_PROPOSAL' });
+    expect(failure.message).toMatch(/đã cũ/);
+    expect(refusalAction('RETRY_PROPOSAL')?.label).toBe('Tìm lại địa điểm');
   });
 });
 

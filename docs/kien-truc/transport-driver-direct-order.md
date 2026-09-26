@@ -42,6 +42,16 @@ văn phòng, đơn đã nhận chặng (gắn **một lần**), và lần báo b
 Trạng thái: `PENDING → ORDER_BOUND` hoặc `PENDING → REJECTED`. Trạng thái cuối không quay ngược
 (trigger `transport_site_intake_commercial_guard`).
 
+**Bản ghi trước #398.** Migration `20260926100100_…` **điền bù** một hàng phần thương mại `PENDING`
+trống cho mỗi lần nhận việc **còn dang dở** lúc triển khai: vòng chạy `PLANNED/ACTIVE`, chặng của lần
+nhận việc là `LOADED`, chưa `CANCELLED`/`COMPLETED`, chưa mang đơn. Lần nhận việc đã đóng/hủy/xong/đã
+gắn đơn không được hàng nào (đường lười của kho vẫn tạo khi có lệnh chạm tới). Hàng điền bù không bịa
+điểm giao, xác nhận nơi lấy, đơn hay người ghi; `siteMatch` cũ là `NULL` nên ra `NEEDS_REVIEW`
+(`DESTINATION_MISSING` + `ORIGIN_LOCATION_UNVERIFIED`), hiện trong "Cần xử lý", và planner cho chính
+xe đó bị từ chối `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE`. Câu lệnh idempotent (`NOT EXISTS` +
+`ON CONFLICT DO NOTHING`); bài `transport-site-intake-commercial-backfill.int.spec.ts` chạy chính đoạn
+giữa hai dòng đánh dấu `DIEN-BU-398` trong migration.
+
 ---
 
 ## 2. Đủ điều kiện tạo đơn — `evaluateCommercialReadiness` (hàm thuần, tất định)
@@ -70,6 +80,23 @@ của #379). Không LLM trong cổng này.
 `siteMatch` được ghi **đúng lúc bấm**: `UNIQUE_INSIDE` (một kho, vị trí nằm TRONG hàng rào) ·
 `CHOSEN_AMONG_SEVERAL` · `NO_LOCATION`. Hàng trước #398 là `NULL` = "không biết".
 
+### Vị trí cũ thất bại đóng (#398 §3.1, §8)
+
+- Tọa độ do máy tài xế gửi (`DRIVER_REPORTED`) đi kèm `locationAgeMs`: tuổi bản định vị đo bằng
+  **đồng hồ của chính máy** lúc gửi (hiệu hai lần đọc cùng một đồng hồ), nên lệch giờ giữa điện thoại
+  và máy chủ không làm sai kết quả. Máy chủ đặt `observedAt = now − locationAgeMs`, rồi áp hạn
+  `maxAgeSeconds = 300` sẵn có của #267: `propose` trả `LOCATION_UNUSABLE/LOCATION_STALE` và không
+  ghi gì; `confirm` trả `400 SITE_INTAKE_LOCATION_UNUSABLE` **trước mọi lần ghi**.
+- App giữ giờ của bản định vị (cái cũ hơn giữa dấu giờ của bản định vị và lúc máy nhận nó). Lúc bấm
+  "Nhận chuyến tại đây", bản định vị từ lúc mở màn cũ hơn 120 giây (`FRESH_FIX_MAX_AGE_MS`, thấp hơn
+  300 giây của máy chủ) thì app **xin lại một lần**; không có bản mới thì **không gửi tọa độ** — lần
+  xác nhận ghi `siteMatch = NO_LOCATION`, việc vận hành vẫn được nhận, phần thương mại ra
+  `NEEDS_REVIEW (ORIGIN_LOCATION_UNVERIFIED)`. Tọa độ không rõ tuổi không bao giờ được gửi.
+- PWA: `captureFix()` ép `maximumAge: 0` — bản web của `expo-location` mặc định `maximumAge: Infinity`,
+  tức nhận mọi vị trí còn trong bộ nhớ đệm của trình duyệt. Web cũ (#267) cũng gửi `locationAgeMs` và
+  xin lại vị trí khi quá 120 giây.
+- Thiếu `locationAgeMs` (máy khách cũ) thì máy chủ giữ hành vi #267 (`observedAt = now`).
+
 ---
 
 ## 3. Lệnh adopt — một giao dịch, ba khóa, một thứ tự
@@ -90,6 +117,7 @@ BEGIN (ReadCommitted)
          idempotencyKey='site-intake:<intakeId>')
   UPDATE TransportSiteIntakeCommercial SET status='ORDER_BOUND', orderId, bindingMode, boundBy, boundAt
   INSERT AuditLog × 3 (transport.order.create · transport.planning.adopt · transport.site_intake.order_bound)
+  [lệnh tài xế chọn điểm giao] + transport.site_intake.destination — cùng giao dịch
 COMMIT
 ```
 
@@ -120,12 +148,20 @@ nhận: chỉ xe (không khóa hàng vòng chạy có sẵn nào — nó chỉ c
 lần nhận việc → đơn → hàng, **không** giành khóa xe. Mọi đường ghi khác chỉ khóa hàng. Không ai giữ
 một khóa sau rồi xin một khóa trước ⇒ không vòng đợi.
 
+Câu `SELECT … FOR UPDATE` trong `withIntake` là **ngoại lệ có tên** của quy ước "capability không tự
+viết khóa hàng vòng chạy" (`MovementRepository.underRunLock`): dùng `underRunLock` sẽ mở giao dịch và
+khóa hàng TRƯỚC, đảo thứ tự thành hàng → đơn — ngược planner (đơn → xe → hàng) và là công thức của
+deadlock. Ngoại lệ được ghi ngay tại câu lệnh và trong chú thích của `underRunLock`. Khóa đơn
+(`orderPlanLockKey()` / `lockOrderPlan()`) khai **một lần** trong `prisma-movement.repository.ts`;
+kho phần thương mại dùng lại.
+
 Bốn lớp chặn nhân đôi:
 
 1. kế hoạch `ADOPTED` → `TransportOrderRunPlan_activeOrder_key`: planner gọi lại cho O1 → `PLAN_ORDER_ALREADY_PLANNED` trước mọi lần ghi;
 2. planner cho **xe đang giữ việc tài xế nhận chưa có đơn** → `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE`: hỏi nhanh qua cổng `PlanningPendingWorkSource` (mặc định rỗng ở `transport-core`, `transport-site-intake` ghi đè), và **hỏi lại dưới khóa xe** trong kho;
 3. tài xế xác nhận khi **xe đã có vòng chạy mở** (vd văn phòng vừa lập, chưa ai cầm) → `SITE_INTAKE_VEHICLE_BUSY`, không ghi gì;
-4. tầng DB: trigger `transport_run_leg_order_binding_once` (chặng `orderId` X → Y bị cấm), `TransportSiteIntakeCommercial_orderId_key`, trigger `transport_site_intake_commercial_guard`.
+4. tầng DB: trigger `transport_run_leg_order_binding_once` — chặng `orderId` X → Y bị cấm; X → NULL **cũng** bị cấm, trừ khi do chính khóa ngoại `ON DELETE SET NULL` ghi khi đơn bị xóa cứng (`pg_trigger_depth() > 1`; một `UPDATE` viết tay, kể cả trong khối `DO`, chạy ở độ sâu 1) ⇒ không còn đường gán lại bằng hai lệnh thô X → NULL → Y. Kèm `TransportSiteIntakeCommercial_orderId_key` và trigger `transport_site_intake_commercial_guard`;
+5. trình sửa vòng chạy/chặng tay (`POST /transport/runs/:id/legs`): thêm chặng `LOADED` cho một đơn đã **nhận chặng của việc tài xế nhận** (`ORDER_BOUND`) → `409 LEG_ORDER_ADOPTED_BY_SITE_INTAKE`, kiểm dưới khóa đơn. Đua với "gắn đơn có sẵn": gắn trước → chặng tay bị từ chối; chặng tay trước → gắn nhận `SITE_INTAKE_BINDING_DENIED (ORDER_ALREADY_ON_RUN)` (bài `transport-movement-adopted-order.int.spec.ts`).
 
 ---
 
@@ -140,8 +176,17 @@ Bốn lớp chặn nhân đôi:
 | `ORDER_BOUND`, đơn đã `FULFILLED`/`CANCELLED` | chỉ **ghi nhận** bất thường, không đổi trạng thái                                                                   | như trái                                            |
 | `PENDING`                                     | `REJECTED` + hủy việc vận hành chưa chạy                                                                            | `REJECTED`; hoạt động vận hành giữ nguyên           |
 
-Không xóa hàng nào. Lý do bắt buộc. Mỗi lần nhận việc có tối đa một lần báo bất thường (gửi lại cùng
-khóa = trả kết cục cũ). Chỉ `ADMIN` (kế toán bị cắt ở `ACCOUNTING_DENIED`).
+Không xóa hàng nào. **Lý do bắt buộc ở ba tầng**: schema HTTP (≥ 3 ký tự sau khi cắt khoảng trắng),
+chính dịch vụ (`SITE_INTAKE_EXCEPTION_REASON_REQUIRED` — người gọi không qua HTTP cũng không lách được)
+và CHECK `TransportSiteIntakeCommercial_exception_shape`. Mỗi lần nhận việc có tối đa một lần báo bất
+thường (gửi lại cùng khóa = trả kết cục cũ). Chỉ `ADMIN` (kế toán bị cắt ở `ACCOUNTING_DENIED`).
+
+"Xe đã lăn bánh" được chứng minh trên Postgres bằng **mốc** (không chỉ bằng trạng thái chặng): chặng
+và vòng chạy còn `PLANNED`, chỉ một mốc `DEPARTED` hoặc `PICKUP_DEPARTURE` là đủ để ra
+`ORDER_CANCELLED_OPERATION_PRESERVED`; vòng chạy, chặng và các hàng mốc giữ nguyên. Sau lần hủy đó kế
+hoạch `ADOPTED` **vẫn hiệu lực** — cùng ngữ nghĩa với hủy đơn có sẵn (kế hoạch mô tả việc vận hành đã
+diễn ra, không phải nghĩa vụ thương mại). Với đơn đã `FULFILLED`, kể cả khi xe chưa chạy, chỉ ghi
+`ANOMALY_RECORDED_ORDER_TERMINAL`; không hủy gì.
 
 ---
 
@@ -151,8 +196,8 @@ khóa = trả kết cục cũ). Chỉ `ADMIN` (kế toán bị cắt ở `ACCOUN
 
 | Đường                                                                                                  | Quyền                  | Ghi?                                                                                        |
 | ------------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------- |
-| `POST proposals`                                                                                       | `.site_intake.propose` | **không** (#267)                                                                            |
-| `POST confirmations` `{siteId, clientEventId, latitude?, longitude?, accuracyMetres?}`                 | `.site_intake.confirm` | vòng chạy + chặng + lần nhận việc + phần thương mại `PENDING` (một giao dịch, khóa xe — §3) |
+| `POST proposals` `{latitude?, longitude?, accuracyMetres?, locationAgeMs?}`                            | `.site_intake.propose` | **không** (#267)                                                                            |
+| `POST confirmations` `{siteId, clientEventId, latitude?, longitude?, accuracyMetres?, locationAgeMs?}` | `.site_intake.confirm` | vòng chạy + chặng + lần nhận việc + phần thương mại `PENDING` (một giao dịch, khóa xe — §3) |
 | `GET open` → `{ intake: DriverIntakeView \| null }`                                                    | `.propose`             | không                                                                                       |
 | `GET destinations` → `{ available, places: KnownPlace[] }`                                             | `.propose`             | không                                                                                       |
 | `POST destinations/search` `{query}` → `PlaceSearchResponse`                                           | `.confirm`             | không                                                                                       |
@@ -162,6 +207,16 @@ khóa = trả kết cục cũ). Chỉ `ADMIN` (kế toán bị cắt ở `ACCOUN
 `destination` = `{kind:'KNOWN_PLACE', placeId}` hoặc `{kind:'PLACE_SEARCH', query, label, latitude,
 longitude}` — kết quả tìm được máy chủ **tìm lại và đối chiếu** nhãn + tọa độ; một cặp số tự do không
 qua được. Mọi thân `.strict()` — trường tiền/khách/xe/tài xế bị từ chối.
+
+`locationAgeMs`: số nguyên ms, `0..86_400_000`, chỉ đi **cùng** `latitude/longitude`; đi với
+`observationId` hoặc không kèm tọa độ → `400`. Xem §2 "Vị trí cũ thất bại đóng".
+
+Đối chiếu kết quả tìm (`SiteIntakePlaceSearchBridge.choiceOf`): `KNOWN_PLACE` chỉ đi qua `placeId`,
+nhãn + tọa độ lấy từ hàng rào đang hoạt động; `PLACE_SEARCH` được máy chủ **tìm lại bằng chính chuỗi
+tìm** và chỉ nhận kết quả **cùng nhãn và cùng điểm (≤ 1 m)** — điểm lưu là điểm của máy chủ. Tìm đang
+tắt/bận → `409 SITE_INTAKE_DESTINATION_SEARCH_UNAVAILABLE`; lệch → `400
+SITE_INTAKE_DESTINATION_UNVERIFIED`; `0,0` không qua (tầng parse của nhà cung cấp loại nó, và CHECK
+`…_destination_not_null_island` chặn ở DB).
 
 `POST confirmations` từ chối `409 SITE_INTAKE_OPEN_RUN_EXISTS` (tài xế đang cầm vòng chạy mở) và
 `409 SITE_INTAKE_VEHICLE_BUSY` (xe đã có vòng chạy mở, kể cả chưa ai cầm) — không ghi gì.
@@ -178,11 +233,32 @@ tiền, không vòng chạy của người khác (lỗi `SITE_INTAKE_VEHICLE_BUS
 | `GET /?status=PENDING` → `SiteIntakeReviewView[]`                                | `transport.site_intake.review.read`       |
 | `GET activity?hours=24` → `DriverOrderActivityView[]` ("Đơn mới từ tài xế")      | `.review.read`                            |
 | `GET by-order/:orderId` → `OrderIntakeSourceView` (404 nếu đơn không đến từ đây) | `.review.read`                            |
+| `GET destinations` → `{ available, places: KnownPlace[] }`                       | `.review.complete` (ADMIN, ACCOUNTING)    |
+| `POST destinations/search` `{query}` → `PlaceSearchResponse` (20/phút)           | `.review.complete` (ADMIN, ACCOUNTING)    |
 | `GET :intakeId` → `SiteIntakeReviewView`                                         | `.review.read`                            |
-| `GET :intakeId/bindable-orders` → đơn OPEN chưa lập kế hoạch                     | `.review.complete`                        |
+| `GET :intakeId/bindable-orders` → đơn OPEN chưa lập kế hoạch, **cùng nơi lấy**   | `.review.complete`                        |
 | `POST :intakeId/complete` `{idempotencyKey, destination?, attestOrigin?}`        | `.review.complete` (ADMIN, ACCOUNTING)    |
 | `POST :intakeId/bind-order` `{orderId, idempotencyKey}`                          | `.review.complete` (ADMIN, ACCOUNTING)    |
 | `POST :intakeId/exception` `{reason, idempotencyKey}`                            | `transport.site_intake.exception` (ADMIN) |
+
+Văn phòng (giám đốc, kế toán) hoàn thiện điểm giao từ **đúng hai nguồn #379 như tài xế**: địa điểm
+đã biết + tìm theo tên, qua **cùng** `SiteIntakePlaceSearchBridge` mà `complete` dùng để tìm lại và đối
+chiếu. Không nhập tọa độ tự do, không lấy chữ tự do làm vị trí, không có luồng "chọn trên máy tính".
+
+**Gắn đơn có sẵn chỉ với đơn tương thích.** `evaluateOrderBinding` có thêm lý do cuối
+`ORDER_ORIGIN_MISMATCH` (`matchOrderOrigin`, hàm thuần): đơn **có** điểm lấy (#379) mà cách tâm hàng
+rào đang hoạt động **gần nhất** của địa điểm tài xế đứng quá `ORDER_ORIGIN_TOLERANCE_METRES = 500` m
+→ `409 SITE_INTAKE_ORDER_ORIGIN_MISMATCH`. Đơn chưa có điểm lấy: cho gắn (người chọn tường minh; cổng
+không bịa tọa độ); địa điểm không có hàng rào: cho gắn (không có gì để so). `bindable-orders` lọc bằng
+**cùng** hàm. 500 m cố định vì cổng và danh sách đọc cùng nguồn (chỉ tâm hàng rào): chặn lệch rõ ràng
+(khác quận/tỉnh), không thay người quyết. Các lý do từ chối gắn khác vẫn là `409
+SITE_INTAKE_BINDING_DENIED` (lý do cụ thể nằm trong thông điệp và `detail.reason` của quyết định).
+
+Phân quyền được chứng minh ở tầng HTTP (`site-intake-review.authz.spec.ts`, `RolesGuard` +
+`TransportActionGuard` thật, `AUTH_MODE=session`): `SALE` bị `403` trên mọi đường
+`/transport/site-intakes`, kể cả với lần nhận việc của chính mình; `ACCOUNTING` bị `403` ở
+`/:id/exception` nhưng được `complete`/`bind-order`; `ADMIN` được `exception`; tài xế đọc hay chọn điểm
+giao cho lần nhận việc của người khác nhận `404 SITE_INTAKE_NOT_FOUND`, cùng thân với id không tồn tại.
 
 Control Tower: loại việc `SITE_INTAKE_NEEDS_REVIEW` (WARNING), chủ thể `SITE_INTAKE` (id = intakeId,
 reference = mã vòng chạy), `detail.reasons` = mã nối bằng dấu phẩy. Đơn tự tạo bình thường **không**
@@ -197,6 +273,21 @@ vòng chạy xong != đơn giao xong != đối soát duyệt != công nợ nhậ
 ```
 
 Lệnh adopt không ghi công nợ, phải trả, quyết toán, doanh thu. Tiền chưa biết là `null`.
+
+---
+
+## 6a. Quan sát
+
+- Bước (`telemetry.step`): `site_intake.driver_destination`, `site_intake.office_complete`,
+  `site_intake.bind_existing_order`, `site_intake.report_exception` (ngoài); `site_intake.settle`,
+  `site_intake.adopt` (trong).
+- `stateChange` phát **sau khi commit** (gom trong giao dịch, phát khi `withIntake` trả về; rollback
+  thì không phát gì): phần thương mại `PENDING→ORDER_BOUND` (lý do = `AUTO_CREATED | OFFICE_COMPLETED |
+OFFICE_EXISTING_ORDER`) và `PENDING→REJECTED`; đơn `∅→OPEN` khi tự tạo, `OPEN→CANCELLED` khi báo bất
+  thường; chặng/vòng chạy `PLANNED→CANCELLED` khi hủy việc chưa chạy.
+- Quyết định có mã (`site_intake.commercial`, `site_intake.exception`, `site_intake.propose/confirm`
+  kèm tuổi vị trí, độ tin vị trí, lý do không dùng được) — không có tọa độ trong chi tiết.
+- Telemetry `@Optional`, fail-open (bài test với sink ném lỗi chứng minh nghiệp vụ vẫn thành công).
 
 ---
 
@@ -217,3 +308,27 @@ Lệnh adopt không ghi công nợ, phải trả, quyết toán, doanh thu. Ti�
   lúc, `take` giới hạn 20/xe); gộp truy vấn khi số hàng chờ tăng thật.
 - **Bản đồ chọn điểm giao** trên PWA: bản đồ nền web chưa có (`RunMap.web.tsx`), nên điểm giao chọn từ
   danh sách địa điểm đã biết + tìm theo tên (#379), không phải chạm trên bản đồ.
+- **Planner từ chối cả đơn không liên quan** khi xe còn giữ một việc tài xế nhận **chưa có đơn**
+  (`PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE`) — có chủ ý, thất bại đóng: văn phòng gỡ việc đó trước
+  (hoàn thiện / gắn đơn / báo bất thường), rồi mới lập kế hoạch khác cho xe.
+- **Không tự tạo đơn khi dữ kiện ngoài đổi**: một việc `PENDING` trở nên đủ điều kiện (vd sửa hàng rào,
+  phân công xe khôi phục) vẫn nằm ở "Cần xử lý" tới khi văn phòng bấm hoàn thiện.
+- `propose` **không báo trước** xe đang bận; lần từ chối `SITE_INTAKE_VEHICLE_BUSY` chỉ đến lúc bấm.
+- `destinationLabel` chữ tự do của #267 vẫn được `confirmations` nhận (máy khách cũ); nó **không bao
+  giờ** là sự thật điểm giao và không hiện cho văn phòng.
+- Lần nhận việc trước #398 có chặng đã `COMPLETED` nhưng vòng chạy còn mở **không** được điền bù (chặng
+  đã xong, không gắn đơn được nữa) — có chủ ý.
+- Trigger chặng: một trigger người dùng trên bảng khác tự `UPDATE` chặng về `NULL` sẽ chạy ở độ sâu
+  lớn hơn 1 và lọt; hôm nay không có trigger nào như vậy, và thêm nó cần quyền DDL (ngang quyền tắt
+  trigger).
+- Kiểm toán của một lần tự tạo tách hai hàng: `transport.order.create` mang `source =
+DRIVER_SITE_INTAKE` + `intakeId`; `transport.site_intake.order_bound` mang `driverId`, `vehicleId`,
+  `siteId`, `runId`, `legId`. Không một hàng nào mang đủ cả năm.
+- `PrismaMovementRepository.bindOrderToUnboundLoadedLeg` không được gọi ở chế độ Prisma (kho phần
+  thương mại adopt ngay trong giao dịch của nó); lớp trừu tượng + bản trong bộ nhớ là đường adopt thật
+  của `PERSISTENCE=memory`.
+- Ô tìm điểm giao của **văn phòng** chỉ có bằng chứng đơn vị (hàm thuần + controller); chưa có luồng
+  E2E mở tờ xem việc (Maestro 09 dừng ở thẻ việc).
+- iOS trên CI chỉ build + mở app, **không** chạy luồng nhận chuyến.
+- Chromium giả lập vị trí giữ nguyên dấu giờ từ lúc đặt: bài PWA đặt lại vị trí ngay trước khi nhận
+  chuyến (`freshFix`).

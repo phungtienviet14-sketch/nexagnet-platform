@@ -7,6 +7,7 @@ import {
   ORIGIN_ATTESTABLE_REASONS,
   evaluateCommercialReadiness,
   hasMovementStarted,
+  isOrderOriginCompatible,
   type CommercialReadiness,
 } from './commercial-readiness.js';
 import { TransportSiteIntakeCoreFacts } from './site-intake-facts.port.js';
@@ -239,11 +240,24 @@ export class SiteIntakeReviewService {
     };
   }
 
-  /** Don OPEN chua co ke hoach, chua nam tren chang nao, chua nhan viec nao — NGUOI chon mot. */
+  /**
+   * Don OPEN chua co ke hoach, chua nam tren chang nao, chua nhan viec nao, va LAY HANG quanh dia
+   * diem tai xe nhan viec (khi don co toa do) — NGUOI chon mot.
+   *
+   * Loc diem lay dung CUNG ham (`isOrderOriginCompatible`) va CUNG nguon dia diem
+   * (`SiteIntakeReadinessReader.external().originPoints`) voi cong gan don duoi khoa — nen danh sach
+   * khong de nghi mot don ma lenh gan se tu choi `SITE_INTAKE_ORDER_ORIGIN_MISMATCH`. Loc TRUOC khi
+   * cat cua so, de don lay hang o noi khac khong chiem cho cua don dung.
+   */
   async bindableOrders(intakeId: string): Promise<readonly BindableOrderView[]> {
-    if (!(await this.intakes.findById(intakeId))) throw notFound();
+    const intake = await this.intakes.findById(intakeId);
+    if (!intake) throw notFound();
+    const { originPoints } = await this.reader.external(intake);
     const open = (await this.movement.listOrders())
-      .filter((order) => order.status === 'OPEN')
+      .filter(
+        (order) =>
+          order.status === 'OPEN' && isOrderOriginCompatible(order.originPoint, originPoints),
+      )
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, BINDABLE_LIMIT * 2);
     const checked = await Promise.all(

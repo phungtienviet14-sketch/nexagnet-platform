@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
+import type { StateChangeRecord, TelemetryRecord } from '../../observability/telemetry-record.js';
+import { TelemetryService } from '../../observability/telemetry.service.js';
 import { InMemoryCounterpartyRepository } from '../counterparty/counterparty.repository.js';
 import { InMemoryCounterpartySiteRepository } from '../counterparty/site.repository.js';
 import { CounterpartySiteService } from '../counterparty/site.service.js';
@@ -90,6 +92,13 @@ describe.each(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN'] as const)(
     let review: SiteIntakeReviewService;
     let planning: PlanningService;
     let pendingWork: SiteIntakePlanningPendingWorkSource;
+    /** Cac mien ghep cua `commercial` — de dung lai MOT ban co telemetry trong bai observability. */
+    let wiring: {
+      store: InMemorySiteIntakeCommercialStore;
+      core: TransportSiteIntakeCoreFactsAdapter;
+      geo: TransportSiteIntakeGeoFactsAdapter;
+      reader: SiteIntakeReadinessReader;
+    };
 
     let siteId = '';
     let destinationPlaceId = '';
@@ -126,6 +135,7 @@ describe.each(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN'] as const)(
       const reader = new SiteIntakeReadinessReader(core, geo, policy);
       commercial = new SiteIntakeCommercialService(store, intakes, core, geo, reader);
       review = new SiteIntakeReviewService(store, intakes, movementRepo, plans, core, reader);
+      wiring = { store, core, geo, reader };
       pendingWork = new SiteIntakePlanningPendingWorkSource(review);
       planning = new PlanningService(movement, plans, fleet, audit, POLICY, policy);
 
@@ -443,6 +453,267 @@ describe.each(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN'] as const)(
       expect((await movementRepo.findLeg(intake.legId))?.orderId).toBeNull();
     });
 
+    /** Don co san mang TOA DO diem lay (#379) — tao qua dung duong van phong tao don. */
+    const anOrderAt = (code: string, originPoint: { latitude: number; longitude: number }) =>
+      movement.createOrder(
+        {
+          code,
+          originLabel: 'Kho nao do',
+          destinationLabel: 'Bai xe B',
+          originPoint,
+          destinationPoint: DESTINATION,
+        },
+        OFFICE,
+      );
+
+    /** ~2 km ve phia bac tam hang rao kho A — ngoai dung sai doi chieu diem lay. */
+    const FAR_FROM_ORIGIN = { latitude: ORIGIN.latitude + 0.018, longitude: ORIGIN.longitude };
+
+    it('don co san lay hang o NOI KHAC: khong nam trong danh sach gan duoc, gan tay thi SITE_INTAKE_ORDER_ORIGIN_MISMATCH', async () => {
+      const intake = await confirm();
+      const far = await anOrderAt('DH-XA', FAR_FROM_ORIGIN);
+      await anOrderAt('DH-GAN', ORIGIN);
+      await anOrder('DH-KHONG-TOA-DO');
+
+      const bindable = (await review.bindableOrders(intake.intakeId)).map((order) => order.code);
+      expect(bindable).toContain('DH-GAN');
+      // Don KHONG co toa do van de nghi: nguoi chon tu chiu, khong co gi de chung minh la lech.
+      expect(bindable).toContain('DH-KHONG-TOA-DO');
+      expect(bindable).not.toContain('DH-XA');
+
+      const before = await counts();
+      expect(
+        await reasonOf(() =>
+          commercial.bindExistingOrder({
+            actor: OFFICE,
+            intakeId: intake.intakeId,
+            orderId: far.id,
+          }),
+        ),
+      ).toBe('SITE_INTAKE_ORDER_ORIGIN_MISMATCH');
+      expect(await counts()).toEqual(before);
+      expect((await review.detail(intake.intakeId)).status).toBe('PENDING');
+      expect((await movementRepo.findLeg(intake.legId))?.orderId).toBeNull();
+      expect(await plans.findActiveForOrder(far.id)).toBeNull();
+    });
+
+    it('don co san lay hang TAI CHINH kho do: gan duoc, don nhan dung vong chay + chang cu', async () => {
+      const intake = await confirm();
+      const near = await anOrderAt('DH-GAN', ORIGIN);
+      const before = await counts();
+
+      const bound = await commercial.bindExistingOrder({
+        actor: OFFICE,
+        intakeId: intake.intakeId,
+        orderId: near.id,
+      });
+      expect(bound).toMatchObject({
+        status: 'ORDER_BOUND',
+        bindingMode: 'OFFICE_EXISTING_ORDER',
+        orderId: near.id,
+        bound: true,
+      });
+      expect(await counts()).toEqual(before);
+      expect((await movementRepo.findLeg(intake.legId))?.orderId).toBe(near.id);
+    });
+
+    /* ================================================================ *
+     * TRINH SUA VONG CHAY / CHANG TAY
+     * ================================================================ */
+
+    it('don TU TAO tu viec tai xe khong len duoc chang co hang THU HAI qua trinh sua tay', async () => {
+      const intake = await confirm();
+      const outcome = await chooseDestination(intake.intakeId);
+      const orderId = outcome.orderId ?? '';
+      const manualRun = await movement.createRun(
+        { code: 'RUN-TAY-398', vehicleId: otherVehicleId },
+        OFFICE,
+      );
+      const before = await counts();
+
+      expect(
+        await reasonOf(() =>
+          movement.addLeg(
+            manualRun.id,
+            {
+              sequence: 1,
+              kind: 'LOADED',
+              orderId,
+              originLabel: 'Cong ty ABC — Kho A',
+              destinationLabel: 'Bai xe B',
+            },
+            OFFICE,
+          ),
+        ),
+      ).toBe('LEG_ORDER_ADOPTED_BY_SITE_INTAKE');
+      expect(await counts()).toEqual(before);
+      expect((await movementRepo.listLegsByOrder(orderId)).map((leg) => leg.id)).toEqual([
+        intake.legId,
+      ]);
+    });
+
+    /* ================================================================ *
+     * OBSERVABILITY — chuyen trang thai + buoc nghiep vu
+     * ================================================================ */
+
+    const RELEASE = {
+      tenant: 'it',
+      environment: 'test',
+      gitSha: 'unknown',
+      source: 'none',
+    } as const;
+
+    const withTelemetry = () => {
+      const records: TelemetryRecord[] = [];
+      const telemetry = new TelemetryService();
+      telemetry.configure({
+        release: RELEASE,
+        privacy: 'full',
+        sinks: [{ record: (record) => records.push(record) }],
+      });
+      const service = new SiteIntakeCommercialService(
+        wiring.store,
+        intakes,
+        wiring.core,
+        wiring.geo,
+        wiring.reader,
+        telemetry,
+      );
+      const stateChanges = () =>
+        records
+          .filter((record): record is StateChangeRecord => record.type === 'state_change')
+          .map(({ entity, entityId, from, to, reason }) => ({
+            entity,
+            entityId,
+            from,
+            to,
+            reason,
+          }));
+      const steps = () =>
+        records.flatMap((record) => (record.type === 'step' ? [record.name] : []));
+      return { service, stateChanges, steps };
+    };
+
+    it('tu tao don: stateChange Order null->OPEN va phan thuong mai PENDING->ORDER_BOUND, trong cac buoc site_intake.*', async () => {
+      const intake = await confirm();
+      const { service, stateChanges, steps } = withTelemetry();
+      const choose = () =>
+        service.chooseDestinationAsDriver({
+          authUserId: AUTH,
+          intakeId: intake.intakeId,
+          clientEventId: 'diem-giao-1',
+          choice: { kind: 'KNOWN_PLACE', placeId: destinationPlaceId },
+        });
+
+      const outcome = await choose();
+
+      const commercialRow = await wiring.store.findByIntake(intake.intakeId);
+      expect(stateChanges()).toEqual([
+        {
+          entity: 'TransportOrder',
+          entityId: outcome.orderId,
+          from: null,
+          to: 'OPEN',
+          reason: 'AUTO_CREATED',
+        },
+        {
+          entity: 'TransportSiteIntakeCommercial',
+          entityId: commercialRow?.id,
+          from: 'PENDING',
+          to: 'ORDER_BOUND',
+          reason: 'AUTO_CREATED',
+        },
+      ]);
+      // Buoc trong ket thuc (va ghi) truoc buoc ngoai.
+      expect(steps()).toEqual([
+        'site_intake.adopt',
+        'site_intake.settle',
+        'site_intake.driver_destination',
+      ]);
+
+      // Gui lai: khong chuyen trang thai nao moi.
+      await choose();
+      expect(stateChanges()).toHaveLength(2);
+    });
+
+    it('lenh bi tu choi khong phat chuyen trang thai; bao bat thuong PENDING->REJECTED kem huy chang + vong chay', async () => {
+      const intake = await confirm();
+      const { service, stateChanges, steps } = withTelemetry();
+      const far = await anOrderAt('DH-XA', FAR_FROM_ORIGIN);
+
+      expect(
+        await reasonOf(() =>
+          service.bindExistingOrder({ actor: OFFICE, intakeId: intake.intakeId, orderId: far.id }),
+        ),
+      ).toBe('SITE_INTAKE_ORDER_ORIGIN_MISMATCH');
+      expect(stateChanges()).toEqual([]);
+      expect(steps()).toEqual(['site_intake.bind_existing_order']);
+
+      await service.reportException({
+        actor: 'giam-doc',
+        intakeId: intake.intakeId,
+        reason: 'Tai xe bam nham kho',
+        idempotencyKey: 'bat-thuong-1',
+      });
+      const commercialRow = await wiring.store.findByIntake(intake.intakeId);
+      const reason = 'INTAKE_REJECTED_WORK_CANCELLED';
+      expect(stateChanges()).toEqual([
+        {
+          entity: 'TransportRunLeg',
+          entityId: intake.legId,
+          from: 'PLANNED',
+          to: 'CANCELLED',
+          reason,
+        },
+        {
+          entity: 'TransportVehicleRun',
+          entityId: intake.runId,
+          from: 'PLANNED',
+          to: 'CANCELLED',
+          reason,
+        },
+        {
+          entity: 'TransportSiteIntakeCommercial',
+          entityId: commercialRow?.id,
+          from: 'PENDING',
+          to: 'REJECTED',
+          reason,
+        },
+      ]);
+    });
+
+    it('telemetry hong KHONG lam hong nghiep vu (fail-open)', async () => {
+      const intake = await confirm();
+      const telemetry = new TelemetryService();
+      telemetry.configure({
+        release: RELEASE,
+        privacy: 'full',
+        sinks: [
+          {
+            record: () => {
+              throw new Error('sink chet');
+            },
+          },
+        ],
+      });
+      const service = new SiteIntakeCommercialService(
+        wiring.store,
+        intakes,
+        wiring.core,
+        wiring.geo,
+        wiring.reader,
+        telemetry,
+      );
+
+      const outcome = await service.chooseDestinationAsDriver({
+        authUserId: AUTH,
+        intakeId: intake.intakeId,
+        clientEventId: 'diem-giao-1',
+        choice: { kind: 'KNOWN_PLACE', placeId: destinationPlaceId },
+      });
+      expect(outcome).toMatchObject({ status: 'ORDER_BOUND', bound: true });
+    });
+
     /* ================================================================ *
      * LAP KE HOACH SAU DO
      * ================================================================ */
@@ -531,6 +802,26 @@ describe.each(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN'] as const)(
           }),
         ),
       ).toBe('SITE_INTAKE_EXCEPTION_ALREADY_RECORDED');
+    });
+
+    it('ly do TRANG (chi khoang trang) bi tu choi o tang dich vu, khong ghi gi', async () => {
+      const intake = await confirm();
+      const outcome = await chooseDestination(intake.intakeId);
+      const before = await counts();
+
+      expect(
+        await reasonOf(() =>
+          commercial.reportException({
+            actor: 'giam-doc',
+            intakeId: intake.intakeId,
+            reason: '   ',
+            idempotencyKey: 'bat-thuong-trang',
+          }),
+        ),
+      ).toBe('SITE_INTAKE_EXCEPTION_REASON_REQUIRED');
+      expect(await counts()).toEqual(before);
+      expect((await movement.getOrder(outcome.orderId ?? '')).status).toBe('OPEN');
+      expect((await auditRepo.list({ action: 'transport.site_intake.exception' })).length).toBe(0);
     });
 
     it('vong chay con viec KHAC song thi chi huy chang cua viec nay', async () => {

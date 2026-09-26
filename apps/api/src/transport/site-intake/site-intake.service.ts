@@ -151,6 +151,7 @@ export class SiteIntakeService {
         driverId: driver.id,
         candidateCount: candidates.length,
         locationTrust: located.trust,
+        ...(outcome.kind === 'LOCATION_UNUSABLE' ? { locationUnusable: outcome.reason } : {}),
       });
     }
 
@@ -415,15 +416,24 @@ export class SiteIntakeService {
 
     if (command.latitude === undefined || command.longitude === undefined) return null;
 
+    const now = this.now();
     return {
       latitude: command.latitude,
       longitude: command.longitude,
       accuracyMetres: command.accuracyMetres ?? null,
-      // Cap so tho khong mang dau thoi gian rieng — no VUA duoc doc len. Dat `observedAt = now`
-      // lam phep kiem tuoi thanh khong-op cho duong nay, va do la dung: phep kiem tuoi ton tai de
-      // chan mot ban ghi CU trong hang doi ngoai tuyen cua Lane B, khong phai de doan gia mot cap
-      // so vua gui.
-      observedAt: this.now(),
+      // TUOI CUA CAP SO — `#398` §3.1 "vi tri cu phai that bai dong".
+      //
+      // App lai xe gui `locationAgeMs`: tuoi ban dinh vi do bang CHINH dong ho dien thoai luc gui
+      // (hieu hai moc cua cung mot dong ho), nen lech gio giua dien thoai va may chu khong lot vao.
+      // May chu lui `now` dung chung do, va phep kiem tuoi cua `resolveSiteCandidates` (han
+      // `maxAgeSeconds`) chan mot ban dinh vi chup luc mo man roi gui lai nhieu phut sau.
+      //
+      // VANG MAT `locationAgeMs` = may khach `#267` CU (man lai xe tren web) — no chua gui tuoi. Giu
+      // DUNG hanh vi cu cho no: `observedAt = now`, tuc phep kiem tuoi KHONG chan duoc gi tren duong
+      // do. Day la mot lo hong da biet, ghi ro de khong ai tuong duong nay da duoc bao ve; dong no la
+      // viec cua may khach do (gui tuoi), khong phai doan tuoi o may chu.
+      observedAt:
+        command.locationAgeMs === undefined ? now : new Date(now.getTime() - command.locationAgeMs),
       trust: 'DRIVER_REPORTED',
       observation: null,
     };
@@ -462,6 +472,9 @@ export class SiteIntakeService {
     if (outcome.kind === 'LOCATION_UNUSABLE') {
       this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_LOCATION_UNUSABLE', {
         reason: outcome.reason,
+        locationTrust: located.trust,
+        // Tuoi ma phep kiem da thay — de nguoi doc trace phan biet "cu 6 phut" voi "dong ho lech".
+        ageSeconds: Math.round((this.now().getTime() - located.observedAt.getTime()) / 1000),
       });
       throw TransportDomainError.invalid(
         'SITE_INTAKE_LOCATION_UNUSABLE',

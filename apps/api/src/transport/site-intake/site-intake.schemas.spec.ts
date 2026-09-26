@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { confirmSiteIntakeSchema, proposeSiteIntakeSchema } from './site-intake.schemas.js';
+import {
+  confirmSiteIntakeSchema,
+  LOCATION_AGE_MAX_MS,
+  proposeSiteIntakeSchema,
+} from './site-intake.schemas.js';
 
 /**
  * BIEN CUA THAN YEU CAU — `#267` H7.
@@ -106,6 +110,76 @@ describe('bien cua nhan viec tai A — `#267` H7', () => {
     expect(
       confirmSiteIntakeSchema.safeParse({ ...validConfirm, clientEventId: '   ' }).success,
     ).toBe(false);
+  });
+
+  /* ---------------------------------------------------------------- *
+   * `#398` §3.1 — TUOI CUA CAP TOA DO
+   * ---------------------------------------------------------------- */
+
+  describe('`locationAgeMs` — tuoi do bang dong ho may khach', () => {
+    it('di kem cap toa do thi hop le, o ca duong doc lan duong ghi', () => {
+      expect(
+        proposeSiteIntakeSchema.safeParse({ ...validLocation, locationAgeMs: 5_000 }).success,
+      ).toBe(true);
+      expect(confirmSiteIntakeSchema.safeParse({ ...validConfirm, locationAgeMs: 0 }).success).toBe(
+        true,
+      );
+      expect(
+        confirmSiteIntakeSchema.safeParse({ ...validConfirm, locationAgeMs: LOCATION_AGE_MAX_MS })
+          .success,
+      ).toBe(true);
+    });
+
+    /**
+     * Ban dinh vi cua Lane B mang dau thoi gian RIENG. Mot tuoi di kem no la mot nguon thoi gian
+     * thu hai cho cung mot vi tri — cung loai cau hoi ma `notTwoSources` da tu choi tra loi thay.
+     */
+    it('di voi observationId thi bi tu choi, va loi chi dung truong', () => {
+      const withObservation = { observationId: 'obs-1', locationAgeMs: 5_000 };
+      for (const parsed of [
+        proposeSiteIntakeSchema.safeParse(withObservation),
+        confirmSiteIntakeSchema.safeParse({
+          ...withObservation,
+          siteId: 'site-1',
+          clientEventId: 'cham-mot',
+        }),
+      ]) {
+        expect(parsed.success).toBe(false);
+        const ageIssue = parsed.error?.issues.find((issue) => issue.path[0] === 'locationAgeMs');
+        expect(ageIssue?.message).toMatch(/locationAgeMs chi di kem latitude\/longitude/);
+      }
+      // CA toa do LAN observationId LAN tuoi: van bi tu choi (hai nguon vi tri).
+      expect(
+        proposeSiteIntakeSchema.safeParse({ ...validLocation, ...withObservation }).success,
+      ).toBe(false);
+    });
+
+    it('mot minh, khong kem toa do, thi bi tu choi', () => {
+      expect(proposeSiteIntakeSchema.safeParse({ locationAgeMs: 5_000 }).success).toBe(false);
+      expect(
+        confirmSiteIntakeSchema.safeParse({
+          siteId: 'site-1',
+          clientEventId: 'cham-mot',
+          locationAgeMs: 5_000,
+        }).success,
+      ).toBe(false);
+    });
+
+    it.each([
+      ['am', -1],
+      ['khong nguyen', 1.5],
+      ['qua mot ngay', LOCATION_AGE_MAX_MS + 1],
+      ['chuoi', '5000'],
+      ['NaN', Number.NaN],
+      ['vo cung', Number.POSITIVE_INFINITY],
+    ])('tuoi %s bi tu choi', (_label, locationAgeMs) => {
+      expect(proposeSiteIntakeSchema.safeParse({ ...validLocation, locationAgeMs }).success).toBe(
+        false,
+      );
+      expect(confirmSiteIntakeSchema.safeParse({ ...validConfirm, locationAgeMs }).success).toBe(
+        false,
+      );
+    });
   });
 
   it('diem den la TUY CHON, va rong thi bi tu choi', () => {

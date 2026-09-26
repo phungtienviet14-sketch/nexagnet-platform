@@ -52,7 +52,7 @@ const REASON_TEXT: Record<string, string> = {
   SITE_INTAKE_VEHICLE_BUSY:
     'Xe của bạn đang có một chuyến chưa kết thúc — xem ở màn Việc hoặc báo văn phòng.',
   SITE_INTAKE_LOCATION_UNUSABLE:
-    'Vị trí lúc bấm chưa đủ để nhận ra địa điểm — tìm lại địa điểm rồi bấm lại.',
+    'Vị trí lúc bấm đã cũ hoặc chưa đủ chính xác để nhận ra địa điểm — tìm lại địa điểm rồi bấm lại.',
   SITE_INTAKE_SITE_NOT_A_CANDIDATE:
     'Địa điểm này không còn nằm quanh vị trí của bạn — tìm lại địa điểm rồi chọn.',
   SITE_INTAKE_OBSERVATION_NOT_FOUND: 'Bản định vị không dùng được — tìm lại địa điểm.',

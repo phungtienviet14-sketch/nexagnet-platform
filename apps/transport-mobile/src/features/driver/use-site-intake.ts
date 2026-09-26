@@ -9,11 +9,13 @@ import {
   classifyIntakeFailure,
   classifyLoadFailure,
   confirmBody,
+  confirmLocation,
   destinationBody,
   destinationIdentity,
   INITIAL_INTAKE_FLOW,
   intakeFlowReducer,
   locationFromFix,
+  proposalBody,
   proposalPrimary,
   searchOutcome,
   searchQueryProblem,
@@ -89,15 +91,14 @@ export function useSiteIntakeFlow(resumeIntakeId: string | null) {
         if (current()) dispatch({ type: 'RESUMED', intake });
         return;
       }
-      const { location, note } = locationFromFix(
-        await captureFixWithin(BEST_EFFORT_FIX_TIMEOUT_MS),
-      );
+      const fix = await captureFixWithin(BEST_EFFORT_FIX_TIMEOUT_MS);
+      const { captured, note } = locationFromFix(fix, Date.now());
       if (!current()) return;
       const proposal = await httpRef.current.post<SiteIntakeProposal>(
         `${BASE}/proposals`,
-        location,
+        proposalBody(captured, Date.now()),
       );
-      if (current()) dispatch({ type: 'PROPOSAL_LOADED', proposal, location, locationNote: note });
+      if (current()) dispatch({ type: 'PROPOSAL_LOADED', proposal, captured, locationNote: note });
     } catch (error) {
       if (!current()) return;
       const failure = classifyLoadFailure(error);
@@ -138,9 +139,16 @@ export function useSiteIntakeFlow(resumeIntakeId: string | null) {
       async () => {
         const attempt = attemptFor(confirmAttempt.current, siteId, randomUUID);
         confirmAttempt.current = attempt;
+        // Ban chup luc mo man da cu (lai xe bam sau vai phut) -> chup lai truoc khi gui; khong co
+        // ban moi thi gui KHONG toa do (`confirmLocation`). Tuoi tinh dung luc gui.
+        const captured = await confirmLocation(
+          snapshot.captured,
+          () => captureFixWithin(BEST_EFFORT_FIX_TIMEOUT_MS),
+          () => Date.now(),
+        );
         const result = await httpRef.current.post<SiteIntakeResult>(
           `${BASE}/confirmations`,
-          confirmBody(siteId, attempt.key, snapshot.location),
+          confirmBody(siteId, attempt.key, captured, Date.now()),
         );
         confirmAttempt.current = null;
         dispatch({ type: 'CONFIRMED', result });

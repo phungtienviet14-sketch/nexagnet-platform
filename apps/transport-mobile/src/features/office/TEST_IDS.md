@@ -32,7 +32,12 @@ viec co nhieu muc cung loai (dung `.nth(i)`).
 | `site-intake-review-sheet` | to viec tai xe nhan | Than to truot (Can xu ly, Can duyet, chi tiet don) |
 | `site-intake-missing` | to viec tai xe nhan | "Thiếu: …" / "Đủ điều kiện — bấm Hoàn thiện để tạo đơn" |
 | `site-intake-complete` | to viec tai xe nhan | "Hoàn thiện" (chi khi may chu noi du dieu kien) |
-| `site-intake-set-destination`, `site-intake-place-filter`, `site-intake-place-<placeId>`, `site-intake-destination-send` | to viec tai xe nhan | Chon diem giao tu dia diem da biet (khong chon san) |
+| `site-intake-set-destination`, `site-intake-place-filter`, `site-intake-place-<placeId>`, `site-intake-destination-send` | to viec tai xe nhan | Chon diem giao tu dia diem da biet (`GET /transport/site-intakes/destinations`, khong chon san) |
+| `site-intake-place-note` | to viec tai xe nhan (chon diem giao) | Danh sach dia diem da biet tat / rong / khong khop — tro sang tim theo ten |
+| `site-intake-review-search-query`, `site-intake-review-search-submit` | to viec tai xe nhan (chon diem giao) | Tim diem giao theo ten (#379) — `POST /transport/site-intakes/destinations/search`; chuoi 2..200 ky tu |
+| `site-intake-review-search-result-<index>` | to viec tai xe nhan (chon diem giao) | Mot ket qua tim (`index` tu 0 theo thu tu may chu, da bo toa do hong); chon = `PLACE_SEARCH` NGUYEN VAN chuoi + nhan + toa do |
+| `site-intake-review-search-notice`, `site-intake-review-search-attribution` | to viec tai xe nhan (chon diem giao) | Tim dang tat / ban / khong ra gi; dong nguon du lieu ban do |
+| `site-intake-review-destination-picked` | to viec tai xe nhan (chon diem giao) | "Điểm giao đã chọn: …" hoac loi nhac chon |
 | `site-intake-attest-origin` | to viec tai xe nhan | "Xác nhận nơi lấy hàng" |
 | `site-intake-bind-open`, `site-intake-bind-<orderId>`, `site-intake-bind-submit` | to viec tai xe nhan | "Gắn vào đơn có sẵn" — nguoi chon, khong chon san |
 | `site-intake-exception-open` | to viec tai xe nhan, chi tiet don | "Báo bất thường / Hủy" (chi khi co quyen `transport.site_intake.exception`) |

@@ -5,6 +5,7 @@ import { PrismaService } from '../../config/prisma.service.js';
 import type { CreateOrderInput } from '../movement/movement.repository.js';
 import type { Order, RunLeg } from '../movement/movement.types.js';
 import {
+  lockOrderPlan,
   orderCreateData,
   toLeg,
   toOrder,
@@ -21,7 +22,6 @@ import {
   SiteIntakeCommercialStore,
   commercialNotFound,
   legNoLongerAdoptable,
-  orderPlanLockKey,
   siteIntakeCommercialLockKey,
   type CommercialScope,
   type WithIntakeOptions,
@@ -154,7 +154,8 @@ export class PrismaSiteIntakeCommercialStore extends SiteIntakeCommercialStore {
         const client = tx as TxClient;
         await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${siteIntakeCommercialLockKey(intakeId)}, 0))`;
         if (options.lockOrderId !== undefined) {
-          await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${orderPlanLockKey(options.lockOrderId)}, 0))`;
+          // CUNG khoa (va cung chuoi) voi lan lap ke hoach / lan them chang co hang cua don nay.
+          await lockOrderPlan(client, options.lockOrderId);
         }
 
         const intakeRow: IntakeRow | null = await model(
@@ -163,6 +164,28 @@ export class PrismaSiteIntakeCommercialStore extends SiteIntakeCommercialStore {
         ).findUnique({ where: { id: intakeId } });
         if (!intakeRow) throw commercialNotFound();
 
+        /*
+         * NGOAI LE CO Y cua quy uoc "capability khong tu viet `SELECT ... FOR UPDATE` tren vong chay"
+         * (`MovementRepository.underRunLock`, `RunWriteGuard`). Cau lenh nay khoa DUNG hang ma
+         * `underRunLock`/`createLeg`/`setLegStatus`/lan dong vong chay khoa — cung mot khoa, khong
+         * phai khoa thu hai; cai khac la no nam SAU hai khoa tu van trong CUNG giao dich.
+         *
+         * Vi sao KHONG di qua `underRunLock`: ham do mo giao dich RIENG cua no va khoa hang vong chay
+         * TRUOC. Boc lenh nay vao do thi thu tu thanh "hang vong chay -> lan nhan viec -> don" — dao
+         * nguoc voi lan lap ke hoach (don -> xe -> hang vong chay) va `createLeg` co hang (don -> hang
+         * vong chay): hai giao dich, moi ben giu mot khoa ben kia can = deadlock. Con chay hai giao
+         * dich lien tiep thi mat tinh nguyen tu cua "tao don + nhan chang + ke hoach + ORDER_BOUND".
+         *
+         * Vi sao thu tu o day KHONG tao vong doi (moi duong deu di mot chieu cua day
+         * lan nhan viec -> don -> xe -> hang vong chay, va khong ai quay lui):
+         *   · lenh nay:            lan nhan viec -> [don] -> hang vong chay (KHONG gianh khoa xe);
+         *   · lap ke hoach:        don -> xe -> hang vong chay;
+         *   · them chang co hang:  don -> hang vong chay;
+         *   · tai xe xac nhan:     CHI xe (chi CHEN hang moi, khong khoa hang vong chay co san);
+         *   · moi duong ghi khac:  CHI hang vong chay.
+         * Khong ai giu hang vong chay roi moi xin mot khoa tu van, va khong ai ngoai lenh nay xin khoa
+         * lan nhan viec — nen khong co chu trinh cho doi.
+         */
         const locked: unknown = await client.$queryRaw`
           SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${intakeRow.runId} FOR UPDATE`;
         if (!Array.isArray(locked) || locked.length === 0) throw commercialNotFound();

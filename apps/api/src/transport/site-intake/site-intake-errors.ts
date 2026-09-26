@@ -43,7 +43,11 @@ export const TRANSPORT_SITE_INTAKE_ERROR_REASONS = [
   'SITE_INTAKE_ORDER_BOUND_TO_OTHER_INTAKE',
   'SITE_INTAKE_BOUND_TO_OTHER_ORDER',
   'SITE_INTAKE_BINDING_DENIED',
+  /** Don co san lay hang o NOI KHAC voi dia diem lai xe da nhan viec — khong gan duoc. */
+  'SITE_INTAKE_ORDER_ORIGIN_MISMATCH',
   'SITE_INTAKE_EXCEPTION_ALREADY_RECORDED',
+  /** Bao bat thuong / huy ma ly do trang (sau khi cat khoang trang). */
+  'SITE_INTAKE_EXCEPTION_REASON_REQUIRED',
   /** Don nguon cua mot don khong phai la mot lan tai xe nhan truc tiep. */
   'SITE_INTAKE_ORDER_SOURCE_NOT_FOUND',
 ] as const;

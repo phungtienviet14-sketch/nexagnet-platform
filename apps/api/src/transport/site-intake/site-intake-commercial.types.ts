@@ -27,6 +27,9 @@ export type SiteIntakeDestinationSource = (typeof SITE_INTAKE_DESTINATION_SOURCE
 export const SITE_INTAKE_ACTOR_ROLES = ['DRIVER', 'OFFICE'] as const;
 export type SiteIntakeActorRole = (typeof SITE_INTAKE_ACTOR_ROLES)[number];
 
+/** Ly do bao bat thuong / huy: toi thieu bay nhieu ky tu SAU khi cat khoang trang (HTTP + dich vu). */
+export const EXCEPTION_REASON_MIN_LENGTH = 3;
+
 export const SITE_INTAKE_EXCEPTION_OUTCOMES = [
   'ORDER_CANCELLED_WORK_CANCELLED',
   'ORDER_CANCELLED_OPERATION_PRESERVED',

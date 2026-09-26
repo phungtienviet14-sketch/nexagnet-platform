@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
+import type { GeoPoint } from '../geo/geo-point.js';
 import { greatCircleMetres } from '../geo/geodesy.js';
 import { evaluateOrderCancel } from '../movement/movement-lifecycle.js';
 import type { Order } from '../movement/movement.types.js';
@@ -7,10 +8,12 @@ import type { KnownPlace } from '../places/place-search.types.js';
 import { TRANSPORT_CLOCK } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
+  ORDER_ORIGIN_TOLERANCE_METRES,
   decideException,
   evaluateCommercialReadiness,
   evaluateOrderBinding,
   hasMovementStarted,
+  matchOrderOrigin,
   siteIntakeOrderCode,
   siteIntakePlanKey,
   type CommercialReadiness,
@@ -26,7 +29,11 @@ import {
   TransportSiteIntakeGeoFacts,
 } from './site-intake-facts.port.js';
 import { SiteIntakeReadinessReader } from './site-intake-readiness.reader.js';
-import { SiteIntakeCommercialStore, type CommercialScope } from './site-intake-commercial.store.js';
+import {
+  SiteIntakeCommercialStore,
+  type CommercialScope,
+  type WithIntakeOptions,
+} from './site-intake-commercial.store.js';
 import type {
   ResolvedDestination,
   SiteIntakeActorRole,
@@ -35,6 +42,7 @@ import type {
   SiteIntakeCommercialStatus,
   SiteIntakeExceptionOutcome,
 } from './site-intake-commercial.types.js';
+import { EXCEPTION_REASON_MIN_LENGTH } from './site-intake-commercial.types.js';
 import { RunSiteIntakeRepository } from './site-intake.repository.js';
 import type { RunSiteIntake } from './site-intake.types.js';
 
@@ -103,6 +111,40 @@ export interface ReportExceptionCommand {
 }
 
 /**
+ * BUOC NGHIEP VU cua capability — `<mien>.<viec>`, doc len nghe ra viec (quy uoc observability).
+ * Bon lenh la bon buoc ngoai; `settle` (phan xu + tu tao don) va `adopt` (don nhan vong chay +
+ * chang cu) la hai buoc trong. Mot lenh nhin ra toi da ba buoc, khong phai mot buoc moi ham.
+ */
+type SiteIntakeStep =
+  | 'site_intake.driver_destination'
+  | 'site_intake.office_complete'
+  | 'site_intake.bind_existing_order'
+  | 'site_intake.report_exception'
+  | 'site_intake.settle'
+  | 'site_intake.adopt';
+
+/** MOT chuyen trang thai da xay ra trong lenh — ghi ra telemetry SAU khi giao dich commit. */
+interface StateTransition {
+  readonly entity:
+    'TransportSiteIntakeCommercial' | 'TransportOrder' | 'TransportRunLeg' | 'TransportVehicleRun';
+  readonly entityId: string;
+  readonly from: string | null;
+  readonly to: string;
+  readonly reason?: string;
+}
+
+/** Ghi nhan mot chuyen trang thai trong pham vi lenh (chua phat ra — xem `runCommand`). */
+type RecordTransition = (transition: StateTransition) => void;
+
+interface AdoptContext {
+  readonly actor: string;
+  readonly mode: SiteIntakeBindingMode;
+  readonly destinationLabel: string;
+  readonly created: boolean;
+  readonly at?: Date;
+}
+
+/**
  * VIEC TAI XE NHAN TRUC TIEP -> DON TU DONG — `#398`, phia LENH.
  *
  * ============================================================================================
@@ -164,24 +206,29 @@ export class SiteIntakeCommercialService {
     const intake = await this.requireOwnIntake(command.authUserId, command.intakeId);
     const destination = await this.resolve(command.choice);
 
-    return this.store.withIntake(intake.id, {}, async (scope) => {
-      if (scope.commercial.destination?.eventId === command.clientEventId) {
-        this.decide('site_intake.commercial', 'allowed', 'SITE_INTAKE_DESTINATION_REPLAYED', {
-          intakeId: intake.id,
-        });
-        return this.outcomeOf(scope, await this.readinessIn(scope), false, true);
-      }
-      if (scope.commercial.status !== 'PENDING') {
-        return this.outcomeOf(scope, await this.readinessIn(scope), false, false);
-      }
+    return this.runCommand(
+      'site_intake.driver_destination',
+      intake.id,
+      {},
+      async (scope, record) => {
+        if (scope.commercial.destination?.eventId === command.clientEventId) {
+          this.decide('site_intake.commercial', 'allowed', 'SITE_INTAKE_DESTINATION_REPLAYED', {
+            intakeId: intake.id,
+          });
+          return this.outcomeOf(scope, await this.readinessIn(scope), false, true);
+        }
+        if (scope.commercial.status !== 'PENDING') {
+          return this.outcomeOf(scope, await this.readinessIn(scope), false, false);
+        }
 
-      await this.recordDestination(scope, destination, {
-        by: command.authUserId,
-        role: 'DRIVER',
-        eventId: command.clientEventId,
-      });
-      return this.settle(scope, command.authUserId, 'AUTO_CREATED');
-    });
+        await this.recordDestination(scope, destination, {
+          by: command.authUserId,
+          role: 'DRIVER',
+          eventId: command.clientEventId,
+        });
+        return this.settle(scope, command.authUserId, 'AUTO_CREATED', record);
+      },
+    );
   }
 
   /* ------------------------------------------------------------------ *
@@ -196,7 +243,7 @@ export class SiteIntakeCommercialService {
     const intake = await this.requireIntake(command.intakeId);
     const destination = command.choice ? await this.resolve(command.choice) : null;
 
-    return this.store.withIntake(intake.id, {}, async (scope) => {
+    return this.runCommand('site_intake.office_complete', intake.id, {}, async (scope, record) => {
       if (scope.commercial.status !== 'PENDING') {
         return this.outcomeOf(scope, await this.readinessIn(scope), false, true);
       }
@@ -223,7 +270,7 @@ export class SiteIntakeCommercialService {
           after: scope.commercial,
         });
       }
-      return this.settle(scope, command.actor, 'OFFICE_COMPLETED');
+      return this.settle(scope, command.actor, 'OFFICE_COMPLETED', record);
     });
   }
 
@@ -232,59 +279,95 @@ export class SiteIntakeCommercialService {
    *
    * Khoa tu van cua DON duoc gianh truoc khoa hang vong chay, cung khoa ma lan lap ke hoach gianh:
    * gan don nay vao chang cua lai xe va lap ke hoach cho don nay xep hang, khong chong len nhau.
+   *
+   * "Don TUONG THICH" (`#398` §6): ngoai dieu kien san sang (mo, chua ke hoach, chua chang song,
+   * chua nhan viec khac), diem lay cua don — khi don CO toa do — phai nam quanh dia diem tai xe
+   * nhan viec (`matchOrderOrigin`). Don khong co toa do van gan duoc: nguoi chon tu chiu, va cong
+   * nay khong bia toa do de tu choi. Dia diem doc tu CUNG nguon voi danh sach don gan duoc
+   * (`SiteIntakeReviewService.bindableOrders`), nen man hinh khong de nghi mot don ma cong chan.
    */
   async bindExistingOrder(command: BindExistingOrderCommand): Promise<CommercialOutcome> {
     const intake = await this.requireIntake(command.intakeId);
 
-    return this.store.withIntake(intake.id, { lockOrderId: command.orderId }, async (scope) => {
-      const target = await scope.findOrder(command.orderId);
-      if (!target) {
-        throw TransportDomainError.notFound('SITE_INTAKE_ORDER_NOT_FOUND', 'Khong tim thay don');
-      }
-      const planFacts = await scope.orderPlanFacts(target.id);
-      const leg = this.legOf(scope);
-      const decision = evaluateOrderBinding({
-        status: scope.commercial.status,
-        boundOrderId: scope.commercial.binding?.orderId ?? null,
-        run: { status: scope.run.status },
-        leg: { kind: leg.kind, status: leg.status, orderId: leg.orderId },
-        runCarriesOtherOneOrderPlan: this.reader.facts(
-          { ...scope, commercial: scope.commercial },
-          { driver: null, driverVehicleId: null, site: null, originPoints: [] },
-        ).runCarriesOtherOneOrderPlan,
-        target: {
-          id: target.id,
-          status: target.status,
-          hasActivePlan: planFacts.hasActivePlan,
-          liveLegCount: planFacts.liveLegCount,
-          boundToOtherIntake:
-            planFacts.boundIntakeId !== null && planFacts.boundIntakeId !== scope.intake.id,
-        },
-      });
-
-      if (decision.kind === 'ALREADY_BOUND') {
-        this.decide('site_intake.commercial', 'allowed', 'SITE_INTAKE_ALREADY_BOUND', {
-          intakeId: scope.intake.id,
-          orderId: decision.orderId,
+    return this.runCommand(
+      'site_intake.bind_existing_order',
+      intake.id,
+      { lockOrderId: command.orderId },
+      async (scope) => {
+        const target = await scope.findOrder(command.orderId);
+        if (!target) {
+          throw TransportDomainError.notFound('SITE_INTAKE_ORDER_NOT_FOUND', 'Khong tim thay don');
+        }
+        const planFacts = await scope.orderPlanFacts(target.id);
+        const external = await this.reader.external(scope.intake);
+        const leg = this.legOf(scope);
+        const decision = evaluateOrderBinding({
+          status: scope.commercial.status,
+          boundOrderId: scope.commercial.binding?.orderId ?? null,
+          run: { status: scope.run.status },
+          leg: { kind: leg.kind, status: leg.status, orderId: leg.orderId },
+          runCarriesOtherOneOrderPlan: this.reader.facts(scope, external)
+            .runCarriesOtherOneOrderPlan,
+          siteOriginPoints: external.originPoints,
+          target: {
+            id: target.id,
+            status: target.status,
+            hasActivePlan: planFacts.hasActivePlan,
+            liveLegCount: planFacts.liveLegCount,
+            boundToOtherIntake:
+              planFacts.boundIntakeId !== null && planFacts.boundIntakeId !== scope.intake.id,
+            originPoint: target.originPoint,
+          },
         });
-        return this.outcomeOf(scope, await this.readinessIn(scope), false, true);
-      }
-      if (decision.kind === 'DENY') {
-        this.decide('site_intake.commercial', 'denied', 'SITE_INTAKE_BINDING_DENIED', {
-          intakeId: scope.intake.id,
-          orderId: target.id,
-          reason: decision.reason,
-        });
-        throw bindingDenied(decision.reason);
-      }
 
-      await this.adopt(scope, target, {
-        actor: command.actor,
-        mode: 'OFFICE_EXISTING_ORDER',
-        destinationLabel: target.destinationLabel,
-        created: false,
+        if (decision.kind === 'ALREADY_BOUND') {
+          this.decide('site_intake.commercial', 'allowed', 'SITE_INTAKE_ALREADY_BOUND', {
+            intakeId: scope.intake.id,
+            orderId: decision.orderId,
+          });
+          return this.outcomeOf(scope, await this.readinessIn(scope), false, true);
+        }
+        if (decision.kind === 'DENY') {
+          this.decideBindingDenied(scope.intake.id, target, decision.reason, external.originPoints);
+          throw bindingDenied(decision.reason);
+        }
+
+        await this.adopt(scope, target, {
+          actor: command.actor,
+          mode: 'OFFICE_EXISTING_ORDER',
+          destinationLabel: target.destinationLabel,
+          created: false,
+        });
+        return this.outcomeOf(scope, await this.readinessIn(scope), true, false);
+      },
+    );
+  }
+
+  /**
+   * Tu choi gan don co san — lech diem lay co MA RIENG (kem khoang cach, khong kem toa do); moi
+   * duong con lai di chung `SITE_INTAKE_BINDING_DENIED` voi ma cu the o `detail.reason`.
+   */
+  private decideBindingDenied(
+    intakeId: string,
+    target: Order,
+    reason: SiteIntakeBindingDenyReason,
+    siteOriginPoints: readonly GeoPoint[],
+  ): void {
+    if (reason !== 'ORDER_ORIGIN_MISMATCH') {
+      this.decide('site_intake.commercial', 'denied', 'SITE_INTAKE_BINDING_DENIED', {
+        intakeId,
+        orderId: target.id,
+        reason,
       });
-      return this.outcomeOf(scope, await this.readinessIn(scope), true, false);
+      return;
+    }
+    const match = matchOrderOrigin(target.originPoint, siteOriginPoints);
+    this.decide('site_intake.commercial', 'denied', 'SITE_INTAKE_ORDER_ORIGIN_MISMATCH', {
+      intakeId,
+      orderId: target.id,
+      reason,
+      distanceMetres: match.kind === 'MISMATCH' ? Math.round(match.distanceMetres) : null,
+      toleranceMetres: ORDER_ORIGIN_TOLERANCE_METRES,
     });
   }
 
@@ -295,10 +378,20 @@ export class SiteIntakeCommercialService {
    * phan THUONG MAI bi huy. Don da o trang thai cuoi thi chi GHI NHAN bat thuong — khong di vong qua
    * vong doi don bang mot lan sua trang thai truc tiep.
    */
-  async reportException(command: ReportExceptionCommand): Promise<ExceptionOutcome> {
+  async reportException(input: ReportExceptionCommand): Promise<ExceptionOutcome> {
+    // Ly do BAT BUOC o CHINH tang nghiep vu, khong chi o schema HTTP: moi nguoi goi khong qua HTTP
+    // (PERSISTENCE=memory, mot tac vu noi bo) cung khong ghi duoc mot bat thuong voi ly do trang.
+    const reason = input.reason.trim();
+    if (reason.length < EXCEPTION_REASON_MIN_LENGTH) {
+      throw TransportDomainError.invalid(
+        'SITE_INTAKE_EXCEPTION_REASON_REQUIRED',
+        'Phai ghi ly do khi bao bat thuong / huy',
+      );
+    }
+    const command: ReportExceptionCommand = { ...input, reason };
     const intake = await this.requireIntake(command.intakeId);
 
-    return this.store.withIntake(intake.id, {}, async (scope) => {
+    return this.runCommand('site_intake.report_exception', intake.id, {}, async (scope, record) => {
       const leg = this.legOf(scope);
       const boundOrder = scope.commercial.binding
         ? await scope.findOrder(scope.commercial.binding.orderId)
@@ -357,9 +450,18 @@ export class SiteIntakeCommercialService {
             intakeId: scope.intake.id,
           },
         });
+        record({
+          entity: 'TransportOrder',
+          entityId: boundOrder.id,
+          from: boundOrder.status,
+          to: cancelled.status,
+          reason: decision.outcome,
+        });
       }
 
-      if (decision.cancelWork) await this.cancelUnstartedWork(scope, command, at);
+      if (decision.cancelWork) {
+        await this.cancelUnstartedWork(scope, command, at, decision.outcome, record);
+      }
 
       await scope.recordException({
         reason: command.reason,
@@ -392,13 +494,80 @@ export class SiteIntakeCommercialService {
    * ------------------------------------------------------------------ */
 
   /**
+   * MOT LENH THUONG MAI = mot buoc nghiep vu bao quanh MOT giao dich `withIntake`.
+   *
+   * Chuyen trang thai (phan thuong mai, don, chang, vong chay) duoc GOM trong giao dich va chi phat
+   * ra `telemetry.stateChange` SAU khi `withIntake` tra ve — tuc sau COMMIT. Mot lenh cuon lai
+   * khong de lai mot chuyen trang thai "ma" trong trace. Chuyen cua CHINH phan thuong mai
+   * (`PENDING -> ORDER_BOUND | REJECTED`) duoc tinh bang so trang thai truoc/sau, nen khong duong
+   * nao quen ghi no.
+   *
+   * Observability KHONG la dieu kien cua nghiep vu: vang `telemetry` thi lenh chay y het, va
+   * `TelemetryService` tu nuot loi cua chinh no (fail-open).
+   */
+  private runCommand<T>(
+    step: SiteIntakeStep,
+    intakeId: string,
+    options: WithIntakeOptions,
+    work: (scope: CommercialScope, record: RecordTransition) => Promise<T>,
+  ): Promise<T> {
+    const run = async (): Promise<T> => {
+      const transitions: StateTransition[] = [];
+      const record: RecordTransition = (transition) => {
+        transitions.push(transition);
+      };
+      const result = await this.store.withIntake(intakeId, options, async (scope) => {
+        const before = scope.commercial.status;
+        const value = await work(scope, record);
+        const after = scope.commercial;
+        if (after.status !== before) {
+          record({
+            entity: 'TransportSiteIntakeCommercial',
+            entityId: after.id,
+            from: before,
+            to: after.status,
+            reason: after.binding?.mode ?? after.exception?.outcome,
+          });
+        }
+        return value;
+      });
+      for (const transition of transitions) this.telemetry?.stateChange(transition);
+      return result;
+    };
+    return this.stepped(step, run, { intakeId });
+  }
+
+  /** `telemetry.step` khi co, chay thang khi khong — cung khuon `PlaceService`. */
+  private stepped<T>(
+    step: SiteIntakeStep,
+    run: () => Promise<T>,
+    attributes: Readonly<Record<string, unknown>>,
+  ): Promise<T> {
+    return this.telemetry ? this.telemetry.step(step, run, attributes) : run();
+  }
+
+  /**
    * PHAN XU roi, neu DU, TU TAO DON. Chay DUOI khoa cua `withIntake` — su that doc o day la ban
    * sau khi co khoa, nen hai lenh song song khong the cung thay "chua co don".
    */
-  private async settle(
+  private settle(
     scope: CommercialScope,
     actor: string,
     mode: 'AUTO_CREATED' | 'OFFICE_COMPLETED',
+    record: RecordTransition,
+  ): Promise<CommercialOutcome> {
+    return this.stepped(
+      'site_intake.settle',
+      () => this.settleUnderLock(scope, actor, mode, record),
+      { intakeId: scope.intake.id, mode },
+    );
+  }
+
+  private async settleUnderLock(
+    scope: CommercialScope,
+    actor: string,
+    mode: 'AUTO_CREATED' | 'OFFICE_COMPLETED',
+    record: RecordTransition,
   ): Promise<CommercialOutcome> {
     const readiness = await this.readinessIn(scope);
     if (readiness.kind === 'READY_TO_AUTO_CREATE') {
@@ -423,6 +592,13 @@ export class SiteIntakeCommercialService {
         entityId: order.id,
         before: null,
         after: { ...order, source: 'DRIVER_SITE_INTAKE', intakeId: scope.intake.id, mode },
+      });
+      record({
+        entity: 'TransportOrder',
+        entityId: order.id,
+        from: null,
+        to: order.status,
+        reason: mode,
       });
       await this.adopt(scope, order, {
         actor,
@@ -457,18 +633,21 @@ export class SiteIntakeCommercialService {
    *   1. chang co hang cua lan nhan viec: `orderId` NULL -> don nay (co dieu kien, mot lan);
    *   2. ke hoach `ADOPTED` tro vao DUNG chang do — lan lap ke hoach sau cua don nay thay "da co ke
    *      hoach" (`TransportOrderRunPlan_activeOrder_key`) va KHONG tao vong chay/chang moi;
-   *   3. phan thuong mai: `PENDING -> ORDER_BOUND`.
+   *   3. phan thuong mai: `PENDING -> ORDER_BOUND` (chuyen trang thai do `runCommand` ghi, sau
+   *      COMMIT).
    */
-  private async adopt(
+  private adopt(scope: CommercialScope, order: Order, context: AdoptContext): Promise<void> {
+    return this.stepped('site_intake.adopt', () => this.adoptUnderLock(scope, order, context), {
+      intakeId: scope.intake.id,
+      orderId: order.id,
+      mode: context.mode,
+    });
+  }
+
+  private async adoptUnderLock(
     scope: CommercialScope,
     order: Order,
-    context: {
-      readonly actor: string;
-      readonly mode: SiteIntakeBindingMode;
-      readonly destinationLabel: string;
-      readonly created: boolean;
-      readonly at?: Date;
-    },
+    context: AdoptContext,
   ): Promise<void> {
     const at = context.at ?? this.now();
     const leg = this.legOf(scope);
@@ -544,6 +723,8 @@ export class SiteIntakeCommercialService {
     scope: CommercialScope,
     command: ReportExceptionCommand,
     at: Date,
+    outcome: SiteIntakeExceptionOutcome,
+    record: RecordTransition,
   ): Promise<void> {
     const leg = this.legOf(scope);
     const plan = scope.activeRunPlans.find((entry) => entry.loadedLegId === leg.id);
@@ -567,6 +748,13 @@ export class SiteIntakeCommercialService {
         before: leg,
         after: { ...leg, status: 'CANCELLED', reason: command.reason },
       });
+      record({
+        entity: 'TransportRunLeg',
+        entityId: leg.id,
+        from: leg.status,
+        to: 'CANCELLED',
+        reason: outcome,
+      });
     }
     const otherLiveWork = scope.legs.some(
       (entry) => entry.id !== leg.id && entry.status !== 'CANCELLED',
@@ -583,6 +771,13 @@ export class SiteIntakeCommercialService {
         entityId: scope.run.id,
         before: scope.run,
         after: { ...scope.run, status: 'CANCELLED', cancellationReason: command.reason },
+      });
+      record({
+        entity: 'TransportVehicleRun',
+        entityId: scope.run.id,
+        from: scope.run.status,
+        to: 'CANCELLED',
+        reason: outcome,
       });
     }
   }
@@ -755,6 +950,11 @@ function bindingDenied(reason: SiteIntakeBindingDenyReason): TransportDomainErro
       );
     case 'ORDER_NOT_OPEN':
       return TransportDomainError.conflict('SITE_INTAKE_ORDER_NOT_OPEN', 'Don khong con mo');
+    case 'ORDER_ORIGIN_MISMATCH':
+      return TransportDomainError.conflict(
+        'SITE_INTAKE_ORDER_ORIGIN_MISMATCH',
+        'Don nay lay hang o noi khac voi noi tai xe nhan viec — chon don khac',
+      );
     default:
       return TransportDomainError.conflict(
         'SITE_INTAKE_BINDING_DENIED',

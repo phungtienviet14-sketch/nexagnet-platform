@@ -387,7 +387,7 @@ export interface KnownPlace {
   readonly radiusMetres: number;
 }
 
-/** `GET destinations` (lai xe) va `GET /transport/places/known` (van phong). */
+/** `GET /transport/me/site-intake/destinations` (lai xe) va `GET /transport/site-intakes/destinations` (van phong). */
 export interface KnownPlacesResponse {
   readonly available: boolean;
   readonly places: readonly KnownPlace[];

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { SiteIntakeProposal } from '../../transport-types';
-import { toSiteIntakeScreen, SITE_INTAKE_LOCATION_HINTS } from '../site-intake';
+import {
+  FRESH_FIX_MAX_AGE_MS,
+  LOCATION_AGE_MAX_MS,
+  needsFreshFix,
+  toSiteIntakeScreen,
+  withLocationAge,
+  SITE_INTAKE_LOCATION_HINTS,
+} from '../site-intake';
 
 /**
  * MAN HINH NHAN VIEC TAI A — `#267` H6.
@@ -181,5 +188,42 @@ describe('toSiteIntakeScreen — `#267` H6', () => {
       }),
     );
     expect(screen.candidates[0]?.uncertain).toBe(true);
+  });
+});
+
+describe('tuoi ban dinh vi luc gui — #398', () => {
+  const at = 1_800_000_000_000;
+  const coords = { latitude: 20.8264, longitude: 106.7752, accuracyMetres: 12 };
+
+  it('gui tuoi do bang dong ho trinh duyet, tinh NGAY luc gui', () => {
+    expect(withLocationAge({ location: coords, fixAtMs: at - 4_000 }, at)).toEqual({
+      ...coords,
+      locationAgeMs: 4_000,
+    });
+  });
+
+  it('khong co toa do thi khong them tuoi', () => {
+    expect(withLocationAge({ location: {}, fixAtMs: at }, at)).toEqual({});
+  });
+
+  it('toa do KHONG ro tuoi thi khong gui toa do — may chu se coi no la "vua doc"', () => {
+    expect(withLocationAge({ location: coords, fixAtMs: null }, at)).toEqual({});
+  });
+
+  it('tuoi am (dong ho lui) ve 0, tuoi qua tran bi chan o tran', () => {
+    expect(withLocationAge({ location: coords, fixAtMs: at + 5_000 }, at).locationAgeMs).toBe(0);
+    expect(
+      withLocationAge({ location: coords, fixAtMs: at - 2 * LOCATION_AGE_MAX_MS }, at)
+        .locationAgeMs,
+    ).toBe(LOCATION_AGE_MAX_MS);
+  });
+
+  it('xin lai vi tri khi ban dinh vi cu hon nguong, hoac khong ro tuoi', () => {
+    expect(needsFreshFix({ location: coords, fixAtMs: at - 1_000 }, at)).toBe(false);
+    expect(needsFreshFix({ location: coords, fixAtMs: at - FRESH_FIX_MAX_AGE_MS - 1 }, at)).toBe(
+      true,
+    );
+    expect(needsFreshFix({ location: coords, fixAtMs: null }, at)).toBe(true);
+    expect(needsFreshFix({ location: {}, fixAtMs: null }, at)).toBe(false);
   });
 });

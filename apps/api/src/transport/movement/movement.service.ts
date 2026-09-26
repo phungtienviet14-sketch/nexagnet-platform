@@ -27,6 +27,7 @@ import {
 } from './movement-lifecycle.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
+  LegOrderAdoptedBySiteIntakeError,
   MovementRepository,
   RUN_CODE,
   RunClosedForNewWorkError,
@@ -411,6 +412,18 @@ export class MovementService {
       .catch((error: unknown) => {
         // `#398`: cong ke hoach cua don tu choi DUOI khoa — ma nghiep vu, khong phai va cham thu tu.
         if (error instanceof TransportDomainError) throw error;
+        /*
+         * `#398`: DON DA NHAN chang co hang cua mot viec tai xe nhan truc tiep — kho phat hien duoi
+         * khoa cua don. 409 (va cham trang thai), khong phai 403: nguoi goi co quyen, chi la chang
+         * co hang cua don nay da ton tai. Trinh sua vong chay/chang tay khong doi nghia gi khac.
+         */
+        if (error instanceof LegOrderAdoptedBySiteIntakeError) {
+          throw this.conflictDecision('run.leg_change', 'LEG_ORDER_ADOPTED_BY_SITE_INTAKE', {
+            runId,
+            orderId: error.orderId,
+            kind: command.kind,
+          });
+        }
         /*
          * VONG CHAY DA DONG GIUA HAI BUOC. Phep kiem o dau ham doc truoc khi co khoa nao, nen no
          * khong nhin thay mot lan dong dang chay; kho — noi gianh cung khoa hang voi duong dong —
@@ -1119,5 +1132,21 @@ export class MovementService {
       detail,
     });
     return TransportDomainError.denied(reason, TRANSPORT_MOVEMENT_DECISIONS.labels[reason]);
+  }
+
+  /** Nhu `deny`, nhung la VA CHAM TRANG THAI (409) — nguoi goi co quyen, su that khong cho phep. */
+  private conflictDecision(
+    point: DecisionPoint,
+    reason: TransportMovementDecisionReason,
+    detail: Record<string, unknown>,
+  ): TransportDomainError {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_MOVEMENT_DECISIONS,
+      point,
+      outcome: 'denied',
+      reason,
+      detail,
+    });
+    return TransportDomainError.conflict(reason, TRANSPORT_MOVEMENT_DECISIONS.labels[reason]);
   }
 }

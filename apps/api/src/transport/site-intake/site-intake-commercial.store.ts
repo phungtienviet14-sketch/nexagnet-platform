@@ -137,10 +137,13 @@ export abstract class SiteIntakeCommercialStore {
   abstract listPendingForVehicle(vehicleId: string): Promise<readonly SiteIntakeCommercial[]>;
 }
 
-/** Ten khoa tu van — MOT noi khai, de lan lap ke hoach dung DUNG chuoi do. */
+/**
+ * Ten khoa tu van cua MOT lan nhan viec. Khoa cua DON (`orderPlanLockKey`) KHONG khai o day: no
+ * thuoc `transport-core` (`prisma-movement.repository.ts`), noi lan lap ke hoach gianh no — capability
+ * nay nhap nguoc vao, de hai duong luon dung DUNG mot chuoi.
+ */
 export const siteIntakeCommercialLockKey = (intakeId: string): string =>
   `transport-site-intake-commercial:${intakeId}`;
-export const orderPlanLockKey = (orderId: string): string => `transport-order-plan:${orderId}`;
 
 export const commercialNotFound = (): TransportDomainError =>
   TransportDomainError.notFound(

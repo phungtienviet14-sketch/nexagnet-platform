@@ -1,11 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useHttp } from '../../session/SessionProvider';
+import type { PlaceSearchResponse } from '../driver/types';
 import { useOfficeAccess, useOfficeKey, useOfficeScope } from './queries';
 import {
   EXCEPTION_ACTION,
   REVIEW_COMPLETE_ACTION,
   REVIEW_READ_ACTION,
+  reviewSearchProblem,
   SITE_INTAKE_CAPABILITY,
 } from './site-intake-review';
 import type {
@@ -45,16 +47,85 @@ export function useSiteIntakeReview(intakeId: string | null) {
   });
 }
 
-/** Dia diem da biet (hang rao) — cung nguon voi man tao don (#379). */
+/**
+ * Dia diem giao DA BIET (hang rao dang hoat dong) — doc tu CUNG nguon ma lenh `complete` doi chieu
+ * mot `KNOWN_PLACE`, qua CUNG ma quyen `.review.complete`. Khong dung `/transport/places/known` cua
+ * man tao don: nguon do con giu hang rao cua dia diem da nghi, ma lenh nay se tu choi.
+ */
 export function useKnownPlaces(enabled: boolean) {
   const http = useHttp();
-  const queryKey = useOfficeKey('office', 'known-places');
+  const queryKey = useOfficeKey('office', 'site-intake-destinations');
   return useQuery({
     queryKey,
     enabled,
     staleTime: 5 * 60_000,
-    queryFn: () => http.get<KnownPlacesResponse>('/transport/places/known'),
+    queryFn: () => http.get<KnownPlacesResponse>(`${BASE}/destinations`),
   });
+}
+
+/** Mot lan tim — `query` la DUNG chuoi da gui (lenh `complete` tim lai bang chinh no). */
+export interface ReviewSearchResult {
+  readonly query: string;
+  readonly response: PlaceSearchResponse;
+}
+
+export interface ReviewDestinationSearch {
+  readonly busy: boolean;
+  /** Chuoi chua gui duoc (qua ngan/dai) — noi truoc, khong goi may chu. */
+  readonly problem: string | null;
+  /** Loi mang / 403 / 404 — hien bang `ErrorBlock`, bam lai la tim lai. */
+  readonly error: unknown;
+  readonly result: ReviewSearchResult | null;
+}
+
+const NO_SEARCH: ReviewDestinationSearch = {
+  busy: false,
+  problem: null,
+  error: null,
+  result: null,
+};
+
+/**
+ * TIM DIEM GIAO THEO TEN cho van phong — chi DOC, `POST` vi chuoi tim co the la dia chi kho cua
+ * khach (#379 khong dua no vao chuoi truy van).
+ *
+ * Moi lan tim mang mot so thu tu: ket qua cua lan tim CU ve sau lan moi bi bo, khong de hang cua
+ * chuoi cu hien duoi o nhap da doi. Cau chu + hang chon duoc la viec cua `reviewSearchOutcome`.
+ */
+export function useReviewDestinationSearch() {
+  const http = useHttp();
+  const [search, setSearch] = useState<ReviewDestinationSearch>(NO_SEARCH);
+  const latest = useRef(0);
+
+  const run = useCallback(
+    async (raw: string) => {
+      latest.current += 1;
+      const ticket = latest.current;
+      const problem = reviewSearchProblem(raw);
+      if (problem !== null) {
+        setSearch({ ...NO_SEARCH, problem });
+        return;
+      }
+      const query = raw.trim();
+      setSearch({ ...NO_SEARCH, busy: true });
+      try {
+        const response = await http.post<PlaceSearchResponse>(`${BASE}/destinations/search`, {
+          query,
+        });
+        if (ticket === latest.current) setSearch({ ...NO_SEARCH, result: { query, response } });
+      } catch (error) {
+        if (ticket === latest.current) setSearch({ ...NO_SEARCH, error });
+      }
+    },
+    [http],
+  );
+
+  const clear = useCallback(() => {
+    latest.current += 1;
+    setSearch(NO_SEARCH);
+  }, []);
+
+  return { search, run, clear };
 }
 
 /** Don OPEN chua lap ke hoach — NGUOI chon mot, may chu khong xep hang, khong doan. */

@@ -1,5 +1,6 @@
 import type {
   SiteCandidateView,
+  SiteIntakeLocationInput,
   SiteIntakeLocationTrust,
   SiteIntakeLocationUnusableReason,
   SiteIntakeOpenRunView,
@@ -183,4 +184,47 @@ export function toSiteIntakeScreen(proposal: SiteIntakeProposal): SiteIntakeScre
     trustLabel,
     canCreate: proposal.canCreate,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * TUOI BAN DINH VI — `#398`
+ * ------------------------------------------------------------------ */
+
+/** Tran cua `locationAgeMs` — trung voi `LOCATION_AGE_MAX_MS` o may chu. */
+export const LOCATION_AGE_MAX_MS = 86_400_000;
+
+/**
+ * Qua tuoi nay thi lan xac nhan XIN LAI vi tri truoc khi gui. Thap hon han muc 300 giay cua may
+ * chu, de mot lan bam hop le khong bi tu choi chi vi lai xe doc man hinh lau.
+ */
+export const FRESH_FIX_MAX_AGE_MS = 120_000;
+
+/** Mot ban dinh vi tu trinh duyet: toa do + LUC doc duoc no theo dong ho cua trinh duyet. */
+export interface BrowserFix {
+  readonly location: SiteIntakeLocationInput;
+  readonly fixAtMs: number | null;
+}
+
+/**
+ * Than yeu cau vi tri KEM tuoi, tinh NGAY luc gui.
+ *
+ * May chu khong tin "vua doc" nua: tu `#398` no tru tuoi nay khoi dong ho cua no roi moi kiem han
+ * 300 giay. Hai moc (luc doc, luc gui) cung mot dong ho trinh duyet, nen lech gio giua may lai xe
+ * va may chu khong lam sai ket qua. Khong ro tuoi thi KHONG gui toa do: toa do khong tuoi se bi may
+ * chu coi la "vua doc" — dung cai lo hong nay dang dong lai.
+ */
+export function withLocationAge(fix: BrowserFix, nowMs: number): SiteIntakeLocationInput {
+  const { location, fixAtMs } = fix;
+  if (location.latitude === undefined || location.longitude === undefined) return location;
+  const age = fixAtMs === null ? Number.NaN : Math.round(nowMs - fixAtMs);
+  if (!Number.isFinite(age)) return {};
+  return { ...location, locationAgeMs: Math.min(Math.max(0, age), LOCATION_AGE_MAX_MS) };
+}
+
+/** Ban dinh vi da cu (hoac khong ro tuoi) thi xin lai truoc khi xac nhan. */
+export function needsFreshFix(fix: BrowserFix, nowMs: number): boolean {
+  if (fix.location.latitude === undefined) return false;
+  if (fix.fixAtMs === null) return true;
+  const age = nowMs - fix.fixAtMs;
+  return !Number.isFinite(age) || age < 0 || age > FRESH_FIX_MAX_AGE_MS;
 }

@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, classifyHttpError } from '../../api/errors';
 import { buildQueue, cardModel, chipCount, queueCounts } from '../accounting/queue';
 import { actionLabelFor, decisionSheetFor, queueItemSubline } from '../director/inbox';
+import { SEARCH_BUSY_TEXT, SEARCH_DISABLED_TEXT, searchOutcome } from '../driver/site-intake-flow';
+import type { DestinationChoice, PlaceSearchResponse } from '../driver/types';
 import { composeHeadline, queueKindLabel, unavailableSourceNotes } from './control-tower';
 import { officeReasonText } from './reasons';
 import {
   commandOutcomeText,
+  completeDestinationBody,
+  destinationCommandIdentity,
   driverOrderCard,
   exceptionCaption,
   exceptionConsequence,
@@ -13,12 +17,25 @@ import {
   exceptionReasonReady,
   filterKnownPlaces,
   isNotDriverDirect,
+  KNOWN_PLACES_EMPTY_TEXT,
+  KNOWN_PLACES_NO_MATCH_TEXT,
+  KNOWN_PLACES_UNAVAILABLE_TEXT,
+  knownPlaceRows,
+  knownPlacesNote,
   locationLine,
   missingLine,
   orderSourceLines,
+  PICK_PROMPT_TEXT,
+  pickedDestinationLine,
   READINESS_REASON_LABEL,
   READY_TO_COMPLETE_TEXT,
   reviewActions,
+  reviewSearchOutcome,
+  reviewSearchProblem,
+  samePick,
+  SEARCH_BUSY_NO_KNOWN_TEXT,
+  SEARCH_EMPTY_NO_KNOWN_TEXT,
+  SEARCH_OFF_NO_KNOWN_TEXT,
   siteIntakeQueueNote,
 } from './site-intake-review';
 import type {
@@ -281,6 +298,7 @@ describe('ket cuc — noi DUNG cau may chu tra', () => {
       'SITE_INTAKE_COMMERCIAL_CLOSED',
       'SITE_INTAKE_ORDER_NOT_OPEN',
       'SITE_INTAKE_BINDING_DENIED',
+      'SITE_INTAKE_ORDER_ORIGIN_MISMATCH',
       'SITE_INTAKE_EXCEPTION_ALREADY_RECORDED',
       'SITE_INTAKE_NOT_READY',
     ]) {
@@ -356,5 +374,174 @@ describe('Can duyet (ke toan) — cung ban ghi, nguon thu tu', () => {
     expect(chipCount(counts.INTAKE)).toBe('1');
     expect(counts.ALL.total).toBe(1);
     expect(chipCount(queueCounts({ claims: [] }).INTAKE)).toBeNull();
+  });
+});
+
+describe('chon diem giao — dia diem da biet + tim theo ten (#379), khong toa do tu go', () => {
+  const DINH_VU = { latitude: 20.8264, longitude: 106.7752 };
+  const response = (over: Partial<PlaceSearchResponse> = {}): PlaceSearchResponse => ({
+    status: 'OK',
+    reason: null,
+    results: [
+      { label: 'Cảng Đình Vũ', address: 'Hải An, Hải Phòng', point: DINH_VU },
+      { label: 'Điểm hỏng (0,0)', address: null, point: { latitude: 0, longitude: 0 } },
+      { label: 'Ngoài phạm vi', address: null, point: { latitude: 91, longitude: 106 } },
+      { label: 'Kho Đình Vũ 2', address: null, point: { latitude: 20.83, longitude: 106.77 } },
+    ],
+    attribution: '© OpenStreetMap contributors',
+    fromCache: false,
+    ...over,
+  });
+  const places = [
+    {
+      id: 'p1',
+      kind: 'CUSTOMER',
+      name: 'Kho Đình Vũ',
+      detail: 'Khách A',
+      point: { latitude: 1, longitude: 1 },
+      radiusMetres: 1,
+    },
+    {
+      id: 'p2',
+      kind: 'DEPOT',
+      name: 'Bãi xe',
+      detail: null,
+      point: { latitude: 1, longitude: 1 },
+      radiusMetres: 1,
+    },
+  ];
+
+  it('chuoi tim: 2..200 ky tu that, khong goi may chu khi sai', () => {
+    expect(reviewSearchProblem('')).toMatch(/ít nhất 2/);
+    expect(reviewSearchProblem('  a  ')).toMatch(/ít nhất 2/);
+    expect(reviewSearchProblem('ab')).toBeNull();
+    expect(reviewSearchProblem('x'.repeat(201))).toMatch(/tối đa 200/);
+  });
+
+  it('ket qua tim: bo toa do hong, giu NGUYEN chuoi da gui + nhan + toa do may chu tra', () => {
+    const outcome = reviewSearchOutcome(response(), '  Đình Vũ ', 2);
+
+    expect(outcome.rows.map((row) => row.testID)).toEqual([
+      'site-intake-review-search-result-0',
+      'site-intake-review-search-result-1',
+    ]);
+    expect(outcome.rows[0]).toMatchObject({
+      label: 'Cảng Đình Vũ',
+      detail: 'Hải An, Hải Phòng',
+      choice: {
+        kind: 'PLACE_SEARCH',
+        query: 'Đình Vũ',
+        label: 'Cảng Đình Vũ',
+        latitude: 20.8264,
+        longitude: 106.7752,
+      },
+    });
+    expect(outcome.notice).toBeNull();
+    expect(outcome.attribution).toBe('© OpenStreetMap contributors');
+    // MOT ban duy nhat voi lai xe: cung lua chon ma may chu doi chieu.
+    expect(outcome.rows.map((row) => row.choice)).toEqual(
+      searchOutcome(response(), '  Đình Vũ ').rows.map((row) => row.choice),
+    );
+  });
+
+  it('tim tat / ban / khong ra gi: noi DUNG vay; danh sach rong thi khong tro vao danh sach', () => {
+    const off = response({ status: 'DISABLED', reason: 'PROVIDER_UNCONFIGURED', results: [] });
+    const busy = response({ status: 'BUSY', reason: 'PROVIDER_BUSY', results: [] });
+    const empty = response({ results: [] });
+
+    expect(reviewSearchOutcome(off, 'Dinh Vu', 2)).toEqual({
+      rows: [],
+      notice: SEARCH_DISABLED_TEXT,
+      attribution: null,
+    });
+    expect(reviewSearchOutcome(busy, 'Dinh Vu', 2).notice).toBe(SEARCH_BUSY_TEXT);
+    expect(reviewSearchOutcome(empty, 'Dinh Vu', 2).notice).toMatch(/chọn trong danh sách/);
+
+    expect(reviewSearchOutcome(off, 'Dinh Vu', 0).notice).toBe(SEARCH_OFF_NO_KNOWN_TEXT);
+    expect(reviewSearchOutcome(busy, 'Dinh Vu', 0).notice).toBe(SEARCH_BUSY_NO_KNOWN_TEXT);
+    expect(reviewSearchOutcome(empty, 'Dinh Vu', 0).notice).toBe(SEARCH_EMPTY_NO_KNOWN_TEXT);
+    for (const text of [
+      SEARCH_OFF_NO_KNOWN_TEXT,
+      SEARCH_BUSY_NO_KNOWN_TEXT,
+      SEARCH_EMPTY_NO_KNOWN_TEXT,
+    ]) {
+      expect(text).not.toMatch(/danh sách/);
+    }
+    expect(reviewSearchOutcome(off, 'Dinh Vu', 0).rows).toEqual([]);
+  });
+
+  it('dia diem da biet: loc khong dau, testID on dinh, lua chon KNOWN_PLACE, khong chon san', () => {
+    const rows = knownPlaceRows(places, '');
+    expect(rows.map((row) => row.testID)).toEqual(['site-intake-place-p1', 'site-intake-place-p2']);
+    expect(rows[0]).toMatchObject({
+      label: 'Kho Đình Vũ',
+      detail: 'Khách A',
+      choice: { kind: 'KNOWN_PLACE', placeId: 'p1' },
+    });
+    expect(knownPlaceRows(places, 'dinh vu').map((row) => row.testID)).toEqual([
+      'site-intake-place-p1',
+    ]);
+    expect(pickedDestinationLine(null)).toBe(PICK_PROMPT_TEXT);
+  });
+
+  it('cau duoi danh sach: tat / rong / khong khop — va KHONG con chi toi "máy tính"', () => {
+    expect(knownPlacesNote({ available: false, total: 0, shown: 0 })).toBe(
+      KNOWN_PLACES_UNAVAILABLE_TEXT,
+    );
+    expect(knownPlacesNote({ available: true, total: 0, shown: 0 })).toBe(KNOWN_PLACES_EMPTY_TEXT);
+    expect(knownPlacesNote({ available: true, total: 2, shown: 0 })).toBe(
+      KNOWN_PLACES_NO_MATCH_TEXT,
+    );
+    expect(knownPlacesNote({ available: true, total: 2, shown: 1 })).toBeNull();
+    for (const text of [
+      KNOWN_PLACES_UNAVAILABLE_TEXT,
+      KNOWN_PLACES_EMPTY_TEXT,
+      KNOWN_PLACES_NO_MATCH_TEXT,
+      SEARCH_OFF_NO_KNOWN_TEXT,
+    ]) {
+      expect(text).not.toMatch(/máy tính/);
+    }
+    expect(KNOWN_PLACES_UNAVAILABLE_TEXT).toMatch(/tìm điểm giao theo tên/);
+  });
+
+  it('than complete: DUNG cac truong cua lua chon, khong truong thua (than may chu .strict())', () => {
+    expect(completeDestinationBody('k-1', { kind: 'KNOWN_PLACE', placeId: 'p1' })).toEqual({
+      idempotencyKey: 'k-1',
+      destination: { kind: 'KNOWN_PLACE', placeId: 'p1' },
+    });
+    const [row] = reviewSearchOutcome(response(), 'Đình Vũ', 2).rows;
+    // Mot lua chon "ro" truong cua hang hien thi — than gui di van chi co cac truong cua lua chon.
+    const leaky: DestinationChoice = Object.assign({}, row!.choice, { detail: 'x', testID: 'y' });
+    expect(completeDestinationBody('k-2', leaky)).toEqual({
+      idempotencyKey: 'k-2',
+      destination: {
+        kind: 'PLACE_SEARCH',
+        query: 'Đình Vũ',
+        label: 'Cảng Đình Vũ',
+        latitude: 20.8264,
+        longitude: 106.7752,
+      },
+    });
+  });
+
+  it('doi lua chon = doi khoa lenh; cung lua chon tu hai lan tim = cung mot lua chon', () => {
+    const first = reviewSearchOutcome(response(), 'Đình Vũ', 2).rows;
+    const again = reviewSearchOutcome(response(), 'Đình Vũ', 2).rows;
+    const other = reviewSearchOutcome(response(), 'Dinh Vu', 2).rows;
+    const known = knownPlaceRows(places, '');
+
+    expect(samePick(first[0]!, again[0]!)).toBe(true);
+    expect(samePick(first[0]!, first[1]!)).toBe(false);
+    // Cung nhan + toa do nhung chuoi tim khac: may chu tim lai bang chuoi khac -> lenh khac.
+    expect(samePick(first[0]!, other[0]!)).toBe(false);
+    expect(samePick(known[0]!, null)).toBe(false);
+    expect(destinationCommandIdentity(first[0]!.choice)).toBe(
+      destinationCommandIdentity(again[0]!.choice),
+    );
+    expect(destinationCommandIdentity(first[0]!.choice)).not.toBe(
+      destinationCommandIdentity(first[1]!.choice),
+    );
+    expect(destinationCommandIdentity(known[0]!.choice)).toBe('destination:known:p1');
+    expect(pickedDestinationLine(first[0]!)).toBe('Điểm giao đã chọn: Cảng Đình Vũ');
   });
 });

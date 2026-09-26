@@ -2276,7 +2276,12 @@ export type ActionQueueSubjectKind =
   | 'FUEL_RECONCILIATION'
   | 'TRACKING_SESSION'
   | 'RUN_CHECKPOINT'
-  | 'COMPANY';
+  | 'COMPANY'
+  /**
+   * `#398`: mot lan tai xe nhan viec truc tiep (`id` = intakeId, `reference` = ma vong chay). Ban
+   * sao cua `ACTION_QUEUE_SUBJECTS` o `apps/api/src/transport/control-tower/control-tower.types.ts`.
+   */
+  | 'SITE_INTAKE';
 
 export interface ActionQueueSubject {
   readonly kind: ActionQueueSubjectKind;
@@ -2876,6 +2881,8 @@ export interface SiteIntakeLocationInput {
   readonly latitude?: number;
   readonly longitude?: number;
   readonly accuracyMetres?: number | null;
+  /** `#398`: tuoi ban dinh vi (ms) do bang dong ho cua CHINH trinh duyet luc gui. Chi di kem toa do. */
+  readonly locationAgeMs?: number;
   readonly observationId?: string;
 }
 

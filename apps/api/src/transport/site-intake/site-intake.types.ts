@@ -117,6 +117,11 @@ export interface ProposeSiteIntakeCommand {
   readonly longitude?: number;
   readonly accuracyMetres?: number | null;
   readonly observationId?: string;
+  /**
+   * `#398` §3.1: tuoi cua cap toa do, ms, do bang dong ho MAY KHACH luc gui. Chi co nghia khi kem
+   * `latitude`/`longitude`. Vang mat = may khach `#267` cu (web) — xem `resolveLocation`.
+   */
+  readonly locationAgeMs?: number;
 }
 
 /** LENH xac nhan. `siteId` la thu DUY NHAT lai xe chon, va no phai la mot dia diem CO THAT. */

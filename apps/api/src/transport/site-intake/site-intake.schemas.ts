@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EXCEPTION_REASON_MIN_LENGTH } from './site-intake-commercial.types.js';
 
 const trimmed = z.string().trim();
 
@@ -12,12 +13,21 @@ const trimmed = z.string().trim();
  * `.strict()` chan hinh dang thu tu: gui CA `observationId` LAN toa do se bi tu choi thay vi lang
  * le uu tien mot ben. Hai nguon vi tri trong mot yeu cau la mot cau hoi ma chi nguoi goi tra loi
  * duoc, va doan ho la cach chac chan nhat de mot ngay nao do doan sai.
+ *
+ * `locationAgeMs` (`#398` §3.1) — TUOI cua cap so, do bang CHINH dong ho may khach luc gui
+ * (`Date.now() - thoi diem co ban dinh vi`). Hieu hai moc cua CUNG mot dong ho nen lech gio tuyet
+ * doi giua dien thoai va may chu khong lot vao. No CHI di kem cap toa do: ban dinh vi cua Lane B
+ * mang dau thoi gian rieng (`capturedAt`/`receivedAt`), va mot tuoi khong kem toa do la tuoi cua
+ * mot thu khong ton tai.
  */
+export const LOCATION_AGE_MAX_MS = 86_400_000;
+
 const locationShape = {
   latitude: z.number().finite().min(-90).max(90).optional(),
   longitude: z.number().finite().min(-180).max(180).optional(),
   accuracyMetres: z.number().finite().min(0).max(100_000).nullish(),
   observationId: trimmed.min(1).max(100).optional(),
+  locationAgeMs: z.number().int().min(0).max(LOCATION_AGE_MAX_MS).optional(),
 };
 
 const bothOrNeither = (value: { latitude?: number; longitude?: number }): boolean =>
@@ -26,11 +36,26 @@ const bothOrNeither = (value: { latitude?: number; longitude?: number }): boolea
 const notTwoSources = (value: { latitude?: number; observationId?: string }): boolean =>
   value.latitude === undefined || value.observationId === undefined;
 
+const ageOnlyWithCoordinates = (value: {
+  latitude?: number;
+  observationId?: string;
+  locationAgeMs?: number;
+}): boolean =>
+  value.locationAgeMs === undefined ||
+  (value.latitude !== undefined && value.observationId === undefined);
+
+const AGE_ONLY_WITH_COORDINATES = {
+  message:
+    'locationAgeMs chi di kem latitude/longitude — khong di voi observationId, khong di mot minh',
+  path: ['locationAgeMs'],
+};
+
 export const proposeSiteIntakeSchema = z
   .object(locationShape)
   .strict()
   .refine(bothOrNeither, { message: 'phai gui ca latitude lan longitude, hoac khong gui ca hai' })
-  .refine(notTwoSources, { message: 'khong gui dong thoi observationId va toa do' });
+  .refine(notTwoSources, { message: 'khong gui dong thoi observationId va toa do' })
+  .refine(ageOnlyWithCoordinates, AGE_ONLY_WITH_COORDINATES);
 
 export const confirmSiteIntakeSchema = z
   .object({
@@ -49,7 +74,8 @@ export const confirmSiteIntakeSchema = z
   })
   .strict()
   .refine(bothOrNeither, { message: 'phai gui ca latitude lan longitude, hoac khong gui ca hai' })
-  .refine(notTwoSources, { message: 'khong gui dong thoi observationId va toa do' });
+  .refine(notTwoSources, { message: 'khong gui dong thoi observationId va toa do' })
+  .refine(ageOnlyWithCoordinates, AGE_ONLY_WITH_COORDINATES);
 
 export type ProposeSiteIntakeBody = z.infer<typeof proposeSiteIntakeSchema>;
 export type ConfirmSiteIntakeBody = z.infer<typeof confirmSiteIntakeSchema>;
@@ -104,7 +130,10 @@ export const bindExistingOrderSchema = z
 
 /** Ly do BAT BUOC — `#398` §9: mot lan huy khong co ly do la mot lan xoa lich su bang mot nut bam. */
 export const reportExceptionSchema = z
-  .object({ reason: trimmed.min(3).max(500), idempotencyKey: trimmed.min(1).max(120) })
+  .object({
+    reason: trimmed.min(EXCEPTION_REASON_MIN_LENGTH).max(500),
+    idempotencyKey: trimmed.min(1).max(120),
+  })
   .strict();
 
 export const reviewListQuerySchema = z

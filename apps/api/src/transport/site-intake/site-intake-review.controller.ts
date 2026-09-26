@@ -21,6 +21,8 @@ import {
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { firstIssue } from '../transport.schemas.js';
+import type { KnownPlace, PlaceSearchResponse } from '../places/place-search.types.js';
+import { placeSearchSchema } from '../places/places.schemas.js';
 import {
   SiteIntakeCommercialService,
   type CommercialOutcome,
@@ -97,6 +99,48 @@ export class SiteIntakeReviewController {
   @RequiresTransportAction('transport.site_intake.review.read')
   byOrder(@Param('orderId') orderId: string): Promise<OrderIntakeSourceView> {
     return this.guard(() => this.reviews.sourceOfOrder(orderId));
+  }
+
+  /*
+   * ============================================================================================
+   * CHON DIEM GIAO — HAI NGUON #379, CUNG MA QUYEN VOI LENH `complete`
+   * ============================================================================================
+   *
+   * Van phong bo sung diem giao bang dung hai nguyen lieu ma lai xe dung: dia diem DA BIET (hang rao
+   * dang hoat dong) va TIM THEO TEN. Khong co o nhap toa do, khong co chu tu do thanh diem giao.
+   *
+   * `GET destinations` doc tu `knownDestinations()` — CUNG nguon ma `complete` doi chieu mot
+   * `KNOWN_PLACE` (`resolve` doc lai `listKnownPlaces()`), nen danh sach tren man khong the chua mot
+   * dia diem ma lenh se tu choi. `POST destinations/search` di qua CUNG cau noi
+   * `SiteIntakePlaceSearchBridge` ma `complete` dung de TIM LAI (`choiceOf`) — cung dich vu, cung bo
+   * nho dem — nen mot ket qua van phong vua chon khop duoc khi may chu doi chieu.
+   *
+   * Ca hai khai TRUOC `GET :intakeId`: Express so tuyen theo thu tu khai, va `:intakeId` se nuot chu
+   * `destinations`. Quyen: `@Roles('ADMIN', 'ACCOUNTING')` + `.review.complete` — y het `complete`,
+   * vi ai khong gui duoc diem giao thi khong co ly do gi de tim no.
+   */
+
+  /** Dia diem giao DA BIET — chi DOC, cung nguon doi chieu cua lenh `complete`. */
+  @Get('destinations')
+  @Roles('ADMIN', 'ACCOUNTING')
+  @RequiresTransportAction('transport.site_intake.review.complete')
+  destinations(): Promise<{ available: true; places: readonly KnownPlace[] }> {
+    return this.guard(() => this.commercial.knownDestinations());
+  }
+
+  /**
+   * Tim diem giao theo ten — `POST` vi chuoi tim co the la dia chi kho cua khach (#379 khong dua no
+   * vao chuoi truy van). Luon 200; tat/ban nam trong than. `@Throttle` 20/phut/nguoi nhu tuyen cua
+   * lai xe: moi lan goi co the thanh mot lan hoi ben thu ba.
+   */
+  @Post('destinations/search')
+  @HttpCode(200)
+  @Roles('ADMIN', 'ACCOUNTING')
+  @RequiresTransportAction('transport.site_intake.review.complete')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  searchDestinations(@Body() body: unknown): Promise<PlaceSearchResponse> {
+    const parsed = parse(placeSearchSchema, body);
+    return this.guard(() => this.places.search(parsed.query));
   }
 
   @Get(':intakeId')

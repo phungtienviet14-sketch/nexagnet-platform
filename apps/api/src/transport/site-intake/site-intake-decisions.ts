@@ -116,6 +116,13 @@ export const SITE_INTAKE_COMMERCIAL_REASONS = [
   'SITE_INTAKE_DESTINATION_REPLAYED',
   /** Gan don co san bi tu choi — ma cu the nam o `detail.reason`. */
   'SITE_INTAKE_BINDING_DENIED',
+  /**
+   * Gan don co san bi tu choi vi don LAY HANG O NOI KHAC — diem lay cua don nam ngoai dung sai
+   * quanh dia diem tai xe nhan viec (`matchOrderOrigin`). Ma RIENG chu khong gop vao
+   * `SITE_INTAKE_BINDING_DENIED`: van phong sua bang cach chon DON KHAC, khong phai doi don nay
+   * het ke hoach/het chang. `detail` mang khoang cach va dung sai (met), khong mang toa do.
+   */
+  'SITE_INTAKE_ORDER_ORIGIN_MISMATCH',
 ] as const;
 export type SiteIntakeCommercialReason = (typeof SITE_INTAKE_COMMERCIAL_REASONS)[number];
 
@@ -178,6 +185,8 @@ export const TRANSPORT_SITE_INTAKE_DECISIONS = defineDecisionVocabulary({
     SITE_INTAKE_DESTINATION_RECORDED: 'Đã ghi điểm giao',
     SITE_INTAKE_DESTINATION_REPLAYED: 'Gửi lại đúng lệnh điểm giao cũ',
     SITE_INTAKE_BINDING_DENIED: 'Không gắn được đơn có sẵn',
+    SITE_INTAKE_ORDER_ORIGIN_MISMATCH:
+      'Đơn có sẵn lấy hàng ở nơi khác với nơi tài xế nhận chuyến — không gắn được',
 
     SITE_INTAKE_EXCEPTION_ORDER_CANCELLED_WORK_CANCELLED:
       'Hủy đơn — xe chưa chạy nên việc vận hành cũng hủy',

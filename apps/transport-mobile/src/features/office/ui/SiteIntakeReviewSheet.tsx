@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { attemptFor, type CommandAttempt } from '../../../api/command-attempt';
@@ -13,29 +13,40 @@ import { Sheet } from '../../../ui/Sheet';
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '../../../ui/States';
 import { Divider, KeyValue, Pill } from '../../../ui/Surface';
 import { Text } from '../../../ui/Text';
+import type { DestinationRow } from '../../driver/site-intake-flow';
 import { newIdempotencyKey, useOfficeAccess, useOfficeKey } from '../queries';
 import {
   bindableOrderLine,
   commandOutcomeText,
+  completeDestinationBody,
+  destinationCommandIdentity,
   EXCEPTION_REASON_MAX,
   exceptionConsequence,
   exceptionOutcomeText,
   exceptionReasonReady,
-  filterKnownPlaces,
+  knownPlaceRows,
+  knownPlacesNote,
   locationLine,
   missingLine,
   originLine,
+  pickedDestinationLine,
+  REVIEW_SEARCH_MAX_CHARS,
   REVIEW_STATUS_LABEL,
   reviewActions,
+  reviewSearchOutcome,
+  samePick,
   SITE_INTAKE_POLICY,
 } from '../site-intake-review';
 import {
   useBindableOrders,
   useInvalidateSiteIntake,
   useKnownPlaces,
+  useReviewDestinationSearch,
   useSiteIntakeReview,
+  type ReviewDestinationSearch,
 } from '../site-intake-queries';
 import type {
+  KnownPlacesResponse,
   SiteIntakeCommandResponse,
   SiteIntakeCommercialOutcome,
   SiteIntakeExceptionResult,
@@ -78,24 +89,28 @@ export function SiteIntakeReviewSheet({
   const decision = useDecision(SITE_INTAKE_POLICY);
   const attempts = useRef<Readonly<Record<string, CommandAttempt>>>({});
   const [requested, setMode] = useState<Mode>(initialMode);
-  const [placeId, setPlaceId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<DestinationRow | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
+  const [query, setQuery] = useState('');
   const [reason, setReason] = useState('');
   const [outcome, setOutcome] = useState<string | null>(null);
   const { reset } = decision;
+  const { search, run: runSearch, clear: clearSearch } = useReviewDestinationSearch();
 
   // Mo lai (viec khac) = lenh moi: khoa moi, form sach.
   useEffect(() => {
     attempts.current = {};
     setMode(initialMode);
-    setPlaceId(null);
+    setPicked(null);
     setOrderId(null);
     setFilter('');
+    setQuery('');
     setReason('');
     setOutcome(null);
+    clearSearch();
     reset();
-  }, [intakeId, initialMode, reset]);
+  }, [intakeId, initialMode, reset, clearSearch]);
 
   const view = review.data ?? null;
   const allowed = view ? reviewActions(view, can) : null;
@@ -115,9 +130,11 @@ export function SiteIntakeReviewSheet({
     queryClient.setQueryData(reviewKey, intake);
     setOutcome(text);
     setMode('IDLE');
-    setPlaceId(null);
+    setPicked(null);
     setOrderId(null);
+    setQuery('');
     setReason('');
+    clearSearch();
     invalidate();
   }
 
@@ -143,12 +160,14 @@ export function SiteIntakeReviewSheet({
   const describeException = (result: SiteIntakeExceptionResult) => exceptionOutcomeText(result);
 
   function sendDestination() {
-    if (placeId === null) return;
-    const destination = { kind: 'KNOWN_PLACE', placeId };
+    if (picked === null) return;
+    // `choice` la DUNG than may chu doi chieu: dia diem da biet, hoac ket qua tim NGUYEN VAN (chuoi
+    // da gui + nhan + toa do may chu tra). Khong co nhanh nao dung toa do tu go.
+    const { choice } = picked;
     command(
       'complete',
-      `destination:${placeId}`,
-      (key) => ({ idempotencyKey: key, destination }),
+      destinationCommandIdentity(choice),
+      (key) => completeDestinationBody(key, choice),
       describeCommercial,
     );
   }
@@ -208,7 +227,7 @@ export function SiteIntakeReviewSheet({
             kind="signal"
             label="Gửi điểm giao"
             icon="map-marker-check-outline"
-            disabled={placeId === null}
+            disabled={picked === null}
             loading={busy}
             onPress={sendDestination}
             testID="site-intake-destination-send"
@@ -265,34 +284,17 @@ export function SiteIntakeReviewSheet({
         {outcome ? <Notice tone="live" title={outcome} testID="site-intake-outcome" /> : null}
         <FailureNotice failure={decision.failure} />
         {view && mode === 'DESTINATION' ? (
-          <View style={styles.form}>
-            <Field
-              label="Lọc theo tên"
-              value={filter}
-              onChangeText={setFilter}
-              autoCorrect={false}
-              testID="site-intake-place-filter"
-            />
-            {places.isPending ? <LoadingBlock lines={2} /> : null}
-            {places.isError ? (
-              <ErrorBlock error={places.error} onRetry={() => void places.refetch()} />
-            ) : null}
-            {places.data && !places.data.available ? (
-              <Text variant="caption" tone="muted">
-                Doanh nghiệp chưa có sổ địa điểm (hàng rào) — chọn điểm giao trên máy tính.
-              </Text>
-            ) : null}
-            {filterKnownPlaces(places.data?.places ?? [], filter).map((place) => (
-              <ChoiceRow
-                key={place.id}
-                label={place.name}
-                detail={place.detail}
-                selected={placeId === place.id}
-                onPress={() => setPlaceId(place.id)}
-                testID={`site-intake-place-${place.id}`}
-              />
-            ))}
-          </View>
+          <DestinationForm
+            places={places}
+            filter={filter}
+            onFilter={setFilter}
+            query={query}
+            onQuery={setQuery}
+            search={search}
+            onSearch={() => void runSearch(query)}
+            picked={picked}
+            onPick={setPicked}
+          />
         ) : null}
         {view && mode === 'BIND' ? (
           <View style={styles.form}>
@@ -301,7 +303,10 @@ export function SiteIntakeReviewSheet({
               <ErrorBlock error={bindable.error} onRetry={() => void bindable.refetch()} />
             ) : null}
             {bindable.data && bindable.data.length === 0 ? (
-              <EmptyBlock icon="package-variant" title="Không có đơn mở nào chưa lập kế hoạch" />
+              <EmptyBlock
+                icon="package-variant"
+                title="Không có đơn mở nào cùng nơi lấy hàng mà chưa lập kế hoạch"
+              />
             ) : null}
             {(bindable.data ?? []).map((order) => (
               <ChoiceRow
@@ -406,6 +411,130 @@ function IdleActions({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * CHON DIEM GIAO — hai nguon #379: dia diem da biet (loc khong dau) va tim theo ten. Khong o go toa
+ * do, khong chu tu do thanh diem giao, khong chon san. Tim tat / ban / khong ra gi thi noi dung vay.
+ */
+function DestinationForm({
+  places,
+  filter,
+  onFilter,
+  query,
+  onQuery,
+  search,
+  onSearch,
+  picked,
+  onPick,
+}: {
+  readonly places: UseQueryResult<KnownPlacesResponse>;
+  readonly filter: string;
+  readonly onFilter: (next: string) => void;
+  readonly query: string;
+  readonly onQuery: (next: string) => void;
+  readonly search: ReviewDestinationSearch;
+  readonly onSearch: () => void;
+  readonly picked: DestinationRow | null;
+  readonly onPick: (row: DestinationRow) => void;
+}) {
+  const all = places.data?.places ?? [];
+  const known = knownPlaceRows(all, filter);
+  const note = places.data
+    ? knownPlacesNote({ available: places.data.available, total: all.length, shown: known.length })
+    : null;
+  const knownCount = places.data?.available ? all.length : 0;
+  const found = search.result
+    ? reviewSearchOutcome(search.result.response, search.result.query, knownCount)
+    : null;
+
+  return (
+    <View style={styles.form}>
+      <Field
+        label="Lọc địa điểm đã biết"
+        value={filter}
+        onChangeText={onFilter}
+        autoCorrect={false}
+        testID="site-intake-place-filter"
+      />
+      {places.isPending ? <LoadingBlock lines={2} label="Đang đọc địa điểm đã biết…" /> : null}
+      {places.isError ? (
+        <ErrorBlock
+          error={places.error}
+          title="Chưa đọc được địa điểm đã biết"
+          onRetry={() => void places.refetch()}
+        />
+      ) : null}
+      {note ? (
+        <Text variant="caption" tone="muted" testID="site-intake-place-note">
+          {note}
+        </Text>
+      ) : null}
+      {known.map((row) => (
+        <ChoiceRow
+          key={row.key}
+          label={row.label}
+          detail={row.detail}
+          selected={samePick(row, picked)}
+          onPress={() => onPick(row)}
+          testID={row.testID}
+        />
+      ))}
+      <Divider />
+      <Field
+        label="Tìm theo tên hoặc địa chỉ"
+        value={query}
+        onChangeText={onQuery}
+        autoCorrect={false}
+        returnKeyType="search"
+        onSubmitEditing={onSearch}
+        maxLength={REVIEW_SEARCH_MAX_CHARS}
+        error={search.problem}
+        testID="site-intake-review-search-query"
+      />
+      <Button
+        kind="secondary"
+        icon="magnify"
+        label="Tìm"
+        loading={search.busy}
+        onPress={onSearch}
+        testID="site-intake-review-search-submit"
+      />
+      {search.error ? (
+        <ErrorBlock error={search.error} title="Chưa tìm được" onRetry={onSearch} />
+      ) : null}
+      {found?.notice ? (
+        <Notice
+          tone="neutral"
+          icon="information-outline"
+          title={found.notice}
+          testID="site-intake-review-search-notice"
+        />
+      ) : null}
+      {(found?.rows ?? []).map((row) => (
+        <ChoiceRow
+          key={row.key}
+          label={row.label}
+          detail={row.detail}
+          selected={samePick(row, picked)}
+          onPress={() => onPick(row)}
+          testID={row.testID}
+        />
+      ))}
+      {found?.attribution ? (
+        <Text variant="caption" tone="faint" testID="site-intake-review-search-attribution">
+          {found.attribution}
+        </Text>
+      ) : null}
+      <Text
+        variant={picked ? 'bodyStrong' : 'caption'}
+        tone={picked ? 'ink' : 'muted'}
+        testID="site-intake-review-destination-picked"
+      >
+        {pickedDestinationLine(picked)}
+      </Text>
+    </View>
   );
 }
 

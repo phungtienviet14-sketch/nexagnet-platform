@@ -269,8 +269,79 @@ export const SITE_INTAKE_BINDING_DENY_REASONS = [
   'ORDER_ALREADY_PLANNED',
   'ORDER_ALREADY_ON_RUN',
   'ORDER_BOUND_TO_OTHER_INTAKE',
+  /**
+   * Don co san LAY HANG O NOI KHAC: diem lay cua don nam ngoai dung sai quanh dia diem ma tai xe
+   * da bam "Nhan chuyen tai day". Xem `matchOrderOrigin()`.
+   */
+  'ORDER_ORIGIN_MISMATCH',
 ] as const;
 export type SiteIntakeBindingDenyReason = (typeof SITE_INTAKE_BINDING_DENY_REASONS)[number];
+
+/**
+ * DUNG SAI doi chieu diem lay cua mot DON CO SAN voi dia diem cua lan nhan viec — met.
+ *
+ * Vi sao mot hang so chu khong phai ban kinh hang rao: "diem cua dia diem" o ca hai duong dung
+ * no (cong gan don duoi khoa, va danh sach don gan duoc cua van phong) den tu CUNG mot nguon —
+ * `SiteIntakeReadinessReader.external().originPoints`, tam cac hang rao DANG hoat dong, KHONG kem
+ * ban kinh. Hai duong phai doc cung mot nguon, neu khong danh sach se de nghi mot don ma cong lai
+ * tu choi.
+ *
+ * Vi sao 500 m:
+ *   · don tao tu "dia diem da biet" (#379) mang DUNG tam hang rao -> 0 m, luon qua;
+ *   · don tao tu tim dia diem theo ten co the roi o cong/mat duong cua mot kho lon — lech vai tram
+ *     met so voi tam hang rao (hang rao mau cua repo co ban kinh 200–300 m). Chat hon thi cong nay
+ *     tu choi chinh don dung, va van phong khong con duong nao ngoai bao bat thuong;
+ *   · long hon thi hai kho KHAC nhau cua cung mot khu cong nghiep bat dau lot qua. Cong nay chan
+ *     cai sai HIEN NHIEN (don lay hang o tinh/quan khac), khong thay nguoi chon don.
+ */
+export const ORDER_ORIGIN_TOLERANCE_METRES = 500;
+
+/**
+ * KET QUA doi chieu diem lay cua don voi dia diem cua lan nhan viec. Bon ket cuc, khong mot
+ * `boolean`: nguoi doc trace phai tach duoc "khop" voi "khong doi chieu duoc".
+ */
+export type OrderOriginMatch =
+  /** Don KHONG co toa do diem lay (don truoc #379, don chieu tu chuyen v1). */
+  | { readonly kind: 'ORDER_ORIGIN_UNKNOWN' }
+  /** Dia diem cua lan nhan viec khong con hang rao dang hoat dong nao — khong co diem de so. */
+  | { readonly kind: 'SITE_POINT_UNKNOWN' }
+  | { readonly kind: 'MATCH'; readonly distanceMetres: number }
+  | { readonly kind: 'MISMATCH'; readonly distanceMetres: number };
+
+/**
+ * DON CO SAN CO LAY HANG O CHINH NOI TAI XE NHAN VIEC KHONG — `#398` §6 *"bind an existing
+ * compatible Order by explicit human choice only"*. Ham THUAN, tat dinh.
+ *
+ * Khop khi diem lay cua don cach tam GAN NHAT trong cac hang rao dang hoat dong cua dia diem khong
+ * qua `ORDER_ORIGIN_TOLERANCE_METRES`. Nhieu hang rao (khai lap, hoac khac toa do) thi CHI CAN mot
+ * cai khop: tat ca deu la hang rao cua CHINH dia diem do.
+ *
+ * Hai truong hop KHONG doi chieu duoc thi CHO QUA, co y:
+ *   · don khong co toa do diem lay — khong co gi de chung minh la lech; NGUOI chon don da noi "day
+ *     la cung mot viec", va cong nay khong duoc bia mot toa do de tu choi;
+ *   · dia diem khong co hang rao dang hoat dong — cung ly do. (Viec tu tao don cho lan nhan viec
+ *     do van bi chan rieng bang `ORIGIN_POINT_UNKNOWN`.)
+ * Chi mot khoang cach DO DUOC va VUOT dung sai moi la ly do tu choi.
+ */
+export function matchOrderOrigin(
+  orderOrigin: GeoPoint | null,
+  sitePoints: readonly GeoPoint[],
+): OrderOriginMatch {
+  if (orderOrigin === null) return { kind: 'ORDER_ORIGIN_UNKNOWN' };
+  if (sitePoints.length === 0) return { kind: 'SITE_POINT_UNKNOWN' };
+  const distanceMetres = Math.min(
+    ...sitePoints.map((point) => greatCircleMetres(point, orderOrigin)),
+  );
+  return distanceMetres <= ORDER_ORIGIN_TOLERANCE_METRES
+    ? { kind: 'MATCH', distanceMetres }
+    : { kind: 'MISMATCH', distanceMetres };
+}
+
+/** Loc danh sach don gan duoc — CUNG luat voi cong gan don, de man hinh khong de nghi don bi chan. */
+export const isOrderOriginCompatible = (
+  orderOrigin: GeoPoint | null,
+  sitePoints: readonly GeoPoint[],
+): boolean => matchOrderOrigin(orderOrigin, sitePoints).kind !== 'MISMATCH';
 
 export interface OrderBindingFacts {
   readonly status: SiteIntakeCommercialStatus;
@@ -282,6 +353,11 @@ export interface OrderBindingFacts {
     readonly orderId: string | null;
   };
   readonly runCarriesOtherOneOrderPlan: boolean;
+  /**
+   * Tam cac hang rao DANG hoat dong cua dia diem lan nhan viec — CUNG nguon voi diem lay cua don tu
+   * tao (`SiteIntakeReadinessReader.external().originPoints`).
+   */
+  readonly siteOriginPoints: readonly GeoPoint[];
   readonly target: {
     readonly id: string;
     readonly status: OrderStatus;
@@ -290,6 +366,8 @@ export interface OrderBindingFacts {
     readonly liveLegCount: number;
     /** Don da nhan mot lan nhan viec KHAC. */
     readonly boundToOtherIntake: boolean;
+    /** Diem lay THAT cua don (#379). `null` = don khong co toa do — khong doi chieu duoc. */
+    readonly originPoint: GeoPoint | null;
   };
 }
 
@@ -303,7 +381,9 @@ export type OrderBindingDecision =
  *
  * Cong nay KHONG doi diem giao hay xac nhan noi lay: don co san mang su that diem lay/giao CUA NO,
  * va chinh NGUOI chon don do da noi "day la cung mot viec". Cai no doi la don khong bi lap ke hoach
- * o noi khac — neu khong, gan vao day se sinh dung hai chang co hang cho mot viec.
+ * o noi khac — neu khong, gan vao day se sinh dung hai chang co hang cho mot viec — va, khi don CO
+ * toa do diem lay, diem do phai nam quanh dia diem tai xe nhan viec (`matchOrderOrigin()`): mot don
+ * lay hang o noi khac khong phai "cung mot viec" du nguoi bam co chon no.
  */
 export function evaluateOrderBinding(facts: OrderBindingFacts): OrderBindingDecision {
   if (facts.status === 'ORDER_BOUND' && facts.boundOrderId !== null) {
@@ -325,6 +405,9 @@ export function evaluateOrderBinding(facts: OrderBindingFacts): OrderBindingDeci
   }
   if (facts.target.hasActivePlan) return { kind: 'DENY', reason: 'ORDER_ALREADY_PLANNED' };
   if (facts.target.liveLegCount > 0) return { kind: 'DENY', reason: 'ORDER_ALREADY_ON_RUN' };
+  if (matchOrderOrigin(facts.target.originPoint, facts.siteOriginPoints).kind === 'MISMATCH') {
+    return { kind: 'DENY', reason: 'ORDER_ORIGIN_MISMATCH' };
+  }
   return { kind: 'BIND' };
 }
 

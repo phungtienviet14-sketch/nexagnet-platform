@@ -79,7 +79,10 @@ const OFFICE_REASON_TEXT: Readonly<Record<string, string>> = {
   SITE_INTAKE_BOUND_TO_OTHER_ORDER: 'Việc này đã gắn với một đơn khác — không gắn lại được.',
   SITE_INTAKE_BINDING_DENIED:
     'Không gắn được đơn này vào việc tài xế nhận (đơn đã có kế hoạch chạy hoặc chặng không nhận được).',
+  SITE_INTAKE_ORDER_ORIGIN_MISMATCH:
+    'Đơn này lấy hàng ở nơi khác với nơi tài xế nhận chuyến — chọn đơn khác.',
   SITE_INTAKE_EXCEPTION_ALREADY_RECORDED: 'Việc này đã được báo bất thường trước đó.',
+  SITE_INTAKE_EXCEPTION_REASON_REQUIRED: 'Cần ghi lý do trước khi báo bất thường hoặc hủy.',
   SITE_INTAKE_ORDER_SOURCE_NOT_FOUND: 'Đơn này không tạo từ xác nhận của tài xế.',
 };
 

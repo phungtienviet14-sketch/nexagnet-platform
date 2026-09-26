@@ -140,6 +140,23 @@ export class RunClosedForNewWorkError extends Error {
   }
 }
 
+/**
+ * `#398` — DON DA NHAN CHANG CO HANG CUA MOT VIEC TAI XE NHAN TRUC TIEP, va mot lenh `createLeg`
+ * dang dat don do len MOT CHANG CO HANG THU HAI.
+ *
+ * Don do da co dung mot chang co hang (chang cua lan tai xe xac nhan, nhan qua lenh adopt — lenh
+ * adopt KHONG di qua `createLeg`). Mot chang co hang thu hai cho cung don la hai lan cho cung mot
+ * viec that: km, doi soat va "don dang o dau" deu nhan doi. Lop loi RIENG, cung khuon
+ * `RunClosedForNewWorkError`: kho phat hien DUOI khoa cua don, `MovementService` dich thanh ma
+ * nghiep vu `LEG_ORDER_ADOPTED_BY_SITE_INTAKE` va ghi quyet dinh.
+ */
+export class LegOrderAdoptedBySiteIntakeError extends Error {
+  constructor(readonly orderId: string) {
+    super(`Don ${orderId} da nhan chang co hang cua viec tai xe nhan truc tiep`);
+    this.name = 'LegOrderAdoptedBySiteIntakeError';
+  }
+}
+
 export interface RunClosureCandidateQuery {
   /** Lan hoan thanh muon nhat phai da cu hon moc nay. */
   readonly completedBefore: Date;
@@ -420,6 +437,15 @@ export abstract class MovementRepository {
    *
    * Nen o day chi co MOT cau lenh khoa, va no dung chung cho ca ba duong ghi.
    *
+   * MOT NGOAI LE DA BIET, co y va co ten: `PrismaSiteIntakeCommercialStore.withIntake`
+   * (`transport-site-intake`, `#398`) tu viet `SELECT ... FOR UPDATE` tren CHINH hang nay — cung
+   * mot khoa, khong phai khoa thu hai — vi no phai khoa hang vong chay SAU hai khoa tu van (lan nhan
+   * viec -> don) trong CUNG mot giao dich voi lan tao don + nhan chang + ke hoach. Di qua ham nay
+   * thi hang vong chay bi khoa TRUOC, tuc thu tu dao nguoc voi lan lap ke hoach (don -> xe -> hang
+   * vong chay) — cong thuc cua deadlock. Thu tu toan cuc van la MOT: lan nhan viec -> don -> xe ->
+   * hang vong chay; khong duong nao giu hang vong chay roi moi xin khoa tu van. Xem chu thich tai
+   * cau lenh do. Mot ngoai le moi phai duoc ghi ten o day, khong duoc lang le them.
+   *
    * ==========================================================================================
    * `write` PHAI GHI QUA `scope.tx`
    * ==========================================================================================
@@ -471,6 +497,15 @@ export abstract class MovementRepository {
    */
   abstract listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]>;
 
+  /**
+   * THEM MOT CHANG — duoi khoa hang vong chay (`#293` R2).
+   *
+   * `#398`: chang `LOADED` mang mot don DA NHAN chang cua viec tai xe nhan truc tiep (phan thuong mai
+   * `ORDER_BOUND` voi don do) bi tu choi bang `LegOrderAdoptedBySiteIntakeError` — kiem DUOI khoa
+   * tu van cua don (`orderPlanLockKey`), cung khoa lenh gan don co san gianh, nen "gan don vao viec
+   * tai xe" va "them chang co hang cho don do" xep hang. Lenh adopt khong di qua day (no DOI
+   * `orderId` cua chang co san), nen cong nay khong chan chinh no.
+   */
   abstract createLeg(input: CreateLegInput): Promise<RunLeg>;
   abstract findLeg(id: string): Promise<RunLeg | null>;
   abstract listLegs(runId: string): Promise<RunLeg[]>;
@@ -606,6 +641,13 @@ export class InMemoryMovementRepository extends MovementRepository {
   private readonly orderLinks = new Map<string, TripOrderLink>();
   /** Hang doi mot-luot-mot theo vong chay — ban trong bo nho cua `SELECT ... FOR UPDATE`. */
   private readonly runLocks = new Map<string, Promise<unknown>>();
+  /**
+   * `#398` — don da NHAN chang cua viec tai xe nhan truc tiep (qua `bindOrderToUnboundLoadedLeg`,
+   * duong adopt DUY NHAT cua ban trong bo nho). Song doi cua "phan thuong mai `ORDER_BOUND` voi don
+   * do" ma ban Prisma doc duoi khoa don: ca hai deu la vinh vien — lan bao bat thuong khong go
+   * `ORDER_BOUND`, va don bi huy thi `resolveLegOrder` da tu choi truoc (`LEG_ORDER_CANCELLED`).
+   */
+  private readonly adoptedOrderIds = new Set<string>();
 
   /**
    * Kho dau vet, de ban nay ghi dau vet dong vong chay o CUNG mot luot voi buoc chuyen trang thai.
@@ -936,6 +978,15 @@ export class InMemoryMovementRepository extends MovementRepository {
   }
 
   private insertLeg(input: CreateLegInput): RunLeg {
+    // `#398`: cung cong voi ban Prisma, kiem TRUOC trang thai vong chay — cung thu tu (khoa don roi
+    // moi khoa hang vong chay).
+    if (
+      input.kind === 'LOADED' &&
+      input.orderId !== null &&
+      this.adoptedOrderIds.has(input.orderId)
+    ) {
+      throw new LegOrderAdoptedBySiteIntakeError(input.orderId);
+    }
     const run = this.runs.get(input.runId);
     if (run && (run.status === 'COMPLETED' || run.status === 'CANCELLED')) {
       throw new RunClosedForNewWorkError(input.runId, run.status);
@@ -1027,6 +1078,7 @@ export class InMemoryMovementRepository extends MovementRepository {
         updatedAt: iso(input.at),
       };
       this.legs.set(next.id, next);
+      this.adoptedOrderIds.add(input.orderId);
       return next;
     });
   }

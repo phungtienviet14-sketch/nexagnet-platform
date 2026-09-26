@@ -6,6 +6,7 @@ import { fromStoredAmount, toStoredAmount } from '../money.js';
 import { isUniqueViolationOn, type UniqueIndexRef } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
+  LegOrderAdoptedBySiteIntakeError,
   MovementRepository,
   RunClosedForNewWorkError,
   type AssignRunInput,
@@ -259,14 +260,27 @@ const toOrderLink = (row: OrderLinkRow): TripOrderLink => ({
 });
 
 /**
+ * `#398` — KHOA TU VAN "ke hoach cua MOT don". MOT noi khai ten, cung ly do voi
+ * `vehicleRunsLockKey()`: hai capability gianh no — lan lap ke hoach / lan them chang co hang o day,
+ * va lenh gan don co san vao viec tai xe nhan truc tiep o `transport-site-intake`
+ * (`PrismaSiteIntakeCommercialStore.withIntake`). Hai chuoi go tay o hai noi la hai khoa khac nhau
+ * ngay lan sua thu hai — va khi do hai duong khong con xep hang.
+ */
+export const orderPlanLockKey = (orderId: string): string => `transport-order-plan:${orderId}`;
+
+export async function lockOrderPlan(tx: TxClient, orderId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${orderPlanLockKey(orderId)}, 0))`;
+}
+
+/**
  * `#398` — CONG KE HOACH CUA DON, duoi khoa tu van cua chinh don do.
  *
- * Khoa `transport-order-plan:<orderId>` la khoa ma lenh gan don co san vao viec tai xe nhan truc
- * tiep cung gianh (`transport-site-intake`). Doc "da co ke hoach hieu luc" SAU khi co khoa, nen mot
- * lan gan don vua commit KHONG the lot qua giua phep kiem va lan ghi.
+ * Khoa `orderPlanLockKey(orderId)` la khoa ma lenh gan don co san vao viec tai xe nhan truc tiep
+ * cung gianh (`transport-site-intake`). Doc "da co ke hoach hieu luc" SAU khi co khoa, nen mot lan
+ * gan don vua commit KHONG the lot qua giua phep kiem va lan ghi.
  */
 async function requireOrderUnplanned(tx: TxClient, orderId: string): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`transport-order-plan:${orderId}`}, 0))`;
+  await lockOrderPlan(tx, orderId);
   const active: unknown = await tx.$queryRaw`
     SELECT 1 FROM "TransportOrderRunPlan" WHERE "orderId" = ${orderId} AND "cancelledAt" IS NULL LIMIT 1`;
   if (Array.isArray(active) && active.length > 0) {
@@ -274,6 +288,31 @@ async function requireOrderUnplanned(tx: TxClient, orderId: string): Promise<voi
       'PLAN_ORDER_ALREADY_PLANNED',
       'Don nay da co ke hoach hieu luc — khong lap them vong chay/chang.',
     );
+  }
+}
+
+/**
+ * `#398` — CONG "DON DA NHAN CHANG CUA VIEC TAI XE NHAN TRUC TIEP", cung khuon
+ * `requireOrderUnplanned()`: khoa cua don da trong tay khi cau hoi chay.
+ *
+ * Don co phan thuong mai `ORDER_BOUND` thi da co dung MOT chang co hang — chang cua lan tai xe xac
+ * nhan, nhan qua lenh adopt (lenh do DOI `orderId` cua chang co san, khong di qua `createLeg`). Mot
+ * chang co hang thu hai cho don do — vd van phong dung trinh sua vong chay/chang tay — la hai lan
+ * cho cung mot viec that. Hoi DUOI khoa don thi "gan don co san vao viec tai xe" (gianh cung khoa)
+ * va lan them chang nay xep hang: gan truoc -> o day thay `ORDER_BOUND`; them chang truoc -> lenh
+ * gan doc `liveLegCount > 0` duoi khoa va tu choi `ORDER_ALREADY_ON_RUN`.
+ *
+ * `ORDER_BOUND` la vinh vien (trigger `transport_site_intake_commercial_guard`), ke ca sau bao bat
+ * thuong — va don da huy thi `MovementService.resolveLegOrder` da tu choi truoc. Khach khong bat
+ * `transport-site-intake` thi bang rong va cau hoi luon tra "khong".
+ */
+async function requireOrderNotAdoptedBySiteIntake(tx: TxClient, orderId: string): Promise<void> {
+  const adopted: unknown = await tx.$queryRaw`
+    SELECT 1 FROM "TransportSiteIntakeCommercial"
+     WHERE "orderId" = ${orderId} AND "status" = 'ORDER_BOUND'
+     LIMIT 1`;
+  if (Array.isArray(adopted) && adopted.length > 0) {
+    throw new LegOrderAdoptedBySiteIntakeError(orderId);
   }
 }
 
@@ -738,8 +777,23 @@ export class PrismaMovementRepository extends MovementRepository {
       async (tx: unknown) => {
         // `#398`: khoa cua DON truoc, khoa cua XE sau, khoa hang vong chay cuoi — cung thu tu voi
         // lenh gan don co san va lan tai xe xac nhan (xem `requireVehicleFreeOfPendingIntake()`).
-        if (input.planGuardOrderId) {
-          await requireOrderUnplanned(tx as TxClient, input.planGuardOrderId);
+        const guardOrderId = input.planGuardOrderId ?? null;
+        const carriedOrderId = input.kind === 'LOADED' ? input.orderId : null;
+        if (guardOrderId !== null) {
+          // TRUOC cong "da nhan viec tai xe": lan lap ke hoach phai nhan `PLAN_ORDER_ALREADY_PLANNED`
+          // — ma ma no biet go phan dang do (`abandonPartialCommit`). Don da nhan viec tai xe luon
+          // co ke hoach `ADOPTED` hieu luc, nen voi planner cong nay nem truoc.
+          await requireOrderUnplanned(tx as TxClient, guardOrderId);
+        }
+        if (carriedOrderId !== null) {
+          // Chang CO HANG cho mot don: hoi "don da nhan chang cua viec tai xe chua" DUOI khoa don.
+          // Planner: khoa da trong tay (cung don, khoa tu van tai nhap duoc). Trinh sua tay: gianh
+          // o day — van TRUOC khoa xe va khoa hang vong chay. (Khong duong nao hom nay truyen mot
+          // `planGuardOrderId` KHAC don cua chang.)
+          if (carriedOrderId !== guardOrderId) await lockOrderPlan(tx as TxClient, carriedOrderId);
+          await requireOrderNotAdoptedBySiteIntake(tx as TxClient, carriedOrderId);
+        }
+        if (guardOrderId !== null) {
           // `vehicleId` doc TRUOC khoa hang la an toan: khong duong ghi nao doi xe cua mot vong
           // chay. Vong chay khong ton tai thi bo qua — khoa ngoai cua DB se tu choi lan chen.
           const owner: { vehicleId: string } | null = await model(
