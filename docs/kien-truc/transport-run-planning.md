@@ -530,7 +530,7 @@ không ràng buộc nào bị gỡ. Đường lui nằm ở `README-rollback.sql
 | `OPEN_WAITING_SESSION` chưa có nguồn                 | **CHỜ LANE O.** Cổng đã có và đã kiểm bằng adapter giả; `TransportDeliveryWaitingSession` (#243 F3) vẫn chưa vào `main`, và lane này **không** dựng một bảng giả. Xem `WAITING_SESSION_BINDING` ở báo cáo cuối lane                                                                                                        |
 | `IDLE_TIMEOUT` cần một lần quét                      | **ĐÃ ĐÓNG.** `RunClosureSweepScheduler` + `RunClosureService.sweep()` — bền vững, có trần, khôi phục được sau khi tiến trình chết, và không đóng hai lần dưới hai worker                                                                                                                                                   |
 | So sánh địa điểm bằng nhãn chữ                       | **CÒN.** Chưa có khoá địa điểm/toạ độ ở grain chặng. Lane M sở hữu phần đó. #379 đưa toạ độ vào **đơn** (điều xe dùng), nhưng lập kế hoạch vẫn so nhãn — xem ghi chú ở §3                                                                                                                                                  |
-| Vòng chạy mồ côi khi hai yêu cầu song song cùng thua | **CÒN.** Bản thua ở `plans.create` để lại một vòng chạy `PLANNED` rỗng việc; nó được dọn bằng đường huỷ bình thường. Cùng khuôn với `SiteIntakeService`                                                                                                                                                                    |
+| Vòng chạy mồ côi khi hai yêu cầu song song cùng thua | **CÒN.** Bản thua ở `plans.create` để lại một vòng chạy `PLANNED` rỗng việc; nó được dọn bằng đường huỷ bình thường. Cùng khuôn với `SiteIntakeService`. Riêng va chạm với lệnh **gắn đơn có sẵn vào việc tài xế nhận trực tiếp** (`#398`): lần lập kế hoạch thua **tự huỷ** vòng chạy rỗng vừa mở — xem ghi chú `#398` bên dưới                                                                                                                                                                    |
 
 ### Nguồn sự thật bên ngoài — cổng, không phải một DI tuỳ nghi
 
@@ -551,3 +551,26 @@ Ba tính chất, và cả ba đều được kiểm:
    là _"đã hỏi, và không có gì chặn"_.
 3. **Vắng mặt là một câu trả lời hợp lệ.** Khách không bật `transport-checkpoint` nhận
    `NoRunClosureBlockerSource` — không có cổng nào để hỏi, khác hẳn với hỏi rồi nhận về "không chặn".
+
+---
+
+## 10. `#398` — đơn NHẬN LẠI vòng chạy của tài xế, không lập thêm
+
+> Chi tiết: [`transport-driver-direct-order.md`](transport-driver-direct-order.md).
+
+Tài xế được gọi điện đi lấy hàng và bấm "Nhận chuyến tại đây" (`#267`) thì vòng chạy R1 + chặng CÓ
+HÀNG L1 (`orderId = NULL`) đã là sự thật vận hành. Khi phần thương mại đủ, đơn O1 ra đời và **nhận lại
+đúng R1/L1**: một hàng `TransportOrderRunPlan` với `outcome = 'ADOPTED'`, `loadedLegId = L1`,
+`emptyLegId = NULL`, `idempotencyKey = 'site-intake:<intakeId>'`. Lập kế hoạch lần sau cho O1 gặp
+`TransportOrderRunPlan_activeOrder_key` và trả `PLAN_ORDER_ALREADY_PLANNED` **trước mọi lần ghi**.
+
+Hai cổng mới của lớp này, cả hai đều trước khi ghi:
+
+| Cổng | Chặn gì |
+| --- | --- |
+| `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE` (cổng `PlanningPendingWorkSource`, mặc định rỗng, `transport-site-intake` ghi đè ở `app-composition.ts`) | văn phòng lập đơn MỚI cho chiếc xe đang giữ một việc tài xế nhận **chưa có đơn** — trước #398 lần đó sinh R2/L2 (ONE) hoặc nối L2 vào R1 (MULTI) cho cùng một việc thật |
+| `planGuardOrderId` trên `createRun`/`createLeg` (khoá tư vấn `transport-order-plan:<orderId>` rồi đọc lại "đã có kế hoạch hiệu lực" dưới khoá) | lần lập kế hoạch chạy đua với lệnh **gắn đơn có sẵn** vào chặng của tài xế — cùng khoá, nên hai đường xếp hàng |
+
+Bằng chứng RED trên mã nền `04c95b84` (Postgres thật): ONE_ORDER_PER_RUN runs 1→2, legs 1→2;
+MULTI_ORDER_RUN legs 1→3. Bằng chứng xanh: `transport-site-intake-commercial.int.spec.ts`.
+

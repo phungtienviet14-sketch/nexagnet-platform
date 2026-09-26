@@ -291,6 +291,12 @@ async function wipeCustomerArDemoHistory(
       ['TransportSettlementAllocation', 'transport_customer_legacy_allocation_append_only'],
       ['TransportSettlementDocument', 'transport_customer_receivable_document_guard'],
       ['TransportCommercialAcceptanceDecision', 'transport_commercial_acceptance_append_only'],
+      /*
+       * `#398`: phan thuong mai cua lan tai xe nhan viec tro `orderId` vao don bang khoa ngoai
+       * `Restrict`. Khong xoa no truoc thi `transportOrder.deleteMany()` do ngay khi ban demo co
+       * mot don do tai xe tao.
+       */
+      ['TransportSiteIntakeCommercial', 'transport_site_intake_commercial_guard'],
     ] as const;
     for (const [table, trigger] of triggers) {
       await tx.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
@@ -315,6 +321,7 @@ async function wipeCustomerArDemoHistory(
     const acceptanceDecisions = await tx.transportCommercialAcceptanceDecision.deleteMany();
     const acceptances = await tx.transportCommercialAcceptance.deleteMany();
     const tripOrderLinks = await tx.transportTripOrderLink.deleteMany();
+    const siteIntakeCommercial = await tx.transportSiteIntakeCommercial.deleteMany();
     const orders = await tx.transportOrder.deleteMany();
 
     for (const [table, trigger] of [...triggers].reverse()) {
@@ -337,6 +344,7 @@ async function wipeCustomerArDemoHistory(
       ['transportCommercialAcceptanceDecision', acceptanceDecisions.count],
       ['transportCommercialAcceptance', acceptances.count],
       ['transportTripOrderLink', tripOrderLinks.count],
+      ['transportSiteIntakeCommercial', siteIntakeCommercial.count],
       ['transportOrder', orders.count],
     ] as const) {
       if (count > 0) deleted[key] = count;

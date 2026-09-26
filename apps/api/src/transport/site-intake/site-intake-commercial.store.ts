@@ -130,6 +130,11 @@ export abstract class SiteIntakeCommercialStore {
   abstract listBoundSince(since: Date, limit: number): Promise<readonly SiteIntakeCommercial[]>;
   /** Loai moc DA ghi tren mot vong chay — duong DOC, khong khoa. */
   abstract checkpointTypesForRun(runId: string): Promise<readonly string[]>;
+  /**
+   * `PENDING` tren mot vong chay CON MO (`PLANNED`/`ACTIVE`) cua MOT chiec xe — truy van CO DICH cho
+   * lan lap ke hoach, khong quet ca bang (lan lap ke hoach nao cung hoi cau nay).
+   */
+  abstract listPendingForVehicle(vehicleId: string): Promise<readonly SiteIntakeCommercial[]>;
 }
 
 /** Ten khoa tu van — MOT noi khai, de lan lap ke hoach dung DUNG chuoi do. */
@@ -214,6 +219,19 @@ export class InMemorySiteIntakeCommercialStore extends SiteIntakeCommercialStore
 
   async checkpointTypesForRun(): Promise<readonly string[]> {
     return [];
+  }
+
+  async listPendingForVehicle(vehicleId: string): Promise<readonly SiteIntakeCommercial[]> {
+    const rows: SiteIntakeCommercial[] = [];
+    for (const intake of await this.intakes.listAll()) {
+      const run = await this.movement.findRun(intake.runId);
+      if (run?.vehicleId !== vehicleId || (run.status !== 'PLANNED' && run.status !== 'ACTIVE')) {
+        continue;
+      }
+      const row = this.materialise(intake.id);
+      if (row.status === 'PENDING') rows.push(row);
+    }
+    return rows;
   }
 
   private materialise(intakeId: string): SiteIntakeCommercial {

@@ -314,13 +314,13 @@ export class SiteIntakeReviewService {
   async pendingIntakeForVehicle(
     vehicleId: string,
   ): Promise<{ readonly intakeId: string; readonly runCode: string } | null> {
-    const views = await this.list('PENDING');
-    const hit = views.find(
-      (view) =>
-        view.vehicle.id === vehicleId &&
-        (view.run.status === 'PLANNED' || view.run.status === 'ACTIVE'),
-    );
-    return hit ? { intakeId: hit.intakeId, runCode: hit.run.code } : null;
+    for (const row of await this.store.listPendingForVehicle(vehicleId)) {
+      const view = await this.reviewOfRow(row);
+      if (view && view.readiness.kind !== 'REJECTED' && view.readiness.kind !== 'ALREADY_BOUND') {
+        return { intakeId: view.intakeId, runCode: view.run.code };
+      }
+    }
+    return null;
   }
 
   /* ------------------------------------------------------------------ *

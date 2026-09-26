@@ -418,6 +418,21 @@ export class PrismaSiteIntakeCommercialStore extends SiteIntakeCommercialStore {
     return rows.map(toCommercial);
   }
 
+  async listPendingForVehicle(vehicleId: string): Promise<readonly SiteIntakeCommercial[]> {
+    const rows: CommercialRow[] = await model(
+      this.prisma,
+      'transportSiteIntakeCommercial',
+    ).findMany({
+      where: {
+        status: 'PENDING',
+        intake: { run: { vehicleId, status: { in: ['PLANNED', 'ACTIVE'] } } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      take: 20,
+    });
+    return rows.map(toCommercial);
+  }
+
   async checkpointTypesForRun(runId: string): Promise<readonly string[]> {
     const rows: { type: string }[] = await model(this.prisma, 'transportRunCheckpoint').findMany({
       where: { runId },
