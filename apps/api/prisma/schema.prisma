@@ -4057,10 +4057,143 @@ model TransportRunSiteIntake {
   confirmedAt    DateTime                         @default(now())
   businessDate   String                           @db.VarChar(10)
   createdAt      DateTime                         @default(now())
+  /// #398: lan xac nhan KHOP dia diem ra sao, ghi DUNG LUC lai xe bam. `NULL` o hang truoc #398 —
+  /// nghia la "khong biet", khong phai mot gia tri doan.
+  siteMatch      TransportSiteIntakeSiteMatch?
+  /// #398: phan THUONG MAI cua lan nhan viec nay (diem giao, don da nhan, bat thuong). DUNG MOT hang,
+  /// tao cung giao dich voi chinh ban ghi nay.
+  commercial     TransportSiteIntakeCommercial?
 
   @@unique([driverId, clientEventId], map: "TransportRunSiteIntake_driver_event_key")
   @@index([siteId, businessDate])
   @@index([businessDate])
+}
+
+// ===================================================================
+// #398 VIEC TAI XE NHAN TRUC TIEP -> DON TU DONG (khong nhan doi vong chay/chang)
+// ===================================================================
+//
+// CANH BAO — RANG BUOC KHONG NAM O DAY. Chung song trong SQL tho cua migration
+// `20260926100100_transport_site_intake_commercial`:
+//
+//     1. `..._destination_complete` / `_known_place_has_ref` / `_destination_*` — diem giao la MOT
+//        khoi (nhan + toa do + nguon + ai + luc nao), khong null island, dung khoang WGS84;
+//     2. `..._binding_shape` — `ORDER_BOUND` KHI VA CHI KHI co don + che do + ai + luc nao;
+//     3. `..._exception_shape` / `_rejected_has_reason` — bat thuong co ly do, tu choi co ly do;
+//     4. `transport_site_intake_commercial_guard` (TRIGGER) — khong xoa; don gan MOT lan; trang thai
+//        cuoi khong quay nguoc; diem giao dong bang khi da xong;
+//     5. `transport_run_leg_order_binding_once` (TRIGGER tren `TransportRunLeg`) — `orderId` X -> Y bi
+//        cam o moi duong ghi.
+//
+// `prisma migrate dev` se sinh lenh XOA ca nam. Ai chay lenh do PHAI bo cac dong do truoc khi commit.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO MOT BANG RIENG, KHONG PHAI THEM COT VAO `TransportRunSiteIntake`.
+//
+// Ban ghi xac nhan la CHI-GHI-THEM: no la bang chung "mot con nguoi da bam". Phan thuong mai thi
+// SONG — diem giao den sau, van phong bo sung, don duoc gan, sep bao bat thuong. Tron hai thu vao mot
+// hang se buoc phai go trigger chi-ghi-them, tuc go chinh bang chung ma `#267` dung len.
+//
+// VA KHONG PHAI MOT MO HINH DON THU HAI (`#398` §2). Bang nay khong co gia, khong khach, khong dieu
+// khoan: no giu DUNG nhung gi can de quyet "du tao don chua" (diem giao, xac nhan noi lay) va dau vet
+// "don nao da nhan chang nay". Don that van la `TransportOrder`.
+
+/// Lan xac nhan KHOP dia diem ra sao — ghi luc lai xe bam (`#398` §8).
+enum TransportSiteIntakeSiteMatch {
+  /// Vi tri gui kem nam TRONG hang rao cua DUNG MOT dia diem, va lai xe xac nhan dung dia diem do.
+  UNIQUE_INSIDE
+  /// Vi tri gui kem gan NHIEU dia diem (hoac chi GAN mot dia diem) — lai xe tu chon mot.
+  CHOSEN_AMONG_SEVERAL
+  /// Khong gui vi tri nao — lai xe chon tay, khong co doi chieu hang rao.
+  NO_LOCATION
+}
+
+/// Trang thai THUONG MAI cua mot lan nhan viec. Khong phai trang thai van hanh.
+enum TransportSiteIntakeCommercialStatus {
+  /// Chua co don: dang doi diem giao, doi van phong xac nhan, hoac vuong mot ly do can nguoi xem.
+  PENDING
+  /// Da co DUNG MOT don, don do da NHAN LAI vong chay + chang cua lan nhan viec.
+  ORDER_BOUND
+  /// Sep/van phong bao bat thuong truoc khi co don — khong tao don tu lan nhan viec nay.
+  REJECTED
+}
+
+/// Don da den bang duong nao.
+enum TransportSiteIntakeBindingMode {
+  /// He thong tu tao khi du dieu kien tat dinh (lai xe cung cap du kien cuoi cung).
+  AUTO_CREATED
+  /// Van phong bo sung dieu con thieu, roi CUNG lenh do tao don.
+  OFFICE_COMPLETED
+  /// Van phong CHON TAY mot don da co san de gan vao — khong doan theo ten/gio.
+  OFFICE_EXISTING_ORDER
+}
+
+enum TransportSiteIntakeDestinationSource {
+  /// Mot hang rao dang hoat dong (bai xe, dia diem phap nhan, khach hang) — may chu tu doc toa do.
+  KNOWN_PLACE
+  /// Mot ket qua tim dia diem (#379) — may chu doi chieu lai voi chinh ket qua tim cua no.
+  PLACE_SEARCH
+}
+
+enum TransportSiteIntakeActorRole {
+  DRIVER
+  OFFICE
+}
+
+/// Ket cuc THAT cua mot lan bao bat thuong — may chu quyet theo su that van hanh (`#398` §9).
+enum TransportSiteIntakeExceptionOutcome {
+  /// Don huy; xe CHUA chay nen vong chay/chang cua viec nay cung huy (khong xoa).
+  ORDER_CANCELLED_WORK_CANCELLED
+  /// Don huy; xe DA chay nen vong chay/chang/moc/GPS giu nguyen.
+  ORDER_CANCELLED_OPERATION_PRESERVED
+  /// Chua co don; khong tao don nua; xe chua chay nen viec van hanh cung huy.
+  INTAKE_REJECTED_WORK_CANCELLED
+  /// Chua co don; khong tao don nua; xe da chay nen viec van hanh giu nguyen.
+  INTAKE_REJECTED_OPERATION_PRESERVED
+  /// Don da o trang thai cuoi (da giao xong/da huy): chi GHI NHAN bat thuong, khong doi trang thai.
+  ANOMALY_RECORDED_ORDER_TERMINAL
+}
+
+/// PHAN THUONG MAI cua MOT lan tai xe nhan viec truc tiep — `#398`.
+///
+/// Doi: lan nay da du dieu kien tat dinh de tu tao don chua, va neu roi thi don NAO da nhan chang nay.
+/// Moi thu tien (cuoc, cong no, dieu khoan) KHONG nam o day va lai xe khong bao gio ghi duoc chung.
+model TransportSiteIntakeCommercial {
+  id                   String                                @id @default(cuid())
+  intakeId             String                                @unique
+  intake               TransportRunSiteIntake                @relation(fields: [intakeId], references: [id], onDelete: Restrict)
+  status               TransportSiteIntakeCommercialStatus   @default(PENDING)
+  /// Diem giao — MOT khoi: nhan + toa do + nguon + ai + vai + luc nao, du ca hoac khong co gi.
+  destinationLabel     String?
+  destinationLatitude  Float?
+  destinationLongitude Float?
+  destinationSource    TransportSiteIntakeDestinationSource?
+  /// `KNOWN_PLACE`: `TransportGeofence.id` da chon. `PLACE_SEARCH`: `null`.
+  destinationRef       String?
+  destinationSetBy     String?
+  destinationSetByRole TransportSiteIntakeActorRole?
+  destinationSetAt     DateTime?
+  /// Khoa chong lap cua lan ghi diem giao GAN NHAT (`clientEventId` cua lai xe / khoa cua van phong).
+  destinationEventId   String?
+  /// Van phong xac nhan noi lay hang khi lan khop dia diem khong du chac (nhieu kho / khong vi tri).
+  originAttestedBy     String?
+  originAttestedAt     DateTime?
+  /// DON da nhan vong chay + chang cua lan nhan viec. GAN MOT LAN — xem trigger.
+  orderId              String?                               @unique
+  order                TransportOrder?                       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  bindingMode          TransportSiteIntakeBindingMode?
+  boundBy              String?
+  boundAt              DateTime?
+  exceptionReason      String?
+  exceptionOutcome     TransportSiteIntakeExceptionOutcome?
+  exceptionBy          String?
+  exceptionAt          DateTime?
+  exceptionKey         String?
+  createdAt            DateTime                              @default(now())
+  updatedAt            DateTime                              @updatedAt
+
+  @@index([status])
+  @@index([boundAt])
 }
 
 // ===================================================================
@@ -4359,6 +4492,8 @@ model TransportOrder {
   completion               TransportCommercialAcceptance?
   /// `#275` K5: chuyen v1 da chieu ra don nay, neu co. TOI DA MOT.
   tripLink                 TransportTripOrderLink?
+  /// #398: lan tai xe nhan viec truc tiep ma don nay NHAN LAI vong chay/chang cua no. TOI DA MOT.
+  siteIntakeCommercial     TransportSiteIntakeCommercial?
   /// Lane Q: ket qua A xac nhan duy nhat; sua tien qua settlement adjustment/reversal hien co.
   customerReconciliation   TransportCustomerReconciliation?
   reconciliationBatchLines TransportCustomerReconciliationBatchLine[]
@@ -5993,6 +6128,10 @@ enum TransportRunGrouping {
 enum TransportRunPlanOutcome {
   NEW_RUN
   APPENDED
+  /// #398: don NHAN LAI vong chay + chang co hang DA TON TAI (do lai xe xac nhan tai dia diem A tao
+  /// ra). Khong sinh chang nao — chi ghi rang don nay da nam tren chang do, de lan lap ke hoach sau
+  /// cua cung don thay "da co ke hoach" va khong tao vong chay/chang thu hai.
+  ADOPTED
 }
 
 /// MOT LAN LAP KE HOACH — gan MOT don vao MOT vong chay, kem cac chang no sinh ra.
