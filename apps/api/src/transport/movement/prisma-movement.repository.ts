@@ -124,7 +124,7 @@ export interface LegRow {
   updatedAt: Date;
 }
 
-interface AssignmentRow {
+export interface AssignmentRow {
   id: string;
   runId: string;
   driverId: string;
@@ -234,7 +234,7 @@ export const toLeg = (row: LegRow): RunLeg => ({
   updatedAt: iso(row.updatedAt),
 });
 
-const toAssignment = (row: AssignmentRow): RunAssignment => ({
+export const toAssignment = (row: AssignmentRow): RunAssignment => ({
   id: row.id,
   runId: row.runId,
   driverId: row.driverId,
@@ -273,6 +273,66 @@ async function requireOrderUnplanned(tx: TxClient, orderId: string): Promise<voi
     throw TransportDomainError.conflict(
       'PLAN_ORDER_ALREADY_PLANNED',
       'Don nay da co ke hoach hieu luc — khong lap them vong chay/chang.',
+    );
+  }
+}
+
+/**
+ * `#398` — KHOA TU VAN "cac vong chay cua MOT xe". MOT noi khai ten, vi hai capability gianh no:
+ * lan lap ke hoach o day, va lan tai xe xac nhan nhan viec o `transport-site-intake`
+ * (`PrismaSiteIntakeConfirmationWriter`). `transport-core` khong duoc nhin sang capability kia, nen
+ * ten nam o day va capability kia nhap nguoc vao.
+ */
+export const vehicleRunsLockKey = (vehicleId: string): string =>
+  `transport-vehicle-runs:${vehicleId}`;
+
+export async function lockVehicleRuns(tx: TxClient, vehicleId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${vehicleRunsLockKey(vehicleId)}, 0))`;
+}
+
+/**
+ * `#398` — CONG "XE DANG GIU VIEC TAI XE NHAN TRUC TIEP CHUA CO DON", duoi khoa cua CHINH xe do.
+ *
+ * `PlanningService.commit()` da hoi cau nay qua `PlanningPendingWorkSource` — nhung KHONG khoa, nen
+ * mot lan tai xe xac nhan commit ngay sau phep hoi do se lot qua: xe ket thuc voi hai vong chay mo
+ * cho dung mot viec that (R1 cua tai xe + R2 cua bo lap ke hoach), hoac (MULTI) mot chang CO HANG
+ * thu hai noi vao R1 trong khi lan nhan viec van `PENDING`. Hoi lai DUOI khoa xe thi hai duong xep
+ * hang: lan xac nhan gianh CUNG khoa va ghi vong chay + chang + lan nhan viec trong MOT giao dich.
+ *
+ * Cung dieu kien voi `SiteIntakeReviewService.pendingIntakeForVehicle()`: phan thuong mai `PENDING`,
+ * vong chay con mo, chang co hang chua huy (vong chay/chang huy = `REJECTED`, khong con "dang do").
+ * Khach khong bat `transport-site-intake` thi bang rong va cau hoi luon tra "khong".
+ *
+ * ============================================================================================
+ * THU TU KHOA: don (tu van) -> xe (tu van) -> hang vong chay (`FOR UPDATE`). KHONG VONG DOI:
+ * ============================================================================================
+ *
+ *   · lap ke hoach:        don -> xe -> hang vong chay;
+ *   · tai xe xac nhan:     CHI xe — khong gianh khoa don, khong khoa hang vong chay nao co san
+ *                          (no chi CHEN hang moi);
+ *   · gan don / tu tao don (`withIntake`): lan nhan viec -> don -> hang vong chay — KHONG gianh khoa xe;
+ *   · moi duong ghi khac (`underRunLock`, dong vong chay, doi trang thai chang): CHI hang vong chay.
+ *
+ * Khong ai giu hang vong chay roi moi xin khoa xe, va khong ai giu khoa xe roi moi xin khoa don —
+ * moi duong di theo CUNG mot chieu cua day tren, nen khong co chu trinh cho doi.
+ */
+async function requireVehicleFreeOfPendingIntake(tx: TxClient, vehicleId: string): Promise<void> {
+  await lockVehicleRuns(tx, vehicleId);
+  const pending: unknown = await tx.$queryRaw`
+    SELECT 1
+      FROM "TransportSiteIntakeCommercial" c
+      JOIN "TransportRunSiteIntake" i ON i."id" = c."intakeId"
+      JOIN "TransportVehicleRun" r ON r."id" = i."runId"
+      JOIN "TransportRunLeg" l ON l."id" = i."legId"
+     WHERE c."status" = 'PENDING'
+       AND r."vehicleId" = ${vehicleId}
+       AND r."status" IN ('PLANNED', 'ACTIVE')
+       AND l."status" <> 'CANCELLED'
+     LIMIT 1`;
+  if (Array.isArray(pending) && pending.length > 0) {
+    throw TransportDomainError.conflict(
+      'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE',
+      'Xe nay dang giu viec tai xe nhan truc tiep chua co don — gan don vao viec do.',
     );
   }
 }
@@ -361,6 +421,8 @@ export class PrismaMovementRepository extends MovementRepository {
       return this.prisma.$transaction(
         async (tx: unknown) => {
           await requireOrderUnplanned(tx as TxClient, orderId);
+          // Khoa don TRUOC, khoa xe SAU — xem `requireVehicleFreeOfPendingIntake()`.
+          await requireVehicleFreeOfPendingIntake(tx as TxClient, input.vehicleId);
           return toRun(
             await model(tx as TxClient, 'transportVehicleRun').create({
               data: {
@@ -674,9 +736,18 @@ export class PrismaMovementRepository extends MovementRepository {
   async createLeg(input: CreateLegInput): Promise<RunLeg> {
     return this.prisma.$transaction(
       async (tx: unknown) => {
-        // `#398`: khoa cua DON truoc, khoa hang vong chay sau — cung thu tu voi lenh gan don co san.
-        if (input.planGuardOrderId)
+        // `#398`: khoa cua DON truoc, khoa cua XE sau, khoa hang vong chay cuoi — cung thu tu voi
+        // lenh gan don co san va lan tai xe xac nhan (xem `requireVehicleFreeOfPendingIntake()`).
+        if (input.planGuardOrderId) {
           await requireOrderUnplanned(tx as TxClient, input.planGuardOrderId);
+          // `vehicleId` doc TRUOC khoa hang la an toan: khong duong ghi nao doi xe cua mot vong
+          // chay. Vong chay khong ton tai thi bo qua — khoa ngoai cua DB se tu choi lan chen.
+          const owner: { vehicleId: string } | null = await model(
+            tx as TxClient,
+            'transportVehicleRun',
+          ).findUnique({ where: { id: input.runId }, select: { vehicleId: true } });
+          if (owner) await requireVehicleFreeOfPendingIntake(tx as TxClient, owner.vehicleId);
+        }
         await (tx as TxClient).$queryRaw`
           SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${input.runId} FOR UPDATE`;
         const run: { status: VehicleRunStatus } | null = await model(

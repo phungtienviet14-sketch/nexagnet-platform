@@ -294,12 +294,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.depot": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 643
+      "line": 650
     },
     "planning.grouping": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 668
+      "line": 675
     },
     "planning.preview": {
       "functionName": "PlanningService.preview",

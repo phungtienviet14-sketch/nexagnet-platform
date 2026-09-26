@@ -16,11 +16,11 @@ import type { SiteFence } from './site-candidate.js';
  * Cung khuon voi `TransportCheckpointCoreFacts` cua `#243` F1, va cung mot ly do: T1 §4.1 luat 4
  * (`NO_CROSS_CONTEXT_REPOSITORY_WRITE`) duoc dat bang CAU TRUC chu khong bang ky luat.
  *
- * MOT NGOAI LE, va no duoc noi ra thay vi giau di: `TransportSiteIntakeRunWriter` CO ham ghi. Do
- * la vi `#267` H4 doi *"create or reuse accepted VehicleRun/RunLeg primitives"* — tuc lane nay
- * PHAI tao duoc mot vong chay, va cach dung la goi DICH VU DA DUOC CHAP NHAN cua Lane A
- * (`MovementService`), khong phai ghi thang vao `MovementRepository`. Cong nay chi phoi ba lenh
- * cua chinh dich vu do, nen khong co duong nao tu day sinh ra mot mo hinh vong chay thu hai.
+ * MOT NGOAI LE, va no duoc noi ra thay vi giau di: `SiteIntakeConfirmationWriter` CO ghi vong
+ * chay. Do la vi `#267` H4 doi *"create or reuse accepted VehicleRun/RunLeg primitives"* — tuc lane
+ * nay PHAI tao duoc mot vong chay. Ban trong bo nho goi DICH VU cua Lane A (`MovementService`); ban
+ * Postgres (`#398`) ghi CUNG cac hang ay, cung ma kiem toan, trong MOT giao dich duoi khoa xe — xem
+ * `PrismaSiteIntakeConfirmationWriter`. Khong duong nao sinh ra mot mo hinh vong chay thu hai.
  */
 
 export interface SiteIntakeDriverFacts {

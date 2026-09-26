@@ -17,6 +17,7 @@ import {
   TransportSiteIntakeLocationFacts,
   type SiteIntakeObservationFacts,
 } from './site-intake-facts.port.js';
+import { PrismaSiteIntakeConfirmationWriter } from './prisma-site-intake-confirmation.writer.js';
 import { PrismaRunSiteIntakeRepository } from './prisma-site-intake.repository.js';
 import { SITE_INTAKE_DRIVER_EVENT } from './site-intake.repository.js';
 import { SiteIntakeService } from './site-intake.service.js';
@@ -91,6 +92,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       new TransportSiteIntakeGeoFactsAdapter(geofences, siteService),
       locations,
       movement,
+      new PrismaSiteIntakeConfirmationWriter(
+        prisma,
+        new AuditLogService(new InMemoryAuditLogRepository()),
+      ),
       POLICY,
     );
 
@@ -137,6 +142,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
+      // `#398`: lan xac nhan ghi ba dong kiem toan vao BANG THAT, cung giao dich — tac nhan la
+      // `authUserId` cua lai xe cua tep nay. So sanh BANG, khong `startsWith`.
+      await prisma.auditLog.deleteMany({ where: { actor: AUTH } });
 
       await prisma.transportGeofence.deleteMany({ where: { label: { startsWith: FENCE_PREFIX } } });
       await prisma.transportCounterpartySite.deleteMany({
@@ -533,6 +541,14 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       for (const run of await movementRepo.listOpenRunsForDriver(driverId)) {
         await movement.cancelRun(run.id, 'IT don dep', ACTOR);
       }
+      // `#398`: vong chay `-DUA` cua bai tren (chua ai cam) van MO tren CHINH xe nay — lan xac nhan
+      // se tu choi `SITE_INTAKE_VEHICLE_BUSY` (xe khong mo vong chay thu hai). Huy no nhu mot lan
+      // don dep cua van hanh.
+      const vehicleOpen = await prisma.transportVehicleRun.findMany({
+        where: { vehicleId, status: { in: ['PLANNED', 'ACTIVE'] } },
+        select: { id: true },
+      });
+      for (const run of vehicleOpen) await movement.cancelRun(run.id, 'IT don dep', ACTOR);
 
       const next = await service.confirm({
         authUserId: AUTH,

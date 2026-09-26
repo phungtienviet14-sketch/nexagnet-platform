@@ -40,6 +40,28 @@ export const toIntake = (row: IntakeRow): RunSiteIntake => ({
   siteMatch: row.siteMatch as SiteMatch | null,
 });
 
+/**
+ * MOT noi dung `data` cua lan tao ban ghi xac nhan — dung boi `create()` o day va boi
+ * `PrismaSiteIntakeConfirmationWriter` (trong giao dich duoi khoa xe).
+ */
+export const intakeCreateData = (input: CreateRunSiteIntakeInput) => ({
+  runId: input.runId,
+  legId: input.legId,
+  siteId: input.siteId,
+  driverId: input.driverId,
+  confirmedBy: input.confirmedBy,
+  locationTrust: input.locationTrust,
+  observationId: input.observationId,
+  distanceMetres: input.distanceMetres,
+  clientEventId: input.clientEventId,
+  confirmedAt: input.confirmedAt,
+  businessDate: input.businessDate,
+  siteMatch: input.siteMatch,
+  // `#398`: phan thuong mai ra doi CUNG lenh — Prisma boc lenh tao long nhau trong mot giao
+  // dich, nen khong co trang thai "co lan nhan viec ma khong co cho ghi thuong mai".
+  commercial: { create: {} },
+});
+
 @Injectable()
 export class PrismaRunSiteIntakeRepository extends RunSiteIntakeRepository {
   constructor(private readonly prisma: PrismaService) {
@@ -48,23 +70,7 @@ export class PrismaRunSiteIntakeRepository extends RunSiteIntakeRepository {
 
   async create(input: CreateRunSiteIntakeInput): Promise<RunSiteIntake> {
     const row = await this.prisma.transportRunSiteIntake.create({
-      data: {
-        runId: input.runId,
-        legId: input.legId,
-        siteId: input.siteId,
-        driverId: input.driverId,
-        confirmedBy: input.confirmedBy,
-        locationTrust: input.locationTrust,
-        observationId: input.observationId,
-        distanceMetres: input.distanceMetres,
-        clientEventId: input.clientEventId,
-        confirmedAt: input.confirmedAt,
-        businessDate: input.businessDate,
-        siteMatch: input.siteMatch,
-        // `#398`: phan thuong mai ra doi CUNG lenh — Prisma boc lenh tao long nhau trong mot
-        // giao dich, nen khong co trang thai "co lan nhan viec ma khong co cho ghi thuong mai".
-        commercial: { create: {} },
-      },
+      data: intakeCreateData(input),
     });
     return toIntake(row);
   }

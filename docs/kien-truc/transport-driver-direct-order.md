@@ -93,15 +93,39 @@ BEGIN (ReadCommitted)
 COMMIT
 ```
 
-Planner cũng giành **khóa tư vấn của đơn trước khóa hàng vòng chạy** (`createRun`/`createLeg` khi có
-`planGuardOrderId`) và đọc lại "đơn đã có kế hoạch hiệu lực chưa" dưới khóa đó. Không ai giành khóa
-hàng rồi mới giành khóa tư vấn ⇒ không vòng đợi.
+Planner (`createRun`/`createLeg` khi có `planGuardOrderId`) giành **khóa tư vấn của đơn**, rồi
+**khóa tư vấn của xe** `transport-vehicle-runs:<vehicleId>` (createLeg đọc `vehicleId` của vòng chạy
+trước), rồi mới **khóa hàng vòng chạy**; dưới hai khóa tư vấn nó đọc lại "đơn đã có kế hoạch hiệu
+lực chưa" (`PLAN_ORDER_ALREADY_PLANNED`) và "xe có đang giữ việc tài xế nhận chưa có đơn không"
+(`PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE` — phần thương mại `PENDING`, vòng chạy `PLANNED/ACTIVE`,
+chặng chưa hủy). Bên thua gỡ phần dở dang như với khóa đơn (`abandonPartialCommit`).
 
-Ba lớp chặn nhân đôi:
+**Lần tài xế xác nhận** (`PrismaSiteIntakeConfirmationWriter`) là **một giao dịch**, chỉ giành khóa xe:
+
+```text
+BEGIN (ReadCommitted)
+  pg_advisory_xact_lock(hashtextextended('transport-vehicle-runs:<vehicleId>', 0))
+  đọc lại: khóa chống lặp (driverId, clientEventId) → trả lần cũ
+           tài xế đang cầm vòng chạy mở            → SITE_INTAKE_OPEN_RUN_EXISTS
+           xe có vòng chạy mở (kể cả chưa ai cầm)  → SITE_INTAKE_VEHICLE_BUSY
+  INSERT TransportVehicleRun (PLANNED) · TransportRunAssignment (effectiveFrom = confirmedAt)
+  INSERT TransportRunLeg (LOADED, sequence 1, orderId NULL)
+  INSERT TransportRunSiteIntake + TransportSiteIntakeCommercial (PENDING)
+  INSERT AuditLog × 3 (transport.run.create · transport.run.assign · transport.run.leg.add)
+COMMIT
+```
+
+Thứ tự khóa là một: **lần nhận việc → đơn → xe → hàng vòng chạy**. Planner: đơn → xe → hàng. Xác
+nhận: chỉ xe (không khóa hàng vòng chạy có sẵn nào — nó chỉ chèn hàng mới). Adopt (`withIntake`):
+lần nhận việc → đơn → hàng, **không** giành khóa xe. Mọi đường ghi khác chỉ khóa hàng. Không ai giữ
+một khóa sau rồi xin một khóa trước ⇒ không vòng đợi.
+
+Bốn lớp chặn nhân đôi:
 
 1. kế hoạch `ADOPTED` → `TransportOrderRunPlan_activeOrder_key`: planner gọi lại cho O1 → `PLAN_ORDER_ALREADY_PLANNED` trước mọi lần ghi;
-2. planner cho **xe đang giữ việc tài xế nhận chưa có đơn** → `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE` (cổng `PlanningPendingWorkSource`, mặc định rỗng ở `transport-core`, `transport-site-intake` ghi đè);
-3. tầng DB: trigger `transport_run_leg_order_binding_once` (chặng `orderId` X → Y bị cấm), `TransportSiteIntakeCommercial_orderId_key`, trigger `transport_site_intake_commercial_guard`.
+2. planner cho **xe đang giữ việc tài xế nhận chưa có đơn** → `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE`: hỏi nhanh qua cổng `PlanningPendingWorkSource` (mặc định rỗng ở `transport-core`, `transport-site-intake` ghi đè), và **hỏi lại dưới khóa xe** trong kho;
+3. tài xế xác nhận khi **xe đã có vòng chạy mở** (vd văn phòng vừa lập, chưa ai cầm) → `SITE_INTAKE_VEHICLE_BUSY`, không ghi gì;
+4. tầng DB: trigger `transport_run_leg_order_binding_once` (chặng `orderId` X → Y bị cấm), `TransportSiteIntakeCommercial_orderId_key`, trigger `transport_site_intake_commercial_guard`.
 
 ---
 
@@ -125,22 +149,27 @@ khóa = trả kết cục cũ). Chỉ `ADMIN` (kế toán bị cắt ở `ACCOUN
 
 ### Tài xế — `transport/me/site-intake` (danh tính từ phiên)
 
-| Đường                                                                                                  | Quyền                  | Ghi?                                                                     |
-| ------------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------ |
-| `POST proposals`                                                                                       | `.site_intake.propose` | **không** (#267)                                                         |
-| `POST confirmations` `{siteId, clientEventId, latitude?, longitude?, accuracyMetres?}`                 | `.site_intake.confirm` | vòng chạy + chặng + lần nhận việc + phần thương mại `PENDING` (một lệnh) |
-| `GET open` → `{ intake: DriverIntakeView \| null }`                                                    | `.propose`             | không                                                                    |
-| `GET destinations` → `{ available, places: KnownPlace[] }`                                             | `.propose`             | không                                                                    |
-| `POST destinations/search` `{query}` → `PlaceSearchResponse`                                           | `.confirm`             | không                                                                    |
-| `GET :intakeId` → `DriverIntakeView` (của người khác = 404)                                            | `.propose`             | không                                                                    |
-| `POST :intakeId/destination` `{clientEventId, destination}` → `{ intake: DriverIntakeView, replayed }` | `.confirm`             | điểm giao; đủ thì tự tạo đơn                                             |
+| Đường                                                                                                  | Quyền                  | Ghi?                                                                                        |
+| ------------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------- |
+| `POST proposals`                                                                                       | `.site_intake.propose` | **không** (#267)                                                                            |
+| `POST confirmations` `{siteId, clientEventId, latitude?, longitude?, accuracyMetres?}`                 | `.site_intake.confirm` | vòng chạy + chặng + lần nhận việc + phần thương mại `PENDING` (một giao dịch, khóa xe — §3) |
+| `GET open` → `{ intake: DriverIntakeView \| null }`                                                    | `.propose`             | không                                                                                       |
+| `GET destinations` → `{ available, places: KnownPlace[] }`                                             | `.propose`             | không                                                                                       |
+| `POST destinations/search` `{query}` → `PlaceSearchResponse`                                           | `.confirm`             | không                                                                                       |
+| `GET :intakeId` → `DriverIntakeView` (của người khác = 404)                                            | `.propose`             | không                                                                                       |
+| `POST :intakeId/destination` `{clientEventId, destination}` → `{ intake: DriverIntakeView, replayed }` | `.confirm`             | điểm giao; đủ thì tự tạo đơn                                                                |
 
 `destination` = `{kind:'KNOWN_PLACE', placeId}` hoặc `{kind:'PLACE_SEARCH', query, label, latitude,
 longitude}` — kết quả tìm được máy chủ **tìm lại và đối chiếu** nhãn + tọa độ; một cặp số tự do không
 qua được. Mọi thân `.strict()` — trường tiền/khách/xe/tài xế bị từ chối.
 
-`DriverIntakeView.stage`: `NEEDS_DESTINATION` · `CONFIRMED` · `OFFICE_FOLLOW_UP` · `CLOSED`. Không có
-mã đơn, không vòng chạy nội bộ, không tiền.
+`POST confirmations` từ chối `409 SITE_INTAKE_OPEN_RUN_EXISTS` (tài xế đang cầm vòng chạy mở) và
+`409 SITE_INTAKE_VEHICLE_BUSY` (xe đã có vòng chạy mở, kể cả chưa ai cầm) — không ghi gì.
+
+`DriverIntakeView.stage`: `NEEDS_DESTINATION` · `CONFIRMED` · `OFFICE_FOLLOW_UP` · `CLOSED`. Khung
+nhìn mang `runId`/`runCode` của **chính vòng chạy tài xế đang cầm** — định danh kỹ thuật để app gắn
+mốc/điều hướng, **không** hiện ra thành chữ "đơn"/"vòng chạy" trên màn hình. Không có mã đơn, không
+tiền, không vòng chạy của người khác (lỗi `SITE_INTAKE_VEHICLE_BUSY` cũng không in mã vòng chạy nào).
 
 ### Văn phòng — `transport/site-intakes`
 
@@ -173,10 +202,18 @@ Lệnh adopt không ghi công nợ, phải trả, quyết toán, doanh thu. Ti�
 
 ## 7. Còn lại (ghi tên, không giấu)
 
-- **Hai lần xác nhận khác `clientEventId` cùng lúc** của cùng một tài xế vẫn có thể cùng qua phép
-  kiểm vòng chạy đang mở của #267 (không khóa). App gửi lại cùng khóa cho mỗi lần bấm, nên cửa sổ này
-  chỉ mở với hai thiết bị cùng tài khoản. Lỗ có từ #267, không mở rộng ở đây.
-- **Bản trong bộ nhớ** (`PERSISTENCE=memory`) không có giao dịch; nó xếp hàng mọi lệnh qua một hàng
-  đợi và bỏ qua `planGuardOrderId`. Bằng chứng đồng thời là Postgres.
+- **Hai lần xác nhận khác `clientEventId` cùng lúc** của cùng một tài xế (lỗ có từ #267) **đã đóng**
+  khi cả hai đi vào cùng một xe: khóa xe xếp hàng chúng, lần sau đọc lại dưới khóa và nhận
+  `SITE_INTAKE_OPEN_RUN_EXISTS` (bài Postgres `o.`). Còn mở đúng một khe hẹp: nếu **phân công xe của
+  tài xế đổi đúng giữa hai lần bấm**, hai lần xác nhận giành khóa của hai xe khác nhau. Xác nhận chỉ
+  giành khóa xe (không khóa tài xế) để giữ thứ tự khóa một chiều ở §3.
+- **Bản trong bộ nhớ** (`PERSISTENCE=memory`) không có giao dịch: lần xác nhận ghi qua
+  `MovementService` (bốn lần ghi rời), xếp hàng qua một hàng đợi riêng; kho phần thương mại xếp hàng
+  qua hàng đợi của nó; planner bỏ qua `planGuardOrderId` (không có khóa đơn/xe giữa lập kế hoạch và
+  xác nhận). Bằng chứng đồng thời là Postgres.
+- **Đường đọc của văn phòng là N+1 theo từng hàng `PENDING`**: `SiteIntakeReviewService` (Cần xử lý,
+  `pendingIntakeForVehicle`, hàng review) dựng mỗi hàng bằng vài truy vấn riêng (vòng chạy, chặng,
+  phân công, kế hoạch, mốc, dữ kiện ngoài). Chấp nhận được ở 10–20 đơn/ngày (vài hàng `PENDING` cùng
+  lúc, `take` giới hạn 20/xe); gộp truy vấn khi số hàng chờ tăng thật.
 - **Bản đồ chọn điểm giao** trên PWA: bản đồ nền web chưa có (`RunMap.web.tsx`), nên điểm giao chọn từ
   danh sách địa điểm đã biết + tìm theo tên (#379), không phải chạm trên bản đồ.

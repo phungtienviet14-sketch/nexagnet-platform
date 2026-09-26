@@ -329,6 +329,11 @@ export class PlanningService {
      * Mo chuyen moi luc nay (ONE) hoac noi chang moi (MULTI) se nhan doi dung mot viec that: lai xe
      * da dung o nha may, vong chay + chang co hang da ton tai. Duong dung la GAN don vao viec do —
      * don nhan lai vong chay/chang cu. Hoi TRUOC moi lan ghi, nen tu choi khong de lai gi.
+     *
+     * Phep hoi nay KHONG khoa: no la duong nhanh kem chi tiet (`intakeId`, ma vong chay). Cong
+     * THAT nam o kho — `createRun`/`createLeg` hoi lai DUOI khoa tu van cua xe, la khoa ma lan
+     * tai xe xac nhan cung gianh. Mot lan xac nhan commit ngay sau dong nay bi bat o do, va khoi
+     * `catch` ben duoi go phan do dang.
      */
     const pending = await command.pendingWork?.pendingIntakeForVehicle(command.vehicleId);
     if (pending) {
@@ -345,7 +350,7 @@ export class PlanningService {
 
     const run = await this.resolveTargetRun(proposal, command, businessDate, driverId, actor).catch(
       (error: unknown) => {
-        throw this.planGuardConflict(error, orderId);
+        throw this.planGuardConflict(error, orderId, command.vehicleId);
       },
     );
     if (run === null) {
@@ -382,15 +387,17 @@ export class PlanningService {
     } catch (error) {
       /*
        * `#398`: MOT LENH GAN DON VUA THANG trong khe giua hai lan ghi cua lan chot nay — sau khi mo
-       * vong chay, hoac sau chang RONG va truoc chang CO HANG. Ban thua khong duoc de lai viec song:
-       * huy (khong xoa) moi chang CHINH lan nay vua them — khong ke hoach nao tro vao chung — va,
-       * neu vong chay la cua CHINH lan nay (`NEW_RUN`, chua ai cam), huy ca vong chay. Vong chay
-       * DANG CHAY (`APPENDED`) thi chi go phan lan nay vua noi vao.
+       * vong chay, hoac sau chang RONG va truoc chang CO HANG — HOAC mot lan tai xe xac nhan vua
+       * dat viec chua co don len CHINH xe nay (khoa xe cua kho thay, phep hoi `pendingWork` o tren
+       * thi khong). Ban thua khong duoc de lai viec song: huy (khong xoa) moi chang CHINH lan nay
+       * vua them — khong ke hoach nao tro vao chung — va, neu vong chay la cua CHINH lan nay
+       * (`NEW_RUN`, chua ai cam), huy ca vong chay. Vong chay DANG CHAY (`APPENDED`) thi chi go
+       * phan lan nay vua noi vao.
        */
       if (isPlanGuardConflict(error)) {
-        await this.abandonPartialCommit(run, proposal, created, actor);
+        await this.abandonPartialCommit(run, proposal, created, actor, abandonReasonOf(error));
       }
-      throw this.planGuardConflict(error, orderId);
+      throw this.planGuardConflict(error, orderId, command.vehicleId);
     }
 
     const loadedLeg = created.find((leg) => leg.kind === 'LOADED');
@@ -925,20 +932,30 @@ export class PlanningService {
     proposal: RunPlanProposal,
     created: readonly RunLeg[],
     actor: string,
+    reason: string,
   ): Promise<void> {
-    const reason = 'Don vua duoc gan vao viec tai xe nhan truc tiep';
     for (const leg of created) await this.movement.cancelLeg(leg.id, reason, actor);
     if (proposal.outcome === 'NEW_RUN') await this.movement.cancelRun(run.id, reason, actor);
   }
 
-  /** Loi cong ke hoach cua kho -> dung ma + dong quyet dinh cua duong tuan tu. Loi khac di nguyen. */
-  private planGuardConflict(error: unknown, orderId: string): unknown {
-    return isPlanGuardConflict(error)
-      ? this.conflict('planning.commit', 'PLAN_ORDER_ALREADY_PLANNED', {
+  /**
+   * Loi cong ke hoach cua kho -> dung ma + dong quyet dinh cua duong tuan tu. Loi khac di nguyen.
+   *
+   * Hai cong, hai ma — ca hai la ma ma phep kiem KHONG khoa o dau `commit()` se tra neu no thay kip:
+   * khoa DON (`PLAN_ORDER_ALREADY_PLANNED`) va khoa XE (`PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE`).
+   */
+  private planGuardConflict(error: unknown, orderId: string, vehicleId: string): unknown {
+    if (!isPlanGuardConflict(error)) return error;
+    return (error as TransportDomainError).reason === 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE'
+      ? this.conflict('planning.commit', 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE', {
+          orderId,
+          vehicleId,
+          by: 'VEHICLE_LOCK',
+        })
+      : this.conflict('planning.commit', 'PLAN_ORDER_ALREADY_PLANNED', {
           orderId,
           by: 'ORDER_LOCK',
-        })
-      : error;
+        });
   }
 
   private decide(
@@ -979,5 +996,14 @@ export class PlanningService {
   }
 }
 
+/** Hai cong duoi khoa cua kho: khoa DON (`#398` gan don co san) va khoa XE (`#398` tai xe xac nhan). */
 const isPlanGuardConflict = (error: unknown): boolean =>
-  error instanceof TransportDomainError && error.reason === 'PLAN_ORDER_ALREADY_PLANNED';
+  error instanceof TransportDomainError &&
+  (error.reason === 'PLAN_ORDER_ALREADY_PLANNED' ||
+    error.reason === 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE');
+
+/** Ly do ghi vao chang/vong chay bi huy — noi DUNG ben nao da thang. */
+const abandonReasonOf = (error: unknown): string =>
+  error instanceof TransportDomainError && error.reason === 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE'
+    ? 'Xe vua nhan viec tai xe nhan truc tiep chua co don'
+    : 'Don vua duoc gan vao viec tai xe nhan truc tiep';

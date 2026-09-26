@@ -21,6 +21,7 @@ import {
   type SiteIntakeObservationFacts,
 } from './site-intake-facts.port.js';
 import { SiteIntakeCommercialService } from './site-intake-commercial.service.js';
+import { MovementSiteIntakeConfirmationWriter } from './site-intake-confirmation.writer.js';
 import { InMemorySiteIntakeCommercialStore } from './site-intake-commercial.store.js';
 import { SiteIntakeReadinessReader } from './site-intake-readiness.reader.js';
 import { SiteIntakeReviewService } from './site-intake-review.service.js';
@@ -118,6 +119,7 @@ describe.each(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN'] as const)(
         geo,
         new NoLocationFacts(),
         movement,
+        new MovementSiteIntakeConfirmationWriter(movement, intakes, core),
         POLICY,
       );
       const store = new InMemorySiteIntakeCommercialStore(intakes, movementRepo, plans, audit);

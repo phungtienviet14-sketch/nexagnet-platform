@@ -20,6 +20,7 @@ import {
   TransportSiteIntakeLocationFacts,
   type SiteIntakeObservationFacts,
 } from './site-intake-facts.port.js';
+import { MovementSiteIntakeConfirmationWriter } from './site-intake-confirmation.writer.js';
 import { InMemoryRunSiteIntakeRepository } from './site-intake.repository.js';
 import { SiteIntakeService } from './site-intake.service.js';
 import { PENDING_DESTINATION_LABEL } from './site-intake.types.js';
@@ -57,6 +58,7 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
   let movement: MovementService;
   let siteService: CounterpartySiteService;
   let service: SiteIntakeService;
+  let core: TransportSiteIntakeCoreFactsAdapter;
 
   let siteId: string;
   let driverId: string;
@@ -82,12 +84,14 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
       POLICY,
     );
 
+    core = new TransportSiteIntakeCoreFactsAdapter(fleet, movementRepo, siteService);
     service = new SiteIntakeService(
       intakes,
-      new TransportSiteIntakeCoreFactsAdapter(fleet, movementRepo, siteService),
+      core,
       new TransportSiteIntakeGeoFactsAdapter(geofences, siteService),
       locations,
       movement,
+      new MovementSiteIntakeConfirmationWriter(movement, intakes, core),
       POLICY,
       undefined,
       undefined,
@@ -446,6 +450,48 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
         if (settled.status === 'fulfilled') expect(settled.value.runId).toBe(runs[0]?.id);
         else expect(settled.reason.reason).toMatch(/SITE_INTAKE_(REPLAYED|CREATE_IN_FLIGHT)/);
       }
+    });
+
+    /**
+     * `#398`/#267: hai may cung tai khoan bam cung luc voi HAI khoa khac nhau. Phep kiem khong khoa
+     * o dau ham cho CA HAI qua; phep hoi lai o cong ghi (hang doi o day, khoa xe o Postgres) chi cho
+     * mot lan ghi, lan kia nhan DUNG ma cua lan bam tuan tu.
+     */
+    it('hai lan bam KHAC khoa cung luc chi de lai MOT vong chay, lan kia OPEN_RUN_EXISTS', async () => {
+      const results = await Promise.allSettled([
+        confirm({ clientEventId: 'may-a' }),
+        confirm({ clientEventId: 'may-b' }),
+      ]);
+
+      expect(results.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.flatMap((entry) =>
+        entry.status === 'rejected' ? [(entry.reason as { reason?: string }).reason] : [],
+      );
+      expect(rejected).toEqual(['SITE_INTAKE_OPEN_RUN_EXISTS']);
+      const runs = await movementRepo.listRuns();
+      expect(runs).toHaveLength(1);
+      expect(await movementRepo.listLegs(runs[0]?.id ?? '')).toHaveLength(1);
+      expect(await intakes.listForDriver(driverId)).toHaveLength(1);
+    });
+
+    /**
+     * `#398`: XE dang co mot vong chay mo ma CHUA AI CAM — vd van phong vua lap ke hoach cho xe
+     * nay, chua kip ghi lai xe. Phep kiem "lai xe dang cam vong chay mo" khong thay no; phep kiem
+     * XE thi thay, va lan xac nhan khong mo vong chay thu hai tren cung xe.
+     */
+    it('xe dang co vong chay mo chua ai cam -> SITE_INTAKE_VEHICLE_BUSY, khong ghi gi', async () => {
+      const office = await movement.createRun(
+        { code: 'RUN-VAN-PHONG', vehicleId, businessDate: '2026-09-09', note: null },
+        'operator',
+      );
+
+      expect(await reasonOf(() => confirm())).toBe('SITE_INTAKE_VEHICLE_BUSY');
+      expect((await movementRepo.listRuns()).map((run) => run.id)).toEqual([office.id]);
+      expect(await intakes.listForDriver(driverId)).toEqual([]);
+
+      // Vong chay do bi huy -> xe ranh, lan bam sau di qua.
+      await movement.cancelRun(office.id, 'van phong huy', 'operator');
+      expect((await confirm({ clientEventId: 'cham-sau' })).replayed).toBe(false);
     });
 
     /** Ma vong chay TAT DINH: cung khoa, cung ma — o moi thu tu den. */

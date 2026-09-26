@@ -211,8 +211,12 @@ export interface CreateRunInput {
    * gan don co san vao viec tai xe nhan truc tiep gianh — nen hai duong xep hang, va khong duong nao
    * sinh ra mot vong chay/chang CO HANG thu hai cho mot don da nhan chang cua lai xe.
    *
+   * Sau khoa don, kho gianh them khoa tu van cua XE (`transport-vehicle-runs:<vehicleId>`) va doc
+   * lai "xe co dang giu viec tai xe nhan truc tiep chua co don khong" — tu choi
+   * `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE` neu co. Lan tai xe xac nhan gianh CUNG khoa xe.
+   *
    * Ban trong bo nho bo qua truong nay: no khong co giao dich de dua phep kiem vao, va lan lap ke
-   * hoach da tu kiem `findActiveForOrder` ngay truoc do.
+   * hoach da tu kiem `findActiveForOrder` + `PlanningPendingWorkSource` ngay truoc do.
    */
   readonly planGuardOrderId?: string | null;
 }
@@ -241,8 +245,12 @@ export interface CreateLegInput {
    * gan don co san vao viec tai xe nhan truc tiep gianh — nen hai duong xep hang, va khong duong nao
    * sinh ra mot vong chay/chang CO HANG thu hai cho mot don da nhan chang cua lai xe.
    *
+   * Sau khoa don, kho gianh them khoa tu van cua XE (`transport-vehicle-runs:<vehicleId>`) va doc
+   * lai "xe co dang giu viec tai xe nhan truc tiep chua co don khong" — tu choi
+   * `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE` neu co. Lan tai xe xac nhan gianh CUNG khoa xe.
+   *
    * Ban trong bo nho bo qua truong nay: no khong co giao dich de dua phep kiem vao, va lan lap ke
-   * hoach da tu kiem `findActiveForOrder` ngay truoc do.
+   * hoach da tu kiem `findActiveForOrder` + `PlanningPendingWorkSource` ngay truoc do.
    */
   readonly planGuardOrderId?: string | null;
 }

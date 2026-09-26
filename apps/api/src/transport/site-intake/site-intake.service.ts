@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { toBusinessDate } from '../business-date.js';
+import { RUN_CODE } from '../movement/movement.repository.js';
 import { MovementService } from '../movement/movement.service.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
@@ -27,9 +28,14 @@ import {
   TransportSiteIntakeGeoFacts,
   TransportSiteIntakeLocationFacts,
   type SiteIntakeObservationFacts,
+  type SiteIntakeOpenRun,
   type SiteIntakeSiteFacts,
 } from './site-intake-facts.port.js';
 import type { SiteMatch } from './site-intake-commercial.types.js';
+import {
+  SiteIntakeConfirmationWriter,
+  type ConfirmedIntakeOutcome,
+} from './site-intake-confirmation.writer.js';
 import {
   RunSiteIntakeRepository,
   SITE_INTAKE_DRIVER_EVENT,
@@ -109,6 +115,7 @@ export class SiteIntakeService {
     private readonly geo: TransportSiteIntakeGeoFacts,
     private readonly location: TransportSiteIntakeLocationFacts,
     private readonly movement: MovementService,
+    private readonly writer: SiteIntakeConfirmationWriter,
     @Inject(TRANSPORT_CORE_POLICY) private readonly corePolicy: TransportCorePolicy,
     @Optional()
     @Inject(TRANSPORT_SITE_INTAKE_POLICY)
@@ -169,27 +176,14 @@ export class SiteIntakeService {
     // dung nua" (vong chay vua tao BAY GIO la mot vong chay dang mo). Doc sau se tu choi mot lan
     // gui lai hop le bang chinh hau qua cua no.
     const replayed = await this.intakes.findByEvent(driver.id, command.clientEventId);
-    if (replayed) {
-      this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_REPLAYED', {
-        intakeId: replayed.id,
-        runId: replayed.runId,
-      });
-      return await this.resultOf(replayed, await this.requireSite(replayed.siteId), true);
-    }
+    if (replayed) return await this.replayOf(replayed);
 
     const site = await this.requireSite(command.siteId);
 
+    // Duong NHANH, khong khoa: tra loi som truoc moi phep kiem vi tri. Cong THAT la phep hoi lai
+    // DUOI khoa xe trong `SiteIntakeConfirmationWriter` — xem khoi `LAN GHI` ben duoi.
     const openRuns = await this.core.listOpenRunsForDriver(driver.id);
-    if (openRuns.length > 0) {
-      this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_OPEN_RUN_EXISTS', {
-        driverId: driver.id,
-        openRunIds: openRuns.map((run) => run.runId),
-      });
-      throw TransportDomainError.conflict(
-        'SITE_INTAKE_OPEN_RUN_EXISTS',
-        `Ban dang co chuyen ${openRuns.map((run) => run.code).join(', ')} chua ket thuc — ghi nhan vao chuyen do`,
-      );
-    }
+    if (openRuns.length > 0) throw this.openRunExists(driver.id, openRuns, 'PRECHECK');
 
     const vehicleId = await this.core.activeVehicleForDriver(driver.id);
     if (vehicleId === null) {
@@ -212,121 +206,66 @@ export class SiteIntakeService {
     const businessDate = toBusinessDate(confirmedAt, this.corePolicy.timeZone);
     const actor = command.authUserId;
 
-    // BA LAN GHI, QUA DICH VU DA DUOC CHAP NHAN CUA LANE A.
+    // LAN GHI — MOT cong, hai ban hien thuc (`SiteIntakeConfirmationWriter`).
     //
-    // `#267` H4 doi *"create or reuse accepted VehicleRun/RunLeg primitives"*, va cach dung la goi
-    // `MovementService` — no giu ma trang thai, dau vet kiem toan va quy uoc ngay nghiep vu. Ghi
-    // thang vao `MovementRepository` se bo qua ca ba.
-    let run;
+    // `#267` H4 doi *"create or reuse accepted VehicleRun/RunLeg primitives"*; `#398` doi them
+    // rang lan ghi do khong duoc dua voi bo lap ke hoach tren CUNG xe. Ban Postgres ghi vong chay +
+    // phan cong + chang + lan nhan viec + ba dong kiem toan trong MOT giao dich, sau khoa tu van
+    // cua xe (khoa bo lap ke hoach cung gianh), va hoi lai ba cau "con dung khong" DUOI khoa do.
+    // Ban trong bo nho ghi qua `MovementService`, xep hang qua mot hang doi.
+    let outcome: ConfirmedIntakeOutcome;
     try {
-      run = await this.movement.createRun(
-        {
-          code: runCodeFor(businessDate, driver.id, command.clientEventId),
-          vehicleId,
-          businessDate,
-          note: null,
-        },
-        actor,
-      );
-    } catch (error) {
-      // HAI YEU CAU CUA CUNG MOT CHAM, den cung luc.
-      //
-      // Ca hai qua duoc phep doc chong lap o dau ham (ban kia chua commit). Nhung ma vong chay la
-      // mot BAM TAT DINH tu `(driverId, clientEventId)`, nen unique cua `TransportVehicleRun.code`
-      // chan yeu cau thu hai NGAY O LAN GHI DAU — truoc khi no kip tao mot chang hay mot ban phan
-      // cong nao. Khong co vong chay mo coi nao duoc de lai.
-      if (!(error instanceof TransportDomainError) || error.reason !== 'RUN_CODE_TAKEN')
-        throw error;
-
-      const already = await this.intakes.findByEvent(driver.id, command.clientEventId);
-      if (already) {
-        this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_REPLAYED', {
-          intakeId: already.id,
-          runId: already.runId,
-        });
-        return await this.resultOf(already, await this.requireSite(already.siteId), true);
-      }
-
-      // Ban kia da tao vong chay nhung CHUA ghi xong ban ghi xac nhan. Khong co gi de tra ve, va
-      // doan la sai — nen noi that: thu lai voi DUNG khoa cu, va lan sau se thay ket qua cua ban kia.
-      this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_CREATE_IN_FLIGHT', {
-        driverId: driver.id,
-        clientEventId: command.clientEventId,
-      });
-      throw TransportDomainError.conflict(
-        'SITE_INTAKE_CREATE_IN_FLIGHT',
-        'Lan bam nay dang duoc xu ly — thu lai sau mot lat',
-      );
-    }
-    await this.movement.assignRun(run.id, { driverId: driver.id }, actor);
-    const leg = await this.movement.addLeg(
-      run.id,
-      {
-        sequence: 1,
-        // `LOADED` kem `orderId` NULL la trang thai ma Lane A viet ro la hop le: *"dang cho hang
-        // nhung don chua nhap xong"*. `EMPTY` se noi sai — lai xe den A de LAY HANG.
-        kind: 'LOADED',
-        orderId: null,
+      outcome = await this.writer.write({
+        vehicleId,
+        runCode: runCodeFor(businessDate, driver.id, command.clientEventId),
         originLabel: `${site.counterpartyName} — ${site.siteName}`,
         destinationLabel: command.destinationLabel ?? PENDING_DESTINATION_LABEL,
-        businessDate,
-        distanceKm: null,
-        note: null,
-      },
-      actor,
-    );
-
-    try {
-      const intake = await this.intakes.create({
-        runId: run.id,
-        legId: leg.id,
-        siteId: site.siteId,
-        driverId: driver.id,
-        confirmedBy: actor,
-        locationTrust: located?.trust ?? 'DRIVER_REPORTED',
-        observationId: located?.observation?.id ?? null,
-        distanceMetres,
-        clientEventId: command.clientEventId,
-        confirmedAt,
-        businessDate,
-        siteMatch,
-      });
-      this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_CREATED', {
-        intakeId: intake.id,
-        runId: run.id,
-        legId: leg.id,
-        siteId: site.siteId,
-        locationTrust: intake.locationTrust,
-        siteMatch,
-        destinationPending: command.destinationLabel === undefined,
-      });
-      return await this.resultOf(intake, site, false);
-    } catch (error) {
-      // HAI YEU CAU SONG SONG cua cung mot lan cham. Phep doc o dau ham khong thay ban kia vi no
-      // chua commit; unique cua kho thi thay. Doc lai va tra ve — khong bao loi cho mot viec da
-      // thanh cong. Vong chay thua cua lan nay bi bo lai o trang thai `PLANNED` va se bi don bang
-      // duong huy binh thuong; khong lan nao trong hai lan tao ra mot vong chay THU HAI co chu.
-      if (isUniqueViolationOn(error, SITE_INTAKE_DRIVER_EVENT)) {
-        const already = await this.intakes.findByEvent(driver.id, command.clientEventId);
-        if (already) {
-          this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_REPLAYED', {
-            intakeId: already.id,
-            runId: already.runId,
-          });
-          return await this.resultOf(already, await this.requireSite(already.siteId), true);
-        }
-      }
-      if (isUniqueViolationOn(error, SITE_INTAKE_OBSERVATION_ONCE)) {
-        this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_OBSERVATION_ALREADY_USED', {
+        intake: {
+          siteId: site.siteId,
+          driverId: driver.id,
+          confirmedBy: actor,
+          locationTrust: located?.trust ?? 'DRIVER_REPORTED',
           observationId: located?.observation?.id ?? null,
-        });
-        throw TransportDomainError.conflict(
-          'SITE_INTAKE_OBSERVATION_ALREADY_USED',
-          'Ban dinh vi do da duoc dung cho mot lan nhan viec khac',
-        );
-      }
-      throw error;
+          distanceMetres,
+          clientEventId: command.clientEventId,
+          confirmedAt,
+          businessDate,
+          siteMatch,
+        },
+      });
+    } catch (error) {
+      return await this.recoverFromWriteCollision(error, driver.id, command, located);
     }
+
+    // Mot lenh CUNG khoa vua thang trong khe giua phep doc o dau ham va khoa xe.
+    if (outcome.kind === 'REPLAYED') return await this.replayOf(outcome.intake);
+    if (outcome.kind === 'DRIVER_HAS_OPEN_RUN') {
+      throw this.openRunExists(driver.id, outcome.openRuns, 'VEHICLE_LOCK');
+    }
+    if (outcome.kind === 'VEHICLE_BUSY') {
+      this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_VEHICLE_BUSY', {
+        driverId: driver.id,
+        vehicleId,
+        openRunIds: outcome.openRuns.map((run) => run.runId),
+      });
+      // Khong in ma vong chay cua NGUOI KHAC ra man hinh lai xe — ma nam o nhat ky quyet dinh.
+      throw TransportDomainError.conflict(
+        'SITE_INTAKE_VEHICLE_BUSY',
+        'Xe cua ban dang co mot chuyen chua ket thuc — bao dieu do truoc khi nhan chuyen moi',
+      );
+    }
+
+    const intake = outcome.intake;
+    this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_CREATED', {
+      intakeId: intake.id,
+      runId: intake.runId,
+      legId: intake.legId,
+      siteId: site.siteId,
+      locationTrust: intake.locationTrust,
+      siteMatch,
+      destinationPending: command.destinationLabel === undefined,
+    });
+    return await this.resultOf(intake, site, false);
   }
 
   /** Lich su nhan viec CUA CHINH MINH — danh tinh tu phien, khong tu than yeu cau. */
@@ -338,6 +277,82 @@ export class SiteIntakeService {
   /* ------------------------------------------------------------------ *
    * Noi bo
    * ------------------------------------------------------------------ */
+
+  private async replayOf(intake: RunSiteIntake): Promise<SiteIntakeResult> {
+    this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_REPLAYED', {
+      intakeId: intake.id,
+      runId: intake.runId,
+    });
+    return await this.resultOf(intake, await this.requireSite(intake.siteId), true);
+  }
+
+  /**
+   * MOT ma, MOT cau cho "lai xe dang cam vong chay chua ket thuc" — du phep kiem nhanh o dau ham
+   * hay phep hoi lai duoi khoa xe bat duoc. `by` noi cai nao, cho nguoi doc trace.
+   */
+  private openRunExists(
+    driverId: string,
+    openRuns: readonly SiteIntakeOpenRun[],
+    by: 'PRECHECK' | 'VEHICLE_LOCK',
+  ): TransportDomainError {
+    this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_OPEN_RUN_EXISTS', {
+      driverId,
+      openRunIds: openRuns.map((run) => run.runId),
+      by,
+    });
+    return TransportDomainError.conflict(
+      'SITE_INTAKE_OPEN_RUN_EXISTS',
+      `Ban dang co chuyen ${openRuns.map((run) => run.code).join(', ')} chua ket thuc — ghi nhan vao chuyen do`,
+    );
+  }
+
+  /**
+   * VA CHAM UNIQUE cua lan ghi — MOT khoi dich cho ca hai ban hien thuc cua cong ghi.
+   *
+   * Ban Postgres xep hang hai lenh CUNG khoa duoi khoa xe, nen lenh thu hai thuong thay ban kia
+   * ngay trong giao dich (`REPLAYED`). Khoi nay giu cho nhung khe con lai, voi DUNG nghia cu:
+   *
+   *   · ma vong chay tat dinh da bi chiem (`RUN_CODE_TAKEN` o ban trong bo nho, unique `RUN_CODE` o
+   *     ban Postgres) hoac khoa chong lap da co -> doc lai; thay thi tra ve ban cu. Ma vong chay bi
+   *     chiem ma chua co ban ghi xac nhan -> `SITE_INTAKE_CREATE_IN_FLIGHT` (noi that, khong doan);
+   *   · ban dinh vi da phuc vu mot lan nhan viec khac -> `SITE_INTAKE_OBSERVATION_ALREADY_USED`.
+   *
+   * Ban Postgres cuon lai CA giao dich truoc khi loi toi day — khong vong chay mo coi nao.
+   */
+  private async recoverFromWriteCollision(
+    error: unknown,
+    driverId: string,
+    command: ConfirmSiteIntakeCommand,
+    located: ResolvedLocation | null,
+  ): Promise<SiteIntakeResult> {
+    const runCodeTaken =
+      (error instanceof TransportDomainError && error.reason === 'RUN_CODE_TAKEN') ||
+      isUniqueViolationOn(error, RUN_CODE);
+    if (runCodeTaken || isUniqueViolationOn(error, SITE_INTAKE_DRIVER_EVENT)) {
+      const already = await this.intakes.findByEvent(driverId, command.clientEventId);
+      if (already) return await this.replayOf(already);
+      if (runCodeTaken) {
+        this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_CREATE_IN_FLIGHT', {
+          driverId,
+          clientEventId: command.clientEventId,
+        });
+        throw TransportDomainError.conflict(
+          'SITE_INTAKE_CREATE_IN_FLIGHT',
+          'Lan bam nay dang duoc xu ly — thu lai sau mot lat',
+        );
+      }
+    }
+    if (isUniqueViolationOn(error, SITE_INTAKE_OBSERVATION_ONCE)) {
+      this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_OBSERVATION_ALREADY_USED', {
+        observationId: located?.observation?.id ?? null,
+      });
+      throw TransportDomainError.conflict(
+        'SITE_INTAKE_OBSERVATION_ALREADY_USED',
+        'Ban dinh vi do da duoc dung cho mot lan nhan viec khac',
+      );
+    }
+    throw error;
+  }
 
   /**
    * BA NGUON VI TRI, theo dung thu tu uu tien, va `null` khi khong co nguon nao.

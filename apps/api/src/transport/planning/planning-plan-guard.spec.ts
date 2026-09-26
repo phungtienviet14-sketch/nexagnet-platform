@@ -3,8 +3,12 @@ import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js'
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { InMemoryFleetRepository } from '../fleet/fleet.repository.js';
 import { InMemoryMovementRepository } from '../movement/movement.repository.js';
-import { MovementService, type AddLegCommand } from '../movement/movement.service.js';
-import type { RunLeg } from '../movement/movement.types.js';
+import {
+  MovementService,
+  type AddLegCommand,
+  type CreateRunCommand,
+} from '../movement/movement.service.js';
+import type { RunLeg, VehicleRun } from '../movement/movement.types.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { InMemoryRunPlanRepository } from './planning.repository.js';
 import { PlanningService } from './planning.service.js';
@@ -24,13 +28,26 @@ import type { RunGrouping, TransportPlanningPolicy } from './planning.types.js';
 const ACTOR = 'ke-toan';
 const CORE_POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
 
+type GuardReason = 'PLAN_ORDER_ALREADY_PLANNED' | 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE';
+
 class RefusingMovementService extends MovementService {
   refuse: ((command: AddLegCommand) => boolean) | null = null;
+  refuseRun = false;
+  /** Cong nao cua kho tu choi: khoa DON (gan don co san) hay khoa XE (tai xe vua xac nhan). */
+  reason: GuardReason = 'PLAN_ORDER_ALREADY_PLANNED';
+
+  override async createRun(input: CreateRunCommand, actor: string): Promise<VehicleRun> {
+    if (this.refuseRun) {
+      this.refuseRun = false;
+      throw TransportDomainError.conflict(this.reason, 'Kho tu choi duoi khoa');
+    }
+    return super.createRun(input, actor);
+  }
 
   override async addLeg(runId: string, command: AddLegCommand, actor: string): Promise<RunLeg> {
     if (this.refuse?.(command)) {
       this.refuse = null;
-      throw TransportDomainError.conflict('PLAN_ORDER_ALREADY_PLANNED', 'Don vua co ke hoach');
+      throw TransportDomainError.conflict(this.reason, 'Kho tu choi duoi khoa');
     }
     return super.addLeg(runId, command, actor);
   }
@@ -154,5 +171,65 @@ describe('PlanningService.commit — thua cong ke hoach cua don giua chung (#398
     expect(added.map((leg) => [leg.kind, leg.status])).toEqual([['EMPTY', 'CANCELLED']]);
     expect(await plans.findActiveForOrder(first.id)).not.toBeNull();
     expect(await plans.findActiveForOrder(second.id)).toBeNull();
+  });
+
+  /* ---------------------------------------------------------------- *
+   * KHOA XE — mot lan tai xe xac nhan vua dat viec chua co don len CHINH xe nay
+   * ---------------------------------------------------------------- */
+
+  describe('khoa XE cua kho (`PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE`)', () => {
+    beforeEach(() => {
+      movement.reason = 'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE';
+    });
+
+    it('tu choi o lan MO vong chay -> dung ma cua khoa xe, khong mot hang nao', async () => {
+      const order = await anOrder('ORD-A', 'Kho A', 'Cang B');
+      movement.refuseRun = true;
+
+      expect(
+        await reasonOf(() =>
+          planner('ONE_ORDER_PER_RUN').commit(order.id, { vehicleId, idempotencyKey: 'k' }, ACTOR),
+        ),
+      ).toBe('PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE');
+      expect(await movementRepo.listRuns()).toEqual([]);
+      expect(await plans.findActiveForOrder(order.id)).toBeNull();
+    });
+
+    it('vong chay MOI, tu choi o chang CO HANG -> chang rong + vong chay huy, ly do noi dung ben thang', async () => {
+      const order = await anOrder('ORD-A', 'Kho A', 'Cang B');
+      movement.refuse = (command) => command.kind === 'LOADED';
+
+      expect(
+        await reasonOf(() =>
+          planner('ONE_ORDER_PER_RUN').commit(order.id, { vehicleId, idempotencyKey: 'k' }, ACTOR),
+        ),
+      ).toBe('PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE');
+
+      const runs = await movementRepo.listRuns();
+      expect(runs.map((run) => [run.status, run.cancellationReason])).toEqual([
+        ['CANCELLED', 'Xe vua nhan viec tai xe nhan truc tiep chua co don'],
+      ]);
+      const legs = await movementRepo.listLegs(runs[0]?.id ?? '');
+      expect(legs.map((leg) => [leg.kind, leg.status])).toEqual([['EMPTY', 'CANCELLED']]);
+      expect(await plans.findActiveForOrder(order.id)).toBeNull();
+    });
+
+    it('noi vao vong chay DANG CO (MULTI) -> chi go chang lan nay vua noi', async () => {
+      const multi = planner('MULTI_ORDER_RUN');
+      const first = await anOrder('ORD-A', 'Kho A', 'Cang B');
+      const committed = await multi.commit(first.id, { vehicleId, idempotencyKey: 'a' }, ACTOR);
+      const second = await anOrder('ORD-C', 'Kho C', 'Cang D');
+      movement.refuse = (command) => command.kind === 'LOADED';
+
+      expect(
+        await reasonOf(() => multi.commit(second.id, { vehicleId, idempotencyKey: 'c' }, ACTOR)),
+      ).toBe('PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE');
+
+      expect((await movementRepo.findRun(committed.run.id))?.status).not.toBe('CANCELLED');
+      const legs = await movementRepo.listLegs(committed.run.id);
+      const added = legs.filter((leg) => !committed.legs.some((own) => own.id === leg.id));
+      expect(added.map((leg) => [leg.kind, leg.status])).toEqual([['EMPTY', 'CANCELLED']]);
+      expect(await plans.findActiveForOrder(second.id)).toBeNull();
+    });
   });
 });

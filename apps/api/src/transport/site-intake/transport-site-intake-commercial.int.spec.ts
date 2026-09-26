@@ -7,8 +7,12 @@ import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterpart
 import { PrismaCounterpartySiteRepository } from '../counterparty/prisma-counterparty-site.repository.js';
 import { CounterpartySiteService } from '../counterparty/site.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
-import { MovementService, type AddLegCommand } from '../movement/movement.service.js';
-import type { RunLeg } from '../movement/movement.types.js';
+import {
+  MovementService,
+  type AddLegCommand,
+  type CreateRunCommand,
+} from '../movement/movement.service.js';
+import type { RunLeg, VehicleRun } from '../movement/movement.types.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 import { PlanningService } from '../planning/planning.service.js';
 import type { RunGrouping, TransportPlanningPolicy } from '../planning/planning.types.js';
@@ -17,6 +21,7 @@ import { PrismaGeofenceRepository } from '../proof/geofence.repository.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { siteIntakeOrderCode, siteIntakePlanKey } from './commercial-readiness.js';
 import { PrismaSiteIntakeCommercialStore } from './prisma-site-intake-commercial.store.js';
+import { PrismaSiteIntakeConfirmationWriter } from './prisma-site-intake-confirmation.writer.js';
 import { PrismaRunSiteIntakeRepository } from './prisma-site-intake.repository.js';
 import { SiteIntakePlanningPendingWorkSource } from './site-intake-composition.adapters.js';
 import {
@@ -94,6 +99,47 @@ class GatedMovementService extends MovementService {
   }
 }
 
+/**
+ * CONG ep thu tu nhieu buoc cua BO LAP KE HOACH: chay `action` TOI CUNG ngay truoc buoc duoc chon,
+ * roi moi cho buoc do di tiep. Ba buoc la ba khe that giua cac lan ghi cua `PlanningService.commit()`:
+ *
+ *   · `latestRunForVehicle` — sau phep hoi `pendingWork` (KHONG khoa), truoc khi chon vong chay dich;
+ *   · `createRun`           — sau khi da chon "mo vong chay moi", truoc lan ghi dau tien;
+ *   · `addLeg`              — vong chay moi DA commit (chua ai cam), chang chua ghi.
+ */
+type PlannerStep = 'latestRunForVehicle' | 'createRun' | 'addLeg';
+
+class SteppedMovementService extends MovementService {
+  private gate: { readonly step: PlannerStep; readonly action: () => Promise<unknown> } | null =
+    null;
+
+  arm(step: PlannerStep, action: () => Promise<unknown>): void {
+    this.gate = { step, action };
+  }
+
+  private async pass(step: PlannerStep): Promise<void> {
+    const gate = this.gate;
+    if (gate === null || gate.step !== step) return;
+    this.gate = null;
+    await gate.action();
+  }
+
+  override async latestRunForVehicle(vehicleId: string): Promise<VehicleRun | null> {
+    await this.pass('latestRunForVehicle');
+    return super.latestRunForVehicle(vehicleId);
+  }
+
+  override async createRun(input: CreateRunCommand, actor: string): Promise<VehicleRun> {
+    await this.pass('createRun');
+    return super.createRun(input, actor);
+  }
+
+  override async addLeg(runId: string, command: AddLegCommand, actor: string): Promise<RunLeg> {
+    await this.pass('addLeg');
+    return super.addLeg(runId, command, actor);
+  }
+}
+
 const reasonOf = (settled: PromiseSettledResult<unknown>): string | null =>
   settled.status === 'rejected'
     ? settled.reason instanceof TransportDomainError
@@ -123,6 +169,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       geo,
       new NoLocationFacts(),
       movement,
+      new PrismaSiteIntakeConfirmationWriter(prisma, audit),
       CORE_POLICY,
     );
     const store = new PrismaSiteIntakeCommercialStore(prisma, audit);
@@ -636,25 +683,37 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       },
     );
 
-    /** DOI CHUNG AM: bo cong "viec dang do" ra thi chinh kich ban tren SINH R2/L2. */
+    /**
+     * HAI LOP CHAN. Truoc day bai nay la DOI CHUNG AM: bo cong `pendingWork` ra thi chinh kich ban
+     * tren SINH R2/L2. Tu khi kho hoi lai cau do DUOI khoa tu van cua xe (`createRun`/`createLeg` co
+     * `planGuardOrderId`), vang cong o tang dich vu cung KHONG con lot: ONE bi chan o lan mo vong
+     * chay, MULTI bi chan o chang dau tien noi vao vong chay cua tai xe — va khong de lai gi. Doi
+     * chung am cua CHINH khoa xe la cac bai dua ep thu tu o muc `o.` ben duoi.
+     */
     it.each([
       ['ONE_ORDER_PER_RUN', one],
       ['MULTI_ORDER_RUN', multi],
     ] as const)(
-      'f. doi chung am (%s): vang cong viec dang do -> lap ke hoach nhan doi viec that',
+      'f. vang cong viec dang do o tang dich vu (%s) -> khoa xe cua kho van chan, khong R2/L2',
       async (_grouping, stack) => {
         const who = await anIntake();
         const order = await anOfficeOrder();
+        const before = await footprint(who.vehicleId);
 
-        await stack.planning.commit(
-          order.id,
-          { vehicleId: who.vehicleId, idempotencyKey: `${PREFIX}-am-${stack.grouping}` },
-          OFFICE,
+        const [settled] = await Promise.allSettled([
+          stack.planning.commit(
+            order.id,
+            { vehicleId: who.vehicleId, idempotencyKey: `${PREFIX}-am-${stack.grouping}` },
+            OFFICE,
+          ),
+        ]);
+
+        expect(reasonOf(settled as PromiseSettledResult<unknown>)).toBe(
+          'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE',
         );
-
-        const after = await footprint(who.vehicleId);
-        expect(after.legs).toBeGreaterThan(1);
-        expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(1);
+        expect(await footprint(who.vehicleId)).toEqual(before);
+        expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(0);
+        expect(await prisma.transportOrderRunPlan.count({ where: { orderId: order.id } })).toBe(0);
       },
     );
 
@@ -1131,6 +1190,247 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const order = await prisma.transportOrder.findUniqueOrThrow({ where: { id: who.orderId } });
       expect(order.freightAmount).toBeNull();
       expect(order.customerId).toBeNull();
+    });
+
+    /* ================================================================ *
+     * o. TAI XE XAC NHAN DUA VOI LAP KE HOACH TREN CUNG XE — khoa tu van cua xe
+     * ================================================================ */
+
+    const OPEN: readonly string[] = ['PLANNED', 'ACTIVE'];
+
+    /**
+     * Moi su that phai dung SAU mot lan dua "tai xe D xac nhan tren xe V" vs "van phong lap don Y len
+     * xe V". Tra ve `true` neu tai xe thang.
+     */
+    const expectOneJobOn = async (
+      who: { readonly vehicleId: string; readonly driverId: string },
+      orderId: string,
+    ): Promise<boolean> => {
+      const runs = await prisma.transportVehicleRun.findMany({
+        where: { vehicleId: who.vehicleId },
+        include: { legs: true, siteIntake: { include: { commercial: true } } },
+      });
+      const open = runs.filter((run) => OPEN.includes(run.status));
+      // (1) KHONG BAO GIO hai vong chay mo tren mot xe.
+      expect(open, 'hai vong chay mo tren mot xe').toHaveLength(1);
+
+      const liveLoadedForOrder = await prisma.transportRunLeg.count({
+        where: { orderId, kind: 'LOADED', status: { not: 'CANCELLED' } },
+      });
+      // (2) KHONG BAO GIO mot chang CO HANG song cua Y khi viec tai xe tren xe van `PENDING`.
+      if (open.some((run) => run.siteIntake?.commercial?.status === 'PENDING')) {
+        expect(liveLoadedForOrder).toBe(0);
+      }
+
+      const activePlans = await prisma.transportOrderRunPlan.count({
+        where: { orderId, cancelledAt: null },
+      });
+      const intakes = await prisma.transportRunSiteIntake.count({
+        where: { driverId: who.driverId },
+      });
+      const driverWon = intakes === 1;
+      if (driverWon) {
+        // (3) Bo lap ke hoach thua: vong chay cua no (neu co) DA HUY, khong chang song nao.
+        for (const run of runs.filter((entry) => entry.siteIntake === null)) {
+          expect(run.status, `vong chay ${run.code} cua bo lap ke hoach thua`).toBe('CANCELLED');
+          expect(run.legs.filter((leg) => leg.status !== 'CANCELLED')).toEqual([]);
+        }
+        const intakeRun = runs.find((entry) => entry.siteIntake !== null);
+        expect(intakeRun?.legs.filter((leg) => leg.status !== 'CANCELLED')).toHaveLength(1);
+        expect(liveLoadedForOrder).toBe(0);
+        expect(activePlans).toBe(0);
+      } else {
+        // (4) Tai xe thua: KHONG mot hang nao cua lan xac nhan.
+        expect(intakes).toBe(0);
+        expect(liveLoadedForOrder).toBe(1);
+        expect(activePlans).toBe(1);
+      }
+      return driverWon;
+    };
+
+    it.each([
+      ['ONE_ORDER_PER_RUN', one],
+      ['MULTI_ORDER_RUN', multi],
+    ] as const)(
+      'o. tai xe xac nhan DUA voi lap ke hoach cho CUNG xe (%s, lap lai) -> dung mot ben thang, khong hai vong chay mo',
+      async (_grouping, stack) => {
+        const winners: string[] = [];
+        for (let round = 0; round < 4; round += 1) {
+          const who = await aDriver();
+          const order = await anOfficeOrder();
+
+          const settled = await Promise.allSettled([
+            confirmAt(who.auth, `dua-xe-${round}`),
+            stack.planning.commit(
+              order.id,
+              {
+                vehicleId: who.vehicleId,
+                idempotencyKey: `${PREFIX}-dua-xe-${stack.grouping}-${round}`,
+                pendingWork: stack.pendingWork,
+              },
+              OFFICE,
+            ),
+          ]);
+
+          const [confirmed, planned] = settled;
+          expect(
+            settled.filter((entry) => entry.status === 'fulfilled'),
+            JSON.stringify(settled.map(reasonOf)),
+          ).toHaveLength(1);
+          const driverWon = await expectOneJobOn(who, order.id);
+          if (driverWon) {
+            expect(confirmed?.status).toBe('fulfilled');
+            expect(reasonOf(planned as PromiseSettledResult<unknown>)).toBe(
+              'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE',
+            );
+          } else {
+            expect(planned?.status).toBe('fulfilled');
+            expect(reasonOf(confirmed as PromiseSettledResult<unknown>)).toMatch(
+              /^SITE_INTAKE_(VEHICLE_BUSY|OPEN_RUN_EXISTS)$/,
+            );
+          }
+          winners.push(driverWon ? 'tai-xe' : 'lap-ke-hoach');
+        }
+        expect(winners).toHaveLength(4);
+      },
+    );
+
+    /**
+     * CUNG cuoc dua, THU TU bi ep vao dung ba khe cua bo lap ke hoach. Hai khe dau: lan xac nhan
+     * commit SAU phep hoi `pendingWork` (khong khoa) — chi khoa xe cua kho con bat duoc. Khe thu ba:
+     * vong chay moi cua bo lap ke hoach da commit nhung chua ai cam — phep kiem "lai xe dang cam
+     * vong chay mo" khong thay no, chi phep kiem XE duoi khoa thay.
+     */
+    it.each([
+      ['ONE_ORDER_PER_RUN', 'createRun', 'tai-xe'],
+      ['MULTI_ORDER_RUN', 'latestRunForVehicle', 'tai-xe'],
+      ['ONE_ORDER_PER_RUN', 'addLeg', 'lap-ke-hoach'],
+    ] as const)(
+      'o. xac nhan chen vao khe cua bo lap ke hoach (%s, truoc %s) -> %s thang, ben kia khong de lai viec song',
+      async (grouping, step, winner) => {
+        const stepped = new SteppedMovementService(movementRepo, fleet, audit, CORE_POLICY);
+        const stack = stackFor(grouping, stepped);
+        const who = await aDriver();
+        const order = await anOfficeOrder();
+
+        const confirmed: PromiseSettledResult<SiteIntakeResult>[] = [];
+        stepped.arm(step, async () => {
+          confirmed.push(...(await Promise.allSettled([confirmAt(who.auth, `khe-${step}`)])));
+        });
+
+        const [planned] = await Promise.allSettled([
+          stack.planning.commit(
+            order.id,
+            {
+              vehicleId: who.vehicleId,
+              idempotencyKey: `${PREFIX}-khe-xe-${grouping}-${step}`,
+              pendingWork: stack.pendingWork,
+            },
+            OFFICE,
+          ),
+        ]);
+
+        expect(confirmed).toHaveLength(1);
+        const driverWon = await expectOneJobOn(who, order.id);
+        expect(driverWon ? 'tai-xe' : 'lap-ke-hoach').toBe(winner);
+        if (winner === 'tai-xe') {
+          expect(confirmed[0]?.status).toBe('fulfilled');
+          expect(reasonOf(planned as PromiseSettledResult<unknown>)).toBe(
+            'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE',
+          );
+        } else {
+          expect(planned?.status).toBe('fulfilled');
+          expect(reasonOf(confirmed[0] as PromiseSettledResult<unknown>)).toBe(
+            'SITE_INTAKE_VEHICLE_BUSY',
+          );
+        }
+      },
+    );
+
+    it('o. hai lan bam KHAC khoa cua cung mot tai xe cung luc -> dung mot vong chay, lan kia OPEN_RUN_EXISTS', async () => {
+      for (let round = 0; round < 3; round += 1) {
+        const who = await aDriver();
+
+        const settled = await Promise.allSettled([
+          confirmAt(who.auth, `may-a-${round}`),
+          confirmAt(who.auth, `may-b-${round}`),
+        ]);
+
+        expect(
+          settled.filter((entry) => entry.status === 'fulfilled'),
+          JSON.stringify(settled.map(reasonOf)),
+        ).toHaveLength(1);
+        expect(settled.map(reasonOf).filter((reason) => reason !== null)).toEqual([
+          'SITE_INTAKE_OPEN_RUN_EXISTS',
+        ]);
+        expect(await footprint(who.vehicleId)).toMatchObject({
+          runs: 1,
+          activeRuns: 1,
+          legs: 1,
+          intakes: 1,
+          commercial: 1,
+        });
+      }
+    });
+
+    it('o. xe dang co vong chay mo CHUA AI CAM -> SITE_INTAKE_VEHICLE_BUSY, khong ghi gi', async () => {
+      const who = await aDriver();
+      await movement.createRun(
+        {
+          code: `${PREFIX}-BAN-${++suffix}`,
+          vehicleId: who.vehicleId,
+          businessDate: '2026-09-26',
+          note: null,
+        },
+        OFFICE,
+      );
+      const before = await footprint(who.vehicleId);
+
+      const [settled] = await Promise.allSettled([confirmAt(who.auth, 'xe-ban')]);
+
+      expect(reasonOf(settled as PromiseSettledResult<unknown>)).toBe('SITE_INTAKE_VEHICLE_BUSY');
+      expect(await footprint(who.vehicleId)).toEqual(before);
+      expect(before).toMatchObject({ runs: 1, activeRuns: 1, legs: 0, intakes: 0 });
+      expect(await prisma.transportRunSiteIntake.count({ where: { driverId: who.driverId } })).toBe(
+        0,
+      );
+      expect(await prisma.auditLog.count({ where: { actor: who.auth } })).toBe(0);
+    });
+
+    it('o. lan xac nhan ghi kiem toan tao vong chay / phan cong / them chang CUNG giao dich', async () => {
+      const who = await anIntake();
+      const assignment = await prisma.transportRunAssignment.findFirstOrThrow({
+        where: { runId: who.intake.runId, effectiveTo: null },
+      });
+      expect(assignment.driverId).toBe(who.driverId);
+      expect(assignment.assignedBy).toBe(who.auth);
+      const intake = await prisma.transportRunSiteIntake.findUniqueOrThrow({
+        where: { id: who.intake.intakeId },
+      });
+      expect(assignment.effectiveFrom.toISOString()).toBe(intake.confirmedAt.toISOString());
+
+      const rows = await prisma.auditLog.findMany({
+        where: { entityId: { in: [who.intake.runId, assignment.id, who.intake.legId] } },
+      });
+      const byAction = new Map(rows.map((row) => [row.action, row]));
+      expect(rows).toHaveLength(3);
+      expect(byAction.get('transport.run.create')).toMatchObject({
+        entityType: 'TransportVehicleRun',
+        entityId: who.intake.runId,
+        actor: who.auth,
+        after: expect.objectContaining({ code: who.intake.runCode, status: 'PLANNED' }),
+      });
+      expect(byAction.get('transport.run.assign')).toMatchObject({
+        entityType: 'TransportRunAssignment',
+        entityId: assignment.id,
+        actor: who.auth,
+      });
+      expect(byAction.get('transport.run.leg.add')).toMatchObject({
+        entityType: 'TransportRunLeg',
+        entityId: who.intake.legId,
+        actor: who.auth,
+        after: expect.objectContaining({ kind: 'LOADED', orderId: null, sequence: 1 }),
+      });
     });
   },
 );

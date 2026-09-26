@@ -56,6 +56,13 @@ export const SITE_INTAKE_CONFIRM_REASONS = [
    */
   'SITE_INTAKE_OPEN_RUN_EXISTS',
   /**
+   * `#398`: XE cua lai xe dang co mot vong chay chua ket thuc — ke ca vong chay CHUA AI CAM, vd van
+   * phong vua lap ke hoach cho xe nay va chua kip ghi lai xe. Mo them mot vong chay luc nay la hai
+   * vong chay mo tren MOT xe cho co the la cung mot viec that. Kiem DUOI khoa tu van cua xe — khoa
+   * ma lan lap ke hoach cung gianh.
+   */
+  'SITE_INTAKE_VEHICLE_BUSY',
+  /**
    * Nguoi goi CO gui vi tri, nhung vi tri do khong dung duoc (sai so qua lon, qua han tuoi, toa
    * do vo nghia).
    *
@@ -154,6 +161,7 @@ export const TRANSPORT_SITE_INTAKE_DECISIONS = defineDecisionVocabulary({
     SITE_INTAKE_SITE_NOT_FOUND: 'Không tìm thấy địa điểm vận hành',
     SITE_INTAKE_SITE_INACTIVE: 'Địa điểm đã nghỉ',
     SITE_INTAKE_OPEN_RUN_EXISTS: 'Đã có chuyến chưa kết thúc — ghi vào chuyến đó',
+    SITE_INTAKE_VEHICLE_BUSY: 'Xe đang có chuyến chưa kết thúc — không mở thêm chuyến thứ hai',
     SITE_INTAKE_LOCATION_UNUSABLE: 'Vị trí gửi lên không dùng được',
     SITE_INTAKE_SITE_NOT_A_CANDIDATE: 'Địa điểm được chọn không nằm quanh vị trí đã gửi',
     SITE_INTAKE_OBSERVATION_NOT_FOUND: 'Không tìm thấy bản định vị',
