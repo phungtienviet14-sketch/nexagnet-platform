@@ -381,16 +381,14 @@ export class PlanningService {
       }
     } catch (error) {
       /*
-       * `#398`: MOT LENH GAN DON VUA THANG trong khe giua lan mo vong chay va lan them chang dau.
-       * Vong chay moi chua co chang nao va chua co ai cam — huy no NGAY (khong xoa), de khong de
-       * lai mot vong chay mo coi tren bang dieu hanh. Vong chay DANG CHAY thi khong dong vao.
+       * `#398`: MOT LENH GAN DON VUA THANG trong khe giua hai lan ghi cua lan chot nay — sau khi mo
+       * vong chay, hoac sau chang RONG va truoc chang CO HANG. Ban thua khong duoc de lai viec song:
+       * huy (khong xoa) moi chang CHINH lan nay vua them — khong ke hoach nao tro vao chung — va,
+       * neu vong chay la cua CHINH lan nay (`NEW_RUN`, chua ai cam), huy ca vong chay. Vong chay
+       * DANG CHAY (`APPENDED`) thi chi go phan lan nay vua noi vao.
        */
-      if (isPlanGuardConflict(error) && proposal.outcome === 'NEW_RUN' && created.length === 0) {
-        await this.movement.cancelRun(
-          run.id,
-          'Don vua duoc gan vao viec tai xe nhan truc tiep',
-          actor,
-        );
+      if (isPlanGuardConflict(error)) {
+        await this.abandonPartialCommit(run, proposal, created, actor);
       }
       throw this.planGuardConflict(error, orderId);
     }
@@ -919,6 +917,18 @@ export class PlanningService {
 
   private now(): Date {
     return this.clock ? this.clock() : new Date();
+  }
+
+  /** Go phan DO DANG cua mot lan chot thua cong ke hoach cua don — xem khoi `catch` trong `commit()`. */
+  private async abandonPartialCommit(
+    run: VehicleRun,
+    proposal: RunPlanProposal,
+    created: readonly RunLeg[],
+    actor: string,
+  ): Promise<void> {
+    const reason = 'Don vua duoc gan vao viec tai xe nhan truc tiep';
+    for (const leg of created) await this.movement.cancelLeg(leg.id, reason, actor);
+    if (proposal.outcome === 'NEW_RUN') await this.movement.cancelRun(run.id, reason, actor);
   }
 
   /** Loi cong ke hoach cua kho -> dung ma + dong quyet dinh cua duong tuan tu. Loi khac di nguyen. */
