@@ -109,6 +109,9 @@ apps/transport-mobile/android/
 apps/transport-mobile/ios/
 apps/transport-mobile/.expo/
 apps/transport-mobile/dist-web/
+# #398 — ket qua E2E PWA (Playwright) sinh luc chay
+apps/transport-mobile/e2e-results/
+apps/transport-mobile/e2e-report/
 # Kho ky phat hanh KHONG BAO GIO vao git — xem apps/transport-mobile/docs/phat-hanh.md
 *.keystore
 *.jks

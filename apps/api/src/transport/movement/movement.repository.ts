@@ -140,6 +140,23 @@ export class RunClosedForNewWorkError extends Error {
   }
 }
 
+/**
+ * `#398` — DON DA NHAN CHANG CO HANG CUA MOT VIEC TAI XE NHAN TRUC TIEP, va mot lenh `createLeg`
+ * dang dat don do len MOT CHANG CO HANG THU HAI.
+ *
+ * Don do da co dung mot chang co hang (chang cua lan tai xe xac nhan, nhan qua lenh adopt — lenh
+ * adopt KHONG di qua `createLeg`). Mot chang co hang thu hai cho cung don la hai lan cho cung mot
+ * viec that: km, doi soat va "don dang o dau" deu nhan doi. Lop loi RIENG, cung khuon
+ * `RunClosedForNewWorkError`: kho phat hien DUOI khoa cua don, `MovementService` dich thanh ma
+ * nghiep vu `LEG_ORDER_ADOPTED_BY_SITE_INTAKE` va ghi quyet dinh.
+ */
+export class LegOrderAdoptedBySiteIntakeError extends Error {
+  constructor(readonly orderId: string) {
+    super(`Don ${orderId} da nhan chang co hang cua viec tai xe nhan truc tiep`);
+    this.name = 'LegOrderAdoptedBySiteIntakeError';
+  }
+}
+
 export interface RunClosureCandidateQuery {
   /** Lan hoan thanh muon nhat phai da cu hon moc nay. */
   readonly completedBefore: Date;
@@ -204,6 +221,21 @@ export interface CreateRunInput {
   readonly vehicleId: string;
   readonly businessDate: string;
   readonly note?: string | null;
+  /**
+   * `#398`: DON ma lan ghi nay dang LAP KE HOACH cho. Co mat thi kho gianh khoa tu van
+   * `transport-order-plan:<orderId>` TRUOC khoa hang vong chay, doc lai "don nay da co ke hoach
+   * hieu luc chua" DUOI khoa do, va tu choi `PLAN_ORDER_ALREADY_PLANNED` neu co. Cung khoa ma lenh
+   * gan don co san vao viec tai xe nhan truc tiep gianh — nen hai duong xep hang, va khong duong nao
+   * sinh ra mot vong chay/chang CO HANG thu hai cho mot don da nhan chang cua lai xe.
+   *
+   * Sau khoa don, kho gianh them khoa tu van cua XE (`transport-vehicle-runs:<vehicleId>`) va doc
+   * lai "xe co dang giu viec tai xe nhan truc tiep chua co don khong" — tu choi
+   * `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE` neu co. Lan tai xe xac nhan gianh CUNG khoa xe.
+   *
+   * Ban trong bo nho bo qua truong nay: no khong co giao dich de dua phep kiem vao, va lan lap ke
+   * hoach da tu kiem `findActiveForOrder` + `PlanningPendingWorkSource` ngay truoc do.
+   */
+  readonly planGuardOrderId?: string | null;
 }
 
 export interface CancelRunInput {
@@ -223,6 +255,21 @@ export interface CreateLegInput {
   /** #276 L6 — km DU KIEN. Khong bao gio ghi de len `distanceKm`. */
   readonly plannedDistanceKm?: number | null;
   readonly note?: string | null;
+  /**
+   * `#398`: DON ma lan ghi nay dang LAP KE HOACH cho. Co mat thi kho gianh khoa tu van
+   * `transport-order-plan:<orderId>` TRUOC khoa hang vong chay, doc lai "don nay da co ke hoach
+   * hieu luc chua" DUOI khoa do, va tu choi `PLAN_ORDER_ALREADY_PLANNED` neu co. Cung khoa ma lenh
+   * gan don co san vao viec tai xe nhan truc tiep gianh — nen hai duong xep hang, va khong duong nao
+   * sinh ra mot vong chay/chang CO HANG thu hai cho mot don da nhan chang cua lai xe.
+   *
+   * Sau khoa don, kho gianh them khoa tu van cua XE (`transport-vehicle-runs:<vehicleId>`) va doc
+   * lai "xe co dang giu viec tai xe nhan truc tiep chua co don khong" — tu choi
+   * `PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE` neu co. Lan tai xe xac nhan gianh CUNG khoa xe.
+   *
+   * Ban trong bo nho bo qua truong nay: no khong co giao dich de dua phep kiem vao, va lan lap ke
+   * hoach da tu kiem `findActiveForOrder` + `PlanningPendingWorkSource` ngay truoc do.
+   */
+  readonly planGuardOrderId?: string | null;
 }
 
 /**
@@ -249,6 +296,13 @@ export interface LegStatusWriteResult {
   readonly leg: RunLeg;
   /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
   readonly applied: boolean;
+}
+
+export interface BindLegOrderInput {
+  readonly legId: string;
+  readonly orderId: string;
+  readonly destinationLabel: string;
+  readonly at: Date;
 }
 
 export interface AssignRunInput {
@@ -383,6 +437,15 @@ export abstract class MovementRepository {
    *
    * Nen o day chi co MOT cau lenh khoa, va no dung chung cho ca ba duong ghi.
    *
+   * MOT NGOAI LE DA BIET, co y va co ten: `PrismaSiteIntakeCommercialStore.withIntake`
+   * (`transport-site-intake`, `#398`) tu viet `SELECT ... FOR UPDATE` tren CHINH hang nay — cung
+   * mot khoa, khong phai khoa thu hai — vi no phai khoa hang vong chay SAU hai khoa tu van (lan nhan
+   * viec -> don) trong CUNG mot giao dich voi lan tao don + nhan chang + ke hoach. Di qua ham nay
+   * thi hang vong chay bi khoa TRUOC, tuc thu tu dao nguoc voi lan lap ke hoach (don -> xe -> hang
+   * vong chay) — cong thuc cua deadlock. Thu tu toan cuc van la MOT: lan nhan viec -> don -> xe ->
+   * hang vong chay; khong duong nao giu hang vong chay roi moi xin khoa tu van. Xem chu thich tai
+   * cau lenh do. Mot ngoai le moi phai duoc ghi ten o day, khong duoc lang le them.
+   *
    * ==========================================================================================
    * `write` PHAI GHI QUA `scope.tx`
    * ==========================================================================================
@@ -434,6 +497,15 @@ export abstract class MovementRepository {
    */
   abstract listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]>;
 
+  /**
+   * THEM MOT CHANG — duoi khoa hang vong chay (`#293` R2).
+   *
+   * `#398`: chang `LOADED` mang mot don DA NHAN chang cua viec tai xe nhan truc tiep (phan thuong mai
+   * `ORDER_BOUND` voi don do) bi tu choi bang `LegOrderAdoptedBySiteIntakeError` — kiem DUOI khoa
+   * tu van cua don (`orderPlanLockKey`), cung khoa lenh gan don co san gianh, nen "gan don vao viec
+   * tai xe" va "them chang co hang cho don do" xep hang. Lenh adopt khong di qua day (no DOI
+   * `orderId` cua chang co san), nen cong nay khong chan chinh no.
+   */
   abstract createLeg(input: CreateLegInput): Promise<RunLeg>;
   abstract findLeg(id: string): Promise<RunLeg | null>;
   abstract listLegs(runId: string): Promise<RunLeg[]>;
@@ -464,6 +536,21 @@ export abstract class MovementRepository {
    * `null` = khong co chang nao mang dinh danh do.
    */
   abstract setLegStatus(input: LegStatusWrite): Promise<LegStatusWriteResult | null>;
+
+  /**
+   * GAN DON VAO MOT CHANG CO HANG CHUA CO DON — `#398`, MOT LAN, co dieu kien.
+   *
+   * Khong phai mot `PATCH orderId` tong quat: chi di tiep khi, duoi khoa vong chay, chang VAN la
+   * `LOADED`, `orderId` VAN `NULL` va chang CHUA ket thuc (`PLANNED`/`IN_TRANSIT`). Mot lenh den
+   * sau nhan `null` va phai phan xu lai. Doi nhan diem den cung luc: nhan "Chua xac dinh" cua lan
+   * nhan viec nhuong cho nhan cua don.
+   *
+   * Ban Prisma cua `transport-site-intake` ghi dung dieu kien nay TRONG giao dich cua chinh no (khoa
+   * tu van + khoa hang vong chay); phuong thuc nay la duong cua ban trong bo nho va cua moi lan goi
+   * khong can mot giao dich rong hon. Trigger `transport_run_leg_order_binding_once` chan `X -> Y`
+   * o moi duong con lai.
+   */
+  abstract bindOrderToUnboundLoadedLeg(input: BindLegOrderInput): Promise<RunLeg | null>;
 
   abstract assignRun(runId: string, input: AssignRunInput): Promise<RunAssignmentChange>;
   abstract listRunAssignments(runId: string): Promise<RunAssignment[]>;
@@ -554,6 +641,22 @@ export class InMemoryMovementRepository extends MovementRepository {
   private readonly orderLinks = new Map<string, TripOrderLink>();
   /** Hang doi mot-luot-mot theo vong chay — ban trong bo nho cua `SELECT ... FOR UPDATE`. */
   private readonly runLocks = new Map<string, Promise<unknown>>();
+  /**
+   * `#398` — don da NHAN chang cua viec tai xe nhan truc tiep (qua `bindOrderToUnboundLoadedLeg`,
+   * duong adopt DUY NHAT cua ban trong bo nho). Song doi cua "phan thuong mai `ORDER_BOUND` voi don
+   * do" ma ban Prisma doc duoi khoa don. Giu CHANG da nhan, khong chi don: cong chi chan khi chang
+   * do CON SONG (chua huy) — cung cau hoi voi ban Prisma. Chang bi huy (vd van phong huy ke hoach
+   * `ADOPTED` khi xe chua chay) thi don duoc lap ke hoach lai; don bi huy thi `resolveLegOrder` da tu
+   * choi truoc (`LEG_ORDER_CANCELLED`).
+   */
+  private readonly adoptedLegByOrder = new Map<string, string>();
+
+  /** Don co chang co hang SONG cua viec tai xe nhan — song doi `requireOrderNotAdoptedBySiteIntake`. */
+  private hasLiveAdoptedLeg(orderId: string): boolean {
+    const legId = this.adoptedLegByOrder.get(orderId);
+    const leg = legId === undefined ? undefined : this.legs.get(legId);
+    return leg !== undefined && leg.orderId === orderId && leg.status !== 'CANCELLED';
+  }
 
   /**
    * Kho dau vet, de ban nay ghi dau vet dong vong chay o CUNG mot luot voi buoc chuyen trang thai.
@@ -683,6 +786,10 @@ export class InMemoryMovementRepository extends MovementRepository {
     // `memory` la mot duong chay that (demo, CI khong co CSDL), khong phai mot ban gia de test.
     for (const existing of this.runs.values()) {
       if (existing.code === input.code) throw storageUniqueViolation(RUN_CODE);
+    }
+    // `#398`: cung cong voi ban Prisma — tu choi TRUOC lan ghi dau tien cua lan lap ke hoach.
+    if (input.planGuardOrderId && this.hasLiveAdoptedLeg(input.planGuardOrderId)) {
+      throw new LegOrderAdoptedBySiteIntakeError(input.planGuardOrderId);
     }
     const now = iso(new Date());
     const run: VehicleRun = {
@@ -884,6 +991,18 @@ export class InMemoryMovementRepository extends MovementRepository {
   }
 
   private insertLeg(input: CreateLegInput): RunLeg {
+    // `#398`: cung cong voi ban Prisma, kiem TRUOC trang thai vong chay — cung thu tu (khoa don roi
+    // moi khoa hang vong chay).
+    if (
+      input.kind === 'LOADED' &&
+      input.orderId !== null &&
+      this.hasLiveAdoptedLeg(input.orderId)
+    ) {
+      throw new LegOrderAdoptedBySiteIntakeError(input.orderId);
+    }
+    if (input.planGuardOrderId && this.hasLiveAdoptedLeg(input.planGuardOrderId)) {
+      throw new LegOrderAdoptedBySiteIntakeError(input.planGuardOrderId);
+    }
     const run = this.runs.get(input.runId);
     if (run && (run.status === 'COMPLETED' || run.status === 'CANCELLED')) {
       throw new RunClosedForNewWorkError(input.runId, run.status);
@@ -952,6 +1071,31 @@ export class InMemoryMovementRepository extends MovementRepository {
       };
       this.legs.set(next.id, next);
       return { leg: next, applied: true };
+    });
+  }
+
+  async bindOrderToUnboundLoadedLeg(input: BindLegOrderInput): Promise<RunLeg | null> {
+    const owner = this.legs.get(input.legId);
+    if (!owner) return null;
+    return this.withRunLock(owner.runId, async () => {
+      const current = this.legs.get(input.legId);
+      if (
+        !current ||
+        current.kind !== 'LOADED' ||
+        current.orderId !== null ||
+        (current.status !== 'PLANNED' && current.status !== 'IN_TRANSIT')
+      ) {
+        return null;
+      }
+      const next: RunLeg = {
+        ...current,
+        orderId: input.orderId,
+        destinationLabel: input.destinationLabel,
+        updatedAt: iso(input.at),
+      };
+      this.legs.set(next.id, next);
+      this.adoptedLegByOrder.set(input.orderId, next.id);
+      return next;
     });
   }
 

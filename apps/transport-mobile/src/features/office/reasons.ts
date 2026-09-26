@@ -63,6 +63,28 @@ const OFFICE_REASON_TEXT: Readonly<Record<string, string>> = {
     'Phiếu này đã được gửi với nội dung khác. Mở phiếu mới nếu muốn ghi một khoản khác.',
   FUND_ENTRY_PERIOD_FROZEN: 'Kỳ quỹ của ngày này đã chốt — chọn ngày trong kỳ đang mở.',
   DRIVER_NOT_FOUND: 'Không tìm thấy lái xe này.',
+  // Viec tai xe nhan truc tiep (#398) — chu cho VAN PHONG (dich rieng voi chu cua lai xe).
+  SITE_INTAKE_NOT_FOUND: 'Không tìm thấy việc tài xế nhận này — có thể đã bị hủy.',
+  SITE_INTAKE_DESTINATION_NOT_FOUND: 'Địa điểm giao này không còn hoạt động — chọn nơi khác.',
+  SITE_INTAKE_DESTINATION_UNVERIFIED:
+    'Kết quả tìm không khớp kết quả của máy chủ — tìm lại rồi chọn.',
+  SITE_INTAKE_DESTINATION_SEARCH_UNAVAILABLE:
+    'Tìm địa điểm đang tắt hoặc tạm bận — chọn trong danh sách địa điểm đã biết, hoặc thử lại sau.',
+  SITE_INTAKE_COMMERCIAL_CLOSED: 'Việc này đã có đơn hoặc đã hủy — không bổ sung được nữa.',
+  SITE_INTAKE_NOT_READY: 'Việc này vẫn chưa đủ điều kiện tạo đơn — xem phần còn thiếu.',
+  SITE_INTAKE_LEG_NOT_ADOPTABLE: 'Chặng vừa đổi trạng thái — tải lại rồi thử lại.',
+  SITE_INTAKE_ORDER_NOT_FOUND: 'Không tìm thấy đơn được chọn.',
+  SITE_INTAKE_ORDER_NOT_OPEN: 'Đơn được chọn không còn mở.',
+  SITE_INTAKE_ORDER_BOUND_TO_OTHER_INTAKE: 'Đơn này đã gắn với một việc tài xế nhận khác.',
+  SITE_INTAKE_BOUND_TO_OTHER_ORDER: 'Việc này đã gắn với một đơn khác — không gắn lại được.',
+  SITE_INTAKE_BINDING_DENIED:
+    'Không gắn được đơn này vào việc tài xế nhận (đơn đã có kế hoạch chạy hoặc chặng không nhận được).',
+  SITE_INTAKE_ORDER_ORIGIN_MISMATCH:
+    'Đơn này lấy hàng ở nơi khác với nơi tài xế nhận chuyến — chọn đơn khác.',
+  SITE_INTAKE_EXCEPTION_ALREADY_RECORDED: 'Việc này đã được báo bất thường trước đó.',
+  SITE_INTAKE_EXCEPTION_REASON_REQUIRED: 'Cần ghi lý do trước khi báo bất thường hoặc hủy.',
+  SITE_INTAKE_STATE_CHANGED: 'Việc vừa được cập nhật — gửi lại, sẽ không ghi hai lần.',
+  SITE_INTAKE_ORDER_SOURCE_NOT_FOUND: 'Đơn này không tạo từ xác nhận của tài xế.',
 };
 
 /** Cau cho nguoi dung tu `reason` + `message` cua may chu. */

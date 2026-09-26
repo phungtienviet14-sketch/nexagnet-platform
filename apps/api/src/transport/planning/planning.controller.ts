@@ -20,6 +20,7 @@ import {
 import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
 import { planCancelSchema, planCommitSchema, planPreviewSchema } from './planning.schemas.js';
+import { PlanningPendingWorkSource } from './planning-pending-work.port.js';
 import { PlanningService } from './planning.service.js';
 import { RunClosureService } from './run-closure.service.js';
 
@@ -70,6 +71,11 @@ export class TransportPlanningController {
      * that lai. `LEG_CHANGED` nam o `RunsController`; o day la `PLAN_CANCELLED`.
      */
     private readonly closures: RunClosureService,
+    /**
+     * `#398`: viec dang do cua xe — mac dinh RONG o `transport-core`, `transport-site-intake` ghi de
+     * o `app-composition.ts`. Cung khuon `fieldTruth` cua `RunsController`.
+     */
+    private readonly pendingWork: PlanningPendingWorkSource,
   ) {}
 
   /** Chinh sach dang ap dung. Be mat CHAN DOAN — `#276` L1. */
@@ -121,6 +127,7 @@ export class TransportPlanningController {
             emptyKm: input.plannedEmptyKm ?? null,
             loadedKm: input.plannedLoadedKm ?? null,
           },
+          pendingWork: this.pendingWork,
         },
         transportActorOf(request),
       ),

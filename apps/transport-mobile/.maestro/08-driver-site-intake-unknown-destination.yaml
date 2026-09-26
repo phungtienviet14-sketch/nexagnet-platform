@@ -1,0 +1,50 @@
+# #398 — LAI XE CHUA BIET DIEM GIAO: van nhan chuyen (su that van hanh hop le), nhung KHONG co don
+# nao duoc bia — viec vao "Can xu ly" cua Giam doc de van phong bo sung (xem 09).
+appId: com.nexagnet247.transport.preview
+tags:
+  - driver
+  - intake
+  - smoke
+---
+- setLocation:
+    latitude: ${MAESTRO_PICKUP_LAT}
+    longitude: ${MAESTRO_PICKUP_LNG}
+- runFlow:
+    file: subflows/launch-and-login.yaml
+    env:
+      LOGIN_USERNAME: ${MAESTRO_REVIEW_DRIVER_USERNAME}
+- setPermissions:
+    permissions:
+      location: allow
+- extendedWaitUntil:
+    visible:
+      id: driver-site-intake-start
+    timeout: 45000
+- tapOn:
+    id: driver-site-intake-start
+- extendedWaitUntil:
+    visible:
+      id: site-intake-confirm
+    timeout: 45000
+- tapOn:
+    id: site-intake-confirm
+- extendedWaitUntil:
+    visible:
+      id: site-intake-destination-unknown
+    timeout: 45000
+- tapOn:
+    id: site-intake-destination-unknown
+- extendedWaitUntil:
+    visible:
+      id: site-intake-done
+    timeout: 30000
+- assertVisible: 'Đã nhận chuyến'
+- assertVisible: '.*[Vv]ăn phòng sẽ bổ sung.*'
+- takeScreenshot: 08-chua-biet-diem-giao
+- tapOn:
+    id: site-intake-back-to-work
+- extendedWaitUntil:
+    visible:
+      id: driver-work
+    timeout: 30000
+- takeScreenshot: 08-ve-viec

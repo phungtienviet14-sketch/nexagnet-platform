@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useBranding } from '../../src/branding/BrandingProvider';
 import { formatBusinessDate } from '../../src/format';
 import {
   composeHeadline,
@@ -17,10 +19,15 @@ import {
   useOfficeAccess,
   useRefetchOnFocus,
 } from '../../src/features/office/queries';
+import {
+  useDriverOrderActivity,
+  useSiteIntakeGates,
+} from '../../src/features/office/site-intake-queries';
 import type { ControlTowerView, QueueItem } from '../../src/features/office/types';
 import { MoneySection } from '../../src/features/office/ui/MoneySection';
 import { WhyMissing } from '../../src/features/office/ui/WhyMissing';
 import { DecisionCard, FleetStrip, Headline } from '../../src/features/director/ui/Briefing';
+import { DriverOrdersSection } from '../../src/features/director/ui/DriverOrders';
 import { SPACE } from '../../src/theme/tokens';
 import { AccountButton } from '../../src/ui/AccountButton';
 import { Button } from '../../src/ui/Button';
@@ -41,14 +48,33 @@ export default function DirectorToday() {
   const tower = useControlTower();
   const financeEnabled = has('transport-settlement') && can('transport.settlement.report.read');
   const finance = useFinanceSummary(financeEnabled);
+  // #398: TIN TUC "Đơn mới từ tài xế" — doc rieng, KHONG cham toi so viec can quyet cua thap dieu hanh.
+  const { timeZone } = useBranding();
+  const intakeGates = useSiteIntakeGates();
+  const driverOrders = useDriverOrderActivity(intakeGates.read);
   useRefetchOnFocus(tower.refetch, tower.dataUpdatedAt);
+  useRefetchOnFocus(driverOrders.refetch, driverOrders.dataUpdatedAt);
 
   const openItem = (item: QueueItem) =>
     router.push({ pathname: '/inbox', params: { open: queueItemKey(item) } });
 
+  const openOrder = (orderId: string) =>
+    router.push({ pathname: '/order/[id]', params: { id: orderId } });
+
+  // Ban tin nam NGAY SAU "Cần quyết trước" khi co bang dieu hanh; bang hong thi van hien rieng.
+  const news = (
+    <DriverOrdersSection
+      query={driverOrders}
+      enabled={intakeGates.read}
+      timeZone={timeZone}
+      onOpenOrder={openOrder}
+    />
+  );
+
   const refresh = () => {
     void tower.refetch();
     if (financeEnabled) void finance.refetch();
+    if (intakeGates.read) void driverOrders.refetch();
   };
 
   return (
@@ -62,7 +88,7 @@ export default function DirectorToday() {
       trailing={<AccountButton />}
       banner={<SyncBanner />}
       onRefresh={refresh}
-      refreshing={tower.isRefetching || finance.isRefetching}
+      refreshing={tower.isRefetching || finance.isRefetching || driverOrders.isRefetching}
       testID="director-today"
     >
       {tower.isPending ? <LoadingBlock lines={4} label="Đang đọc bảng điều hành…" /> : null}
@@ -74,8 +100,15 @@ export default function DirectorToday() {
         />
       ) : null}
       {tower.data ? (
-        <Briefing view={tower.data} onOpen={openItem} onInbox={() => router.push('/inbox')} />
-      ) : null}
+        <Briefing
+          view={tower.data}
+          news={news}
+          onOpen={openItem}
+          onInbox={() => router.push('/inbox')}
+        />
+      ) : (
+        news
+      )}
       <MoneySection query={finance} enabled={financeEnabled} />
     </Screen>
   );
@@ -83,10 +116,13 @@ export default function DirectorToday() {
 
 function Briefing({
   view,
+  news,
   onOpen,
   onInbox,
 }: {
   readonly view: ControlTowerView;
+  /** "Đơn mới từ tài xế" — TIN, dat sau viec can quyet, khong doi so nao cua khoi tren. */
+  readonly news: ReactNode;
   readonly onOpen: (item: QueueItem) => void;
   readonly onInbox: () => void;
 }) {
@@ -131,6 +167,8 @@ function Briefing({
           top.map((item) => <DecisionCard key={queueItemKey(item)} item={item} onPress={onOpen} />)
         )}
       </Section>
+
+      {news}
 
       <Section title="Đội xe">
         <FleetStrip stats={fleetStats(view.fleet)} />

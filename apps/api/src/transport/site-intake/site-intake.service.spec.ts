@@ -20,6 +20,7 @@ import {
   TransportSiteIntakeLocationFacts,
   type SiteIntakeObservationFacts,
 } from './site-intake-facts.port.js';
+import { MovementSiteIntakeConfirmationWriter } from './site-intake-confirmation.writer.js';
 import { InMemoryRunSiteIntakeRepository } from './site-intake.repository.js';
 import { SiteIntakeService } from './site-intake.service.js';
 import { PENDING_DESTINATION_LABEL } from './site-intake.types.js';
@@ -57,6 +58,7 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
   let movement: MovementService;
   let siteService: CounterpartySiteService;
   let service: SiteIntakeService;
+  let core: TransportSiteIntakeCoreFactsAdapter;
 
   let siteId: string;
   let driverId: string;
@@ -82,12 +84,14 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
       POLICY,
     );
 
+    core = new TransportSiteIntakeCoreFactsAdapter(fleet, movementRepo, siteService);
     service = new SiteIntakeService(
       intakes,
-      new TransportSiteIntakeCoreFactsAdapter(fleet, movementRepo, siteService),
-      new TransportSiteIntakeGeoFactsAdapter(geofences),
+      core,
+      new TransportSiteIntakeGeoFactsAdapter(geofences, siteService),
       locations,
       movement,
+      new MovementSiteIntakeConfirmationWriter(movement, intakes, core),
       POLICY,
       undefined,
       undefined,
@@ -448,6 +452,48 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
       }
     });
 
+    /**
+     * `#398`/#267: hai may cung tai khoan bam cung luc voi HAI khoa khac nhau. Phep kiem khong khoa
+     * o dau ham cho CA HAI qua; phep hoi lai o cong ghi (hang doi o day, khoa xe o Postgres) chi cho
+     * mot lan ghi, lan kia nhan DUNG ma cua lan bam tuan tu.
+     */
+    it('hai lan bam KHAC khoa cung luc chi de lai MOT vong chay, lan kia OPEN_RUN_EXISTS', async () => {
+      const results = await Promise.allSettled([
+        confirm({ clientEventId: 'may-a' }),
+        confirm({ clientEventId: 'may-b' }),
+      ]);
+
+      expect(results.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.flatMap((entry) =>
+        entry.status === 'rejected' ? [(entry.reason as { reason?: string }).reason] : [],
+      );
+      expect(rejected).toEqual(['SITE_INTAKE_OPEN_RUN_EXISTS']);
+      const runs = await movementRepo.listRuns();
+      expect(runs).toHaveLength(1);
+      expect(await movementRepo.listLegs(runs[0]?.id ?? '')).toHaveLength(1);
+      expect(await intakes.listForDriver(driverId)).toHaveLength(1);
+    });
+
+    /**
+     * `#398`: XE dang co mot vong chay mo ma CHUA AI CAM — vd van phong vua lap ke hoach cho xe
+     * nay, chua kip ghi lai xe. Phep kiem "lai xe dang cam vong chay mo" khong thay no; phep kiem
+     * XE thi thay, va lan xac nhan khong mo vong chay thu hai tren cung xe.
+     */
+    it('xe dang co vong chay mo chua ai cam -> SITE_INTAKE_VEHICLE_BUSY, khong ghi gi', async () => {
+      const office = await movement.createRun(
+        { code: 'RUN-VAN-PHONG', vehicleId, businessDate: '2026-09-09', note: null },
+        'operator',
+      );
+
+      expect(await reasonOf(() => confirm())).toBe('SITE_INTAKE_VEHICLE_BUSY');
+      expect((await movementRepo.listRuns()).map((run) => run.id)).toEqual([office.id]);
+      expect(await intakes.listForDriver(driverId)).toEqual([]);
+
+      // Vong chay do bi huy -> xe ranh, lan bam sau di qua.
+      await movement.cancelRun(office.id, 'van phong huy', 'operator');
+      expect((await confirm({ clientEventId: 'cham-sau' })).replayed).toBe(false);
+    });
+
     /** Ma vong chay TAT DINH: cung khoa, cung ma — o moi thu tu den. */
     it('ma vong chay suy tu khoa chong lap, khong tu mot so ngau nhien', async () => {
       const first = await confirm();
@@ -684,6 +730,127 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
       expect(await reasonOf(() => confirm({ ...withObservation, clientEventId: 'cham-hai' }))).toBe(
         'SITE_INTAKE_OBSERVATION_ALREADY_USED',
       );
+    });
+  });
+
+  /* ================================================================== *
+   * `#398` §3.1/§8 — VI TRI CU THAT BAI DONG
+   * ================================================================== */
+
+  /**
+   * App lai xe chup MOT ban dinh vi luc mo man, roi gui lai chinh ban do luc bam. Truoc `#398` may
+   * chu dong dau `observedAt = now` cho cap so, nen phep kiem tuoi cua `resolveSiteCandidates` khong
+   * bao gio no. Bay gio app gui `locationAgeMs` (do bang dong ho CUA NO), va may chu lui dong ho
+   * dung chung do — vi tri cu mot lan nua bi chan o dung cho cu.
+   */
+  describe('#398 §3.1 — tuoi cap toa do do may khach gui', () => {
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+    const proposeAt = (locationAgeMs?: number) =>
+      service.propose({
+        authUserId: AUTH,
+        latitude: HAI_PHONG.latitude,
+        longitude: HAI_PHONG.longitude,
+        accuracyMetres: 10,
+        ...(locationAgeMs === undefined ? {} : { locationAgeMs }),
+      });
+
+    const nothingWritten = async () => {
+      expect(await movementRepo.listRuns()).toEqual([]);
+      expect(await movementRepo.listOrders()).toEqual([]);
+      expect(await intakes.listForDriver(driverId)).toEqual([]);
+    };
+
+    it('de nghi voi toa do 10 phut tuoi -> LOCATION_UNUSABLE / LOCATION_STALE, khong ghi gi', async () => {
+      const proposal = await proposeAt(TEN_MINUTES_MS);
+
+      expect(proposal.outcome).toBe('LOCATION_UNUSABLE');
+      expect(proposal.locationUnusable).toBe('LOCATION_STALE');
+      expect(proposal.candidates).toEqual([]);
+      expect(proposal.canCreate).toBe(false);
+      expect(proposal.locationTrust).toBe('DRIVER_REPORTED');
+      await nothingWritten();
+    });
+
+    it('de nghi voi toa do 5 giay tuoi -> nhan ra dung kho nhu truoc', async () => {
+      const proposal = await proposeAt(5_000);
+
+      expect(proposal.outcome).toBe('UNIQUE');
+      expect(proposal.locationUnusable).toBeNull();
+      expect(proposal.candidates[0]?.siteId).toBe(siteId);
+      expect(proposal.canCreate).toBe(true);
+    });
+
+    /** Bien cua han 300 giay: dung 300 giay van dung duoc, qua mot giay thi khong. */
+    it('han tuoi la 300 giay cua chinh sach, tinh ca hai phia bien', async () => {
+      expect((await proposeAt(300_000)).outcome).toBe('UNIQUE');
+      const stale = await proposeAt(301_000);
+      expect(stale.outcome).toBe('LOCATION_UNUSABLE');
+      expect(stale.locationUnusable).toBe('LOCATION_STALE');
+    });
+
+    it('xac nhan voi toa do cu -> SITE_INTAKE_LOCATION_UNUSABLE, KHONG lan nhan viec/vong chay/chang nao', async () => {
+      expect(await reasonOf(() => confirm({ locationAgeMs: TEN_MINUTES_MS }))).toBe(
+        'SITE_INTAKE_LOCATION_UNUSABLE',
+      );
+      await nothingWritten();
+
+      // Khoa cua lan bi tu choi KHONG bi chiem: bam lai voi ban dinh vi moi di qua binh thuong.
+      const retried = await confirm({ locationAgeMs: 5_000 });
+      expect(retried.replayed).toBe(false);
+      expect(await movementRepo.listRuns()).toHaveLength(1);
+    });
+
+    it('xac nhan voi toa do 5 giay tuoi -> tao duoc, va ghi khop chac chan', async () => {
+      const result = await confirm({ locationAgeMs: 5_000 });
+
+      expect(result.replayed).toBe(false);
+      expect(result.locationTrust).toBe('DRIVER_REPORTED');
+      expect(result.distanceMetres).toBe(0);
+      expect(await movementRepo.listLegs(result.runId)).toHaveLength(1);
+      const row = (await intakes.listForDriver(driverId))[0];
+      expect(row?.siteMatch).toBe('UNIQUE_INSIDE');
+    });
+
+    /**
+     * May khach `#267` CU (web) khong gui tuoi. Giu DUNG hanh vi cu — `observedAt = now` — va bai
+     * nay ghim dieu do, de mot lan "sua cho chat" o may chu khong lang le lam gay man web.
+     */
+    it('KHONG gui tuoi (may khach #267 cu) -> hanh vi cu: coi nhu vua doc', async () => {
+      expect((await proposeAt()).outcome).toBe('UNIQUE');
+      const result = await confirm();
+      expect(result.replayed).toBe(false);
+    });
+
+    /**
+     * Tang dich vu KHONG tin rang bien da chan tuoi am: goi thang (bo qua zod) voi tuoi am tuc mot
+     * `observedAt` o tuong lai — va tuong lai la qua han, khong phai "moi hon ca moi".
+     */
+    it('tuoi am goi thang vao dich vu van that bai dong', async () => {
+      const proposal = await proposeAt(-60_000);
+      expect(proposal.outcome).toBe('LOCATION_UNUSABLE');
+      expect(proposal.locationUnusable).toBe('LOCATION_STALE');
+
+      expect(await reasonOf(() => confirm({ locationAgeMs: -60_000 }))).toBe(
+        'SITE_INTAKE_LOCATION_UNUSABLE',
+      );
+      await nothingWritten();
+    });
+
+    /**
+     * Khong gui vi tri nao (vd app chup lai that bai luc bam) van la duong HOP LE: lan nhan viec ra
+     * doi, va so ghi `NO_LOCATION` — phan thuong mai se doi van phong xac nhan noi lay.
+     */
+    it('khong kem toa do van nhan duoc viec, va so ghi NO_LOCATION', async () => {
+      const result = await confirm({
+        latitude: undefined,
+        longitude: undefined,
+        accuracyMetres: undefined,
+      });
+
+      expect(result.distanceMetres).toBeNull();
+      const row = (await intakes.listForDriver(driverId))[0];
+      expect(row?.siteMatch).toBe('NO_LOCATION');
     });
   });
 });

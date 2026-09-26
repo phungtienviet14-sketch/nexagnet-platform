@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
+import { useBranding } from '../../../src/branding/BrandingProvider';
 import {
   legRows,
   orderDateLabel,
@@ -8,6 +9,7 @@ import {
   orderStatusTone,
 } from '../../../src/features/director/orders';
 import { useOrder } from '../../../src/features/director/queries';
+import { OrderDriverSource } from '../../../src/features/director/ui/OrderDriverSource';
 import { useCustomers, useOfficeAccess, useOfficeKey } from '../../../src/features/office/queries';
 import type { ControlTowerView } from '../../../src/features/office/types';
 import { formatVnd } from '../../../src/format';
@@ -21,7 +23,8 @@ import { Text } from '../../../src/ui/Text';
 /**
  * CHI TIET MOT DON — `GET /transport/orders/:id` + `/legs`. Cuoc hien vi may chu tra cho van phong
  * (giam doc). Chang RONG noi bang chu; km `null` la "—". Ma vong chay cua chang lay tu bang dieu
- * hanh DANG CO trong bo nho (khong goi them), thieu thi khong hien.
+ * hanh DANG CO trong bo nho (khong goi them), thieu thi khong hien. Don tao tu xac nhan cua tai xe
+ * (`#398`) co them the nguon + bao bat thuong / huy.
  */
 export default function DirectorOrderDetail() {
   const router = useRouter();
@@ -29,6 +32,7 @@ export default function DirectorOrderDetail() {
   const orderId = typeof id === 'string' ? id : '';
   const { order, legs } = useOrder(orderId);
   const { can } = useOfficeAccess();
+  const { timeZone } = useBranding();
   const customers = useCustomers(can('transport.customer.read'));
   const queryClient = useQueryClient();
   const towerKey = useOfficeKey('director', 'control-tower');
@@ -86,6 +90,8 @@ export default function DirectorOrderDetail() {
           ) : null}
         </Card>
       ) : null}
+      {/* #398: don tao tu xac nhan cua tai xe -> the nguon; don khac (404) -> khong ve gi. */}
+      {data ? <OrderDriverSource orderId={orderId} timeZone={timeZone} /> : null}
 
       <Section title="Chặng phục vụ đơn">
         {legs.isPending ? <LoadingBlock lines={2} /> : null}

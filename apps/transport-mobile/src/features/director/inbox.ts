@@ -10,7 +10,8 @@ import type { QueueItem } from '../office/types';
  * giay to, bao duong, thieu km...) mo mot to CHI DOC kem "Xử lý trên máy tính" — khong gia vo lam
  * duoc. Ma la cung roi vao chi doc, khong vo.
  */
-export type DecisionSheetKind = 'CLAIM' | 'ASSIGN_DRIVER' | 'ALLOWANCE' | 'READ_ONLY';
+export type DecisionSheetKind =
+  'CLAIM' | 'ASSIGN_DRIVER' | 'ALLOWANCE' | 'SITE_INTAKE' | 'READ_ONLY';
 
 export function decisionSheetFor(kind: string): DecisionSheetKind {
   switch (kind) {
@@ -20,6 +21,9 @@ export function decisionSheetFor(kind: string): DecisionSheetKind {
       return 'ASSIGN_DRIVER';
     case 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL':
       return 'ALLOWANCE';
+    // #398: viec tai xe nhan truc tiep CHUA DU — cung to truot voi ke toan (`SiteIntakeReviewSheet`).
+    case 'SITE_INTAKE_NEEDS_REVIEW':
+      return 'SITE_INTAKE';
     default:
       return 'READ_ONLY';
   }
@@ -34,6 +38,8 @@ export function actionLabelFor(kind: string): string {
       return 'Phân công lái xe';
     case 'ALLOWANCE':
       return 'Quyết phụ cấp';
+    case 'SITE_INTAKE':
+      return 'Bổ sung hoặc báo bất thường';
     case 'READ_ONLY':
       return 'Xem chi tiết';
   }
@@ -42,6 +48,8 @@ export function actionLabelFor(kind: string): string {
 /** Dong phu cua the: ma nghiep vu (khong bao gio id ky thuat) va so luong neu co. */
 export function queueItemSubline(item: QueueItem): string | null {
   const parts: string[] = [];
+  const site = item.detail.siteName;
+  if (typeof site === 'string' && site.trim() !== '') parts.push(site);
   if (item.subject.reference) parts.push(item.subject.reference);
   const count = item.detail.count;
   if (typeof count === 'number') parts.push(`${count} khoản`);

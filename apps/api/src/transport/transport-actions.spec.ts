@@ -129,6 +129,11 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // khuyen trong tai lieu thay vi mot ranh gioi quyen.
       'transport.driver.self.site_intake.propose',
       'transport.driver.self.site_intake.confirm',
+      // BA ma VAN PHONG cho viec tai xe nhan truc tiep (`#398`): doc, hoan thien, bao bat thuong.
+      // Ma cuoi la quyet dinh cua SEP — ke toan bi cat, xem bai rieng ben duoi.
+      'transport.site_intake.review.read',
+      'transport.site_intake.review.complete',
+      'transport.site_intake.exception',
       // MOT ma cho phien cho (`#279` O5): MO. Khong co ma DONG o pham vi lai xe — mot phien dong
       // lai boi chinh moc `Khach da nhan hang`, khong boi mot lenh thu hai.
       'transport.driver.self.waiting.start',

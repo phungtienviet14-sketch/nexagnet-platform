@@ -211,10 +211,10 @@ export const FIELD_TRUTH_NOTE =
   'chặng; vòng chạy do hệ thống tự đóng.';
 
 export const ASSIGNED_NOTE =
-  'Văn phòng đã giao việc này cho bạn — không cần vào Nhận việc để nhận lại.';
+  'Văn phòng đã giao việc này cho bạn — không cần bấm Nhận chuyến để nhận lại.';
 
 export const SITE_INTAKE_HINT =
-  'Nếu bạn đang ở điểm lấy hàng mà văn phòng chưa giao việc, dùng Nhận việc để báo đã đến.';
+  'Tới nơi lấy hàng rồi bấm nút dưới — ứng dụng nhận ra địa điểm từ vị trí của bạn.';
 
 export const WAITING_START_TRUTH =
   'Giờ bắt đầu chờ là lúc máy chủ nhận lệnh, không phải lúc bạn bấm.';

@@ -21,3 +21,8 @@ executionOrder:
     - 02-driver-checkpoint-offline
     - 03-director-login
     - 04-accounting-login
+    # #398 — tai xe nhan chuyen truc tiep (duong thuong -> don tu tao; chua biet diem giao -> Can xu
+    # ly), roi Giam doc thay DUNG hai ket cuc do. 09 PHAI chay sau 07 va 08.
+    - 07-driver-site-intake
+    - 08-driver-site-intake-unknown-destination
+    - 09-director-driver-direct

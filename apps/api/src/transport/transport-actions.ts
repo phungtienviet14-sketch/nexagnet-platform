@@ -395,6 +395,25 @@ export const TRANSPORT_ACTIONS = [
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
   /**
+   * VIEC TAI XE NHAN TRUC TIEP — phia VAN PHONG (`#398`).
+   *
+   * BA ma, va ranh gioi giua chung la ranh gioi nghiep vu:
+   *
+   *   · `.review.read`     — xem viec tai xe nhan truc tiep: hang "Can xu ly", ban tin "Don moi tu
+   *                          tai xe", nguon cua mot don. DOC, khong ghi gi.
+   *   · `.review.complete` — BO SUNG phan thuong mai con thieu (diem giao, xac nhan noi lay) de
+   *                          CUNG lenh tao don, hoac gan tay mot don co san. Cung muc voi
+   *                          `transport.order.manage`: ai tao don duoc thi hoan thien duoc.
+   *   · `.exception`       — BAO BAT THUONG / HUY. May chu quyet huy den dau theo su that van hanh;
+   *                          day la quyet dinh cua SEP, nen ke toan bi cat o `ACCOUNTING_DENIED`.
+   *
+   * Lai xe KHONG co ma nao trong ba ma nay: phia lai xe chi co `.propose`/`.confirm` cua chinh
+   * minh, va diem giao cua CHINH lan nhan viec cua minh di qua `.confirm`.
+   */
+  'transport.site_intake.review.read',
+  'transport.site_intake.review.complete',
+  'transport.site_intake.exception',
+  /**
    * MO MOT PHIEN CHO NGUOI NHAN (`#279` O5) — nut `Bat dau cho` cua chinh lai xe do.
    *
    * MOT ma, va CHI mot: khong co ma `.close` o pham vi lai xe, vi lai xe khong dong mot phien cho
@@ -736,6 +755,13 @@ const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
  */
 const ACCOUNTING_DENIED: readonly TransportAction[] = [
   'transport.trip.cancel',
+  /**
+   * BAO BAT THUONG / HUY mot viec tai xe nhan truc tiep (`#398`) — quyet dinh cua SEP.
+   *
+   * Ke toan VAN hoan thien duoc phan thuong mai con thieu (`.review.complete`, cung muc voi tao
+   * don); ho khong huy duoc mot don ma tai xe da nhan hang theo lenh cua sep.
+   */
+  'transport.site_intake.exception',
   'transport.costing.period.reopen',
   'transport.fuel.reconciliation.reopen',
   /**

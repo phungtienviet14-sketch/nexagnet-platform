@@ -321,13 +321,19 @@ export interface SiteIntakeProposal {
   readonly canCreate: boolean;
 }
 
+/** KET QUA `POST confirmations` (`site-intake.types.ts` `SiteIntakeResult`). */
 export interface SiteIntakeResult {
+  readonly intakeId: string;
   readonly runId: string;
   readonly runCode: string;
+  readonly legId: string;
+  readonly siteId: string;
   readonly siteName: string;
   readonly counterpartyName: string;
   readonly locationTrust: SiteIntakeLocationTrust;
+  readonly distanceMetres: number | null;
   readonly destinationPending: boolean;
+  readonly businessDate: BusinessDate;
   readonly replayed: boolean;
 }
 
@@ -337,3 +343,80 @@ export interface SiteIntakeLocationInput {
   readonly longitude?: number;
   readonly accuracyMetres?: number | null;
 }
+
+/* ------------------------------------------------------------------ *
+ * `#398` — "Giao toi dau?" (`site-intake-review.service.ts` `DriverIntakeView`)
+ * ------------------------------------------------------------------ */
+
+/**
+ * `NEEDS_DESTINATION` — chua co diem giao, lai xe chon duoc;
+ * `CONFIRMED`         — da nhan chuyen day du;
+ * `OFFICE_FOLLOW_UP`  — da nhan chuyen, van phong bo sung phan con thieu;
+ * `CLOSED`            — viec da bi huy / khong tiep tuc.
+ */
+export type DriverIntakeStage = 'NEEDS_DESTINATION' | 'CONFIRMED' | 'OFFICE_FOLLOW_UP' | 'CLOSED';
+
+/** Lan nhan viec nhin tu LAI XE — KHONG ma don, KHONG tien. `runCode` khong bao gio hien. */
+export interface DriverIntakeView {
+  readonly intakeId: string;
+  readonly runId: string;
+  readonly runCode: string;
+  readonly siteName: string | null;
+  readonly counterpartyName: string | null;
+  readonly confirmedAt: string;
+  readonly destinationLabel: string | null;
+  readonly stage: DriverIntakeStage;
+  readonly canChooseDestination: boolean;
+}
+
+/** `POST :intakeId/destination` — `replayed` = lan GUI LAI, khong ghi gi them. */
+export interface DriverDestinationResponse {
+  readonly intake: DriverIntakeView;
+  readonly replayed: boolean;
+}
+
+/** Dia diem DA BIET (`place-search.types.ts` `KnownPlace`) — hang rao LA dia diem. */
+export type KnownPlaceKind = 'DEPOT' | 'COUNTERPARTY_SITE' | 'CUSTOMER';
+
+export interface KnownPlace {
+  readonly id: string;
+  readonly kind: KnownPlaceKind;
+  readonly name: string;
+  readonly detail: string | null;
+  readonly point: GeoPoint;
+  readonly radiusMetres: number;
+}
+
+/** `GET /transport/me/site-intake/destinations` (lai xe) va `GET /transport/site-intakes/destinations` (van phong). */
+export interface KnownPlacesResponse {
+  readonly available: boolean;
+  readonly places: readonly KnownPlace[];
+}
+
+export interface PlaceCandidate {
+  readonly label: string;
+  readonly address: string | null;
+  readonly point: GeoPoint;
+}
+
+export type PlaceLookupStatus = 'OK' | 'DISABLED' | 'BUSY' | 'UNAVAILABLE';
+
+/** `POST destinations/search` — LUON 200, trang thai nam trong than. */
+export interface PlaceSearchResponse {
+  readonly status: PlaceLookupStatus;
+  readonly reason: string | null;
+  readonly results: readonly PlaceCandidate[];
+  readonly attribution: string | null;
+  readonly fromCache: boolean;
+}
+
+/** Hai hinh dang lua chon diem giao — KHONG co "mot cap so tu do". */
+export type DestinationChoice =
+  | { readonly kind: 'KNOWN_PLACE'; readonly placeId: string }
+  | {
+      readonly kind: 'PLACE_SEARCH';
+      readonly query: string;
+      readonly label: string;
+      readonly latitude: number;
+      readonly longitude: number;
+    };

@@ -434,7 +434,9 @@ export function MovementView() {
               hint={`Xe ${plateOf(activePlan.vehicleId)} · ${
                 activePlan.outcome === 'NEW_RUN'
                   ? 'mở vòng chạy mới'
-                  : 'nối vào vòng chạy đang chạy'
+                  : activePlan.outcome === 'ADOPTED'
+                    ? 'nhận vòng chạy tài xế đã nhận tại điểm lấy hàng'
+                    : 'nối vào vòng chạy đang chạy'
               }`}
             />
           )}

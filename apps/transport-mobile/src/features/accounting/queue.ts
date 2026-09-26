@@ -1,41 +1,54 @@
 import { formatBusinessDate, formatLiters, formatVnd } from '../../format';
 import { formatCount } from '../office/control-tower';
 import type { ExpenseClaim, WaitingAllowance } from '../office/decision-types';
+import { missingLine, originLine } from '../office/site-intake-review';
+import type { SiteIntakeReviewView } from '../office/types';
 import { fuelContextLabel, PAYMENT_METHOD_LABEL } from './fuel';
 import type { FuelEntryPage, FuelEntryRow } from './types';
 
 /**
- * HANG "CẦN DUYỆT" CUA KE TOAN — mot danh sach tu BA nguon, HAM THUAN.
+ * HANG "CẦN DUYỆT" CUA KE TOAN — mot danh sach tu BON nguon, HAM THUAN.
  *
  *   · de nghi chi  `GET /transport/expense-claims?status=PENDING_REVIEW`
  *   · phieu dau    `GET /transport/fuel/entries?verification=DECLARED&limit=50`
  *   · phu cap cho  `GET /transport/waiting-allowances/pending`
+ *   · viec tai xe nhan truc tiep CHUA DU `GET /transport/site-intakes?status=PENDING` (`#398`) — CUNG
+ *     ban ghi giam doc thay trong "Cần xử lý", khong phai mot hop thu thu hai; khong co tien.
  *
  * Thu tu TRONG moi nguon la cua may chu (khong xep lai); giua cac nguon la mot thu tu co dinh. So
  * tren chip phieu dau la `pendingVerificationCount` cua MAY CHU — danh sach co the chi hien 50 dau,
  * va chip noi ro "50/73" thay vi de nguoi doc tuong chi con 50.
  */
-export type QueueType = 'CLAIM' | 'FUEL' | 'ALLOWANCE';
+export type QueueType = 'CLAIM' | 'FUEL' | 'ALLOWANCE' | 'INTAKE';
 export type QueueFilter = 'ALL' | QueueType;
 
 export type QueueEntry =
   | { readonly type: 'CLAIM'; readonly id: string; readonly claim: ExpenseClaim }
   | { readonly type: 'FUEL'; readonly id: string; readonly fuel: FuelEntryRow }
-  | { readonly type: 'ALLOWANCE'; readonly id: string; readonly allowance: WaitingAllowance };
+  | { readonly type: 'ALLOWANCE'; readonly id: string; readonly allowance: WaitingAllowance }
+  | { readonly type: 'INTAKE'; readonly id: string; readonly intake: SiteIntakeReviewView };
 
-export const QUEUE_FILTERS: readonly QueueFilter[] = ['ALL', 'CLAIM', 'FUEL', 'ALLOWANCE'];
+export const QUEUE_FILTERS: readonly QueueFilter[] = [
+  'ALL',
+  'CLAIM',
+  'FUEL',
+  'ALLOWANCE',
+  'INTAKE',
+];
 
 export const QUEUE_FILTER_LABEL: Readonly<Record<QueueFilter, string>> = {
   ALL: 'Tất cả',
   CLAIM: 'Đề nghị chi',
   FUEL: 'Phiếu dầu',
   ALLOWANCE: 'Phụ cấp chờ',
+  INTAKE: 'Tài xế nhận trực tiếp',
 };
 
 export interface QueueSources {
   readonly claims?: readonly ExpenseClaim[];
   readonly fuel?: FuelEntryPage;
   readonly allowances?: readonly WaitingAllowance[];
+  readonly intakes?: readonly SiteIntakeReviewView[];
 }
 
 export const entryKey = (entry: Pick<QueueEntry, 'type' | 'id'>): string =>
@@ -50,6 +63,11 @@ export function buildQueue(sources: QueueSources): readonly QueueEntry[] {
       type: 'ALLOWANCE',
       id: allowance.id,
       allowance,
+    })),
+    ...(sources.intakes ?? []).map((intake): QueueEntry => ({
+      type: 'INTAKE',
+      id: intake.intakeId,
+      intake,
     })),
   ];
 }
@@ -80,14 +98,19 @@ export function queueCounts(sources: QueueSources): Readonly<Record<QueueFilter,
     total: sources.allowances ? sources.allowances.length : null,
     shown: sources.allowances?.length ?? 0,
   };
-  const known = [claim, fuel, allowance].filter((count) => count.total !== null);
+  const intake: QueueCount = {
+    total: sources.intakes ? sources.intakes.length : null,
+    shown: sources.intakes?.length ?? 0,
+  };
+  const known = [claim, fuel, allowance, intake].filter((count) => count.total !== null);
   return {
     CLAIM: claim,
     FUEL: fuel,
     ALLOWANCE: allowance,
+    INTAKE: intake,
     ALL: {
       total: known.length === 0 ? null : known.reduce((sum, count) => sum + (count.total ?? 0), 0),
-      shown: claim.shown + fuel.shown + allowance.shown,
+      shown: claim.shown + fuel.shown + allowance.shown + intake.shown,
     },
   };
 }
@@ -112,7 +135,8 @@ export function nextAfter(entries: readonly QueueEntry[], key: string): QueueEnt
 
 export interface QueueCardModel {
   readonly title: string;
-  readonly amount: string;
+  /** `null` = muc KHONG co tien (viec tai xe nhan truc tiep) — khong in "0 ₫" hay "—". */
+  readonly amount: string | null;
   readonly subline: string;
   readonly warnings: readonly string[];
   readonly typeLabel: string;
@@ -152,6 +176,14 @@ export function cardModel(
         amount: formatVnd(entry.allowance.candidateAmount),
         subline: `${formatBusinessDate(entry.allowance.businessDate)} · ${entry.allowance.reason}`,
         warnings: [],
+      };
+    case 'INTAKE':
+      return {
+        typeLabel: 'Việc tài xế nhận trực tiếp',
+        title: entry.intake.driver.name ?? 'Lái xe chưa đọc được tên',
+        amount: null,
+        subline: `${entry.intake.vehicle.plate ?? 'Xe chưa đọc được biển'} · ${originLine(entry.intake.origin)}`,
+        warnings: [missingLine(entry.intake.readiness.reasons)],
       };
   }
 }

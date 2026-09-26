@@ -17,6 +17,8 @@ nguồn, cùng nghĩa nghiệp vụ; khác nhau chỉ ở chỗ nền tảng bu�
 | Bản đồ lấy/giao (OpenFreeMap)                                    | FULL — maplibre-gl                               | FULL — MapLibre native       | FULL — MapLibre native       |
 | Hàng đợi ngoại tuyến + trung tâm đồng bộ                         | FULL — IndexedDB, cùng bộ test hành vi           | FULL — SQLite                | FULL — SQLite                |
 | Lái xe: ghi phiếu đổ dầu (kèm ảnh hoá đơn), xem phiếu            | FULL                                             | FULL                         | FULL                         |
+| Lái xe: nhận chuyến tại địa điểm hiện tại + chọn điểm giao (#398) | FULL — cần mạng; điểm giao từ danh sách đã biết/tìm theo tên³ | FULL — cần mạng              | FULL — cần mạng              |
+| Giám đốc: "Đơn mới từ tài xế", việc tài xế nhận chưa đủ, báo bất thường/hủy (#398) | FULL                                  | FULL                         | FULL                         |
 | Lái xe: nộp lại phiếu bị từ chối, đính thêm/gỡ chứng từ phiếu cũ | NOT_SUPPORTED_YET                                | NOT_SUPPORTED_YET            | NOT_SUPPORTED_YET            |
 | Lái xe: khoản chi chuyến cũ                                      | NOT_SUPPORTED_YET                                | NOT_SUPPORTED_YET            | NOT_SUPPORTED_YET            |
 | Lái xe: Tiền — quỹ, quyết toán, phiếu lương (chỉ đọc)            | FULL                                             | FULL                         | FULL                         |
@@ -31,11 +33,15 @@ nguồn, cùng nghĩa nghiệp vụ; khác nhau chỉ ở chỗ nền tảng bu�
 trên máy thật: RESEARCHED / NOT DEVICE-PROVEN.
 ² Máy ảnh trong trang khi trình duyệt cho; không thì hộp chụp của hệ thống, ghi nguồn `UNKNOWN`
 (không gọi là ảnh vừa chụp).
+³ Nhận chuyến là việc **cần mạng có chủ ý** (#398): địa điểm đề nghị và điều kiện tạo đơn do máy
+chủ quyết; mất mạng thì app nói "Cần mạng để nhận chuyến tại địa điểm này", không báo thành công
+giả, không vào hàng đợi ngoại tuyến. Gửi lại sau khi mất phản hồi dùng CÙNG `clientEventId`. Bản đồ
+nền web chưa có nên PWA không chạm-trên-bản-đồ để chọn điểm giao.
 
 ## Đã chứng minh ở đâu
 
 | Nền tảng | Bằng chứng tự động                                                                                                                                                                                                                        | Chưa có                                      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Android  | Máy ảo API 35 + API/Postgres thật (`mobile-android-e2e`): flow **bắt buộc** 01–04 — đăng nhập ba vai, bốn tab + bản đồ, mốc khi mất sóng → gửi khi có sóng. Flow **tuỳ chọn** (không chặn job): 05 chọn ảnh chứng từ, 06 ghi phiếu đổ dầu | Máy thật, máy ảnh thật, bám nền              |
+| Android  | Máy ảo API 35 + API/Postgres thật (`mobile-android-e2e`): flow **bắt buộc** 01–04 — đăng nhập ba vai, bốn tab + bản đồ, mốc khi mất sóng → gửi khi có sóng; 07–09 (#398) — nhận chuyến → điểm giao → đơn tự tạo, chưa biết điểm giao → Cần xử lý, giám đốc thấy đúng hai kết cục (kiểm lại số qua API: `verify-driver-direct.mjs`). Flow **tuỳ chọn** (không chặn job): 05 chọn ảnh chứng từ, 06 ghi phiếu đổ dầu | Máy thật, máy ảnh thật, bám nền              |
 | iOS      | Build Release cho Simulator, cài + mở, chụp màn (`mobile-ios`)                                                                                                                                                                            | Smoke đăng nhập/luồng, máy thật              |
-| PWA      | Đăng nhập trong Chromium với máy chủ giả (chạy tay, không nằm trong CI)                                                                                                                                                                   | Cài thật trên iPhone Safari / Android Chrome |
+| PWA      | `mobile-pwa-e2e` (#398): Chromium màn điện thoại trên bản xuất web thật + API/Postgres thật — mất mạng không báo thành công, nhận chuyến → đơn tự tạo (hàng việc không tăng), chưa biết điểm giao → Cần xử lý (+1), báo bất thường có lý do                                                                                                                                                                   | Cài thật trên iPhone Safari / Android Chrome |

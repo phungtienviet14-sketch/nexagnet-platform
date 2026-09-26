@@ -14,6 +14,23 @@ import { LocationCaptureError } from './location-state';
  */
 const CAPTURE_TIMEOUT_MS = 15_000;
 
+/**
+ * `maximumAge: 0` — BAT BUOC mot ban dinh vi MOI tren PWA.
+ *
+ * Ban web cua `expo-location` goi `navigator.geolocation.getCurrentPosition` voi
+ * `maximumAge: Infinity` roi moi rai `options` len tren: khong ghi de thi trinh duyet duoc tra lai
+ * BAT KY vi tri nao con trong bo nho dem, ke ca tu mot tieng truoc — dung cai "vi tri cu" ma chu
+ * thich o tren cam. Tu `#398` may chu con tu choi ban dinh vi qua tuoi (`LOCATION_STALE`), nen mot
+ * vi tri dem se lam lai xe ket o "Tìm lại địa điểm" toi khi tai lai trang. Native bo qua truong nay
+ * (Fused Location / Core Location luon xin ban moi o day). Kieu `LocationOptions` khong khai truong
+ * nay, nen mo rong kieu thay vi ep kieu.
+ */
+const CAPTURE_OPTIONS: Location.LocationOptions & { readonly maximumAge: number } = {
+  accuracy: Location.Accuracy.High,
+  mayShowUserSettingsDialog: true,
+  maximumAge: 0,
+};
+
 function toFix(location: Location.LocationObject): FrozenFix {
   const { coords } = location;
   return {
@@ -47,10 +64,7 @@ export async function captureFix(): Promise<FrozenFix> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const location = await Promise.race([
-      Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-        mayShowUserSettingsDialog: true,
-      }),
+      Location.getCurrentPositionAsync(CAPTURE_OPTIONS),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => reject(new LocationCaptureError('TIMEOUT')), CAPTURE_TIMEOUT_MS);
       }),

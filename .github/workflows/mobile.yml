@@ -311,6 +311,15 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash tools/mobile-smoke/run-maestro.sh "${{ runner.temp }}/e2e-apk" "${{ runner.temp }}/e2e-out"
+      # #398 — nhung dieu Maestro khong dem duoc: don tu tao nhan DUNG chang cua lan nhan viec, ke
+      # hoach ADOPTED, khong tien bia, va hang "Can xu ly" chi co viec thieu diem giao (don binh
+      # thuong KHONG vao). Chi DOC, bang phien Giam doc.
+      - name: Kiem qua API ket cuc nhan chuyen truc tiep (#398)
+        run: node tools/mobile-smoke/verify-driver-direct.mjs
+        env:
+          SMOKE_API_URL: http://127.0.0.1:3001
+          SMOKE_FIXTURE: ${{ runner.temp }}/mobile-smoke.json
+          SMOKE_VERIFY_OUTPUT: ${{ runner.temp }}/e2e-out/driver-direct-verify.json
       - name: Gom nhat ky
         if: always()
         run: |
@@ -322,6 +331,101 @@ jobs:
         with:
           name: nexagent-transport-e2e-report
           path: ${{ runner.temp }}/e2e-out/
+          retention-days: 14
+
+  # --------------------------------------------------------------------------------------------
+  # PWA E2E (#398) — Chromium man dien thoai, ban xuat web THAT, API THAT + Postgres THAT.
+  #
+  # Cung the gioi voi smoke Android (`prepare.mjs`), nhung PWA chay che do COOKIE cung origin: may chu
+  # `e2e/pwa-server.mjs` phuc vu `dist-web` va chuyen `/auth /transport /files /health` toi API —
+  # dung hinh dang Caddy o san xuat (deploy/pwa/Caddyfile). Vi tri trinh duyet la GIA LAP.
+  # --------------------------------------------------------------------------------------------
+  mobile-pwa-e2e:
+    needs: mobile-js
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: netviet
+          POSTGRES_PASSWORD: netviet_local
+          POSTGRES_DB: netviet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U netviet"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://netviet:netviet_local@localhost:5432/netviet
+      TENANT: transport-preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - name: Build API + goi workspace
+        run: pnpm --filter "@netviet/api..." --filter "@nexagnet/transport-mobile^..." build
+      - name: Migrate Postgres tam
+        run: pnpm --filter @netviet/api exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Sinh thong tin dang nhap dung mot lan
+        run: |
+          minted_login="$(openssl rand -hex 24)"
+          minted_session="$(openssl rand -hex 32)"
+          echo "::add-mask::${minted_login}"
+          echo "::add-mask::${minted_session}"
+          {
+            echo "SMOKE_PASSWORD=${minted_login}"
+            echo "TRANSPORT_DEMO_DRIVER_PASSWORD=${minted_login}"
+            echo "SESSION_SECRET=${minted_session}"
+          } >> "$GITHUB_ENV"
+      - name: Gieo the gioi van tai mau
+        run: node deploy/netviet/seed-transport-demo.mjs
+      - name: Khoi dong API (nen) — AUTH_MODE=session, PERSISTENCE=prisma
+        working-directory: apps/api
+        env:
+          AUTH_MODE: session
+          PERSISTENCE: prisma
+          TENANT_DIR: ${{ github.workspace }}/tenants/transport-preview
+          PORT: '3001'
+          NODE_ENV: development
+          CORS_ORIGIN: http://127.0.0.1:8098
+        run: |
+          nohup node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/health > /dev/null; then echo "API da len"; exit 0; fi
+            sleep 2
+          done
+          tail -100 "$RUNNER_TEMP/api.log"
+          exit 1
+      - name: Dung the gioi (qua API, bang phien Giam doc)
+        run: node tools/mobile-smoke/prepare.mjs
+        env:
+          SMOKE_API_URL: http://127.0.0.1:3001
+          SMOKE_OUTPUT: ${{ runner.temp }}/mobile-smoke.json
+      - name: Xuat ban web (PWA)
+        run: pnpm --filter @nexagnet/transport-mobile export:web
+      - name: Cai Chromium cho Playwright
+        run: pnpm --filter @nexagnet/transport-mobile exec playwright install --with-deps chromium
+      - name: PWA E2E — nhan chuyen truc tiep (#398)
+        run: pnpm --filter @nexagnet/transport-mobile exec playwright test
+        env:
+          E2E_FIXTURE: ${{ runner.temp }}/mobile-smoke.json
+          E2E_PASSWORD: ${{ env.SMOKE_PASSWORD }}
+          E2E_API_URL: http://127.0.0.1:3001
+      - name: Gom nhat ky
+        if: always()
+        run: |
+          mkdir -p apps/transport-mobile/e2e-results
+          cp "$RUNNER_TEMP/api.log" apps/transport-mobile/e2e-results/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/mobile-smoke.json" apps/transport-mobile/e2e-results/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nexagent-transport-pwa-e2e-report
+          path: |
+            apps/transport-mobile/e2e-results/
+            apps/transport-mobile/e2e-report/
           retention-days: 14
 
   # --------------------------------------------------------------------------------------------

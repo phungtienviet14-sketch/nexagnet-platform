@@ -101,6 +101,12 @@ export const PLAN_COMMIT_REASONS = [
    * ghi lam ban phan cong DAU TIEN, truoc khi noi chang. Cung quy tac voi vong chay moi.
    */
   'PLAN_RUN_DRIVER_ADOPTED',
+  /**
+   * `#398`: chiec xe dang giu mot vong chay con mo do LAI XE NHAN TRUC TIEP tai dia diem A, va
+   * viec do CHUA co don. Lap ke hoach luc nay se sinh vong chay/chang THU HAI cho dung mot viec
+   * that — nen dung lai, va chi duong "gan don vao viec tai xe da nhan" (Can xu ly -> Hoan thien).
+   */
+  'PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE',
 ] as const;
 export type PlanCommitReason = (typeof PLAN_COMMIT_REASONS)[number];
 
@@ -227,6 +233,8 @@ export const TRANSPORT_PLANNING_DECISIONS = defineDecisionVocabulary({
       'Vong chay dang mo cua xe do lai xe khac cam, khong phai nguoi dang phu trach xe — doi chieu lai roi giao don lai',
     PLAN_RUN_DRIVER_ADOPTED:
       'Vong chay dang mo chua co lai xe: ghi nguoi dang phu trach xe lam lai xe cua vong chay',
+    PLAN_VEHICLE_HAS_PENDING_SITE_INTAKE:
+      'Xe nay dang co viec tai xe nhan truc tiep chua co don — gan don vao viec do thay vi lap chuyen moi',
     PLAN_CANCELLED: 'Da huy ke hoach va cac chang chua chay cua no',
     PLAN_CANCEL_ALREADY_CANCELLED: 'Ke hoach da huy tu truoc',
     PLAN_CANCEL_LEG_COMPLETED: 'Chang co hang cua ke hoach nay da chay xong, khong go nguoc duoc',

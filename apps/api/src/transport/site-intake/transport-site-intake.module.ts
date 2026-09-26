@@ -20,6 +20,23 @@ import {
 } from './site-intake.repository.js';
 import { PrismaRunSiteIntakeRepository } from './prisma-site-intake.repository.js';
 import { SiteIntakeService, TRANSPORT_SITE_INTAKE_POLICY } from './site-intake.service.js';
+import { AuditLogService } from '../../audit/audit-log.service.js';
+import { MovementRepository } from '../movement/movement.repository.js';
+import { MovementService } from '../movement/movement.service.js';
+import { PrismaSiteIntakeConfirmationWriter } from './prisma-site-intake-confirmation.writer.js';
+import {
+  MovementSiteIntakeConfirmationWriter,
+  SiteIntakeConfirmationWriter,
+} from './site-intake-confirmation.writer.js';
+import { RunPlanRepository } from '../planning/planning.repository.js';
+import { PrismaSiteIntakeCommercialStore } from './prisma-site-intake-commercial.store.js';
+import { SiteIntakeCommercialService } from './site-intake-commercial.service.js';
+import {
+  InMemorySiteIntakeCommercialStore,
+  SiteIntakeCommercialStore,
+} from './site-intake-commercial.store.js';
+import { SiteIntakeReadinessReader } from './site-intake-readiness.reader.js';
+import { SiteIntakeReviewService } from './site-intake-review.service.js';
 
 /**
  * Capability `transport-site-intake` — nhan viec tai dia diem A (`#267`).
@@ -65,8 +82,71 @@ import { SiteIntakeService, TRANSPORT_SITE_INTAKE_POLICY } from './site-intake.s
       provide: TRANSPORT_SITE_INTAKE_POLICY,
       useFactory: (): SiteCandidatePolicy => DEFAULT_SITE_CANDIDATE_POLICY,
     },
+    /**
+     * `#398` — LAN GHI cua mot lan tai xe xac nhan. Postgres: MOT giao dich duoi khoa tu van cua xe
+     * (khoa bo lap ke hoach cung gianh). Trong bo nho: qua `MovementService`, xep hang qua mot hang
+     * doi — khong co giao dich, bang chung dong thoi la Postgres.
+     */
+    {
+      provide: SiteIntakeConfirmationWriter,
+      useFactory: (
+        prisma: PrismaService,
+        audit: AuditLogService,
+        movement: MovementService,
+        intakes: RunSiteIntakeRepository,
+        core: TransportSiteIntakeCoreFacts,
+      ): SiteIntakeConfirmationWriter =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaSiteIntakeConfirmationWriter(prisma, audit)
+          : new MovementSiteIntakeConfirmationWriter(movement, intakes, core),
+      inject: [
+        PrismaService,
+        AuditLogService,
+        MovementService,
+        RunSiteIntakeRepository,
+        TransportSiteIntakeCoreFacts,
+      ],
+    },
     SiteIntakeService,
+    /**
+     * `#398` — phan THUONG MAI. Kho chon theo `PERSISTENCE` cung khuon kho xac nhan o tren; ban trong
+     * bo nho di qua chinh cac kho trong bo nho cua `transport-core` (don, vong chay, chang, ke
+     * hoach) — nen CUNG mot ban kho xac nhan phai duoc dung o ca hai noi.
+     */
+    {
+      provide: SiteIntakeCommercialStore,
+      useFactory: (
+        prisma: PrismaService,
+        intakes: RunSiteIntakeRepository,
+        movement: MovementRepository,
+        plans: RunPlanRepository,
+        audit: AuditLogService,
+      ): SiteIntakeCommercialStore =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaSiteIntakeCommercialStore(prisma, audit)
+          : new InMemorySiteIntakeCommercialStore(
+              intakes as InMemoryRunSiteIntakeRepository,
+              movement,
+              plans,
+              audit,
+            ),
+      inject: [
+        PrismaService,
+        RunSiteIntakeRepository,
+        MovementRepository,
+        RunPlanRepository,
+        AuditLogService,
+      ],
+    },
+    SiteIntakeReadinessReader,
+    SiteIntakeCommercialService,
+    SiteIntakeReviewService,
   ],
-  exports: [SiteIntakeService, RunSiteIntakeRepository],
+  exports: [
+    SiteIntakeService,
+    RunSiteIntakeRepository,
+    SiteIntakeCommercialService,
+    SiteIntakeReviewService,
+  ],
 })
 export class TransportSiteIntakeModule {}

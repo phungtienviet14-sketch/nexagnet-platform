@@ -89,6 +89,12 @@ export const RUN_LEG_REASONS = [
   'LEG_ORDER_NOT_FOUND',
   'LEG_ORDER_CANCELLED',
   'LEG_RUN_TERMINAL',
+  /**
+   * `#398`: don DA NHAN chang co hang cua mot viec tai xe nhan truc tiep (phan thuong mai
+   * `ORDER_BOUND`). Them mot chang co hang thu hai cho don do — vd qua trinh sua vong chay/chang tay
+   * — la hai lan cho cung mot viec that. Kho kiem DUOI khoa tu van cua don.
+   */
+  'LEG_ORDER_ADOPTED_BY_SITE_INTAKE',
 ] as const;
 export type RunLegReason = (typeof RUN_LEG_REASONS)[number];
 
@@ -262,6 +268,8 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     LEG_ORDER_NOT_FOUND: 'Khong tim thay nghia vu thuong mai de gan vao chang',
     LEG_ORDER_CANCELLED: 'Nghia vu do da huy, khong gan vao chang duoc',
     LEG_RUN_TERMINAL: 'Vong chay da o trang thai cuoi, khong them chang duoc',
+    LEG_ORDER_ADOPTED_BY_SITE_INTAKE:
+      'Nghia vu nay da nhan chang co hang cua viec tai xe nhan truc tiep — khong them chang co hang thu hai',
     LEG_TRANSITION_APPLIED: 'Da doi trang thai chang',
     LEG_ALREADY_TERMINAL: 'Chang da o trang thai cuoi',
     LEG_ALREADY_IN_STATE: 'Chang da o dung trang thai nay',

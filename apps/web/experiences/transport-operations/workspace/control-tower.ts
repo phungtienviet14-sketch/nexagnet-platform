@@ -84,6 +84,7 @@ const SOURCE_LABEL: Readonly<Record<ControlTowerSource, string>> = {
   FUEL: 'Nhiên liệu',
   OPERATIONAL_ALERTS: 'Bảo dưỡng & giấy tờ',
   CHECKPOINT: 'Mốc hiện trường',
+  SITE_INTAKE: 'Việc tài xế nhận trực tiếp',
 };
 
 const PHASE_LABEL: Readonly<Record<RunLegPhase, string>> = {
@@ -110,6 +111,7 @@ const QUEUE_LABEL: Readonly<Record<ActionQueueKind, string>> = {
   MAINTENANCE_DUE_SOON: 'Bảo dưỡng sắp đến hạn',
   VEHICLE_STATE_INCONSISTENT: 'Xe vừa đang sửa vừa đang chạy chuyến',
   CHECKPOINT_LOCATION_PROOF_MISSING: 'Mốc hiện trường không kèm bằng chứng vị trí',
+  SITE_INTAKE_NEEDS_REVIEW: 'Việc tài xế nhận trực tiếp chưa đủ thông tin',
 };
 
 /**
@@ -134,6 +136,11 @@ const QUEUE_SECTION: Readonly<Record<ActionQueueKind, TransportSectionId>> = {
   VEHICLE_STATE_INCONSISTENT: 'maintenance',
   /* Ban ghi goc la mot MOC, va moc song trong dong thoi gian cua chinh vong chay do. */
   CHECKPOINT_LOCATION_PROOF_MISSING: 'movement',
+  /*
+   * `#398`: ban ghi goc la mot lan tai xe nhan viec tren MOT vong chay — man van hanh tren web chi
+   * de tuong thich; hoan thien/bao bat thuong lam tren ung dung di dong.
+   */
+  SITE_INTAKE_NEEDS_REVIEW: 'movement',
 };
 
 const PENDING_LABEL: Readonly<Record<PendingActionQueueEntry['kind'], string>> = {

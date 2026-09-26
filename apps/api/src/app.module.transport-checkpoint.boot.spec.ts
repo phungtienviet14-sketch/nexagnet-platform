@@ -207,8 +207,11 @@ describe('transport-checkpoint process boot contract', () => {
       expect(JSON.parse(proof ?? '{}')).toEqual({
         controlTower: true,
         checkpointsController: true,
-        /* Khach nay khong bat costing/fuel/asset-compliance, nen ba nguon do van duoc cong bo. */
-        unavailableSources: ['EXPENSE_CLAIMS', 'FUEL', 'OPERATIONAL_ALERTS'],
+        /*
+         * Khach nay khong bat costing/fuel/asset-compliance/site-intake, nen bon nguon do van duoc
+         * cong bo (`SITE_INTAKE` tu #398).
+         */
+        unavailableSources: ['EXPENSE_CLAIMS', 'FUEL', 'OPERATIONAL_ALERTS', 'SITE_INTAKE'],
         beforeInTransit: ['RUN-BOOT-1'],
         /* Chua co moc nao: cot LOADING rong nhung KHONG mang ma ly do — nguon CO, chua co du lieu. */
         beforeLoadingReason: null,

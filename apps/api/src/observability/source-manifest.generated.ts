@@ -221,7 +221,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.location": {
       "functionName": "MovementService.recordOrderLocation",
       "filePath": "apps/api/src/transport/movement/movement.service.ts",
-      "line": 1075
+      "line": 1101
     },
     "order.manual_approve": {
       "functionName": "OrdersService.approveTurn",
@@ -294,17 +294,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.depot": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 600
+      "line": 650
     },
     "planning.grouping": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 625
+      "line": 675
     },
     "planning.preview": {
       "functionName": "PlanningService.preview",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 162
+      "line": 168
     },
     "planning.run_closure": {
       "functionName": "PlanningService.settleRunClosure",
@@ -397,11 +397,44 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "MovementService.projectTrip",
       "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
+    "site_intake.adopt": {
+      "functionName": "SiteIntakeCommercialService.adopt",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
+      "line": 675
+    },
+    "site_intake.bind_existing_order": {
+      "functionName": "SiteIntakeCommercialService.bindExistingOrder",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
+      "line": 328
+    },
+    "site_intake.commercial": {
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts"
+    },
     "site_intake.confirm": {
       "filePath": "apps/api/src/transport/site-intake/site-intake.service.ts"
     },
+    "site_intake.driver_destination": {
+      "functionName": "SiteIntakeCommercialService.chooseDestinationAsDriver",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
+      "line": 227
+    },
+    "site_intake.office_complete": {
+      "functionName": "SiteIntakeCommercialService.completeAsOffice",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
+      "line": 274
+    },
     "site_intake.propose": {
       "filePath": "apps/api/src/transport/site-intake/site-intake.service.ts"
+    },
+    "site_intake.report_exception": {
+      "functionName": "SiteIntakeCommercialService.reportException",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
+      "line": 429
+    },
+    "site_intake.settle": {
+      "functionName": "SiteIntakeCommercialService.settle",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
+      "line": 595
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
@@ -620,9 +653,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 34
     },
     "transport.driver.self.site_intake.confirm": {
-      "functionName": "DriverSiteIntakeController.confirm",
-      "filePath": "apps/api/src/transport/site-intake/driver-site-intake.controller.ts",
-      "line": 75
+      "filePath": "apps/api/src/transport/site-intake/driver-site-intake.controller.ts"
     },
     "transport.driver.self.site_intake.propose": {
       "filePath": "apps/api/src/transport/site-intake/driver-site-intake.controller.ts"
@@ -800,6 +831,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SettlementReportsController.documentChain",
       "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts",
       "line": 121
+    },
+    "transport.site_intake.exception": {
+      "functionName": "SiteIntakeReviewController.exception",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-review.controller.ts",
+      "line": 220
+    },
+    "transport.site_intake.review.complete": {
+      "filePath": "apps/api/src/transport/site-intake/site-intake-review.controller.ts"
+    },
+    "transport.site_intake.review.read": {
+      "filePath": "apps/api/src/transport/site-intake/site-intake-review.controller.ts"
     },
     "transport.stakeholder.self.vehicle.read": {
       "filePath": "apps/api/src/transport/asset-ownership/stakeholder-vehicles.controller.ts"
@@ -1014,12 +1056,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "control_tower.board_projection|BOARD_CHECKPOINT_COLUMNS_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 174
+      "line": 182
     },
     "control_tower.compile|CONTROL_TOWER_COMPILED": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 182
+      "line": 190
     },
     "control_tower.compile|CONTROL_TOWER_SOURCE_FAILED": {
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts"
@@ -1027,7 +1069,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "control_tower.compile|CONTROL_TOWER_SOURCE_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 165
+      "line": 173
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
@@ -1752,7 +1794,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.location|*": {
       "functionName": "MovementService.requireOrderPoint",
       "filePath": "apps/api/src/transport/movement/movement.service.ts",
-      "line": 1052
+      "line": 1078
     },
     "outbound.authority|*": {
       "functionName": "AgentOrchestrator.composeReply",
@@ -1908,6 +1950,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SettlementService.openPeriod",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
       "line": 953
+    },
+    "site_intake.exception|*": {
+      "functionName": "SiteIntakeCommercialService.decideException",
+      "filePath": "apps/api/src/transport/site-intake/site-intake-commercial.service.ts",
+      "line": 959
     },
     "source.approval|*": {
       "filePath": "apps/api/src/source-registry/source-registry.service.ts"

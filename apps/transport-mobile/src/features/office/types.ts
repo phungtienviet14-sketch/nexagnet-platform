@@ -261,3 +261,159 @@ export interface RunJourneyView {
   readonly timeline: readonly JourneyEvent[];
   readonly unavailableSources: readonly string[];
 }
+
+/* ------------------------------------------------------------------ *
+ * VIEC TAI XE NHAN TRUC TIEP — `/transport/site-intakes/**` (#398, `site-intake-review.service.ts`)
+ * ------------------------------------------------------------------ */
+
+export type SiteIntakeCommercialStatus = 'PENDING' | 'ORDER_BOUND' | 'REJECTED';
+export type SiteIntakeBindingMode = 'AUTO_CREATED' | 'OFFICE_COMPLETED' | 'OFFICE_EXISTING_ORDER';
+export type SiteIntakeExceptionOutcome =
+  | 'ORDER_CANCELLED_WORK_CANCELLED'
+  | 'ORDER_CANCELLED_OPERATION_PRESERVED'
+  | 'INTAKE_REJECTED_WORK_CANCELLED'
+  | 'INTAKE_REJECTED_OPERATION_PRESERVED'
+  | 'ANOMALY_RECORDED_ORDER_TERMINAL';
+export type SiteIntakeLocationTrust = 'SERVER_BOUND' | 'DRIVER_REPORTED';
+export type SiteMatch = 'UNIQUE_INSIDE' | 'CHOSEN_AMONG_SEVERAL' | 'NO_LOCATION';
+export type SiteIntakeReadinessKind =
+  'READY_TO_AUTO_CREATE' | 'NEEDS_REVIEW' | 'ALREADY_BOUND' | 'REJECTED';
+
+export interface SiteIntakeException {
+  readonly reason: string;
+  readonly outcome: SiteIntakeExceptionOutcome;
+  readonly at: string;
+}
+
+/** Mot viec tai xe nhan truc tiep nhin tu VAN PHONG — ma va so, khong mot cau chu nao. */
+export interface SiteIntakeReviewView {
+  readonly intakeId: string;
+  readonly status: SiteIntakeCommercialStatus;
+  readonly confirmedAt: string;
+  readonly businessDate: BusinessDate;
+  readonly driver: { readonly id: string; readonly name: string | null };
+  readonly vehicle: { readonly id: string; readonly plate: string | null };
+  readonly run: { readonly id: string; readonly code: string; readonly status: string };
+  readonly leg: { readonly id: string; readonly status: string };
+  readonly origin: {
+    readonly siteId: string;
+    readonly label: string;
+    readonly siteName: string | null;
+    readonly counterpartyName: string | null;
+    readonly address: string | null;
+    readonly active: boolean;
+  };
+  readonly location: {
+    readonly trust: SiteIntakeLocationTrust;
+    readonly siteMatch: SiteMatch | null;
+    readonly distanceMetres: number | null;
+  };
+  readonly destination: {
+    readonly label: string;
+    readonly source: 'KNOWN_PLACE' | 'PLACE_SEARCH';
+    readonly setByRole: 'DRIVER' | 'OFFICE';
+    readonly setAt: string;
+  } | null;
+  readonly originAttestedAt: string | null;
+  readonly readiness: {
+    readonly kind: SiteIntakeReadinessKind;
+    readonly reasons: readonly string[];
+    readonly rejectedReason: string | null;
+  };
+  readonly order: {
+    readonly id: string;
+    readonly code: string;
+    readonly status: string;
+    readonly bindingMode: SiteIntakeBindingMode;
+    readonly boundAt: string;
+  } | null;
+  readonly exception: SiteIntakeException | null;
+  readonly movementStarted: boolean;
+  /** Viec may chu CHO PHEP lam tiep — quyen nguoi goi van loc them o tang HTTP. */
+  readonly actions: {
+    readonly canSetDestination: boolean;
+    readonly canAttestOrigin: boolean;
+    readonly canBindExistingOrder: boolean;
+    readonly canReportException: boolean;
+  };
+}
+
+/** "ĐƠN MỚI TỪ TÀI XẾ" — ban tin, KHONG phai viec can quyet. */
+export interface DriverOrderActivityView {
+  readonly intakeId: string;
+  readonly orderId: string;
+  readonly orderCode: string;
+  readonly orderStatus: string;
+  readonly bindingMode: SiteIntakeBindingMode;
+  readonly boundAt: string;
+  readonly confirmedAt: string;
+  readonly driverName: string | null;
+  readonly vehiclePlate: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly exceptionOutcome: SiteIntakeExceptionOutcome | null;
+}
+
+/** Nguon cua mot don: "Tạo từ xác nhận của tài xế". 404 khi don khong den tu duong nay. */
+export interface OrderIntakeSourceView extends DriverOrderActivityView {
+  readonly locationTrust: SiteIntakeLocationTrust;
+  readonly siteMatch: SiteMatch | null;
+  readonly movementStarted: boolean;
+  readonly exception: SiteIntakeException | null;
+  readonly canReportException: boolean;
+}
+
+export interface BindableOrderView {
+  readonly id: string;
+  readonly code: string;
+  readonly businessDate: BusinessDate;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly createdAt: string;
+}
+
+/** Ket cuc lenh HOAN THIEN / GAN DON — doc tu su that SAU lenh. `readiness` giu nguyen hinh dang may chu. */
+export interface SiteIntakeCommercialOutcome {
+  readonly intakeId: string;
+  readonly status: SiteIntakeCommercialStatus;
+  readonly readiness: {
+    readonly kind: SiteIntakeReadinessKind;
+    readonly reasons?: readonly string[];
+    readonly orderId?: string;
+    readonly reason?: string;
+  };
+  readonly orderId: string | null;
+  readonly orderCode: string | null;
+  readonly bindingMode: SiteIntakeBindingMode | null;
+  readonly bound: boolean;
+  readonly replayed: boolean;
+}
+
+export interface SiteIntakeExceptionResult {
+  readonly intakeId: string;
+  readonly outcome: SiteIntakeExceptionOutcome;
+  readonly status: SiteIntakeCommercialStatus;
+  readonly orderId: string | null;
+  readonly operationPreserved: boolean;
+  readonly replayed: boolean;
+}
+
+/** Moi lenh van phong tra ket cuc + khung nhin DA CAP NHAT cua chinh viec do. */
+export interface SiteIntakeCommandResponse<T> {
+  readonly outcome: T;
+  readonly intake: SiteIntakeReviewView;
+}
+
+export interface KnownPlace {
+  readonly id: string;
+  readonly kind: string;
+  readonly name: string;
+  readonly detail: string | null;
+  readonly point: { readonly latitude: number; readonly longitude: number };
+  readonly radiusMetres: number;
+}
+
+export interface KnownPlacesResponse {
+  readonly available: boolean;
+  readonly places: readonly KnownPlace[];
+}

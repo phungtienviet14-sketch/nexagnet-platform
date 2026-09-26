@@ -16,7 +16,7 @@ const model = (prisma: PrismaService, name: string): any =>
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   (prisma as unknown as Record<string, any>)[name];
 
-interface PlanRow {
+export interface PlanRow {
   id: string;
   orderId: string;
   runId: string;
@@ -36,7 +36,7 @@ interface PlanRow {
 const iso = (value: Date): string => value.toISOString();
 const isoOrNull = (value: Date | null): string | null => (value === null ? null : iso(value));
 
-const toPlan = (row: PlanRow): OrderRunPlan => ({
+export const toPlan = (row: PlanRow): OrderRunPlan => ({
   id: row.id,
   orderId: row.orderId,
   runId: row.runId,

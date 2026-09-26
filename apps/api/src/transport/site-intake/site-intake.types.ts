@@ -1,6 +1,7 @@
 import type { BusinessDate } from '../business-date.js';
 import type { VehicleRunStatus } from '../movement/movement.types.js';
 import type { LocationUnusableReason, SiteCandidateConfidence } from './site-candidate.js';
+import type { SiteMatch } from './site-intake-commercial.types.js';
 
 /**
  * MUC DO TIN cua vi tri da de nghi ra mot lan nhan viec — `#267` H2/H7.
@@ -102,6 +103,11 @@ export interface RunSiteIntake {
   readonly clientEventId: string;
   readonly confirmedAt: Date;
   readonly businessDate: BusinessDate;
+  /**
+   * `#398`: lan xac nhan KHOP dia diem ra sao, ghi DUNG LUC bam. `null` o ban ghi truoc #398 —
+   * "khong biet", khong phai mot gia tri doan.
+   */
+  readonly siteMatch: SiteMatch | null;
 }
 
 /** LENH doc de nghi. Danh tinh den tu PHIEN, khong tu than yeu cau. */
@@ -111,6 +117,11 @@ export interface ProposeSiteIntakeCommand {
   readonly longitude?: number;
   readonly accuracyMetres?: number | null;
   readonly observationId?: string;
+  /**
+   * `#398` §3.1: tuoi cua cap toa do, ms, do bang dong ho MAY KHACH luc gui. Chi co nghia khi kem
+   * `latitude`/`longitude`. Vang mat = may khach `#267` cu (web) — xem `resolveLocation`.
+   */
+  readonly locationAgeMs?: number;
 }
 
 /** LENH xac nhan. `siteId` la thu DUY NHAT lai xe chon, va no phai la mot dia diem CO THAT. */

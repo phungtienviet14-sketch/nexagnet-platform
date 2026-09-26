@@ -2048,7 +2048,8 @@ export interface RunMovementSummary {
 }
 
 export type RunGrouping = 'ONE_ORDER_PER_RUN' | 'MULTI_ORDER_RUN';
-export type RunPlanOutcome = 'NEW_RUN' | 'APPENDED';
+/** `ADOPTED` (#398): don nhan lai vong chay + chang cu cua mot lan tai xe nhan viec truc tiep. */
+export type RunPlanOutcome = 'NEW_RUN' | 'APPENDED' | 'ADOPTED';
 
 /**
  * CHINH SACH LAP KE HOACH dang ap dung cho khach nay — be mat CHAN DOAN cua `GET
@@ -2275,7 +2276,12 @@ export type ActionQueueSubjectKind =
   | 'FUEL_RECONCILIATION'
   | 'TRACKING_SESSION'
   | 'RUN_CHECKPOINT'
-  | 'COMPANY';
+  | 'COMPANY'
+  /**
+   * `#398`: mot lan tai xe nhan viec truc tiep (`id` = intakeId, `reference` = ma vong chay). Ban
+   * sao cua `ACTION_QUEUE_SUBJECTS` o `apps/api/src/transport/control-tower/control-tower.types.ts`.
+   */
+  | 'SITE_INTAKE';
 
 export interface ActionQueueSubject {
   readonly kind: ActionQueueSubjectKind;
@@ -2298,7 +2304,9 @@ export type ActionQueueKind =
   | 'MAINTENANCE_OVERDUE'
   | 'MAINTENANCE_DUE_SOON'
   | 'VEHICLE_STATE_INCONSISTENT'
-  | 'CHECKPOINT_LOCATION_PROOF_MISSING';
+  | 'CHECKPOINT_LOCATION_PROOF_MISSING'
+  /** `#398`: viec tai xe nhan truc tiep chua du dieu kien tao don (chi ngoai le). */
+  | 'SITE_INTAKE_NEEDS_REVIEW';
 
 export type PendingActionQueueKind =
   | 'RECEIVER_WAITING_ABOVE_THRESHOLD'
@@ -2328,7 +2336,13 @@ export interface ActionQueueItem {
   readonly detail: Readonly<Record<string, number | string | null>>;
 }
 
-export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS' | 'CHECKPOINT';
+export type ControlTowerSource =
+  | 'EXPENSE_CLAIMS'
+  | 'FUEL'
+  | 'OPERATIONAL_ALERTS'
+  | 'CHECKPOINT'
+  /** `#398`: viec tai xe nhan truc tiep — bang hien tren ung dung di dong. */
+  | 'SITE_INTAKE';
 
 /**
  * Ban SAO cua `FleetPresenceView` o `apps/api/src/transport/control-tower/control-tower.types.ts`.
@@ -2867,6 +2881,8 @@ export interface SiteIntakeLocationInput {
   readonly latitude?: number;
   readonly longitude?: number;
   readonly accuracyMetres?: number | null;
+  /** `#398`: tuoi ban dinh vi (ms) do bang dong ho cua CHINH trinh duyet luc gui. Chi di kem toa do. */
+  readonly locationAgeMs?: number;
   readonly observationId?: string;
 }
 

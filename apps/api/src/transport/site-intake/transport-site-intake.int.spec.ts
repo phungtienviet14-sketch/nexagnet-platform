@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryAuditLogRepository } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { withProtectedTriggersDisabled } from '../../it-trigger-cleanup.js';
 import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterparty.repository.js';
 import { PrismaCounterpartySiteRepository } from '../counterparty/prisma-counterparty-site.repository.js';
 import { CounterpartySiteService } from '../counterparty/site.service.js';
@@ -16,6 +17,7 @@ import {
   TransportSiteIntakeLocationFacts,
   type SiteIntakeObservationFacts,
 } from './site-intake-facts.port.js';
+import { PrismaSiteIntakeConfirmationWriter } from './prisma-site-intake-confirmation.writer.js';
 import { PrismaRunSiteIntakeRepository } from './prisma-site-intake.repository.js';
 import { SITE_INTAKE_DRIVER_EVENT } from './site-intake.repository.js';
 import { SiteIntakeService } from './site-intake.service.js';
@@ -87,9 +89,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const service = new SiteIntakeService(
       intakes,
       new TransportSiteIntakeCoreFactsAdapter(fleet, movementRepo, siteService),
-      new TransportSiteIntakeGeoFactsAdapter(geofences),
+      new TransportSiteIntakeGeoFactsAdapter(geofences, siteService),
       locations,
       movement,
+      new PrismaSiteIntakeConfirmationWriter(
+        prisma,
+        new AuditLogService(new InMemoryAuditLogRepository()),
+      ),
       POLICY,
     );
 
@@ -107,24 +113,38 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       const runIds = runs.map((run) => run.id);
 
       // Ban ghi xac nhan bi trigger `..._append_only` chan khi bo TRUC TIEP, va khoa ngoai cua no la
-      // `Restrict` nen khong co duong `CASCADE` nao. Nen lan don dep phai TAT trigger mot cach tuong
-      // minh — mot thao tac chi xay ra o day, trong mot bai IT, va duoc bat lai ngay. Cung khuon
-      // `transport-driver-settlement.int.spec.ts`.
+      // `Restrict` nen khong co duong `CASCADE` nao. `#398` them mot tang nua: phan THUONG MAI
+      // (`TransportSiteIntakeCommercial`) tro vao ban ghi xac nhan bang khoa ngoai `Restrict` va co
+      // trigger chan `DELETE` rieng — nen no phai di TRUOC, cung giao dich tat trigger. Helper chung
+      // tat/bat trong MOT giao dich duoi khoa tu van muc giao dich, nen tep khac khong bao gio thay
+      // trigger dang tat.
       if (runIds.length > 0) {
-        await prisma.$executeRawUnsafe(
-          'ALTER TABLE "TransportRunSiteIntake" DISABLE TRIGGER "transport_run_site_intake_append_only"',
+        await withProtectedTriggersDisabled(
+          prisma,
+          [
+            ['TransportSiteIntakeCommercial', 'transport_site_intake_commercial_guard'],
+            ['TransportRunSiteIntake', 'transport_run_site_intake_append_only'],
+          ],
+          async (tx) => {
+            const intakeIds = (
+              await tx.transportRunSiteIntake.findMany({
+                where: { runId: { in: runIds } },
+                select: { id: true },
+              })
+            ).map((row) => row.id);
+            await tx.transportSiteIntakeCommercial.deleteMany({
+              where: { intakeId: { in: intakeIds } },
+            });
+            await tx.transportRunSiteIntake.deleteMany({ where: { id: { in: intakeIds } } });
+          },
         );
-        try {
-          await prisma.transportRunSiteIntake.deleteMany({ where: { runId: { in: runIds } } });
-        } finally {
-          await prisma.$executeRawUnsafe(
-            'ALTER TABLE "TransportRunSiteIntake" ENABLE TRIGGER "transport_run_site_intake_append_only"',
-          );
-        }
       }
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
+      // `#398`: lan xac nhan ghi ba dong kiem toan vao BANG THAT, cung giao dich — tac nhan la
+      // `authUserId` cua lai xe cua tep nay. So sanh BANG, khong `startsWith`.
+      await prisma.auditLog.deleteMany({ where: { actor: AUTH } });
 
       await prisma.transportGeofence.deleteMany({ where: { label: { startsWith: FENCE_PREFIX } } });
       await prisma.transportCounterpartySite.deleteMany({
@@ -295,7 +315,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       const run = await prisma.transportVehicleRun.findUniqueOrThrow({
         where: { id: result.runId },
-        include: { legs: true, assignments: true, siteIntake: true },
+        include: { legs: true, assignments: true, siteIntake: { include: { commercial: true } } },
       });
 
       expect(run.status).toBe('PLANNED');
@@ -306,6 +326,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(run.assignments[0]?.driverId).toBe(driverId);
       expect(run.siteIntake?.siteId).toBe(siteId);
       expect(run.siteIntake?.locationTrust).toBe('DRIVER_REPORTED');
+      // `#398`: vi tri nam TRONG hang rao cua DUNG mot kho -> khop chac chan, ghi luc bam.
+      expect(run.siteIntake?.siteMatch).toBe('UNIQUE_INSIDE');
+      // Phan thuong mai ra doi CUNG lenh, o `PENDING`, chua diem giao, chua don.
+      expect(run.siteIntake?.commercial).toMatchObject({
+        status: 'PENDING',
+        orderId: null,
+        destinationLabel: null,
+        bindingMode: null,
+        exceptionAt: null,
+      });
       // Khong nghia vu thuong mai nao ra doi cung no.
       expect(
         await prisma.transportOrder.count({ where: { legs: { some: { runId: run.id } } } }),
@@ -388,6 +418,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
           clientEventId: 'it-si-cham-mot',
           confirmedAt: new Date(),
           businessDate: '2026-09-09',
+          siteMatch: 'NO_LOCATION',
         });
       } catch (error) {
         recognised = isUniqueViolationOn(error, SITE_INTAKE_DRIVER_EVENT);
@@ -510,6 +541,14 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       for (const run of await movementRepo.listOpenRunsForDriver(driverId)) {
         await movement.cancelRun(run.id, 'IT don dep', ACTOR);
       }
+      // `#398`: vong chay `-DUA` cua bai tren (chua ai cam) van MO tren CHINH xe nay — lan xac nhan
+      // se tu choi `SITE_INTAKE_VEHICLE_BUSY` (xe khong mo vong chay thu hai). Huy no nhu mot lan
+      // don dep cua van hanh.
+      const vehicleOpen = await prisma.transportVehicleRun.findMany({
+        where: { vehicleId, status: { in: ['PLANNED', 'ACTIVE'] } },
+        select: { id: true },
+      });
+      for (const run of vehicleOpen) await movement.cancelRun(run.id, 'IT don dep', ACTOR);
 
       const next = await service.confirm({
         authUserId: AUTH,
