@@ -14,7 +14,7 @@
  */
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import process from 'node:process';
 
 const ROOT = resolve(process.env.PWA_ROOT ?? 'dist-web');
@@ -64,7 +64,10 @@ function proxy(req, res) {
 function serveFile(req, res) {
   const path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
   const candidate = normalize(join(ROOT, path));
-  const safe = candidate.startsWith(ROOT) ? candidate : join(ROOT, 'index.html');
+  // Ranh gioi THU MUC, khong phai tien to chuoi: `dist-web-khac` bat dau bang `dist-web` nhung khong
+  // nam trong no.
+  const inside = candidate === ROOT || candidate.startsWith(`${ROOT}${sep}`);
+  const safe = inside ? candidate : join(ROOT, 'index.html');
   const file =
     existsSync(safe) && statSync(safe).isFile()
       ? safe
